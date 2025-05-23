@@ -82,41 +82,60 @@ public:
 
 class Bucket {
 
-private:
+public:
 
     Vector3 location;
     std::unordered_set<Vector3> points;
     Pair best;
 
-public:
-
     Bucket(Vector3 location) : location(location) {
 
     }
 
-    bool operator<(const Bucket other) const {
-        if (best.initialised && !other.best.initialised) {return true;}
-        if (!best.initialised && other.best.initialised) {return false;}
-        return best.distance < other.best.distance;
-    }
-
 };
+
+struct BucketComparator {
+    bool operator()(const Bucket* lhs, const Bucket* rhs) const {
+        if (lhs->best.initialised && !rhs->best.initialised) {return true;}
+        if (!lhs->best.initialised && rhs->best.initialised) {return false;}
+        return lhs->best.distance < rhs->best.distance;
+    }
+}
 
 class CourseningGrid {
 
 public:
 
-    uint16_t resolution;        
-    std::unordered_map<Vector3, Bucket> grid;
-    std::set<Bucket> cache;
+    uint16_t resolution = 5u;        
+    std::unordered_map<Vector3, Bucket*> grid;
+    std::set<Bucket*, BucketComparator> cache;
 
-    CourseningGrid(uint16_t resolution) {
-        this->resolution = resolution;
+    CourseningGrid() {
+        
     }
 
     void add(Vector3 point) {
 
-        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / this->resolution;
+        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
+        uint16_t x = point.x / grid_size;
+        uint16_t y = point.y / grid_size;
+        uint16_t z = point.z / grid_size;
+        Vector3 location(x, y, z);
+        
+        // If we don't have the required bucket, allocate one.
+        if (this->grid.find(location) == this->grid.end()) {
+            this->grid[location] = new Bucket(location);
+        }
+
+        // If we already have this point, don't add it.
+        else if (this->grid[location]->points.find(point) != this->grid[location]->points.end()) {
+            return;
+        }
+
+        // Find all neighbour buckets and compute new possible nearest neighbour pairings.
+
+        // Insert into the bucket
+        this->grid[location]->points.add(point);
 
 
     }
@@ -125,16 +144,9 @@ public:
 
     }
     
-    /*
-    std::tuple<std::tuple<uint16_t, uint16_t, uint16_t>, std::tuple<uint16_t, uint16_t, uint16_t>> get_nearest() {
-
-        
-
-
-
-        return std::make_tuple(std::make_tuple(8u, 8u, 8u), std::make_tuple(8u, 8u, 8u));
+    Pair get_nearest() {
+        return Pair();
     }
-    */
 
 };
 
@@ -154,6 +166,7 @@ uint8_t* process(uint8_t* input, int length) {
     uint8_t* output = (uint8_t*) malloc(length);
 
     std::unordered_map<Vector3, uint16_t> histogram;
+    CourseningGrid coursening_grid;
 
     for (int i = 0; i < length / 3; i += 3) {
 
