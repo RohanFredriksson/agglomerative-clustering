@@ -100,7 +100,7 @@ struct BucketComparator {
         if (!lhs->best.initialised && rhs->best.initialised) {return false;}
         return lhs->best.distance < rhs->best.distance;
     }
-}
+};
 
 class CourseningGrid {
 
@@ -135,7 +135,7 @@ public:
         // Find all neighbour buckets and compute new possible nearest neighbour pairings.
 
         // Insert into the bucket
-        this->grid[location]->points.add(point);
+        this->grid[location]->points.insert(point);
 
 
     }
