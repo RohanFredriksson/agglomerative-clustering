@@ -1,6 +1,5 @@
 // Average Hierarchical Agglomerative Color Clustering
-#include <map>
-#include <vector>
+#include <set>
 #include <cstdint>
 #include <cstdlib>
 #include <emscripten.h>
@@ -15,11 +14,17 @@ class Vector3 {
     
 public:
 
-    uint32_t x;
-    uint32_t y;
-    uint32_t z;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z;
 
-    Vector3(uint32_t x, uint32_t y, int32_t z) {
+    Vector3() {
+        this->x = 0u;
+        this->y = 0u;
+        this->z = 0u;
+    }
+
+    Vector3(uint16_t x, uint16_t y, uint16_t z) {
         this->x = x;
         this->y = y;
         this->z = z;
@@ -46,58 +51,99 @@ namespace std {
     };
 }
 
-class Bucket {
+class Pair {
 
 public:
-    Vector3 location;
-    std::unordered_set<Vector3> points;
+
+    Vector3 a;
+    Vector3 b;
+    uint64_t distance;
+    bool initialised = false;
+
+    Pair() {
+
+    }
+
+    Pair(Vector3 a, Vector3 b) {
+    
+        this->a = a;
+        this->b = b;
+
+        uint64_t dx = a.x > b.x ? (uint64_t)(a.x - b.x) : (uint64_t)(b.x - a.x);
+        uint64_t dy = a.y > b.y ? (uint64_t)(a.y - b.y) : (uint64_t)(b.y - a.y);
+        uint64_t dz = a.z > b.z ? (uint64_t)(a.z - b.z) : (uint64_t)(b.z - a.z);
+
+        this->distance = dx * dx + dy * dy + dz * dz;
+        this->initialised = true;
+
+    }
 
 };
 
+class Bucket {
+
+private:
+
+    Vector3 location;
+    std::unordered_set<Vector3> points;
+    Pair best;
+
+public:
+
+    Bucket(Vector3 location) : location(location) {
+
+    }
+
+    bool operator<(const Bucket other) const {
+        if (best.initialised && !other.best.initialised) {return true;}
+        if (!best.initialised && other.best.initialised) {return false;}
+        return best.distance < other.best.distance;
+    }
+
+};
 
 class CourseningGrid {
 
-    private:
+public:
 
-        uint32_t resolution;        
-        std::unordered_map<Vector3, Bucket> grid;
+    uint16_t resolution;        
+    std::unordered_map<Vector3, Bucket> grid;
+    std::set<Bucket> cache;
 
-    public:
+    CourseningGrid(uint16_t resolution) {
+        this->resolution = resolution;
+    }
 
-        CourseningGrid(uint32_t resolution) {
-            this->resolution = resolution;
-        }
+    void add(Vector3 point) {
 
-        void add(Vector3 point) {
-
-            uint32_t grid_size = std::numeric_limits<uint32_t>::max() / this->resolution;
+        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / this->resolution;
 
 
-        }
+    }
 
-        void remove(Vector3 point) {
+    void remove(Vector3 point) {
 
-        }
+    }
+    
+    /*
+    std::tuple<std::tuple<uint16_t, uint16_t, uint16_t>, std::tuple<uint16_t, uint16_t, uint16_t>> get_nearest() {
+
         
-        /*
-        std::tuple<std::tuple<uint32_t, uint32_t, uint32_t>, std::tuple<uint32_t, uint32_t, uint32_t>> get_nearest() {
-
-            
 
 
 
-            return std::make_tuple(std::make_tuple(8u, 8u, 8u), std::make_tuple(8u, 8u, 8u));
-        }
-        */
+        return std::make_tuple(std::make_tuple(8u, 8u, 8u), std::make_tuple(8u, 8u, 8u));
+    }
+    */
 
 };
 
-inline uint32_t uint8_to_uint32(uint8_t value) {
-    return (uint32_t(value) * std::numeric_limits<uint32_t>::max()) / std::numeric_limits<uint8_t>::max();
+inline uint16_t uint8_to_uint16(uint8_t value) {
+    return (uint16_t(value) * std::numeric_limits<uint16_t>::max()) / std::numeric_limits<uint8_t>::max();
 }
 
-inline uint8_t uint32_to_uint8(uint32_t value) {
-    return (uint8_t)((uint64_t(value) * std::numeric_limits<uint8_t>::max()) / std::numeric_limits<uint32_t>::max());
+inline uint8_t uint16_to_uint8(uint16_t value) {
+    return (uint8_t)((uint32_t(value) * std::numeric_limits<uint8_t>::max()) / std::numeric_limits<uint16_t>::max());
 }
 
 extern "C" {
@@ -107,11 +153,11 @@ uint8_t* process(uint8_t* input, int length) {
     
     uint8_t* output = (uint8_t*) malloc(length);
 
-    std::unordered_map<Vector3, uint32_t> histogram;
+    std::unordered_map<Vector3, uint16_t> histogram;
 
     for (int i = 0; i < length / 3; i += 3) {
 
-        Vector3 color(uint8_to_uint32(input[i]), uint8_to_uint32(input[i+1]), uint8_to_uint32(input[i+2]));
+        Vector3 color(uint8_to_uint16(input[i]), uint8_to_uint16(input[i+1]), uint8_to_uint16(input[i+2]));
         auto search = histogram.find(color);
 
         // If we already have this point, increment the histogram
