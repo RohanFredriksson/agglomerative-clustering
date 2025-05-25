@@ -110,7 +110,7 @@ struct BucketComparator {
     }
 };
 
-class CourseningGrid {
+class SpatialGrid {
 
 public:
 
@@ -118,8 +118,14 @@ public:
     std::unordered_map<Vector3, Bucket*> grid;
     std::set<Bucket*, BucketComparator> cache;
 
-    CourseningGrid(uint16_t resolution) {
+    SpatialGrid(uint16_t resolution) {
         this->resolution = resolution;
+    }
+
+    ~SpatialGrid() {
+        for (const auto& pair : this->grid) {
+            delete pair.second;
+        }
     }
 
     void add(Vector3 point) {
@@ -244,6 +250,14 @@ public:
         return (*this->cache.begin())->best;
     }
 
+    void copy(SpatialGrid* grid) {        
+        for (const auto& pair : this->grid) {
+            for (Vector3 point : pair.second->points) {
+                grid->add(point);
+            }
+        }
+    }
+
 };
 
 inline uint16_t uint8_to_uint16(uint8_t value) {
@@ -262,7 +276,7 @@ uint8_t* process(uint8_t* input, int length) {
     uint8_t* output = (uint8_t*) malloc(length);
 
     std::unordered_map<Vector3, uint16_t> histogram;
-    CourseningGrid coursening_grid(5u);
+    SpatialGrid spatial_grid(5u);
 
     for (int i = 0; i < length / 3; i += 3) {
 
