@@ -196,6 +196,12 @@ public:
         if (bucket->points.find(point) == bucket->points.end()) {return;}
         this->grid[location]->points.erase(point);
 
+        // If the bucket is empty delete the bucket.
+        if (bucket->points.size() == 0) {
+            this->grid.erase(location);
+            delete bucket;
+        }
+
         // Find all neighbour buckets and see if we have to compute nearest neighbour pairings.
         Vector3 min = location;
         if (min.x > 0u) {min.x--;}
@@ -234,6 +240,10 @@ public:
     }
     
     Pair get_nearest() {
+
+        
+
+
         return Pair();
     }
 
