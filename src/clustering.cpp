@@ -114,12 +114,12 @@ class CourseningGrid {
 
 public:
 
-    uint16_t resolution = 5u;        
+    uint16_t resolution;        
     std::unordered_map<Vector3, Bucket*> grid;
     std::set<Bucket*, BucketComparator> cache;
 
-    CourseningGrid() {
-        
+    CourseningGrid(uint16_t resolution) {
+        this->resolution = resolution;
     }
 
     void add(Vector3 point) {
@@ -240,11 +240,8 @@ public:
     }
     
     Pair get_nearest() {
-
-        
-
-
-        return Pair();
+        if (this->cache.size() == 0) {return Pair();}
+        return (*this->cache.begin())->best;
     }
 
 };
@@ -265,7 +262,7 @@ uint8_t* process(uint8_t* input, int length) {
     uint8_t* output = (uint8_t*) malloc(length);
 
     std::unordered_map<Vector3, uint16_t> histogram;
-    CourseningGrid coursening_grid;
+    CourseningGrid coursening_grid(5u);
 
     for (int i = 0; i < length / 3; i += 3) {
 
