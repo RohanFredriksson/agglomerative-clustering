@@ -276,7 +276,8 @@ uint8_t* process(uint8_t* input, int length) {
     uint8_t* output = (uint8_t*) malloc(length);
 
     std::unordered_map<Vector3, uint16_t> histogram;
-    SpatialGrid spatial_grid(5u);
+    uint16_t current_resolution = 5u;
+    SpatialGrid spatial_grid(current_resolution);
 
     for (int i = 0; i < length / 3; i += 3) {
 
@@ -289,9 +290,47 @@ uint8_t* process(uint8_t* input, int length) {
             continue;
         }
 
+        spatial_grid.add(color);
         histogram[color] = 1u;
 
     }
+
+    while (current_resolution > 0u) {
+
+        Pair best_pair = spatial_grid.get_nearest();
+        
+        // If there are no best pairs then, coursen the grid.
+        if (!best_pair.initialised) {
+            current_resolution = current_resolution - 1u;
+            SpatialGrid new_grid(current_resolution);
+            spatial_grid.copy(&new_grid);
+            spatial_grid = new_grid;
+            continue;
+        }
+
+        // Merge the nearest points together.
+        uint16_t a_count = histogram[best_pair.a];
+        uint16_t b_count = histogram[best_pair.b];
+        uint16_t merged_count = a_count + b_count;
+        float a_ratio = (float) a_count / (float) merged_count;
+        float b_ratio = (float) b_count / (float) merged_count;
+        
+        Vector3 merged(
+            best_pair.a.x * a_ratio + best_pair.b.x * b_ratio,
+            best_pair.a.y * a_ratio + best_pair.b.y * b_ratio,
+            best_pair.a.z * a_ratio + best_pair.b.z * b_ratio
+        );
+
+        histogram.erase(best_pair.a);
+        histogram.erase(best_pair.b);
+        histogram[merged] = merged_count;
+
+        spatial_grid.remove(best_pair.a);
+        spatial_grid.remove(best_pair.b);
+        spatial_grid.add(merged);
+
+    }
+    
 
     for (int i = 0; i < length; ++i) {
         output[i] = 255 - input[i];  // You can change this logic
