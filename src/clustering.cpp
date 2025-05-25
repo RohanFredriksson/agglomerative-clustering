@@ -84,6 +84,10 @@ public:
         return distance < other.distance;
     }
 
+    bool contains(Vector3 vector) {
+        return this->a == vector || this->b == vector;\
+    }
+
 };
 
 class Bucket {
@@ -174,10 +178,58 @@ public:
         // Insert into the bucket
         this->grid[location]->points.insert(point);
 
-
     }
 
     void remove(Vector3 point) {
+
+        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
+        uint16_t x = point.x / grid_size;
+        uint16_t y = point.y / grid_size;
+        uint16_t z = point.z / grid_size;
+        Vector3 location(x, y, z);
+
+        // We can't remove a point if there is no bucket for it.
+        if (this->grid.find(location) == this->grid.end()) {return;}
+        Bucket* bucket = this->grid[location];
+
+        // If the point isn't in the bucket, we can't remove it.
+        if (bucket->points.find(point) == bucket->points.end()) {return;}
+        this->grid[location]->points.erase(point);
+
+        // Find all neighbour buckets and see if we have to compute nearest neighbour pairings.
+        Vector3 min = location;
+        if (min.x > 0u) {min.x--;}
+        if (min.y > 0u) {min.y--;}
+        if (min.z > 0u) {min.z--;}
+
+        Vector3 max = location;
+        if (max.x < grid_size - 1u) {max.x++;}
+        if (max.y < grid_size - 1u) {max.y++;}
+        if (max.z < grid_size - 1u) {max.z++;}
+
+        for (uint16_t x = min.x; x <= max.x; x++) {
+            for (uint16_t y = min.y; y < max.y; y++) {
+                for (uint16_t z = min.z; z < max.z; z++) {
+
+                    Vector3 bucket_position = Vector3(x, y, z);
+                    if (this->grid.find(bucket_position) == this->grid.end()) {continue;}
+                    bucket = this->grid[bucket_position];
+
+                    if (!bucket->best.contains(point)) {continue;}
+                    bucket->best = Pair();
+
+                    for (const Vector3& current_point : bucket->points) {
+                        Pair pair(current_point, point);
+                        if (!(pair < bucket->best)) {continue;}
+                        bucket->best = pair;
+                    }
+
+                    cache.erase(bucket);
+                    cache.insert(bucket);
+
+                }
+            }
+        }
 
     }
     
