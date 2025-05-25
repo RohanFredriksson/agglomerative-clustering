@@ -78,6 +78,12 @@ public:
 
     }
 
+    bool operator<(const Pair& other) const {
+        if (initialised && !other.initialised) {return true;}
+        if (!initialised && other.initialised) {return false;}
+        return distance < other.distance;
+    }
+
 };
 
 class Bucket {
@@ -96,9 +102,7 @@ public:
 
 struct BucketComparator {
     bool operator()(const Bucket* lhs, const Bucket* rhs) const {
-        if (lhs->best.initialised && !rhs->best.initialised) {return true;}
-        if (!lhs->best.initialised && rhs->best.initialised) {return false;}
-        return lhs->best.distance < rhs->best.distance;
+        return lhs->best < rhs->best;
     }
 };
 
@@ -133,6 +137,39 @@ public:
         }
 
         // Find all neighbour buckets and compute new possible nearest neighbour pairings.
+        Vector3 min = location;
+        if (min.x > 0u) {min.x--;}
+        if (min.y > 0u) {min.y--;}
+        if (min.z > 0u) {min.z--;}
+
+        Vector3 max = location;
+        if (max.x < grid_size - 1u) {max.x++;}
+        if (max.y < grid_size - 1u) {max.y++;}
+        if (max.z < grid_size - 1u) {max.z++;}
+
+        for (uint16_t x = min.x; x <= max.x; x++) {
+            for (uint16_t y = min.y; y < max.y; y++) {
+                for (uint16_t z = min.z; z < max.z; z++) {
+
+                    Vector3 bucket_position = Vector3(x, y, z);
+                    if (this->grid.find(bucket_position) == this->grid.end()) {continue;}
+                    Bucket* bucket = this->grid[bucket_position];
+                    bool recache = false;
+
+                    for (const Vector3& current_point : bucket->points) {
+                        Pair pair(current_point, point);
+                        if (!(pair < bucket->best)) {continue;}
+                        bucket->best = pair;
+                        recache = true;
+                    }
+
+                    if (!recache) {continue;}
+                    cache.erase(bucket);
+                    cache.insert(bucket);
+
+                }
+            }
+        }
 
         // Insert into the bucket
         this->grid[location]->points.insert(point);
