@@ -1,5 +1,6 @@
 // Average Hierarchical Agglomerative Color Clustering
 #include <set>
+#include <vector>
 #include <cstdint>
 #include <cstdlib>
 #include <emscripten.h>
@@ -114,12 +115,14 @@ class SpatialGrid {
 
 public:
 
-    uint16_t resolution;        
+    uint16_t resolution;
+    uint16_t grid_size;
     std::unordered_map<Vector3, Bucket*> grid;
     std::set<Bucket*, BucketComparator> cache;
 
     SpatialGrid(uint16_t resolution) {
         this->resolution = resolution;
+        this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
     }
 
     ~SpatialGrid() {
@@ -128,15 +131,60 @@ public:
         }
     }
 
+    std::vector<Bucket*> get_local_buckets(Vector3 location) {
+
+        std::vector<Bucket*> result;
+        result.reserve(9);
+
+        Vector3 min = location;
+        if (min.x > 0u) {min.x--;}
+        if (min.y > 0u) {min.y--;}
+        if (min.z > 0u) {min.z--;}
+
+        Vector3 max = location;
+        if (max.x < this->grid_size - 1u) {max.x++;}
+        if (max.y < this->grid_size - 1u) {max.y++;}
+        if (max.z < this->grid_size - 1u) {max.z++;}
+
+        for (uint16_t x = min.x; x <= max.x; x++) {
+            for (uint16_t y = min.y; y < max.y; y++) {
+                for (uint16_t z = min.z; z < max.z; z++) {
+                    Vector3 bucket_position = Vector3(x, y, z);
+                    if (this->grid.find(bucket_position) == this->grid.end()) {continue;}
+                    result.push_back(this->grid[bucket_position]);
+                }
+            }
+        }
+
+        return result;
+
+    }
+
+    std::vector<Vector3> get_local_points(Vector3 location) {
+
+        size_t total_size; 
+        std::vector<Bucket*> buckets = this->get_local_buckets(location);
+        for (Bucket* bucket : buckets) {total_size += bucket->points.size();}
+        
+        std::vector<Vector3> result;
+        result.reserve(total_size);
+        for (Bucket* bucket : buckets) {result.insert(result.end(), bucket->points.begin(), bucket->points.end());}
+        return result;
+
+    }
+
+    Vector3 get_location(Vector3 point) {
+        return Vector3(
+            point.x / this->grid_size,
+            point.y / this->grid_size,
+            point.z / this->grid_size
+        );   
+    }
+
     void add(Vector3 point) {
 
-        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
-        uint16_t x = point.x / grid_size;
-        uint16_t y = point.y / grid_size;
-        uint16_t z = point.z / grid_size;
-        Vector3 location(x, y, z);
-        
         // If we don't have the required bucket, allocate one.
+        Vector3 location = this->get_location(point);
         if (this->grid.find(location) == this->grid.end()) {
             this->grid[location] = new Bucket(location);
         }
@@ -146,39 +194,22 @@ public:
             return;
         }
 
-        // Find all neighbour buckets and compute new possible nearest neighbour pairings.
-        Vector3 min = location;
-        if (min.x > 0u) {min.x--;}
-        if (min.y > 0u) {min.y--;}
-        if (min.z > 0u) {min.z--;}
+        std::vector<Bucket*> buckets = this->get_local_buckets(location);
+        for (Bucket* bucket : buckets) {
 
-        Vector3 max = location;
-        if (max.x < grid_size - 1u) {max.x++;}
-        if (max.y < grid_size - 1u) {max.y++;}
-        if (max.z < grid_size - 1u) {max.z++;}
+            bool recache = false;
 
-        for (uint16_t x = min.x; x <= max.x; x++) {
-            for (uint16_t y = min.y; y < max.y; y++) {
-                for (uint16_t z = min.z; z < max.z; z++) {
-
-                    Vector3 bucket_position = Vector3(x, y, z);
-                    if (this->grid.find(bucket_position) == this->grid.end()) {continue;}
-                    Bucket* bucket = this->grid[bucket_position];
-                    bool recache = false;
-
-                    for (const Vector3& current_point : bucket->points) {
-                        Pair pair(current_point, point);
-                        if (!(pair < bucket->best)) {continue;}
-                        bucket->best = pair;
-                        recache = true;
-                    }
-
-                    if (!recache) {continue;}
-                    cache.erase(bucket);
-                    cache.insert(bucket);
-
-                }
+            for (const Vector3& current_point : bucket->points) {
+                Pair pair(current_point, point);
+                if (!(pair < bucket->best)) {continue;}
+                bucket->best = pair;
+                recache = true;
             }
+
+            if (!recache) {continue;}
+            cache.erase(bucket);
+            cache.insert(bucket);
+
         }
 
         // Insert into the bucket
@@ -188,13 +219,8 @@ public:
 
     void remove(Vector3 point) {
 
-        uint16_t grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
-        uint16_t x = point.x / grid_size;
-        uint16_t y = point.y / grid_size;
-        uint16_t z = point.z / grid_size;
-        Vector3 location(x, y, z);
-
         // We can't remove a point if there is no bucket for it.
+        Vector3 location = this->get_location(point);
         if (this->grid.find(location) == this->grid.end()) {return;}
         Bucket* bucket = this->grid[location];
 
@@ -208,39 +234,26 @@ public:
             delete bucket;
         }
 
-        // Find all neighbour buckets and see if we have to compute nearest neighbour pairings.
-        Vector3 min = location;
-        if (min.x > 0u) {min.x--;}
-        if (min.y > 0u) {min.y--;}
-        if (min.z > 0u) {min.z--;}
+        std::vector<Bucket*> buckets = this->get_local_buckets(location);
+        for (Bucket* bucket : buckets) {
 
-        Vector3 max = location;
-        if (max.x < grid_size - 1u) {max.x++;}
-        if (max.y < grid_size - 1u) {max.y++;}
-        if (max.z < grid_size - 1u) {max.z++;}
+            // If the best point doesn't include the removed point we don't need to recache.
+            if (!bucket->best.contains(point)) {continue;}
+            bucket->best = Pair();
 
-        for (uint16_t x = min.x; x <= max.x; x++) {
-            for (uint16_t y = min.y; y < max.y; y++) {
-                for (uint16_t z = min.z; z < max.z; z++) {
-
-                    Vector3 bucket_position = Vector3(x, y, z);
-                    if (this->grid.find(bucket_position) == this->grid.end()) {continue;}
-                    bucket = this->grid[bucket_position];
-
-                    if (!bucket->best.contains(point)) {continue;}
-                    bucket->best = Pair();
-
-                    for (const Vector3& current_point : bucket->points) {
-                        Pair pair(current_point, point);
-                        if (!(pair < bucket->best)) {continue;}
-                        bucket->best = pair;
-                    }
-
-                    cache.erase(bucket);
-                    cache.insert(bucket);
-
+            // Brute force closest point search, this should be okay since there should not be too many points.
+            std::vector<Vector3> local_points = this->get_local_points(bucket->location);
+            for (size_t i = 0; i < local_points.size(); i++) {
+                for (size_t j = i + 1; j < local_points.size(); j++) {
+                    Pair pair(local_points[i], local_points[j]);
+                    if (!(pair < bucket->best)) {continue;}
+                    bucket->best = pair;
                 }
             }
+
+            cache.erase(bucket);
+            cache.insert(bucket);
+
         }
 
     }
