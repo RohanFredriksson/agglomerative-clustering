@@ -1,4 +1,5 @@
 import createWasmModule from '../dist/clustering.js';
+import { data } from './image.js';
 
 let module = null;
 
@@ -27,7 +28,7 @@ export async function process(input) {
 }
 
 let f = async () => {
-    let result = await process(new Uint8Array([1, 2, 3]));
+    let result = await process(new Uint8Array(data));
     console.log(result);
 }; f();
 
