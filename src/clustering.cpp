@@ -92,8 +92,18 @@ public:
         return distance < other.distance;
     }
 
+    bool operator==(const Pair& other) const {
+        if (initialised != other.initialised) {return false;}
+        if (!initialised) {return true;}
+        return (a == other.a && b == other.b) || (a == other.b && b == other.a);
+    }
+
+    bool operator!=(const Pair& other) const {
+        return !(*this == other);
+    }
+
     bool contains(Vector3 vector) {
-        return this->a == vector || this->b == vector;\
+        return this->a == vector || this->b == vector;
     }
 
 };
@@ -114,7 +124,8 @@ public:
 
 struct BucketComparator {
     bool operator()(const Bucket* lhs, const Bucket* rhs) const {
-        return lhs->best < rhs->best;
+        if (lhs->best != rhs->best) {return lhs->best < rhs->best;}
+        return lhs < rhs;
     }
 };
 
@@ -124,13 +135,13 @@ public:
 
     uint16_t resolution;
     uint16_t grid_size;
+    size_t size = 0;
     std::unordered_map<Vector3, Bucket*> grid;
     std::set<Bucket*, BucketComparator> cache;
 
     SpatialGrid(uint16_t resolution) {
         this->resolution = resolution;
         this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
-        std::cout << "GRID SIZE: " << this->grid_size << "\n";
     }
 
     ~SpatialGrid() {
@@ -168,9 +179,21 @@ public:
 
     }
 
+    std::vector<Vector3> get_all_points() {
+        
+        size_t total_size = 0;
+        std::vector<Vector3> result;
+        for (const auto& pair : this->grid) {total_size += pair.second->points.size();}
+        result.reserve(total_size);
+
+        for (const auto& pair : this->grid) {result.insert(result.end(), pair.second->points.begin(), pair.second->points.end());}
+        return result;
+
+    }
+
     std::vector<Vector3> get_local_points(Vector3 location) {
 
-        size_t total_size; 
+        size_t total_size = 0; 
         std::vector<Bucket*> buckets = this->get_local_buckets(location);
         for (Bucket* bucket : buckets) {total_size += bucket->points.size();}
         
@@ -193,7 +216,6 @@ public:
 
         // If we don't have the required bucket, allocate one.
         Vector3 location = this->get_location(point);
-        std::cout << "ADD LOCATION: " << location << "\n";
         if (this->grid.find(location) == this->grid.end()) {
             this->grid[location] = new Bucket(location);
         }
@@ -202,8 +224,6 @@ public:
         else if (this->grid[location]->points.find(point) != this->grid[location]->points.end()) {
             return;
         }
-
-        std::cout << "\nADDED COLOUR " << point << "\n";
 
         std::vector<Bucket*> buckets = this->get_local_buckets(location);
         for (Bucket* bucket : buckets) {
@@ -218,16 +238,19 @@ public:
                 best = pair;
             }
 
-            if (!recache) {std::cout << bucket->location << " DOESN'T NEED AN ADD RECACHE\n"; continue;}
-            std::cout << bucket->location << " NEEDS AN ADD RECACHE\n";
+            if (!recache) {continue;}
             cache.erase(bucket);
             bucket->best = best;
-            cache.insert(bucket);
+            std::cout << "BEFORE 2: " << this->cache.size() << "\n";
+            this->cache.insert(bucket);
+            std::cout << "AFTER 2: " << this->cache.size() << "\n";
 
         }
 
         // Insert into the bucket
+        std::cout << "ADDED: " << point << " IN " << location <<"\n";
         this->grid[location]->points.insert(point);
+        this->size++;
         
     }
 
@@ -235,30 +258,28 @@ public:
 
         // We can't remove a point if there is no bucket for it.
         Vector3 location = this->get_location(point);
-        if (this->grid.find(location) == this->grid.end()) {std::cout << "CANNOT FIND BUCKET " << location << "\n"; return;}
+        if (this->grid.find(location) == this->grid.end()) {return;}
         Bucket* bucket = this->grid[location];
 
         // If the point isn't in the bucket, we can't remove it.
-        if (bucket->points.find(point) == bucket->points.end()) {std::cout << "CANNOT FIND COLOUR " << point << " IN " << location << "\n"; return;}
+        if (bucket->points.find(point) == bucket->points.end()) {return;}
         this->grid[location]->points.erase(point);
-        std::cout << "\nREMOVE COLOUR " << point << "\n";
+        this->size--;
 
         // If the bucket is empty delete the bucket.
         if (bucket->points.size() == 0) {
             this->grid.erase(location);
             this->cache.erase(bucket);
             delete bucket;
-            std::cout << "REMOVE BUCKET" << location << "\n";
         }
 
         std::vector<Bucket*> buckets = this->get_local_buckets(location);
         for (Bucket* bucket : buckets) {
 
             // If the best point doesn't include the removed point we don't need to recache.
-            if (!bucket->best.contains(point)) {std::cout << bucket->location << " DOESN'T NEED A REMOVE RECACHE\n"; continue;}
+            if (!bucket->best.contains(point)) {continue;}
             this->cache.erase(bucket);
             bucket->best = Pair();
-            std::cout << bucket->location << " NEEDS A REMOVE RECACHE\n";
 
             // Brute force closest point search, this should be okay since there should not be too many points.
             std::vector<Vector3> local_points = this->get_local_points(bucket->location);
@@ -271,15 +292,45 @@ public:
                 }
             }
 
+            std::cout << "BEFORE 1: " << this->cache.size() << "\n";
             this->cache.insert(bucket);
+            std::cout << "AFTER 1: " << this->cache.size() << "\n";
 
         }
 
     }
     
     Pair get_nearest() {
-        if (this->cache.size() == 0) {return Pair();}
-        return (*this->cache.begin())->best;
+        
+        std::cout << "BUCKETS: " << this->grid.size() << "\n";
+        std::cout << "CACHE: " << this->cache.size() << "\n";
+
+        if (this->cache.size() == 0) {
+            std::cout << "EMPTY CACHE REBUILD: FINAL SIZE: " << this->size << ", " << this->grid.size() << "\n";
+            return Pair();
+        }
+
+        Pair best = (*this->cache.begin())->best;
+        if (best.initialised) {return best;}
+
+        if (!best.initialised && this->resolution == 0u) {
+            std::cout << "NO MORE NEIGHBOUR: FINAL SIZE: " << this->size << "\n"; 
+            return Pair();
+        }
+
+        std::cout << "REBUILD SIZE: " << this->size << "\n";
+        this->size = 0;
+
+        std::vector<Vector3> points = this->get_all_points();
+        for (const auto& pair : this->grid) {delete pair.second;}
+        this->cache.clear();
+        this->grid.clear();
+
+        this->resolution = this->resolution - 1u;
+        this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
+        for (Vector3 point : points) {this->add(point);}
+        return this->get_nearest();
+
     }
 
     void copy(SpatialGrid* grid) {        
@@ -305,15 +356,17 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE
 uint8_t* process(uint8_t* input, int length) {
     
+    std::cout << "LENGTH: " << length << "\n";
     uint8_t* output = (uint8_t*) malloc(length);
 
     std::unordered_map<Vector3, uint16_t> histogram;
     uint16_t current_resolution = 5u;
     SpatialGrid spatial_grid(current_resolution);
 
-    for (int i = 0; i < length / 3; i += 3) {
+    for (int i = 0; i < length - 2; i += 3) {
 
         Vector3 color(uint8_to_uint16(input[i]), uint8_to_uint16(input[i+1]), uint8_to_uint16(input[i+2]));
+        std::cout << color << "\n";
         auto search = histogram.find(color);
 
         // If we already have this point, increment the histogram
@@ -327,21 +380,10 @@ uint8_t* process(uint8_t* input, int length) {
 
     }
 
-    while (current_resolution > 0u) {
+    while (true) {
 
         Pair best_pair = spatial_grid.get_nearest();
-        
-        // If there are no best pairs then, coursen the grid.
-        if (!best_pair.initialised) {
-            std::cout << spatial_grid.grid.size() << "\n";
-            std::cout << spatial_grid.cache.size() << "\n";
-            std::cout << "REBUILD\n\n\n\n\n\n\n\n";
-            current_resolution = current_resolution - 1u;
-            SpatialGrid new_grid(current_resolution);
-            spatial_grid.copy(&new_grid);
-            spatial_grid = new_grid;
-            continue;
-        }
+        if (!best_pair.initialised) {break;}
 
         std::cout << "\nBEST PAIR IN " << (*spatial_grid.cache.begin())->location << "\n";
         std::cout << "A: " << best_pair.a << " " << spatial_grid.get_location(best_pair.a) << "\n";
