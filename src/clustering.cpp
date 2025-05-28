@@ -1,5 +1,6 @@
 // Average Hierarchical Agglomerative Color Clustering
 #include <set>
+#include <map>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
@@ -65,8 +66,7 @@ public:
 
     Vector3 a;
     Vector3 b;
-    uint64_t distance;
-    bool initialised = false;
+    uint64_t distance = std::numeric_limits<uint64_t>::max();
 
     Pair() {
 
@@ -82,19 +82,14 @@ public:
         uint64_t dz = a.z > b.z ? (uint64_t)(a.z - b.z) : (uint64_t)(b.z - a.z);
 
         this->distance = dx * dx + dy * dy + dz * dz;
-        this->initialised = true;
 
     }
 
     bool operator<(const Pair& other) const {
-        if (initialised && !other.initialised) {return true;}
-        if (!initialised && other.initialised) {return false;}
         return distance < other.distance;
     }
 
     bool operator==(const Pair& other) const {
-        if (initialised != other.initialised) {return false;}
-        if (!initialised) {return true;}
         return (a == other.a && b == other.b) || (a == other.b && b == other.a);
     }
 
@@ -137,7 +132,7 @@ public:
     uint16_t grid_size;
     size_t size = 0;
     std::unordered_map<Vector3, Bucket*> grid;
-    std::set<Bucket*, BucketComparator> cache;
+    std::map<uint64_t, std::unordered_set<Bucket*>> cache;
 
     SpatialGrid(uint16_t resolution) {
         this->resolution = resolution;
@@ -239,11 +234,11 @@ public:
             }
 
             if (!recache) {continue;}
-            cache.erase(bucket);
+            this->cache[bucket->best.distance].erase(bucket);
+            if (this->cache[bucket->best.distance].size() == 0) {this->cache.erase(bucket->best.distance);}
             bucket->best = best;
-            std::cout << "BEFORE 2: " << this->cache.size() << "\n";
-            this->cache.insert(bucket);
-            std::cout << "AFTER 2: " << this->cache.size() << "\n";
+            if (this->cache.find(bucket->best.distance) == this->cache.end()) {this->cache[bucket->best.distance] = std::unordered_set<Bucket*>();}
+            this->cache[bucket->best.distance].insert(bucket);
 
         }
 
@@ -269,7 +264,8 @@ public:
         // If the bucket is empty delete the bucket.
         if (bucket->points.size() == 0) {
             this->grid.erase(location);
-            this->cache.erase(bucket);
+            this->cache[bucket->best.distance].erase(bucket);
+            if (this->cache[bucket->best.distance].size() == 0) {this->cache.erase(bucket->best.distance);}
             delete bucket;
         }
 
@@ -278,7 +274,8 @@ public:
 
             // If the best point doesn't include the removed point we don't need to recache.
             if (!bucket->best.contains(point)) {continue;}
-            this->cache.erase(bucket);
+            this->cache[bucket->best.distance].erase(bucket);
+            if (this->cache[bucket->best.distance].size() == 0) {this->cache.erase(bucket->best.distance);}
             bucket->best = Pair();
 
             // Brute force closest point search, this should be okay since there should not be too many points.
@@ -292,9 +289,8 @@ public:
                 }
             }
 
-            std::cout << "BEFORE 1: " << this->cache.size() << "\n";
-            this->cache.insert(bucket);
-            std::cout << "AFTER 1: " << this->cache.size() << "\n";
+            if (this->cache.find(bucket->best.distance) == this->cache.end()) {this->cache[bucket->best.distance] = std::unordered_set<Bucket*>();}
+            this->cache[bucket->best.distance].insert(bucket);
 
         }
 
@@ -310,10 +306,13 @@ public:
             return Pair();
         }
 
-        Pair best = (*this->cache.begin())->best;
-        if (best.initialised) {return best;}
+        std::unordered_set<Bucket*> best_buckets = this->cache.begin()->second;
+        if (best_buckets.size() == 0) {std::cout << "ERROR EMPTY CACHE.\n";}
 
-        if (!best.initialised && this->resolution == 0u) {
+        Pair best = (*best_buckets.begin())->best;
+        if (best.distance != std::numeric_limits<uint64_t>::max()) {return best;}
+
+        if (best.distance == std::numeric_limits<uint64_t>::max() && this->resolution == 0u) {
             std::cout << "NO MORE NEIGHBOUR: FINAL SIZE: " << this->size << "\n"; 
             return Pair();
         }
@@ -383,11 +382,10 @@ uint8_t* process(uint8_t* input, int length) {
     while (true) {
 
         Pair best_pair = spatial_grid.get_nearest();
-        if (!best_pair.initialised) {break;}
+        if (best_pair.distance == std::numeric_limits<uint64_t>::max()) {break;}
 
-        std::cout << "\nBEST PAIR IN " << (*spatial_grid.cache.begin())->location << "\n";
-        std::cout << "A: " << best_pair.a << " " << spatial_grid.get_location(best_pair.a) << "\n";
-        std::cout << "B: " << best_pair.b << " " << spatial_grid.get_location(best_pair.b) << "\n\n";
+        std::cout << "A: " << best_pair.a << " " << spatial_grid.get_location(best_pair.a) << " " << spatial_grid.resolution << "\n";
+        std::cout << "B: " << best_pair.b << " " << spatial_grid.get_location(best_pair.b) << " " << spatial_grid.resolution << "\n\n";
 
         // Merge the nearest points together.
         uint16_t a_count = histogram[best_pair.a];
