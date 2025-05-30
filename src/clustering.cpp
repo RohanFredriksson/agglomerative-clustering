@@ -212,7 +212,10 @@ public:
         // If we don't have the required bucket, allocate one.
         Vector3 location = this->get_location(point);
         if (this->grid.find(location) == this->grid.end()) {
-            this->grid[location] = new Bucket(location);
+            Bucket* bucket = new Bucket(location);
+            this->grid[location] = bucket;
+            if (this->cache.find(bucket->best.distance) == this->cache.end()) {this->cache[bucket->best.distance] = std::unordered_set<Bucket*>();}
+            this->cache[bucket->best.distance].insert(bucket);
         }
 
         // If we already have this point, don't add it.
@@ -327,6 +330,7 @@ public:
 
         this->resolution = this->resolution - 1u;
         this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
+        std::cout << "GRID SIZE: " << this->grid_size << "\n";
         for (Vector3 point : points) {this->add(point);}
         return this->get_nearest();
 
@@ -352,13 +356,33 @@ inline uint8_t uint16_to_uint8(uint16_t value) {
 
 extern "C" {
 
+class MergeOperation {
+    
+public:
+
+    Vector3 merged;
+    Vector3 a;
+    Vector3 b;
+    uint32_t a_count;
+    uint32_t b_count;
+
+    MergeOperation(Vector3 merged, Vector3 a, Vector3 b, uint32_t a_count, uint32_t b_count) {
+        this->merged = merged;
+        this->a = a;
+        this->b = b;
+        this->a_count = a_count;
+        this->b_count = b_count;
+    }
+
+};
+
 EMSCRIPTEN_KEEPALIVE
 uint8_t* process(uint8_t* input, int length) {
     
     std::cout << "LENGTH: " << length << "\n";
     uint8_t* output = (uint8_t*) malloc(length);
 
-    std::unordered_map<Vector3, uint16_t> histogram;
+    std::unordered_map<Vector3, uint32_t> histogram;
     uint16_t current_resolution = 5u;
     SpatialGrid spatial_grid(current_resolution);
 
@@ -388,11 +412,11 @@ uint8_t* process(uint8_t* input, int length) {
         std::cout << "B: " << best_pair.b << " " << spatial_grid.get_location(best_pair.b) << " " << spatial_grid.resolution << "\n\n";
 
         // Merge the nearest points together.
-        uint16_t a_count = histogram[best_pair.a];
-        uint16_t b_count = histogram[best_pair.b];
-        uint16_t merged_count = a_count + b_count;
-        float a_ratio = (float) a_count / (float) merged_count;
-        float b_ratio = (float) b_count / (float) merged_count;
+        uint32_t a_count = histogram[best_pair.a];
+        uint32_t b_count = histogram[best_pair.b];
+        uint32_t merged_count = a_count + b_count;
+        double a_ratio = (double) a_count / (double) merged_count;
+        double b_ratio = (double) b_count / (double) merged_count;
         
         Vector3 merged(
             best_pair.a.x * a_ratio + best_pair.b.x * b_ratio,
