@@ -7,8 +7,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <iostream>
-
 inline void hash_combine(std::size_t& seed, std::size_t value) {
     seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
@@ -40,11 +38,6 @@ public:
     }
 
 };
-
-std::ostream& operator<<(std::ostream& os, const Vector3& v) {
-    os << "(" << v.x << ", " << v.y << ", " << v.z << ")";
-    return os;
-}
 
 namespace std {
     template <>
@@ -84,16 +77,8 @@ public:
 
     }
 
-    bool operator<(const Pair& other) const {
-        return distance < other.distance;
-    }
-
-    bool operator==(const Pair& other) const {
-        return (a == other.a && b == other.b) || (a == other.b && b == other.a);
-    }
-
-    bool operator!=(const Pair& other) const {
-        return !(*this == other);
+    bool operator>=(const Pair& other) const {
+        return distance >= other.distance;
     }
 
     bool contains(Vector3 vector) {
@@ -116,29 +101,21 @@ public:
 
 };
 
-struct BucketComparator {
-    bool operator()(const Bucket* lhs, const Bucket* rhs) const {
-        if (lhs->best != rhs->best) {return lhs->best < rhs->best;}
-        return lhs < rhs;
-    }
-};
-
-class SpatialGrid {
+class CoarseningGrid {
 
 public:
 
     uint16_t resolution;
     uint16_t grid_size;
-    size_t size = 0;
     std::unordered_map<Vector3, Bucket*> grid;
     std::map<uint64_t, std::unordered_set<Bucket*>> cache;
 
-    SpatialGrid(uint16_t resolution) {
+    CoarseningGrid(uint16_t resolution) {
         this->resolution = resolution;
         this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
     }
 
-    ~SpatialGrid() {
+    ~CoarseningGrid() {
         for (const auto& pair : this->grid) {
             delete pair.second;
         }
@@ -239,7 +216,7 @@ public:
 
             for (const Vector3& current_point : bucket->points) {
                 Pair pair(current_point, point);
-                if (!(pair < best)) {continue;}
+                if (pair >= best) {continue;}
                 recache = true;
                 best = pair;
             }
@@ -253,7 +230,6 @@ public:
 
         // Insert into the bucket
         this->grid[location]->points.insert(point);
-        this->size++;
         
     }
 
@@ -267,7 +243,6 @@ public:
         // If the point isn't in the bucket, we can't remove it.
         if (bucket->points.find(point) == bucket->points.end()) {return;}
         this->grid[location]->points.erase(point);
-        this->size--;
 
         // If the bucket is empty delete the bucket.
         if (bucket->points.size() == 0) {
@@ -290,7 +265,7 @@ public:
                 for (const Vector3& current_point : bucket->points) {
                     if (current_point == local_points[i]) {continue;}
                     Pair pair(current_point, local_points[i]);
-                    if (!(pair < bucket->best)) {continue;}
+                    if (pair >= bucket->best) {continue;}
                     bucket->best = pair;
                 }
             }
@@ -305,13 +280,10 @@ public:
     
         if (this->cache.size() == 0) {return Pair();}
         std::unordered_set<Bucket*> best_buckets = this->cache.begin()->second;
-        if (best_buckets.size() == 0) {std::cout << "ERROR EMPTY CACHE.\n";}
 
         Pair best = (*best_buckets.begin())->best;
         if (best.distance != std::numeric_limits<uint64_t>::max()) {return best;}
         if (best.distance == std::numeric_limits<uint64_t>::max() && this->resolution == 0u) {return Pair();}
-
-        this->size = 0;
 
         std::vector<Vector3> points = this->get_all_points();
         for (const auto& pair : this->grid) {delete pair.second;}
@@ -325,7 +297,7 @@ public:
 
     }
 
-    void copy(SpatialGrid* grid) {        
+    void copy(CoarseningGrid* grid) {        
         for (const auto& pair : this->grid) {
             for (Vector3 point : pair.second->points) {
                 grid->add(point);
@@ -371,7 +343,7 @@ uint8_t* process(uint8_t* input, int length) {
     uint8_t* output = (uint8_t*) malloc(length);
     std::unordered_map<Vector3, uint32_t> histogram;
     uint16_t current_resolution = 5u;
-    SpatialGrid spatial_grid(current_resolution);
+    CoarseningGrid coarsening_grid(current_resolution);
 
     for (int i = 0; i < length - 2; i += 3) {
 
@@ -383,18 +355,17 @@ uint8_t* process(uint8_t* input, int length) {
             continue;
         }
 
-        spatial_grid.add(color);
+        coarsening_grid.add(color);
         histogram[color] = 1u;
 
     }
 
-    std::cout << histogram.size() << "\n";
     std::vector<MergeOperation> operations;
     operations.reserve(histogram.size() - 1);
 
     while (true) {
 
-        Pair best_pair = spatial_grid.get_nearest();
+        Pair best_pair = coarsening_grid.get_nearest();
         if (best_pair.distance == std::numeric_limits<uint64_t>::max()) {break;}
 
         // Merge the nearest points together.
@@ -419,14 +390,11 @@ uint8_t* process(uint8_t* input, int length) {
         MergeOperation operation(merged, best_pair.a, best_pair.b, a_count, b_count);
         operations.push_back(operation);
 
-        std::cout << "HISTOGRAM SIZE: " << histogram.size() << " OPERATIONS SIZE: " << operations.size() << " BOTH: " << histogram.size() + operations.size() << "\n";
+        coarsening_grid.remove(best_pair.a);
+        coarsening_grid.remove(best_pair.b);
+        coarsening_grid.add(merged);
 
-        spatial_grid.remove(best_pair.a);
-        spatial_grid.remove(best_pair.b);
-        spatial_grid.add(merged);
     }
-
-    std::cout << histogram.size() << ", " << operations.size() << "\n";
 
     for (int i = 0; i < length; ++i) {
         output[i] = 255 - input[i];  // You can change this logic
