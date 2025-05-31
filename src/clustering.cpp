@@ -315,8 +315,6 @@ inline uint8_t uint16_to_uint8(uint16_t value) {
     return (uint8_t)((uint32_t(value) * std::numeric_limits<uint8_t>::max()) / std::numeric_limits<uint16_t>::max());
 }
 
-extern "C" {
-
 class MergeOperation {
     
 public:
@@ -324,18 +322,41 @@ public:
     Vector3 merged;
     Vector3 a;
     Vector3 b;
-    uint32_t a_count;
-    uint32_t b_count;
 
-    MergeOperation(Vector3 merged, Vector3 a, Vector3 b, uint32_t a_count, uint32_t b_count) {
+    MergeOperation(Vector3 merged, Vector3 a, Vector3 b) {
         this->merged = merged;
         this->a = a;
         this->b = b;
-        this->a_count = a_count;
-        this->b_count = b_count;
     }
 
 };
+
+extern "C" {
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format) {
+    return nullptr;
+}
+
+uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k) {
+    return nullptr;
+}
+
+uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
+    return nullptr;
+}
+
+uint8_t* quantize(uint8_t* image, int image_length, int image_format, int k) {
+    return nullptr;
+}
+
+uint8_t* quantize_with_clustering(uint8_t* image, int image_length, int image_format, uint8_t* clustering, int clustering_length, int k) {
+    return nullptr;
+}
+
+uint8_t* quantize_with_palette(uint8_t* image, int image_length, int image_format, uint8_t* palette, uint8_t* palette_length) {
+    return nullptr;
+}
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* process(uint8_t* input, int length) {
@@ -387,7 +408,7 @@ uint8_t* process(uint8_t* input, int length) {
         if (histogram.find(merged) == histogram.end()) {histogram[merged] = merged_count;}
         else {histogram[merged] = histogram[merged] + merged_count;}
 
-        MergeOperation operation(merged, best_pair.a, best_pair.b, a_count, b_count);
+        MergeOperation operation(merged, best_pair.a, best_pair.b);
         operations.push_back(operation);
 
         coarsening_grid.remove(best_pair.a);
