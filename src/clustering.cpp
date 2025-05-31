@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <emscripten.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -383,28 +384,102 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
 }
 
+class Color {
+
+public:
+
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+
+    Color(uint8_t r, uint8_t g, uint8_t b) {
+        this->r = r;
+        this->g = g;
+        this->b = b;
+    }
+
+    bool operator==(const Color& other) const {
+        return (r == other.r) &&
+               (g == other.g) &&
+               (b == other.b);
+    }
+
+};
+
+namespace std {
+    template <>
+    struct hash<Color> {
+        std::size_t operator()(const Color& c) const noexcept {
+            std::size_t seed = 0;
+            hash_combine(seed, c.r);
+            hash_combine(seed, c.g);
+            hash_combine(seed, c.b);
+            return seed;
+        }
+    };
+}
+
+std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clustering, int k) {
+     
+    std::vector<uint8_t> palette;
+    if (clustering.size() < 3 || k < 1) {return palette;}
+
+    int merges = (clustering.size() - 3) / 9;
+    k = std::min(k - 1, merges);
+    std::unordered_set<Color> colors;
+    colors.insert(Color(clustering[0], clustering[1], clustering[2]));
+
+    for (int i = 0; i < k; i++) {
+        colors.erase(Color(clustering[3+i*9], clustering[4+i*9], clustering[5+i*9]));
+        colors.insert(Color(clustering[6+i*9], clustering[7+i*9], clustering[8+i*9]));
+        colors.insert(Color(clustering[9+i*9], clustering[10+i*9], clustering[11+i*9]));
+    }
+
+    palette.reserve(colors.size());
+    for (Color color : colors) {
+        palette.push_back(color.r);
+        palette.push_back(color.g);
+        palette.push_back(color.b);
+    }
+    
+    return palette;
+    
+}
+
 #include <iostream>
+
+uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
+    uint8_t* output = (uint8_t*) std::malloc(4 + vector.size());
+    output[0] = (vector.size() >> 0) & 0xFF;
+    output[1] = (vector.size() >> 8) & 0xFF;
+    output[2] = (vector.size() >> 16) & 0xFF;
+    output[3] = (vector.size() >> 24) & 0xFF;
+    std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));
+    return output;
+}
 
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
-    uint8_t* output = (uint8_t*) malloc(4 + clustering.size());
-    output[0] = (clustering.size() >> 0) & 0xFF;
-    output[1] = (clustering.size() >> 8) & 0xFF;
-    output[2] = (clustering.size() >> 16) & 0xFF;
-    output[3] = (clustering.size() >> 24) & 0xFF;
-    std::memcpy(output + 4, clustering.data(), clustering.size() * sizeof(uint8_t));
-    return output;
+    return pack_variable_size(clustering);
 }
 
+EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
-    return nullptr;
+    std::vector<uint8_t> clustering;
+    clustering.resize(clustering_length);
+    std::memcpy(clustering.data(), clustering_data, clustering_length);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    return pack_variable_size(palette);
 }
 
+EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k) {
-    return nullptr;
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    return pack_variable_size(palette);
 }
 
 uint8_t* quantize(uint8_t* image, int image_length, int image_format, int k) {
