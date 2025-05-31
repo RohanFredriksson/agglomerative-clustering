@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "emcc src/clustering.cpp -O3 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s EXPORTED_FUNCTIONS=\"['_process', '_malloc', '_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
+    "build": "emcc src/clustering.cpp -O3 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s EXPORTED_FUNCTIONS=\"['_get_clustering', '_process', '_malloc', '_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
     "prepublishOnly": "npm run build"
   }
 }

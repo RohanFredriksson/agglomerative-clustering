@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <emscripten.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -297,14 +298,6 @@ public:
 
     }
 
-    void copy(CoarseningGrid* grid) {        
-        for (const auto& pair : this->grid) {
-            for (Vector3 point : pair.second->points) {
-                grid->add(point);
-            }
-        }
-    }
-
 };
 
 inline uint16_t uint8_to_uint16(uint8_t value) {
@@ -312,37 +305,105 @@ inline uint16_t uint8_to_uint16(uint8_t value) {
 }
 
 inline uint8_t uint16_to_uint8(uint16_t value) {
-    return (uint8_t)((uint32_t(value) * std::numeric_limits<uint8_t>::max()) / std::numeric_limits<uint16_t>::max());
+    return static_cast<uint8_t>((static_cast<uint32_t>(value) * std::numeric_limits<uint8_t>::max() + (std::numeric_limits<uint16_t>::max() / 2)) / std::numeric_limits<uint16_t>::max());
 }
 
-class MergeOperation {
+std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
     
-public:
+    std::vector<uint8_t> clustering;
+    std::unordered_map<Vector3, uint32_t> histogram;
+    CoarseningGrid coarsening_grid(5u);
 
-    Vector3 merged;
-    Vector3 a;
-    Vector3 b;
+    int limit = image_length - 2;
+    int increment = 3;
 
-    MergeOperation(Vector3 merged, Vector3 a, Vector3 b) {
-        this->merged = merged;
-        this->a = a;
-        this->b = b;
+    for (int i = 0; i < limit; i += increment) {
+
+        Vector3 color(uint8_to_uint16(image_data[i]), uint8_to_uint16(image_data[i+1]), uint8_to_uint16(image_data[i+2]));
+        
+        // If we already have this point, increment the histogram
+        if (histogram.find(color) != histogram.end()) {
+            histogram[color] = histogram[color] + 1u;
+            continue;
+        }
+
+        coarsening_grid.add(color);
+        histogram[color] = 1u;
+
     }
 
-};
+    size_t clustering_size = 3 + 9 * (histogram.size() - 1);
+    clustering.reserve(clustering_size);
+    clustering.resize(clustering_size);
+
+    for (int i = histogram.size() - 2; i >= 0; i--) {
+
+        Pair best_pair = coarsening_grid.get_nearest();
+        if (best_pair.distance == std::numeric_limits<uint64_t>::max()) {break;}
+
+        // Merge the nearest points together.
+        uint32_t a_count = histogram[best_pair.a];
+        uint32_t b_count = histogram[best_pair.b];
+        uint32_t merged_count = a_count + b_count;
+        double a_ratio = (double) a_count / (double) merged_count;
+        double b_ratio = (double) b_count / (double) merged_count;
+        Vector3 merged(best_pair.a.x * a_ratio + best_pair.b.x * b_ratio, best_pair.a.y * a_ratio + best_pair.b.y * b_ratio, best_pair.a.z * a_ratio + best_pair.b.z * b_ratio);
+
+        // Update the histogram
+        histogram.erase(best_pair.a);
+        histogram.erase(best_pair.b);
+        if (histogram.find(merged) == histogram.end()) {histogram[merged] = merged_count;}
+        else {histogram[merged] = histogram[merged] + merged_count;}
+
+        // Update the grid
+        coarsening_grid.remove(best_pair.a);
+        coarsening_grid.remove(best_pair.b);
+        coarsening_grid.add(merged);
+
+        // Add the clustering operation
+        size_t offset = 3 + 9 * i;
+        clustering[offset] = uint16_to_uint8(merged.x);
+        clustering[offset + 1] = uint16_to_uint8(merged.y);
+        clustering[offset + 2] = uint16_to_uint8(merged.z);
+        clustering[offset + 3] = uint16_to_uint8(best_pair.a.x);
+        clustering[offset + 4] = uint16_to_uint8(best_pair.a.y);
+        clustering[offset + 5] = uint16_to_uint8(best_pair.a.z);
+        clustering[offset + 6] = uint16_to_uint8(best_pair.b.x);
+        clustering[offset + 7] = uint16_to_uint8(best_pair.b.y);
+        clustering[offset + 8] = uint16_to_uint8(best_pair.b.z);
+
+    }
+
+    // Add the k=1 clustering colour
+    Vector3 last = histogram.begin()->first;
+    clustering[0] = uint16_to_uint8(last.x);
+    clustering[1] = uint16_to_uint8(last.y);
+    clustering[2] = uint16_to_uint8(last.z);
+    return clustering;
+
+}
+
+#include <iostream>
 
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+    uint8_t* output = (uint8_t*) malloc(4 + clustering.size());
+    output[0] = (clustering.size() >> 0) & 0xFF;
+    output[1] = (clustering.size() >> 8) & 0xFF;
+    output[2] = (clustering.size() >> 16) & 0xFF;
+    output[3] = (clustering.size() >> 24) & 0xFF;
+    std::memcpy(output + 4, clustering.data(), clustering.size() * sizeof(uint8_t));
+    return output;
+}
+
+uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
     return nullptr;
 }
 
 uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k) {
-    return nullptr;
-}
-
-uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
     return nullptr;
 }
 
@@ -360,67 +421,8 @@ uint8_t* quantize_with_palette(uint8_t* image, int image_length, int image_forma
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* process(uint8_t* input, int length) {
-    
     uint8_t* output = (uint8_t*) malloc(length);
-    std::unordered_map<Vector3, uint32_t> histogram;
-    uint16_t current_resolution = 5u;
-    CoarseningGrid coarsening_grid(current_resolution);
-
-    for (int i = 0; i < length - 2; i += 3) {
-
-        Vector3 color(uint8_to_uint16(input[i]), uint8_to_uint16(input[i+1]), uint8_to_uint16(input[i+2]));
-        
-        // If we already have this point, increment the histogram
-        if (histogram.find(color) != histogram.end()) {
-            histogram[color] = histogram[color] + 1u;
-            continue;
-        }
-
-        coarsening_grid.add(color);
-        histogram[color] = 1u;
-
-    }
-
-    std::vector<MergeOperation> operations;
-    operations.reserve(histogram.size() - 1);
-
-    while (true) {
-
-        Pair best_pair = coarsening_grid.get_nearest();
-        if (best_pair.distance == std::numeric_limits<uint64_t>::max()) {break;}
-
-        // Merge the nearest points together.
-        uint32_t a_count = histogram[best_pair.a];
-        uint32_t b_count = histogram[best_pair.b];
-        uint32_t merged_count = a_count + b_count;
-        double a_ratio = (double) a_count / (double) merged_count;
-        double b_ratio = (double) b_count / (double) merged_count;
-        
-        Vector3 merged(
-            best_pair.a.x * a_ratio + best_pair.b.x * b_ratio,
-            best_pair.a.y * a_ratio + best_pair.b.y * b_ratio,
-            best_pair.a.z * a_ratio + best_pair.b.z * b_ratio
-        );
-
-        histogram.erase(best_pair.a);
-        histogram.erase(best_pair.b);
-
-        if (histogram.find(merged) == histogram.end()) {histogram[merged] = merged_count;}
-        else {histogram[merged] = histogram[merged] + merged_count;}
-
-        MergeOperation operation(merged, best_pair.a, best_pair.b);
-        operations.push_back(operation);
-
-        coarsening_grid.remove(best_pair.a);
-        coarsening_grid.remove(best_pair.b);
-        coarsening_grid.add(merged);
-
-    }
-
-    for (int i = 0; i < length; ++i) {
-        output[i] = 255 - input[i];  // You can change this logic
-    }
-    
+    std::vector<uint8_t> clustering = _get_clustering(input, length, 1);
     return output;
 }
 
