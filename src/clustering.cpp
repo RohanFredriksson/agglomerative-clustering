@@ -13,6 +13,41 @@ inline void hash_combine(std::size_t& seed, std::size_t value) {
     seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
+class Color {
+
+public:
+
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+
+    Color(uint8_t r, uint8_t g, uint8_t b) {
+        this->r = r;
+        this->g = g;
+        this->b = b;
+    }
+
+    bool operator==(const Color& other) const {
+        return (r == other.r) &&
+               (g == other.g) &&
+               (b == other.b);
+    }
+
+};
+
+namespace std {
+    template <>
+    struct hash<Color> {
+        std::size_t operator()(const Color& c) const noexcept {
+            std::size_t seed = 0;
+            hash_combine(seed, c.r);
+            hash_combine(seed, c.g);
+            hash_combine(seed, c.b);
+            return seed;
+        }
+    };
+}
+
 class Vector3 {
     
 public:
@@ -105,23 +140,12 @@ public:
 
 class CoarseningGrid {
 
-public:
+private:
 
     uint16_t resolution;
     uint16_t grid_size;
     std::unordered_map<Vector3, Bucket*> grid;
     std::map<uint64_t, std::unordered_set<Bucket*>> cache;
-
-    CoarseningGrid(uint16_t resolution) {
-        this->resolution = resolution;
-        this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
-    }
-
-    ~CoarseningGrid() {
-        for (const auto& pair : this->grid) {
-            delete pair.second;
-        }
-    }
 
     std::vector<Bucket*> get_local_buckets(Vector3 location) {
 
@@ -193,6 +217,19 @@ public:
     void remove_cache(Bucket* bucket) {
         this->cache[bucket->best.distance].erase(bucket);
         if (this->cache[bucket->best.distance].size() == 0) {this->cache.erase(bucket->best.distance);}
+    }
+
+public:
+
+    CoarseningGrid(uint16_t resolution) {
+        this->resolution = resolution;
+        this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
+    }
+
+    ~CoarseningGrid() {
+        for (const auto& pair : this->grid) {
+            delete pair.second;
+        }
     }
 
     void add(Vector3 point) {
@@ -309,6 +346,16 @@ inline uint8_t uint16_to_uint8(uint16_t value) {
     return static_cast<uint8_t>((static_cast<uint32_t>(value) * std::numeric_limits<uint8_t>::max() + (std::numeric_limits<uint16_t>::max() / 2)) / std::numeric_limits<uint16_t>::max());
 }
 
+uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
+    uint8_t* output = (uint8_t*) std::malloc(4 + vector.size());
+    output[0] = (vector.size() >> 0) & 0xFF;
+    output[1] = (vector.size() >> 8) & 0xFF;
+    output[2] = (vector.size() >> 16) & 0xFF;
+    output[3] = (vector.size() >> 24) & 0xFF;
+    std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));
+    return output;
+}
+
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
     
     std::vector<uint8_t> clustering;
@@ -384,41 +431,6 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
 }
 
-class Color {
-
-public:
-
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-
-    Color(uint8_t r, uint8_t g, uint8_t b) {
-        this->r = r;
-        this->g = g;
-        this->b = b;
-    }
-
-    bool operator==(const Color& other) const {
-        return (r == other.r) &&
-               (g == other.g) &&
-               (b == other.b);
-    }
-
-};
-
-namespace std {
-    template <>
-    struct hash<Color> {
-        std::size_t operator()(const Color& c) const noexcept {
-            std::size_t seed = 0;
-            hash_combine(seed, c.r);
-            hash_combine(seed, c.g);
-            hash_combine(seed, c.b);
-            return seed;
-        }
-    };
-}
-
 std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clustering, int k) {
      
     std::vector<uint8_t> palette;
@@ -446,16 +458,8 @@ std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clusterin
     
 }
 
-#include <iostream>
-
-uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
-    uint8_t* output = (uint8_t*) std::malloc(4 + vector.size());
-    output[0] = (vector.size() >> 0) & 0xFF;
-    output[1] = (vector.size() >> 8) & 0xFF;
-    output[2] = (vector.size() >> 16) & 0xFF;
-    output[3] = (vector.size() >> 24) & 0xFF;
-    std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));
-    return output;
+uint8_t* _quantize(uint8_t* image_data, int image_length, int image_format, std::vector<uint8_t> palette) {
+    return nullptr;
 }
 
 extern "C" {
@@ -482,16 +486,28 @@ uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, in
     return pack_variable_size(palette);
 }
 
-uint8_t* quantize(uint8_t* image, int image_length, int image_format, int k) {
-    return nullptr;
+EMSCRIPTEN_KEEPALIVE
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    return _quantize(image_data, image_length, image_format, palette);
 }
 
-uint8_t* quantize_with_clustering(uint8_t* image, int image_length, int image_format, uint8_t* clustering, int clustering_length, int k) {
-    return nullptr;
+EMSCRIPTEN_KEEPALIVE
+uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k) {
+    std::vector<uint8_t> clustering;
+    clustering.resize(clustering_length);
+    std::memcpy(clustering.data(), clustering_data, clustering_length);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    return _quantize(image_data, image_length, image_format, palette);
 }
 
-uint8_t* quantize_with_palette(uint8_t* image, int image_length, int image_format, uint8_t* palette, uint8_t* palette_length) {
-    return nullptr;
+EMSCRIPTEN_KEEPALIVE
+uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length) {
+    std::vector<uint8_t> palette;
+    palette.resize(palette_length);
+    std::memcpy(palette.data(), palette_data, palette_length);
+    return _quantize(image_data, image_length, image_format, palette);
 }
 
 EMSCRIPTEN_KEEPALIVE
