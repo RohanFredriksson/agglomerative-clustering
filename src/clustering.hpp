@@ -1,9 +1,9 @@
 #if __cplusplus < 201703L
-#error ImageProcessing requires at least C++17"
+#error AgglomerativeClustering requires at least C++17"
 #endif
 
-#ifndef IMAGE_PROCESSING_HPP
-#define IMAGE_PROCESSING_HPP
+#ifndef AGGLOMERATIVE_CLUSTERING_HPP
+#define AGGLOMERATIVE_CLUSTERING_HPP
 
 #include <unordered_map>
 #include <unordered_set>
