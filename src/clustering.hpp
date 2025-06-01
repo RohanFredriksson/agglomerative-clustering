@@ -14,6 +14,7 @@
 #include <utility>
 #include <limits>
 #include <array>
+#include <stack>
 #include <map>
 
 namespace AgglomerativeClustering {
@@ -323,6 +324,101 @@ public:
     std::array<uint16_t, 3> last() {
         if (this->histogram.size() != 1) {throw std::logic_error("AgglomerativeHistogram::last: method must be called when there is exactly one final element remaining.");}
         return this->histogram.begin()->first;
+    }
+
+};
+
+class KDTree {
+
+private:
+
+    struct Node {
+        std::array<uint8_t, 3> point;
+        int left = -1;
+        int right = -1;
+    };
+
+    std::vector<Node> nodes;
+    int root = -1;
+
+    int build(std::vector<std::array<uint8_t, 3>>& points, int start, int end, int depth) {
+
+        if (start >= end) {return -1;}
+        int mid = (start + end) / 2;
+        int axis = depth % 3;
+        
+        auto comparator = [axis](const std::array<uint8_t, 3>& a, const std::array<uint8_t, 3>& b) {
+            if (axis == 0) {return a[0] < b[0];}
+            if (axis == 1) {return a[1] < b[1];}
+            return a[2] < b[2];
+        };
+
+        std::nth_element(points.begin() + start, points.begin() + mid, points.begin() + end, comparator);
+        this->nodes.push_back(Node{points[mid], -1, -1});
+        int node_index = (int) this->nodes.size() - 1;
+
+        this->nodes[node_index].left = build(points, start, mid, depth + 1);
+        this->nodes[node_index].right = build(points, mid + 1, end, depth + 1);
+
+        return node_index;
+
+    }
+
+public:
+
+    void build(std::vector<std::array<uint8_t, 3>> points) {
+        this->nodes.clear();
+        this->root = this->build(points, 0, (int) points.size(), 0);
+    }
+
+    std::array<uint8_t, 3> get_nearest(const std::array<uint8_t, 3>& target) const {
+
+        if (this->root == -1) {
+            std::array<uint8_t, 3> result = {0u, 0u, 0u};
+            return result;
+        }
+
+        std::array<uint8_t, 3> best_point;
+        uint32_t best_distance = std::numeric_limits<uint32_t>::max();
+
+        struct StackFrame {
+            int node_index;
+            int depth;
+        };
+
+        std::stack<StackFrame> fringe;
+        fringe.push({root, 0});
+
+        while (!fringe.empty()) {
+
+            StackFrame frame = fringe.top();
+            fringe.pop();
+
+            const Node& node = this->nodes[frame.node_index];
+            uint32_t dx = static_cast<uint32_t>(node.point[0] > target[0] ? node.point[0] - target[0] : target[0] - node.point[0]);
+            uint32_t dy = static_cast<uint32_t>(node.point[1] > target[1] ? node.point[1] - target[1] : target[1] - node.point[1]);
+            uint32_t dz = static_cast<uint32_t>(node.point[2] > target[2] ? node.point[2] - target[2] : target[2] - node.point[2]);
+            uint32_t distance = dx * dx + dy * dy + dz * dz;
+
+            if (distance < best_distance) {
+                best_distance = distance;
+                best_point = node.point;
+            }
+
+            int axis = frame.depth % 3;
+            int difference = 0;
+            if (axis == 0)      {difference = int(target[0]) - int(node.point[0]);}
+            else if (axis == 1) {difference = int(target[1]) - int(node.point[1]);}
+            else                {difference = int(target[2]) - int(node.point[2]);}
+
+            int first = difference < 0 ? node.left : node.right;
+            int second = difference < 0 ? node.right : node.left;
+
+            if (first != -1) {fringe.push({first, frame.depth + 1});}
+            if (second != -1 && difference * difference < best_distance) {fringe.push({second, frame.depth + 1});}
+
+        }
+        return best_point;
     }
 
 };
