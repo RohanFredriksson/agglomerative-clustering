@@ -371,7 +371,7 @@ public:
         this->root = this->build(points, 0, (int) points.size(), 0);
     }
 
-    std::array<uint8_t, 3> get_nearest(const std::array<uint8_t, 3>& target) const {
+    [[nodiscard]] std::array<uint8_t, 3> get_nearest(const std::array<uint8_t, 3>& target) const {
 
         if (this->root == -1) {
             std::array<uint8_t, 3> result = {0u, 0u, 0u};
@@ -418,7 +418,9 @@ public:
             if (second != -1 && difference * difference < best_distance) {fringe.push({second, frame.depth + 1});}
 
         }
+
         return best_point;
+    
     }
 
 };

@@ -8,6 +8,13 @@ async function init() {
     return module;
 }
 
+function unpack(Module, pointer) {
+    const lengthBuffer = new Uint8Array(Module.HEAPU8.subarray(pointer, pointer + 4));
+    const length = lengthBuffer[0] | (lengthBuffer[1] << 8) | (lengthBuffer[2] << 16) | (lengthBuffer[3] << 24);
+    const outputBuffer = new Uint8Array(Module.HEAPU8.subarray(pointer + 4, pointer + 4 + length));
+    return outputBuffer;
+}
+
 export async function process(input) {
 
     const Module = await init();
@@ -16,33 +23,16 @@ export async function process(input) {
         throw new TypeError('Input must be a Uint8Array');
     }
 
-    const len = input.length;
-    const inputPtr = Module._malloc(len);
-    Module.HEAPU8.set(input, inputPtr);
+    const inputPointer = Module._malloc(input.length);
+    Module.HEAPU8.set(input, inputPointer);
 
-    const outputPtr = Module._get_clustering(inputPtr, len, 1);
-    const outputLenBuffer = new Uint8Array(Module.HEAPU8.subarray(outputPtr, outputPtr + 4));
-    const outputLen = outputLenBuffer[0] | (outputLenBuffer[1] << 8) | (outputLenBuffer[2] << 16) | (outputLenBuffer[3] << 24);
-    const clusteringBuffer = new Uint8Array(Module.HEAPU8.subarray(outputPtr + 4, outputPtr + 4 + outputLen));
-    console.log(outputLen);
-    console.log(clusteringBuffer);
+    const outputPointer = Module._quantize(inputPointer, input.length, 1, 10);
+    const output = unpack(Module, outputPointer);
 
-    //const output = new Uint8Array(Module.HEAPU8.subarray(outputPtr, outputPtr + len));
-    Module._free(inputPtr);
-    Module._free(outputPtr);
-    //return new Uint8Array(output);
-    return new Uint8Array([]);
+    Module._free(inputPointer);
+    Module._free(outputPointer);
 
-    /*
-    const len = input.length;
-    const inputPtr = Module._malloc(len);
-    Module.HEAPU8.set(input, inputPtr);
-    const outputPtr = Module._process(inputPtr, len);
-    const output = new Uint8Array(Module.HEAPU8.subarray(outputPtr, outputPtr + len));
-    Module._free(inputPtr);
-    Module._free(outputPtr);
-    return new Uint8Array(output);
-    */
+    return output;
 
 }
 

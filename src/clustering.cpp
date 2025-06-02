@@ -2,47 +2,6 @@
 #include "clustering.hpp"
 #include <emscripten.h>
 
-inline void hash_combine(std::size_t& seed, std::size_t value) {
-    seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
-#include <iostream>
-
-class Color {
-
-public:
-
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-
-    Color(uint8_t r, uint8_t g, uint8_t b) {
-        this->r = r;
-        this->g = g;
-        this->b = b;
-    }
-
-    bool operator==(const Color& other) const {
-        return (r == other.r) &&
-               (g == other.g) &&
-               (b == other.b);
-    }
-
-};
-
-namespace std {
-    template <>
-    struct hash<Color> {
-        std::size_t operator()(const Color& c) const noexcept {
-            std::size_t seed = 0;
-            hash_combine(seed, c.r);
-            hash_combine(seed, c.g);
-            hash_combine(seed, c.b);
-            return seed;
-        }
-    };
-}
-
 inline uint16_t uint8_to_uint16(uint8_t value) {
     return (uint16_t(value) * std::numeric_limits<uint16_t>::max()) / std::numeric_limits<uint8_t>::max();
 }
@@ -64,7 +23,7 @@ uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
 
     std::vector<uint8_t> clustering;
-    AgglomerativeClustering::CoarseningGrid grid(5u);
+    AgglomerativeClustering::CoarseningGrid grid(8u); // TODO: Figure out which starting resolution works best.
     AgglomerativeClustering::AgglomerativeHistogram histogram;
 
     int limit = image_format == 1 ? image_length - 2 : image_length - 3;
@@ -72,10 +31,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     for (int i = 0; i < limit; i += increment) {
         std::array<uint16_t, 3> color = {uint8_to_uint16(image_data[i]), uint8_to_uint16(image_data[i+1]), uint8_to_uint16(image_data[i+2])};
-        if (histogram.count(color)) {
-            grid.add(color);
-        }
-        
+        if (histogram.count(color)) {grid.add(color);}
     }
 
     size_t clustering_size = 3 + 9 * (histogram.size() - 1);
@@ -117,34 +73,70 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 }
 
 std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clustering, int k) {
-     
+
     std::vector<uint8_t> palette;
     if (clustering.size() < 3 || k < 1) {return palette;}
 
+    struct ArrayHash {
+        std::size_t operator()(const std::array<uint8_t, 3>& arr) const noexcept {
+            size_t seed = 0;
+            for (auto elem : arr) {seed ^= std::hash<uint8_t>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);}
+            return seed;
+        }
+    };
+
     int merges = (clustering.size() - 3) / 9;
     k = std::min(k - 1, merges);
-    std::unordered_set<Color> colors;
-    colors.insert(Color(clustering[0], clustering[1], clustering[2]));
+    std::unordered_set<std::array<uint8_t, 3>, ArrayHash> colors;
+    colors.insert({clustering[0], clustering[1], clustering[2]});
 
     for (int i = 0; i < k; i++) {
-        colors.erase(Color(clustering[3+i*9], clustering[4+i*9], clustering[5+i*9]));
-        colors.insert(Color(clustering[6+i*9], clustering[7+i*9], clustering[8+i*9]));
-        colors.insert(Color(clustering[9+i*9], clustering[10+i*9], clustering[11+i*9]));
+        colors.erase({clustering[3+i*9], clustering[4+i*9], clustering[5+i*9]});
+        colors.insert({clustering[6+i*9], clustering[7+i*9], clustering[8+i*9]});
+        colors.insert({clustering[9+i*9], clustering[10+i*9], clustering[11+i*9]});
     }
 
     palette.reserve(colors.size());
-    for (Color color : colors) {
-        palette.push_back(color.r);
-        palette.push_back(color.g);
-        palette.push_back(color.b);
+    for (std::array<uint8_t, 3> color : colors) {
+        palette.push_back(color[0]);
+        palette.push_back(color[1]);
+        palette.push_back(color[2]);
     }
-    
-    return palette;
-    
+
+    return palette;    
+
 }
 
-uint8_t* _quantize(uint8_t* image_data, int image_length, int image_format, std::vector<uint8_t> palette) {
-    return nullptr;
+std::vector<uint8_t> _quantize(uint8_t* image_data, int image_length, int image_format, std::vector<uint8_t> palette) {
+    
+    std::vector<std::array<uint8_t, 3>> colors;
+    colors.reserve(palette.size() / 3);
+
+    for (int i = 0; i < palette.size() - 2; i += 3) {
+        std::array<uint8_t, 3> color = {palette[i], palette[i+1], palette[i+2]};
+        colors.push_back(color);
+    }
+
+    AgglomerativeClustering::KDTree tree;
+    tree.build(colors);
+
+    std::vector<uint8_t> output;
+    output.reserve(image_length);
+
+    int limit = image_format == 1 ? image_length - 2 : image_length - 3;
+    int increment = image_format == 1 ? 3 : 4;
+
+    for (int i = 0; i < limit; i += increment) {
+        std::array<uint8_t, 3> color = {image_data[i], image_data[i+1], image_data[i+2]};
+        std::array<uint8_t, 3> nearest = tree.get_nearest(color);
+        output.push_back(nearest[0]);
+        output.push_back(nearest[1]);
+        output.push_back(nearest[2]);
+        if (image_format == 0) {output.push_back(image_data[i+3]);}
+    }
+
+    return output;
+
 }
 
 extern "C" {
@@ -175,7 +167,8 @@ EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
-    return _quantize(image_data, image_length, image_format, palette);
+    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
+    return pack_variable_size(quantized);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -184,7 +177,8 @@ uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int ima
     clustering.resize(clustering_length);
     std::memcpy(clustering.data(), clustering_data, clustering_length);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
-    return _quantize(image_data, image_length, image_format, palette);
+    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
+    return pack_variable_size(quantized);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -192,14 +186,8 @@ uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_
     std::vector<uint8_t> palette;
     palette.resize(palette_length);
     std::memcpy(palette.data(), palette_data, palette_length);
-    return _quantize(image_data, image_length, image_format, palette);
-}
-
-EMSCRIPTEN_KEEPALIVE
-uint8_t* process(uint8_t* input, int length) {
-    uint8_t* output = (uint8_t*) malloc(length);
-    std::vector<uint8_t> clustering = _get_clustering(input, length, 1);
-    return output;
+    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
+    return pack_variable_size(quantized);
 }
 
 }
