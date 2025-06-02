@@ -1,0 +1,13 @@
+{
+  "presets": ["@babel/preset-env"],
+  "env": {
+    "cjs": {
+      "presets": ["@babel/preset-env"],
+      "plugins": ["@babel/plugin-transform-modules-commonjs"]
+    },
+    "esm": {
+      "presets": [["@babel/preset-env", { "modules": false }]],
+      "plugins": []
+    }
+  }
+}
