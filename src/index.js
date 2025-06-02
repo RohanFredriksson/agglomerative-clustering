@@ -1,11 +1,8 @@
 import createWasmModule from '../dist/clustering.js';
-import { data } from './image.js';
-
+const codes = {'rgba': 0, 'rgb': 1};
 let Module = null;
 
-const codes = {"rgba": 0, "rgb": 1};
-
-const init = async () => {
+export const init = async () => {
     if (!Module) {Module = await createWasmModule();}
 };
 
@@ -20,18 +17,17 @@ const load = (image) => {
 
     if (image instanceof Uint8Array) {return {data: image, format: 'rgba'};}
 
-    const checks = [
-        image,
-        typeof image === "object",
-        image.data,
-        image.data instanceof Uint8Array,
-        image.format,
-        image.format === "rgb" || image.format === "rgba",
-    ]
+    if (typeof image !== 'object' || !image || !image.data || !image.format) {
+        throw new Error("Invalid image: expected object with `data` and `format`.");
+    }
 
-    checks.forEach((check) => {
-        if (!check) {throw new Error("Unsupported image image type");}
-    });
+    if (!(image.data instanceof Uint8Array)) {
+        throw new Error("Invalid image data: must be Uint8Array.");
+    }
+
+    if (!Object.keys(codes).includes(image.format)) {
+        throw new Error("Invalid format: must be 'rgb' or 'rgba'.");
+    }
 
     return image
 
@@ -73,10 +69,9 @@ export const getPalette = async (image, k) => {
 
 };
 
-export const getPaletteFromClustering = async (image, clustering, k) => {
+export const getPaletteFromClustering = async (clustering, k) => {
 
     await init();
-    image = load(image);
 
     const clusteringPointer = Module._malloc(clustering.length);
     Module.HEAPU8.set(clustering, clusteringPointer);
@@ -150,6 +145,8 @@ export const quantizeWithPalette = async (image, palette) => {
     return output;
 
 };
+
+import { data } from './image.js';
 
 let f = async () => {
 
