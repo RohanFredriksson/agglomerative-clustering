@@ -35,6 +35,14 @@ const load = (image) => {
 
 };
 
+const check = (k) => {
+
+    if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
+        throw new Error("Invalid k: must be a strictly positive integer.")
+    }
+
+}
+
 export const getClustering = async (image) => {
 
     await init();
@@ -57,6 +65,7 @@ export const getPalette = async (image, k) => {
 
     await init();
     image = load(image);
+    check(k);
 
     const imagePointer = Module._malloc(image.data.length);
     Module.HEAPU8.set(image.data, imagePointer);
@@ -74,6 +83,7 @@ export const getPalette = async (image, k) => {
 export const getPaletteFromClustering = async (clustering, k) => {
 
     await init();
+    check(k);
 
     const clusteringPointer = Module._malloc(clustering.length);
     Module.HEAPU8.set(clustering, clusteringPointer);
@@ -92,6 +102,7 @@ export const quantize = async (image, k) => {
 
     await init();
     image = load(image);
+    check(k);
     
     const imagePointer = Module._malloc(image.data.length);
     Module.HEAPU8.set(image.data, imagePointer);
@@ -110,6 +121,7 @@ export const quantizeWithClustering = async (image, clustering, k) => {
 
     await init();
     image = load(image);
+    check(k);
 
     const imagePointer = Module._malloc(image.data.length);
     const clusteringPointer = Module._malloc(clustering.length);
