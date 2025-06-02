@@ -15,7 +15,9 @@ const unpack = (pointer) => {
 
 const load = (image) => {
 
-    if (image instanceof Uint8Array) {return {data: image, format: 'rgba'};}
+    if (image instanceof Uint8Array) {
+        return {data: image, format: 'rgba'};
+    }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
         throw new Error("Invalid image: expected object with `data` and `format`.");
@@ -145,21 +147,3 @@ export const quantizeWithPalette = async (image, palette) => {
     return output;
 
 };
-
-import { data } from './image.js';
-
-let f = async () => {
-
-    const image = {data: new Uint8Array(data), format: 'rgb'}
-    const clustering = await getClustering(image);
-    const palette = await getPalette(image, 30);
-    
-    console.log(clustering);
-    console.log(palette);
-    console.log(await getPaletteFromClustering(clustering, 20));
-    console.log(await quantize(image, 50));
-    console.log(await quantizeWithClustering(image, clustering, 5));
-    console.log(await quantizeWithPalette(image, palette));
-
-}; f();
-
