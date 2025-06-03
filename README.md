@@ -1,6 +1,8 @@
 # Agglomerative Clustering
 
-Agglomerative Clustering is module which provides a WebAssembly-backed interface for performing image clustering, palette extraction, and color quantization on raw image data.
+A high-performance implementation of hierarchical agglomerative clustering (HAC), optimized for speed and scalability. This package uses WebAssembly (WASM) to accelerate computation, making it suitable for large datasets and real-time clustering tasks in the browser or Node.js environments.
+
+It includes an interface for performing image clustering, palette extraction, and color quantization directly on raw image data, making it a powerful tool for graphics processing, image analysis, and visual data simplification.
 
 ## Features
 

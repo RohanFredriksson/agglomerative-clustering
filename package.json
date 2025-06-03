@@ -1,11 +1,15 @@
 {
   "name": "agglomerative-clustering",
   "version": "1.0.0",
-  "description": "",
+  "description": "Fast hierarchical agglomerative clustering powered by WebAssembly.",
   "license": "MIT",
   "author": "Rohan Fredriksson",
   "type": "module",
   "main": "./lib/index.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RohanFredriksson/agglomerative-clustering.git"
+  },
   "exports": {
     ".": {
       "require": "./lib/index.cjs",
