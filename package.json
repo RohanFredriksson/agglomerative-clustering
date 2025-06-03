@@ -10,6 +10,26 @@
     "type": "git",
     "url": "https://github.com/RohanFredriksson/agglomerative-clustering.git"
   },
+  "keywords": [
+    "nodejs",
+    "browser",
+    "cpp",
+    "clustering",
+    "kd-tree",
+    "webassembly",
+    "wasm",
+    "image-processing",
+    "nearest-neighbour",
+    "image-compression",
+    "image-analysis",
+    "palette-generation",
+    "hierarchical-clustering",
+    "color-clustering",
+    "agglomerative-clustering",
+    "image-quantization",
+    "color-reduction",
+    "spatial-hashing"
+  ],
   "exports": {
     ".": {
       "require": "./lib/index.cjs",
