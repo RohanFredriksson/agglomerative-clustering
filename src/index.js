@@ -1,4 +1,4 @@
-import createWasmModule from '../dist/clustering.js';
+import createWasmModule from './clustering.js';
 const codes = {'rgba': 0, 'rgb': 1};
 let Module = null;
 

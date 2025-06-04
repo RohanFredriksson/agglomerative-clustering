@@ -5,7 +5,7 @@
   "license": "MIT",
   "author": "Rohan Fredriksson",
   "type": "module",
-  "main": "./lib/index.cjs",
+  "main": "./dist/index.cjs",
   "repository": {
     "type": "git",
     "url": "https://github.com/RohanFredriksson/agglomerative-clustering.git"
@@ -32,20 +32,18 @@
   ],
   "exports": {
     ".": {
-      "require": "./lib/index.cjs",
-      "import": "./esm/index.mjs"
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs"
     }
   },
   "files": [
     "dist/",
-    "lib/",
-    "esm/",
     "README.md"
   ],
   "scripts": {
     "build:wasm": "mkdirp dist && emcc src/clustering.cpp -O3 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s EXPORTED_FUNCTIONS=\"['_get_clustering', '_get_palette', '_get_palette_from_clustering', '_quantize', '_quantize_with_clustering', '_quantize_with_palette', '_malloc', '_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
-    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir lib --extensions \".js\" --out-file-extension .cjs",
-    "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir esm --extensions \".js\" --out-file-extension .mjs",
+    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --out-file-extension .cjs",
+    "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
     "build:js": "npm run build:cjs && npm run build:esm",
     "build": "npm run build:wasm && npm run build:js",
     "prepublishOnly": "npm run build"
