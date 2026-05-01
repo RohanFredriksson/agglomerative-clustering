@@ -71,10 +71,8 @@ private:
     std::unordered_map<std::array<uint16_t, 3>, Bucket*, ArrayHash> grid;
     std::map<uint64_t, std::unordered_set<Bucket*>> cache;
 
-    std::vector<Bucket*> get_local_buckets(const std::array<uint16_t, 3>& location) const {
-
-        std::vector<Bucket*> result;
-        result.reserve(27);
+    template<typename F>
+    void for_each_local_bucket(const std::array<uint16_t, 3>& location, F&& func) const {
 
         std::array<uint16_t, 3> min = location;
         if (min[0] > 0u) {min[0]--;}
@@ -91,12 +89,10 @@ private:
                 for (uint16_t z = min[2]; z <= max[2]; z++) {
                     std::array<uint16_t, 3> bucket_position = {x, y, z};
                     auto it = this->grid.find(bucket_position);
-                    if (it != this->grid.end()) {result.push_back(it->second);}
+                    if (it != this->grid.end()) {func(it->second);}
                 }
             }
         }
-
-        return result;
 
     }
 
@@ -114,13 +110,12 @@ private:
 
     std::vector<std::array<uint16_t, 3>> get_local_points(std::array<uint16_t, 3> location) const {
 
-        size_t total_size = 0; 
-        std::vector<Bucket*> buckets = this->get_local_buckets(location);
-        for (Bucket* bucket : buckets) {total_size += bucket->points.size();}
-        
+        size_t total_size = 0;
+        this->for_each_local_bucket(location, [&](Bucket* bucket) {total_size += bucket->points.size();});
+
         std::vector<std::array<uint16_t, 3>> result;
         result.reserve(total_size);
-        for (Bucket* bucket : buckets) {result.insert(result.end(), bucket->points.begin(), bucket->points.end());}
+        this->for_each_local_bucket(location, [&](Bucket* bucket) {result.insert(result.end(), bucket->points.begin(), bucket->points.end());});
         return result;
 
     }
@@ -173,8 +168,7 @@ public:
             return;
         }
 
-        std::vector<Bucket*> buckets = this->get_local_buckets(location);
-        for (Bucket* bucket : buckets) {
+        this->for_each_local_bucket(location, [&](Bucket* bucket) {
 
             bool recache = false;
             Pair best = bucket->best;
@@ -186,12 +180,12 @@ public:
                 best = pair;
             }
 
-            if (!recache) {continue;}
+            if (!recache) {return;}
             this->remove_cache(bucket);
             bucket->best = best;
             this->add_cache(bucket);
 
-        }
+        });
 
         // Insert into the bucket
         this->grid[location]->points.insert(point);
@@ -221,11 +215,10 @@ public:
             delete bucket;
         }
 
-        std::vector<Bucket*> buckets = this->get_local_buckets(location);
-        for (Bucket* bucket : buckets) {
+        this->for_each_local_bucket(location, [&](Bucket* bucket) {
 
             // If the best point doesn't include the removed point we don't need to recache.
-            if (!bucket->best.contains(point)) {continue;}
+            if (!bucket->best.contains(point)) {return;}
             this->remove_cache(bucket);
             bucket->best = Pair();
 
@@ -242,7 +235,7 @@ public:
 
             this->add_cache(bucket);
 
-        }
+        });
 
     }
     
