@@ -79,9 +79,8 @@ std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clusterin
 
     struct ArrayHash {
         std::size_t operator()(const std::array<uint8_t, 3>& arr) const noexcept {
-            size_t seed = 0;
-            for (auto elem : arr) {seed ^= std::hash<uint8_t>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);}
-            return seed;
+            uint32_t v = (uint32_t(arr[0]) << 16) | (uint32_t(arr[1]) << 8) | arr[2];
+            return std::hash<uint32_t>{}(v);
         }
     };
 

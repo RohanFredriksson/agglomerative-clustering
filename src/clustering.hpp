@@ -25,9 +25,13 @@ private:
 
     struct ArrayHash {
         std::size_t operator()(const std::array<uint16_t, 3>& arr) const noexcept {
-            size_t seed = 0;
-            for (auto elem : arr) {seed ^= std::hash<uint16_t>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);}
-            return seed;
+            uint64_t v = (uint64_t(arr[0]) << 32) | (uint64_t(arr[1]) << 16) | arr[2];
+            v ^= v >> 33;
+            v *= 0xff51afd7ed558ccdULL;
+            v ^= v >> 33;
+            v *= 0xc4ceb9fe1a85ec53ULL;
+            v ^= v >> 33;
+            return static_cast<std::size_t>(v);
         }
     };
 
@@ -126,13 +130,13 @@ private:
     }
 
     void add_cache(Bucket* bucket) {
-        if (this->cache.find(bucket->best.distance) == this->cache.end()) {this->cache[bucket->best.distance] = std::unordered_set<Bucket*>();}
         this->cache[bucket->best.distance].insert(bucket);
-    } 
+    }
 
     void remove_cache(Bucket* bucket) {
-        this->cache[bucket->best.distance].erase(bucket);
-        if (this->cache[bucket->best.distance].size() == 0) {this->cache.erase(bucket->best.distance);}
+        auto& slot = this->cache[bucket->best.distance];
+        slot.erase(bucket);
+        if (slot.empty()) {this->cache.erase(bucket->best.distance);}
     }
 
 public:
@@ -157,14 +161,15 @@ public:
 
         // If we don't have the required bucket, allocate one.
         std::array<uint16_t, 3> location = this->get_location(point);
-        if (this->grid.find(location) == this->grid.end()) {
-            Bucket* bucket = new Bucket(location);
-            this->grid[location] = bucket;
-            this->add_cache(bucket);
+        auto grid_it = this->grid.find(location);
+        if (grid_it == this->grid.end()) {
+            Bucket* new_bucket = new Bucket(location);
+            grid_it = this->grid.emplace(location, new_bucket).first;
+            this->add_cache(new_bucket);
         }
 
         // If we already have this point, don't add it.
-        else if (this->grid[location]->points.find(point) != this->grid[location]->points.end()) {
+        else if (grid_it->second->points.count(point)) {
             return;
         }
 
@@ -188,7 +193,7 @@ public:
         });
 
         // Insert into the bucket
-        this->grid[location]->points.insert(point);
+        grid_it->second->points.insert(point);
         
     }
 
@@ -201,15 +206,16 @@ public:
 
         // We can't remove a point if there is no bucket for it.
         std::array<uint16_t, 3> location = this->get_location(point);
-        if (this->grid.find(location) == this->grid.end()) {return;}
-        Bucket* bucket = this->grid[location];
+        auto grid_it = this->grid.find(location);
+        if (grid_it == this->grid.end()) {return;}
+        Bucket* bucket = grid_it->second;
 
         // If the point isn't in the bucket, we can't remove it.
-        if (bucket->points.find(point) == bucket->points.end()) {return;}
-        this->grid[location]->points.erase(point);
+        if (!bucket->points.count(point)) {return;}
+        bucket->points.erase(point);
 
         // If the bucket is empty delete the bucket.
-        if (bucket->points.size() == 0) {
+        if (bucket->points.empty()) {
             this->grid.erase(location);
             this->remove_cache(bucket);
             delete bucket;
@@ -242,7 +248,7 @@ public:
     [[nodiscard]] std::optional<std::pair<std::array<uint16_t, 3>, std::array<uint16_t, 3>>> get_nearest() {
     
         if (this->cache.size() == 0) {return std::nullopt;}
-        std::unordered_set<Bucket*> best_buckets = this->cache.begin()->second;
+        const std::unordered_set<Bucket*>& best_buckets = this->cache.begin()->second;
 
         Pair best = (*best_buckets.begin())->best;
         if (best.distance != std::numeric_limits<uint64_t>::max()) {return std::make_pair(best.a, best.b);}
@@ -268,9 +274,13 @@ private:
 
     struct ArrayHash {
         std::size_t operator()(const std::array<uint16_t, 3>& arr) const noexcept {
-            size_t seed = 0;
-            for (auto elem : arr) {seed ^= std::hash<uint16_t>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);}
-            return seed;
+            uint64_t v = (uint64_t(arr[0]) << 32) | (uint64_t(arr[1]) << 16) | arr[2];
+            v ^= v >> 33;
+            v *= 0xff51afd7ed558ccdULL;
+            v ^= v >> 33;
+            v *= 0xc4ceb9fe1a85ec53ULL;
+            v ^= v >> 33;
+            return static_cast<std::size_t>(v);
         }
     };
 
@@ -290,21 +300,16 @@ public:
         uint32_t a_count = this->histogram[a];
         uint32_t b_count = this->histogram[b];
         uint32_t merged_count = a_count + b_count;
-        double a_ratio = (double) a_count / (double) merged_count;
-        double b_ratio = (double) b_count / (double) merged_count;
 
         std::array<uint16_t, 3> merged = {
-            static_cast<uint16_t>(a[0] * a_ratio + b[0] * b_ratio),
-            static_cast<uint16_t>(a[1] * a_ratio + b[1] * b_ratio),
-            static_cast<uint16_t>(a[2] * a_ratio + b[2] * b_ratio)
+            static_cast<uint16_t>((uint64_t(a[0]) * a_count + uint64_t(b[0]) * b_count) / merged_count),
+            static_cast<uint16_t>((uint64_t(a[1]) * a_count + uint64_t(b[1]) * b_count) / merged_count),
+            static_cast<uint16_t>((uint64_t(a[2]) * a_count + uint64_t(b[2]) * b_count) / merged_count)
         };
 
         this->histogram.erase(a);
         this->histogram.erase(b);
-
-        auto it = this->histogram.find(merged);
-        if (it != this->histogram.end()) {it->second += merged_count;}
-        this->histogram[merged] = merged_count;
+        this->histogram[merged] += merged_count;
 
         return merged;
 
