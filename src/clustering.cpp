@@ -1,6 +1,7 @@
 // Average Hierarchical Agglomerative Color Clustering
 #include "clustering.hpp"
 #include <emscripten.h>
+#include <cmath>
 
 inline uint16_t uint8_to_uint16(uint8_t value) {
     return (uint16_t(value) * std::numeric_limits<uint16_t>::max()) / std::numeric_limits<uint8_t>::max();
@@ -23,16 +24,26 @@ uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
 
     std::vector<uint8_t> clustering;
-    AgglomerativeClustering::CoarseningGrid grid(8u); // TODO: Figure out which starting resolution works best.
     AgglomerativeClustering::AgglomerativeHistogram histogram;
 
     int limit = image_format == 1 ? image_length - 2 : image_length - 3;
     int increment = image_format == 1 ? 3 : 4;
 
+    // Pass 1: build histogram and collect unique colours
+    std::vector<std::array<uint16_t, 3>> unique_colors;
     for (int i = 0; i < limit; i += increment) {
         std::array<uint16_t, 3> color = {uint8_to_uint16(image_data[i]), uint8_to_uint16(image_data[i+1]), uint8_to_uint16(image_data[i+2])};
-        if (histogram.count(color)) {grid.add(color);}
+        if (histogram.count(color)) {unique_colors.push_back(color);}
     }
+
+    // Choose resolution so that a 3×3×3 neighbourhood contains ~1 point on average:
+    // 27N / 2^(3r) >= 1  =>  r <= log2(27N) / 3
+    size_t N = histogram.size();
+    int r = N > 1 ? std::max(0, (int)std::floor(std::log2(27.0 * N) / 3.0) - 1) : 0;
+    AgglomerativeClustering::CoarseningGrid grid(r);
+
+    // Pass 2: populate grid from unique colours
+    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color);}
 
     size_t clustering_size = 3 + 9 * (histogram.size() - 1);
     clustering.reserve(clustering_size);

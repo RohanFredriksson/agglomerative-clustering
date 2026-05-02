@@ -50,7 +50,9 @@
     "build:js": "npm run build:types && npm run build:cjs && npm run build:esm",
     "build": "npm run build:wasm && npm run build:js",
     "prepublishOnly": "npm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench": "vitest bench",
+    "quality": "node bench/quality.js"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",
@@ -59,6 +61,7 @@
     "@babel/preset-env": "^7.27.2",
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",
+    "image-q": "^4.0.0",
     "mkdirp": "^3.0.1",
     "vitest": "^4.1.5"
   }

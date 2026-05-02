@@ -4,3 +4,4 @@ esm/
 lib/
 node_modules/
 test/visual/output/
+fixtures/images/

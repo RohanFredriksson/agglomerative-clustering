@@ -1,4 +1,4 @@
-// Visual tests — outputs are written to test/visual/output/ for developer inspection.
+// Visual tests — outputs are written to test/visual/output/synthetic/ for developer inspection.
 // No pixel-level assertions are made; correctness is verified by eye.
 import { describe, it, expect } from 'vitest';
 import { createCanvas } from 'canvas';
@@ -7,7 +7,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { quantize, getPalette } from '../../dist/index.mjs';
 
-const OUTPUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
+const OUTPUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'output', 'synthetic');
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
 function writeOutput(name, data, width, height) {
@@ -134,11 +134,6 @@ const W = 128, H = 128;
 const gradient   = makeGradientRGBA(W, H);
 const quadrant   = makeQuadrantRGBA(W, H);
 const rainbow    = makeRainbowRGBA(W, H);
-
-// Write input fixtures so they can be compared side-by-side with quantised outputs.
-writeOutput('input-gradient', gradient, W, H);
-writeOutput('input-quadrant', quadrant, W, H);
-writeOutput('input-rainbow',  rainbow,  W, H);
 
 describe('visual — quantize outputs', () => {
 
