@@ -60,14 +60,13 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     for (int i = histogram.size() - 2; i >= 0; i--) {
 
-        std::optional<std::pair<std::array<uint16_t, 3>, std::array<uint16_t, 3>>> result = grid.get_nearest();
-        if (!result.has_value()) {break;}
+        std::optional<AgglomerativeClustering::CoarseningGrid::Nearest> nearest = grid.get_nearest();
+        if (!nearest.has_value()) {break;}
         
-        auto [a, b] = result.value();
+        std::array<uint16_t, 3> a = nearest->a;
+        std::array<uint16_t, 3> b = nearest->b;
         std::array<uint16_t, 3> m = histogram.merge(a, b);
-        grid.remove(a);
-        grid.remove(b);
-        grid.add(m);
+        grid.merge(*nearest, m);
         
         // Add the clustering operation
         size_t offset = 3 + 9 * i;
