@@ -14,7 +14,6 @@
 #include <utility>
 #include <limits>
 #include <array>
-#include <stack>
 #include <map>
 
 namespace AgglomerativeClustering {
@@ -382,15 +381,21 @@ public:
         struct StackFrame {
             int node_index;
             int depth;
+            uint32_t bound;
         };
 
-        std::stack<StackFrame> fringe;
-        fringe.push({root, 0});
+        // The tree is median-split, so its depth is at most ~log2(n) and each pop pushes at most two
+        // frames; a fixed-size stack avoids a heap allocation per query.
+        StackFrame fringe[64];
+        int fringe_size = 0;
+        fringe[fringe_size++] = {root, 0, 0u};
 
-        while (!fringe.empty()) {
+        while (fringe_size > 0) {
 
-            StackFrame frame = fringe.top();
-            fringe.pop();
+            StackFrame frame = fringe[--fringe_size];
+
+            // Skip subtrees that can't contain a closer point than one found since this frame was pushed.
+            if (frame.bound >= best_distance) {continue;}
 
             const Node& node = this->nodes[frame.node_index];
             uint32_t dx = static_cast<uint32_t>(node.point[0] > target[0] ? node.point[0] - target[0] : target[0] - node.point[0]);
@@ -412,8 +417,10 @@ public:
             int first = difference < 0 ? node.left : node.right;
             int second = difference < 0 ? node.right : node.left;
 
-            if (first != -1) {fringe.push({first, frame.depth + 1});}
-            if (second != -1 && difference * difference < best_distance) {fringe.push({second, frame.depth + 1});}
+            // Push the far side first so the near side is popped (and searched) first, tightening best_distance.
+            uint32_t split_distance = static_cast<uint32_t>(difference * difference);
+            if (second != -1 && split_distance < best_distance) {fringe[fringe_size++] = {second, frame.depth + 1, split_distance};}
+            if (first != -1) {fringe[fringe_size++] = {first, frame.depth + 1, frame.bound};}
 
         }
 

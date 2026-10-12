@@ -1,6 +1,9 @@
 // Average Hierarchical Agglomerative Color Clustering
 #include "clustering.hpp"
 #include <emscripten.h>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
 #include <cmath>
 
 inline uint16_t uint8_to_uint16(uint8_t value) {
@@ -11,12 +14,18 @@ inline uint8_t uint16_to_uint8(uint16_t value) {
     return static_cast<uint8_t>((static_cast<uint32_t>(value) * std::numeric_limits<uint8_t>::max() + (std::numeric_limits<uint16_t>::max() / 2)) / std::numeric_limits<uint16_t>::max());
 }
 
-uint8_t* pack_variable_size(std::vector<uint8_t> vector) {
-    uint8_t* output = (uint8_t*) std::malloc(4 + vector.size());
-    output[0] = (vector.size() >> 0) & 0xFF;
-    output[1] = (vector.size() >> 8) & 0xFF;
-    output[2] = (vector.size() >> 16) & 0xFF;
-    output[3] = (vector.size() >> 24) & 0xFF;
+// Allocates a buffer with a 4-byte little-endian length prefix; returns the base pointer (payload starts at +4).
+uint8_t* allocate_variable_size(size_t size) {
+    uint8_t* output = (uint8_t*) std::malloc(4 + size);
+    output[0] = (size >> 0) & 0xFF;
+    output[1] = (size >> 8) & 0xFF;
+    output[2] = (size >> 16) & 0xFF;
+    output[3] = (size >> 24) & 0xFF;
+    return output;
+}
+
+uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
+    uint8_t* output = allocate_variable_size(vector.size());
     std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));
     return output;
 }
@@ -83,10 +92,10 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
 }
 
-std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clustering, int k) {
+std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
 
     std::vector<uint8_t> palette;
-    if (clustering.size() < 3 || k < 1) {return palette;}
+    if (clustering_length < 3 || k < 1) {return palette;}
 
     struct ArrayHash {
         std::size_t operator()(const std::array<uint8_t, 3>& arr) const noexcept {
@@ -95,7 +104,7 @@ std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clusterin
         }
     };
 
-    int merges = (clustering.size() - 3) / 9;
+    int merges = (clustering_length - 3) / 9;
     k = std::min(k - 1, merges);
     std::unordered_set<std::array<uint8_t, 3>, ArrayHash> colors;
     colors.insert({clustering[0], clustering[1], clustering[2]});
@@ -117,12 +126,13 @@ std::vector<uint8_t> _get_palette_from_clustering(std::vector<uint8_t> clusterin
 
 }
 
-std::vector<uint8_t> _quantize(uint8_t* image_data, int image_length, int image_format, std::vector<uint8_t> palette) {
+// Returns a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
+uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length) {
     
     std::vector<std::array<uint8_t, 3>> colors;
-    colors.reserve(palette.size() / 3);
+    colors.reserve(palette_length / 3);
 
-    for (int i = 0; i < palette.size() - 2; i += 3) {
+    for (size_t i = 0; i + 2 < palette_length; i += 3) {
         std::array<uint8_t, 3> color = {palette[i], palette[i+1], palette[i+2]};
         colors.push_back(color);
     }
@@ -130,22 +140,23 @@ std::vector<uint8_t> _quantize(uint8_t* image_data, int image_length, int image_
     AgglomerativeClustering::KDTree tree;
     tree.build(colors);
 
-    std::vector<uint8_t> output;
-    output.reserve(image_length);
-
-    int limit = image_format == 1 ? image_length - 2 : image_length - 3;
     int increment = image_format == 1 ? 3 : 4;
+    size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
+    uint8_t* packed = allocate_variable_size(pixels * increment);
+    uint8_t* output = packed + 4;
 
-    for (int i = 0; i < limit; i += increment) {
-        std::array<uint8_t, 3> color = {image_data[i], image_data[i+1], image_data[i+2]};
+    for (size_t p = 0; p < pixels; p++) {
+        const uint8_t* pixel = image_data + p * increment;
+        uint8_t* out = output + p * increment;
+        std::array<uint8_t, 3> color = {pixel[0], pixel[1], pixel[2]};
         std::array<uint8_t, 3> nearest = tree.get_nearest(color);
-        output.push_back(nearest[0]);
-        output.push_back(nearest[1]);
-        output.push_back(nearest[2]);
-        if (image_format == 0) {output.push_back(image_data[i+3]);}
+        out[0] = nearest[0];
+        out[1] = nearest[1];
+        out[2] = nearest[2];
+        if (image_format == 0) {out[3] = pixel[3];}
     }
 
-    return output;
+    return packed;
 
 }
 
@@ -160,44 +171,32 @@ uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format)
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return pack_variable_size(palette);
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
-    std::vector<uint8_t> clustering;
-    clustering.resize(clustering_length);
-    std::memcpy(clustering.data(), clustering_data, clustering_length);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
     return pack_variable_size(palette);
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
-    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
-    return pack_variable_size(quantized);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size());
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k) {
-    std::vector<uint8_t> clustering;
-    clustering.resize(clustering_length);
-    std::memcpy(clustering.data(), clustering_data, clustering_length);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, k);
-    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
-    return pack_variable_size(quantized);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size());
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length) {
-    std::vector<uint8_t> palette;
-    palette.resize(palette_length);
-    std::memcpy(palette.data(), palette_data, palette_length);
-    std::vector<uint8_t> quantized = _quantize(image_data, image_length, image_format, palette);
-    return pack_variable_size(quantized);
+    return _quantize(image_data, image_length, image_format, palette_data, palette_length);
 }
 
 }
