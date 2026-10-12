@@ -20,6 +20,7 @@ export const KODAK_IMAGES = Array.from({ length: 24 }, (_, i) => {
         urls: [
             `https://r0k.us/graphics/kodak/kodak/kodim${n}.png`,
             `https://huggingface.co/datasets/dblasko/kodak/resolve/main/kodim${n}.png`,
+            `https://raw.githubusercontent.com/MohamedBakrAli/Kodak-Lossless-True-Color-Image-Suite/master/PhotoCD_PCD0992/${n}.png`,
         ],
     };
 });
