@@ -32,20 +32,24 @@ public:
 
 private:
 
-    // Cells are stored densely, so cap the resolution to bound memory: 129^3 cell heads is ~8.5MB.
+    // Cells are indexed densely, so cap the resolution to bound memory: 129^3 cell indices is ~8.5MB.
     static constexpr uint16_t max_resolution = 7u;
     static constexpr int32_t none = -1;
 
-    // Points live in a pool and are chained into their cell with an intrusive doubly linked list.
-    // Each point caches its nearest neighbour within the surrounding 3x3x3 cells.
-    struct Point {
+    // Each occupied cell stores its points contiguously, holding everything a neighbourhood scan reads:
+    // the coordinates and the point's cached nearest neighbour within the surrounding 3x3x3 cells.
+    struct Member {
         std::array<uint16_t, 3> coords{};
-        uint64_t key = 0;
-        uint64_t nearest_distance = std::numeric_limits<uint64_t>::max();
+        int32_t slot = none;
         int32_t nearest = none;
-        int32_t prev = none;
-        int32_t next = none;
-        int32_t cell = none;
+        uint64_t nearest_distance = std::numeric_limits<uint64_t>::max();
+    };
+
+    // Point slots hold the colder per-point data and where the point's member lives.
+    struct Point {
+        uint64_t key = 0;
+        int32_t bucket = none;
+        int32_t index = none;
         uint32_t version = 0;
         bool alive = false;
     };
@@ -72,6 +76,7 @@ private:
     uint16_t grid_size = 0;
     uint16_t dimension = 0;
     std::vector<int32_t> cells;
+    std::vector<std::vector<Member>> buckets;
     std::vector<Point> points;
     std::vector<int32_t> free_slots;
     std::vector<Entry> heap;
@@ -93,6 +98,7 @@ private:
         this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
         this->dimension = std::numeric_limits<uint16_t>::max() / this->grid_size + 1u;
         this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
+        this->buckets.clear();
     }
 
     int32_t get_cell(const std::array<uint16_t, 3>& point) const {
@@ -102,8 +108,13 @@ private:
         return (x * this->dimension + y) * this->dimension + z;
     }
 
+    Member& get_member(int32_t slot) {
+        const Point& point = this->points[slot];
+        return this->buckets[point.bucket][point.index];
+    }
+
     template<typename F>
-    void for_each_local_point(const std::array<uint16_t, 3>& point, F&& func) const {
+    void for_each_local_member(const std::array<uint16_t, 3>& point, F&& func) {
 
         int32_t cx = point[0] / this->grid_size;
         int32_t cy = point[1] / this->grid_size;
@@ -113,76 +124,81 @@ private:
         for (int32_t x = std::max(cx - 1, 0); x <= std::min(cx + 1, last); x++) {
             for (int32_t y = std::max(cy - 1, 0); y <= std::min(cy + 1, last); y++) {
                 for (int32_t z = std::max(cz - 1, 0); z <= std::min(cz + 1, last); z++) {
-                    int32_t slot = this->cells[(x * this->dimension + y) * this->dimension + z];
-                    while (slot != none) {
-                        int32_t next = this->points[slot].next;
-                        func(slot);
-                        slot = next;
-                    }
+                    int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
+                    if (bucket == none) {continue;}
+                    for (Member& member : this->buckets[bucket]) {func(member);}
                 }
             }
         }
 
     }
 
-    void link(int32_t slot) {
+    void link(int32_t slot, const Member& member) {
+        int32_t cell = this->get_cell(member.coords);
+        if (this->cells[cell] == none) {
+            this->cells[cell] = (int32_t) this->buckets.size();
+            this->buckets.emplace_back();
+        }
         Point& point = this->points[slot];
-        point.cell = this->get_cell(point.coords);
-        point.prev = none;
-        point.next = this->cells[point.cell];
-        if (point.next != none) {this->points[point.next].prev = slot;}
-        this->cells[point.cell] = slot;
+        point.bucket = this->cells[cell];
+        point.index = (int32_t) this->buckets[point.bucket].size();
+        this->buckets[point.bucket].push_back(member);
     }
 
     void unlink(int32_t slot) {
         Point& point = this->points[slot];
-        if (point.prev != none) {this->points[point.prev].next = point.next;}
-        else {this->cells[point.cell] = point.next;}
-        if (point.next != none) {this->points[point.next].prev = point.prev;}
+        std::vector<Member>& bucket = this->buckets[point.bucket];
+        if (point.index != (int32_t) bucket.size() - 1) {
+            bucket[point.index] = bucket.back();
+            this->points[bucket[point.index].slot].index = point.index;
+        }
+        bucket.pop_back();
     }
 
     // Invalidates the point's previous heap entry and pushes its current nearest neighbour, if any.
-    void push(int32_t slot) {
-        Point& point = this->points[slot];
+    void push(const Member& member) {
+        Point& point = this->points[member.slot];
         point.version++;
-        if (point.nearest == none) {return;}
-        this->heap.push_back({point.nearest_distance, point.key, this->points[point.nearest].key, slot, point.version});
+        if (member.nearest == none) {return;}
+        this->heap.push_back({member.nearest_distance, point.key, this->points[member.nearest].key, member.slot, point.version});
         std::push_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
     }
 
-    bool is_closer(uint64_t distance, int32_t candidate, const Point& point) const {
-        if (distance != point.nearest_distance) {return distance < point.nearest_distance;}
-        return point.nearest == none || this->points[candidate].key < this->points[point.nearest].key;
+    bool is_closer(uint64_t distance, uint64_t candidate_key, const Member& member) const {
+        if (distance != member.nearest_distance) {return distance < member.nearest_distance;}
+        return member.nearest == none || candidate_key < this->points[member.nearest].key;
     }
 
     // Recomputes a point's nearest neighbour from scratch.
-    void find_nearest(int32_t slot) {
+    void find_nearest(Member& member) {
 
-        Point& point = this->points[slot];
-        point.nearest = none;
-        point.nearest_distance = std::numeric_limits<uint64_t>::max();
+        member.nearest = none;
+        member.nearest_distance = std::numeric_limits<uint64_t>::max();
 
-        this->for_each_local_point(point.coords, [&](int32_t other) {
-            if (other == slot) {return;}
-            uint64_t distance = get_distance(point.coords, this->points[other].coords);
-            if (!this->is_closer(distance, other, point)) {return;}
-            point.nearest = other;
-            point.nearest_distance = distance;
+        this->for_each_local_member(member.coords, [&](const Member& other) {
+            if (other.slot == member.slot) {return;}
+            uint64_t distance = get_distance(member.coords, other.coords);
+            if (distance > member.nearest_distance) {return;}
+            if (!this->is_closer(distance, pack(other.coords), member)) {return;}
+            member.nearest = other.slot;
+            member.nearest_distance = distance;
         });
 
-        this->push(slot);
+        this->push(member);
 
     }
 
     void rebuild() {
 
-        this->heap.clear();
-        for (int32_t slot = 0; slot < (int32_t) this->points.size(); slot++) {
-            if (this->points[slot].alive) {this->link(slot);}
-        }
+        std::vector<Member> members;
+        members.reserve(this->alive);
+        for (const std::vector<Member>& bucket : this->buckets) {members.insert(members.end(), bucket.begin(), bucket.end());}
 
-        for (int32_t slot = 0; slot < (int32_t) this->points.size(); slot++) {
-            if (this->points[slot].alive) {this->find_nearest(slot);}
+        this->set_resolution(this->resolution);
+        this->heap.clear();
+        for (const Member& member : members) {this->link(member.slot, member);}
+        for (std::vector<Member>& bucket : this->buckets) {
+            for (Member& member : bucket) {this->find_nearest(member);}
         }
 
     }
@@ -193,10 +209,12 @@ private:
         if (this->heap.size() <= 4 * this->alive + 1024) {return;}
 
         this->heap.clear();
-        for (int32_t slot = 0; slot < (int32_t) this->points.size(); slot++) {
-            const Point& point = this->points[slot];
-            if (!point.alive || point.nearest == none) {continue;}
-            this->heap.push_back({point.nearest_distance, point.key, this->points[point.nearest].key, slot, point.version});
+        for (const std::vector<Member>& bucket : this->buckets) {
+            for (const Member& member : bucket) {
+                if (member.nearest == none) {continue;}
+                const Point& point = this->points[member.slot];
+                this->heap.push_back({member.nearest_distance, point.key, this->points[member.nearest].key, member.slot, point.version});
+            }
         }
         std::make_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
 
@@ -213,9 +231,8 @@ private:
 
     // Points whose cached nearest neighbour was a removed point must be recomputed; they can only be local to it.
     void repair(const std::array<uint16_t, 3>& removed, int32_t a_slot, int32_t b_slot) {
-        this->for_each_local_point(removed, [&](int32_t other) {
-            int32_t nearest = this->points[other].nearest;
-            if (nearest == a_slot || nearest == b_slot) {this->find_nearest(other);}
+        this->for_each_local_member(removed, [&](Member& other) {
+            if (other.nearest == a_slot || other.nearest == b_slot) {this->find_nearest(other);}
         });
     }
 
@@ -228,45 +245,46 @@ public:
     void add(const std::array<uint16_t, 3>& point) {
 
         // If we already have this point, don't add it.
-        int32_t cell = this->get_cell(point);
-        for (int32_t slot = this->cells[cell]; slot != none; slot = this->points[slot].next) {
-            if (this->points[slot].coords == point) {return;}
+        int32_t bucket = this->cells[this->get_cell(point)];
+        if (bucket != none) {
+            for (const Member& member : this->buckets[bucket]) {
+                if (member.coords == point) {return;}
+            }
         }
 
         int32_t slot;
         if (!this->free_slots.empty()) {slot = this->free_slots.back(); this->free_slots.pop_back();}
         else {slot = (int32_t) this->points.size(); this->points.emplace_back();}
 
-        Point& added = this->points[slot];
-        added.coords = point;
-        added.key = pack(point);
-        added.nearest = none;
-        added.nearest_distance = std::numeric_limits<uint64_t>::max();
-        added.alive = true;
+        uint64_t key = pack(point);
+        this->points[slot].key = key;
+        this->points[slot].alive = true;
         this->alive++;
-        this->link(slot);
+
+        Member added;
+        added.coords = point;
+        added.slot = slot;
 
         // A single pass finds the new point's nearest neighbour and offers it to every local point.
-        this->for_each_local_point(point, [&](int32_t other) {
+        this->for_each_local_member(point, [&](Member& current) {
 
-            if (other == slot) {return;}
-            Point& current = this->points[other];
             uint64_t distance = get_distance(point, current.coords);
 
-            if (this->is_closer(distance, other, added)) {
-                added.nearest = other;
+            if (this->is_closer(distance, pack(current.coords), added)) {
+                added.nearest = current.slot;
                 added.nearest_distance = distance;
             }
 
-            if (this->is_closer(distance, slot, current)) {
+            if (this->is_closer(distance, key, current)) {
                 current.nearest = slot;
                 current.nearest_distance = distance;
-                this->push(other);
+                this->push(current);
             }
 
         });
 
-        this->push(slot);
+        this->link(slot, added);
+        this->push(added);
 
     }
 
@@ -289,14 +307,15 @@ public:
                 const Entry& top = this->heap.front();
                 const Point& point = this->points[top.slot];
                 if (point.alive && point.version == top.version) {
-                    return Nearest{point.coords, this->points[point.nearest].coords, top.slot, point.nearest};
+                    const Member& member = this->get_member(top.slot);
+                    return Nearest{member.coords, this->get_member(member.nearest).coords, top.slot, member.nearest};
                 }
                 std::pop_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
                 this->heap.pop_back();
             }
 
             if (this->alive < 2 || this->resolution == 0u) {return std::nullopt;}
-            this->set_resolution(this->resolution - 1u);
+            this->resolution--;
             this->rebuild();
 
         }
