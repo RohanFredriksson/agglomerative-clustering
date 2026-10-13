@@ -7,11 +7,8 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include <functional>
 #include <algorithm>
 #include <vector>
-#include <stdexcept>
-#include <optional>
 #include <cstdint>
 #include <utility>
 #include <limits>
@@ -19,73 +16,40 @@
 
 namespace AgglomerativeClustering {
 
-class CoarseningGrid {
+// Spatial index over the live clusters, answering exact "cheapest partner by Ward cost" queries.
+// Cells form a dense uniform grid that is rebuilt coarser as clusters merge, keeping a few clusters per cell.
+class WardGrid {
 
 public:
 
-    struct Nearest {
-        std::array<uint16_t, 3> a;
-        std::array<uint16_t, 3> b;
-        int32_t a_slot;
-        int32_t b_slot;
-    };
+    static constexpr int32_t none = -1;
 
 private:
 
     // Cells are indexed densely, so cap the resolution to bound memory: 129^3 cell indices is ~8.5MB.
-    static constexpr uint16_t max_resolution = 7u;
-    static constexpr int32_t none = -1;
+    static constexpr int max_resolution = 7;
 
-    // Each occupied cell stores its points contiguously, holding everything a neighbourhood scan reads:
-    // the coordinates, the pixel count and the point's cached cheapest partner within the surrounding 3x3x3 cells.
+    // Each occupied cell stores its clusters contiguously with everything a scan reads.
     struct Member {
-        std::array<uint16_t, 3> coords{};
-        uint32_t count = 0;
-        int32_t slot = none;
-        int32_t nearest = none;
-        double nearest_cost = std::numeric_limits<double>::infinity();
+        std::array<uint16_t, 3> coords;
+        uint32_t count;
+        int32_t id;
     };
 
-    // Point slots hold the colder per-point data and where the point's member lives.
-    struct Point {
-        uint64_t key = 0;
-        int32_t bucket = none;
-        int32_t index = none;
-        uint32_t version = 0;
-        bool alive = false;
+    struct Cluster {
+        std::array<uint16_t, 3> coords;
+        uint32_t count;
+        int32_t bucket;
+        int32_t index;
     };
 
-    // Heap entries are invalidated lazily: an entry is stale once its point's version moves on.
-    // Ties are broken on packed coordinates so the chosen pair is deterministic.
-    struct Entry {
-
-        double cost;
-        uint64_t key_a;
-        uint64_t key_b;
-        int32_t slot;
-        uint32_t version;
-
-        bool operator>(const Entry& other) const {
-            if (cost != other.cost) {return cost > other.cost;}
-            if (key_a != other.key_a) {return key_a > other.key_a;}
-            return key_b > other.key_b;
-        }
-
-    };
-
-    uint16_t resolution = 0;
-    uint16_t grid_size = 0;
-    uint16_t dimension = 0;
+    int resolution = -1;
+    uint32_t grid_size = 0;
+    int32_t dimension = 0;
     std::vector<int32_t> cells;
     std::vector<std::vector<Member>> buckets;
-    std::vector<Point> points;
-    std::vector<int32_t> free_slots;
-    std::vector<Entry> heap;
+    std::vector<Cluster> clusters;
     size_t alive = 0;
-
-    static uint64_t pack(const std::array<uint16_t, 3>& point) {
-        return (uint64_t(point[0]) << 32) | (uint64_t(point[1]) << 16) | uint64_t(point[2]);
-    }
 
     static uint64_t get_distance(const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
         uint64_t dx = static_cast<uint64_t>(a[0] > b[0] ? a[0] - b[0] : b[0] - a[0]);
@@ -94,260 +58,162 @@ private:
         return dx * dx + dy * dy + dz * dz;
     }
 
-    // Ward's criterion: how much merging the two clusters increases the total squared error,
-    // n_a * n_b / (n_a + n_b) * |a - b|^2.
-    static double get_cost(const Member& a, const Member& b) {
-        double weight = double(a.count) * double(b.count) / (double(a.count) + double(b.count));
-        return weight * double(get_distance(a.coords, b.coords));
+    static double get_weight(uint32_t a, uint32_t b) {
+        return double(a) * double(b) / (double(a) + double(b));
     }
 
-    void set_resolution(uint16_t resolution) {
-        this->resolution = resolution;
-        this->grid_size = std::numeric_limits<uint16_t>::max() / (1u << this->resolution);
-        this->dimension = std::numeric_limits<uint16_t>::max() / this->grid_size + 1u;
-        this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
-        this->buckets.clear();
+    static uint64_t pack(const std::array<uint16_t, 3>& point) {
+        return (uint64_t(point[0]) << 32) | (uint64_t(point[1]) << 16) | uint64_t(point[2]);
     }
 
-    int32_t get_cell(const std::array<uint16_t, 3>& point) const {
-        int32_t x = point[0] / this->grid_size;
-        int32_t y = point[1] / this->grid_size;
-        int32_t z = point[2] / this->grid_size;
-        return (x * this->dimension + y) * this->dimension + z;
+    // Aim for about one cluster per cell; coarser grids are cheaper to search once clusters are sparse.
+    static int resolution_for(size_t count) {
+        int r = 0;
+        while (r < max_resolution && (size_t(1) << (3 * (r + 1))) <= count) {r++;}
+        return r;
     }
 
-    Member& get_member(int32_t slot) {
-        const Point& point = this->points[slot];
-        return this->buckets[point.bucket][point.index];
+    int32_t cell_of(uint16_t value) const {
+        return int32_t(value / this->grid_size);
     }
 
-    template<typename F>
-    void for_each_local_member(const std::array<uint16_t, 3>& point, F&& func) {
-
-        int32_t cx = point[0] / this->grid_size;
-        int32_t cy = point[1] / this->grid_size;
-        int32_t cz = point[2] / this->grid_size;
-        int32_t last = this->dimension - 1;
-
-        for (int32_t x = std::max(cx - 1, 0); x <= std::min(cx + 1, last); x++) {
-            for (int32_t y = std::max(cy - 1, 0); y <= std::min(cy + 1, last); y++) {
-                for (int32_t z = std::max(cz - 1, 0); z <= std::min(cz + 1, last); z++) {
-                    int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
-                    if (bucket == none) {continue;}
-                    for (Member& member : this->buckets[bucket]) {func(member);}
-                }
-            }
-        }
-
-    }
-
-    void link(int32_t slot, const Member& member) {
-        int32_t cell = this->get_cell(member.coords);
+    void link(int32_t id) {
+        Cluster& cluster = this->clusters[id];
+        int32_t cell = (this->cell_of(cluster.coords[0]) * this->dimension + this->cell_of(cluster.coords[1])) * this->dimension + this->cell_of(cluster.coords[2]);
         if (this->cells[cell] == none) {
             this->cells[cell] = (int32_t) this->buckets.size();
             this->buckets.emplace_back();
         }
-        Point& point = this->points[slot];
-        point.bucket = this->cells[cell];
-        point.index = (int32_t) this->buckets[point.bucket].size();
-        this->buckets[point.bucket].push_back(member);
+        cluster.bucket = this->cells[cell];
+        cluster.index = (int32_t) this->buckets[cluster.bucket].size();
+        this->buckets[cluster.bucket].push_back({cluster.coords, cluster.count, id});
     }
 
-    void unlink(int32_t slot) {
-        Point& point = this->points[slot];
-        std::vector<Member>& bucket = this->buckets[point.bucket];
-        if (point.index != (int32_t) bucket.size() - 1) {
-            bucket[point.index] = bucket.back();
-            this->points[bucket[point.index].slot].index = point.index;
+    void rebuild(int resolution) {
+        this->resolution = resolution;
+        this->grid_size = (uint32_t(std::numeric_limits<uint16_t>::max()) + 1u) >> resolution;
+        this->dimension = int32_t(1) << resolution;
+        this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
+        std::vector<std::vector<Member>> previous;
+        previous.swap(this->buckets);
+        for (const std::vector<Member>& bucket : previous) {
+            for (const Member& member : bucket) {this->link(member.id);}
         }
-        bucket.pop_back();
-    }
-
-    // Invalidates the point's previous heap entry and pushes its current nearest neighbour, if any.
-    void push(const Member& member) {
-        Point& point = this->points[member.slot];
-        point.version++;
-        if (member.nearest == none) {return;}
-        this->heap.push_back({member.nearest_cost, point.key, this->points[member.nearest].key, member.slot, point.version});
-        std::push_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
-    }
-
-    bool is_cheaper(double cost, uint64_t candidate_key, const Member& member) const {
-        if (cost != member.nearest_cost) {return cost < member.nearest_cost;}
-        return member.nearest == none || candidate_key < this->points[member.nearest].key;
-    }
-
-    // Recomputes a point's cheapest partner from scratch.
-    void find_nearest(Member& member) {
-
-        member.nearest = none;
-        member.nearest_cost = std::numeric_limits<double>::infinity();
-
-        this->for_each_local_member(member.coords, [&](const Member& other) {
-            if (other.slot == member.slot) {return;}
-            double cost = get_cost(member, other);
-            if (cost > member.nearest_cost) {return;}
-            if (!this->is_cheaper(cost, pack(other.coords), member)) {return;}
-            member.nearest = other.slot;
-            member.nearest_cost = cost;
-        });
-
-        this->push(member);
-
-    }
-
-    void rebuild() {
-
-        std::vector<Member> members;
-        members.reserve(this->alive);
-        for (const std::vector<Member>& bucket : this->buckets) {members.insert(members.end(), bucket.begin(), bucket.end());}
-
-        this->set_resolution(this->resolution);
-        this->heap.clear();
-        for (const Member& member : members) {this->link(member.slot, member);}
-        for (std::vector<Member>& bucket : this->buckets) {
-            for (Member& member : bucket) {this->find_nearest(member);}
-        }
-
-    }
-
-    // Rebuilds the heap from live entries once stale ones dominate, so it stays proportional to the point count.
-    void compact() {
-
-        if (this->heap.size() <= 4 * this->alive + 1024) {return;}
-
-        this->heap.clear();
-        for (const std::vector<Member>& bucket : this->buckets) {
-            for (const Member& member : bucket) {
-                if (member.nearest == none) {continue;}
-                const Point& point = this->points[member.slot];
-                this->heap.push_back({member.nearest_cost, point.key, this->points[member.nearest].key, member.slot, point.version});
-            }
-        }
-        std::make_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
-
-    }
-
-    void remove(int32_t slot) {
-        Point& point = this->points[slot];
-        this->unlink(slot);
-        point.alive = false;
-        point.version++;
-        this->alive--;
-        this->free_slots.push_back(slot);
-    }
-
-    // Points whose cached partner was removed must be recomputed; they can only be local to it.
-    void repair(const std::array<uint16_t, 3>& removed) {
-        this->for_each_local_member(removed, [&](Member& other) {
-            if (other.nearest != none && !this->points[other.nearest].alive) {this->find_nearest(other);}
-        });
-    }
-
-    int32_t find_slot(const std::array<uint16_t, 3>& point) const {
-        int32_t bucket = this->cells[this->get_cell(point)];
-        if (bucket == none) {return none;}
-        for (const Member& member : this->buckets[bucket]) {
-            if (member.coords == point) {return member.slot;}
-        }
-        return none;
-    }
-
-    void insert(const std::array<uint16_t, 3>& point, uint32_t count) {
-
-        int32_t slot;
-        if (!this->free_slots.empty()) {slot = this->free_slots.back(); this->free_slots.pop_back();}
-        else {slot = (int32_t) this->points.size(); this->points.emplace_back();}
-
-        uint64_t key = pack(point);
-        this->points[slot].key = key;
-        this->points[slot].alive = true;
-        this->alive++;
-
-        Member added;
-        added.coords = point;
-        added.count = count;
-        added.slot = slot;
-
-        // A single pass finds the new point's cheapest partner and offers it to every local point.
-        this->for_each_local_member(point, [&](Member& current) {
-
-            double cost = get_cost(added, current);
-
-            if (this->is_cheaper(cost, pack(current.coords), added)) {
-                added.nearest = current.slot;
-                added.nearest_cost = cost;
-            }
-
-            if (this->is_cheaper(cost, key, current)) {
-                current.nearest = slot;
-                current.nearest_cost = cost;
-                this->push(current);
-            }
-
-        });
-
-        this->link(slot, added);
-        this->push(added);
-
     }
 
 public:
 
-    CoarseningGrid(uint16_t resolution) {
-        this->set_resolution(std::min(resolution, max_resolution));
+    explicit WardGrid(size_t expected) {
+        this->clusters.reserve(2 * expected);
+        this->rebuild(resolution_for(expected));
     }
 
-    // Adds a distinct colour with its pixel count; a colour already present is ignored.
-    void add(const std::array<uint16_t, 3>& point, uint32_t count) {
-        if (this->find_slot(point) != none) {return;}
-        this->insert(point, count);
+    int32_t add(const std::array<uint16_t, 3>& coords, uint32_t count) {
+        int32_t id = (int32_t) this->clusters.size();
+        this->clusters.push_back({coords, count, none, none});
+        this->link(id);
+        this->alive++;
+        return id;
     }
 
-    // Replaces the pair returned by get_nearest with their merged point. If the merged point lands exactly on
-    // an existing point, that point is absorbed too (their counts add up) and true is returned.
-    bool merge(const Nearest& nearest, const std::array<uint16_t, 3>& merged) {
-
-        uint32_t count = this->get_member(nearest.a_slot).count + this->get_member(nearest.b_slot).count;
-        this->remove(nearest.a_slot);
-        this->remove(nearest.b_slot);
-        this->repair(nearest.a);
-        this->repair(nearest.b);
-
-        int32_t existing = this->find_slot(merged);
-        if (existing != none) {
-            count += this->get_member(existing).count;
-            this->remove(existing);
-            this->repair(merged);
+    void remove(int32_t id) {
+        Cluster& cluster = this->clusters[id];
+        std::vector<Member>& bucket = this->buckets[cluster.bucket];
+        if (cluster.index != (int32_t) bucket.size() - 1) {
+            bucket[cluster.index] = bucket.back();
+            this->clusters[bucket[cluster.index].id].index = cluster.index;
         }
-
-        this->insert(merged, count);
-        this->compact();
-        return existing != none;
-
+        bucket.pop_back();
+        cluster.bucket = none;
+        this->alive--;
     }
 
-    // Returns the cheapest pair to merge among points in neighbouring cells, coarsening the grid when no such pair exists.
-    [[nodiscard]] std::optional<Nearest> get_nearest() {
+    // Coarsens the grid once clusters have thinned out enough for a lower resolution.
+    void coarsen() {
+        int target = resolution_for(this->alive);
+        if (target < this->resolution) {this->rebuild(target);}
+    }
 
-        while (true) {
+    bool is_alive(int32_t id) const {return this->clusters[id].bucket != none;}
+    size_t size() const {return this->alive;}
+    const std::array<uint16_t, 3>& coords(int32_t id) const {return this->clusters[id].coords;}
+    uint32_t count(int32_t id) const {return this->clusters[id].count;}
+    int32_t capacity() const {return (int32_t) this->clusters.size();}
 
-            while (!this->heap.empty()) {
-                const Entry& top = this->heap.front();
-                const Point& point = this->points[top.slot];
-                if (point.alive && point.version == top.version) {
-                    const Member& member = this->get_member(top.slot);
-                    return Nearest{member.coords, this->get_member(member.nearest).coords, top.slot, member.nearest};
+    // Ward cost of merging two clusters: the increase in total squared error, n_a * n_b / (n_a + n_b) * |a - b|^2.
+    double cost(int32_t a, int32_t b) const {
+        const Cluster& x = this->clusters[a];
+        const Cluster& y = this->clusters[b];
+        return get_weight(x.count, y.count) * double(get_distance(x.coords, y.coords));
+    }
+
+    // A strict total order on candidate partners of `a`: by cost, then by the partner's packed colour and id.
+    // Every cluster ranks partners the same way, which is what keeps the nearest-neighbour chain acyclic.
+    bool is_before(int32_t a, double cost, int32_t candidate, double best_cost, int32_t best) const {
+        if (best == none) {return true;}
+        if (cost != best_cost) {return cost < best_cost;}
+        uint64_t candidate_key = pack(this->clusters[candidate].coords);
+        uint64_t best_key = pack(this->clusters[best].coords);
+        uint64_t own_key = pack(this->clusters[a].coords);
+        // Compare the unordered pairs {a, candidate} and {a, best} by their smaller then larger (key, id).
+        auto lower = [&](uint64_t key, int32_t id) {return std::make_pair(std::min(std::make_pair(own_key, a), std::make_pair(key, id)), std::max(std::make_pair(own_key, a), std::make_pair(key, id)));};
+        return lower(candidate_key, candidate) < lower(best_key, best);
+    }
+
+    // Finds the live cluster that is cheapest to merge with `id`, searching outward ring by ring and stopping
+    // once no unvisited cell can hold a cheaper partner. Every partner has at least one pixel, so beyond
+    // distance d the cost is at least n / (n + 1) * d^2.
+    [[nodiscard]] int32_t nearest(int32_t id) const {
+
+        const Cluster& self = this->clusters[id];
+        const std::array<uint16_t, 3>& p = self.coords;
+        const int32_t c[3] = {this->cell_of(p[0]), this->cell_of(p[1]), this->cell_of(p[2])};
+        const int32_t last = this->dimension - 1;
+        const double minimum_weight = get_weight(self.count, 1u) * (1.0 - 1e-12);
+
+        int32_t best = none;
+        double best_cost = std::numeric_limits<double>::infinity();
+
+        auto scan = [&](int32_t x, int32_t y, int32_t z) {
+            int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
+            if (bucket == none) {return;}
+            for (const Member& member : this->buckets[bucket]) {
+                if (member.id == id) {continue;}
+                double cost = get_weight(self.count, member.count) * double(get_distance(p, member.coords));
+                if (cost > best_cost) {continue;}
+                if (this->is_before(id, cost, member.id, best_cost, best)) {best = member.id; best_cost = cost;}
+            }
+        };
+
+        for (int32_t ring = 0; ; ring++) {
+
+            // Anything outside the cells already searched lies past one of the cube's faces.
+            if (ring > 0) {
+                uint64_t gap = std::numeric_limits<uint64_t>::max();
+                for (int axis = 0; axis < 3; axis++) {
+                    if (c[axis] - ring >= 0) {gap = std::min<uint64_t>(gap, uint64_t(p[axis]) - (uint64_t(c[axis] - ring + 1) * this->grid_size - 1u));}
+                    if (c[axis] + ring <= last) {gap = std::min<uint64_t>(gap, uint64_t(c[axis] + ring) * this->grid_size - p[axis]);}
                 }
-                std::pop_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
-                this->heap.pop_back();
+                if (gap == std::numeric_limits<uint64_t>::max()) {break;}
+                if (best != none && minimum_weight * double(gap * gap) > best_cost) {break;}
             }
 
-            if (this->alive < 2 || this->resolution == 0u) {return std::nullopt;}
-            this->resolution--;
-            this->rebuild();
+            for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
+                bool x_edge = x == c[0] - ring || x == c[0] + ring;
+                for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
+                    bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
+                    if (xy_edge) {
+                        for (int32_t z = std::max(c[2] - ring, 0); z <= std::min(c[2] + ring, last); z++) {scan(x, y, z);}
+                    } else {
+                        if (c[2] - ring >= 0) {scan(x, y, c[2] - ring);}
+                        if (ring > 0 && c[2] + ring <= last) {scan(x, y, c[2] + ring);}
+                    }
+                }
+            }
 
         }
+
+        return best;
 
     }
 
@@ -371,7 +237,7 @@ private:
 
     std::unordered_map<std::array<uint16_t, 3>, uint32_t, ArrayHash> histogram;
 
-public: 
+public:
 
     bool count(std::array<uint16_t, 3> color) {
         auto it = this->histogram.find(color);
@@ -385,33 +251,8 @@ public:
         return it == this->histogram.end() ? 0u : it->second;
     }
 
-    std::array<uint16_t, 3> merge(std::array<uint16_t, 3> a, std::array<uint16_t, 3> b) {
-
-        uint32_t a_count = this->histogram[a];
-        uint32_t b_count = this->histogram[b];
-        uint32_t merged_count = a_count + b_count;
-
-        std::array<uint16_t, 3> merged = {
-            static_cast<uint16_t>((uint64_t(a[0]) * a_count + uint64_t(b[0]) * b_count) / merged_count),
-            static_cast<uint16_t>((uint64_t(a[1]) * a_count + uint64_t(b[1]) * b_count) / merged_count),
-            static_cast<uint16_t>((uint64_t(a[2]) * a_count + uint64_t(b[2]) * b_count) / merged_count)
-        };
-
-        this->histogram.erase(a);
-        this->histogram.erase(b);
-        this->histogram[merged] += merged_count;
-
-        return merged;
-
-    }
-
-    size_t size() {
+    size_t size() const {
         return this->histogram.size();
-    }
-
-    std::array<uint16_t, 3> last() {
-        if (this->histogram.size() != 1) {throw std::logic_error("AgglomerativeHistogram::last: method must be called when there is exactly one final element remaining.");}
-        return this->histogram.begin()->first;
     }
 
 };
