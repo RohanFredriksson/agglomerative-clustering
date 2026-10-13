@@ -37,12 +37,13 @@ private:
     static constexpr int32_t none = -1;
 
     // Each occupied cell stores its points contiguously, holding everything a neighbourhood scan reads:
-    // the coordinates and the point's cached nearest neighbour within the surrounding 3x3x3 cells.
+    // the coordinates, the pixel count and the point's cached cheapest partner within the surrounding 3x3x3 cells.
     struct Member {
         std::array<uint16_t, 3> coords{};
+        uint32_t count = 0;
         int32_t slot = none;
         int32_t nearest = none;
-        uint64_t nearest_distance = std::numeric_limits<uint64_t>::max();
+        double nearest_cost = std::numeric_limits<double>::infinity();
     };
 
     // Point slots hold the colder per-point data and where the point's member lives.
@@ -58,14 +59,14 @@ private:
     // Ties are broken on packed coordinates so the chosen pair is deterministic.
     struct Entry {
 
-        uint64_t distance;
+        double cost;
         uint64_t key_a;
         uint64_t key_b;
         int32_t slot;
         uint32_t version;
 
         bool operator>(const Entry& other) const {
-            if (distance != other.distance) {return distance > other.distance;}
+            if (cost != other.cost) {return cost > other.cost;}
             if (key_a != other.key_a) {return key_a > other.key_a;}
             return key_b > other.key_b;
         }
@@ -91,6 +92,13 @@ private:
         uint64_t dy = static_cast<uint64_t>(a[1] > b[1] ? a[1] - b[1] : b[1] - a[1]);
         uint64_t dz = static_cast<uint64_t>(a[2] > b[2] ? a[2] - b[2] : b[2] - a[2]);
         return dx * dx + dy * dy + dz * dz;
+    }
+
+    // Ward's criterion: how much merging the two clusters increases the total squared error,
+    // n_a * n_b / (n_a + n_b) * |a - b|^2.
+    static double get_cost(const Member& a, const Member& b) {
+        double weight = double(a.count) * double(b.count) / (double(a.count) + double(b.count));
+        return weight * double(get_distance(a.coords, b.coords));
     }
 
     void set_resolution(uint16_t resolution) {
@@ -160,28 +168,28 @@ private:
         Point& point = this->points[member.slot];
         point.version++;
         if (member.nearest == none) {return;}
-        this->heap.push_back({member.nearest_distance, point.key, this->points[member.nearest].key, member.slot, point.version});
+        this->heap.push_back({member.nearest_cost, point.key, this->points[member.nearest].key, member.slot, point.version});
         std::push_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
     }
 
-    bool is_closer(uint64_t distance, uint64_t candidate_key, const Member& member) const {
-        if (distance != member.nearest_distance) {return distance < member.nearest_distance;}
+    bool is_cheaper(double cost, uint64_t candidate_key, const Member& member) const {
+        if (cost != member.nearest_cost) {return cost < member.nearest_cost;}
         return member.nearest == none || candidate_key < this->points[member.nearest].key;
     }
 
-    // Recomputes a point's nearest neighbour from scratch.
+    // Recomputes a point's cheapest partner from scratch.
     void find_nearest(Member& member) {
 
         member.nearest = none;
-        member.nearest_distance = std::numeric_limits<uint64_t>::max();
+        member.nearest_cost = std::numeric_limits<double>::infinity();
 
         this->for_each_local_member(member.coords, [&](const Member& other) {
             if (other.slot == member.slot) {return;}
-            uint64_t distance = get_distance(member.coords, other.coords);
-            if (distance > member.nearest_distance) {return;}
-            if (!this->is_closer(distance, pack(other.coords), member)) {return;}
+            double cost = get_cost(member, other);
+            if (cost > member.nearest_cost) {return;}
+            if (!this->is_cheaper(cost, pack(other.coords), member)) {return;}
             member.nearest = other.slot;
-            member.nearest_distance = distance;
+            member.nearest_cost = cost;
         });
 
         this->push(member);
@@ -213,7 +221,7 @@ private:
             for (const Member& member : bucket) {
                 if (member.nearest == none) {continue;}
                 const Point& point = this->points[member.slot];
-                this->heap.push_back({member.nearest_distance, point.key, this->points[member.nearest].key, member.slot, point.version});
+                this->heap.push_back({member.nearest_cost, point.key, this->points[member.nearest].key, member.slot, point.version});
             }
         }
         std::make_heap(this->heap.begin(), this->heap.end(), std::greater<Entry>());
@@ -229,28 +237,23 @@ private:
         this->free_slots.push_back(slot);
     }
 
-    // Points whose cached nearest neighbour was a removed point must be recomputed; they can only be local to it.
-    void repair(const std::array<uint16_t, 3>& removed, int32_t a_slot, int32_t b_slot) {
+    // Points whose cached partner was removed must be recomputed; they can only be local to it.
+    void repair(const std::array<uint16_t, 3>& removed) {
         this->for_each_local_member(removed, [&](Member& other) {
-            if (other.nearest == a_slot || other.nearest == b_slot) {this->find_nearest(other);}
+            if (other.nearest != none && !this->points[other.nearest].alive) {this->find_nearest(other);}
         });
     }
 
-public:
-
-    CoarseningGrid(uint16_t resolution) {
-        this->set_resolution(std::min(resolution, max_resolution));
+    int32_t find_slot(const std::array<uint16_t, 3>& point) const {
+        int32_t bucket = this->cells[this->get_cell(point)];
+        if (bucket == none) {return none;}
+        for (const Member& member : this->buckets[bucket]) {
+            if (member.coords == point) {return member.slot;}
+        }
+        return none;
     }
 
-    void add(const std::array<uint16_t, 3>& point) {
-
-        // If we already have this point, don't add it.
-        int32_t bucket = this->cells[this->get_cell(point)];
-        if (bucket != none) {
-            for (const Member& member : this->buckets[bucket]) {
-                if (member.coords == point) {return;}
-            }
-        }
+    void insert(const std::array<uint16_t, 3>& point, uint32_t count) {
 
         int32_t slot;
         if (!this->free_slots.empty()) {slot = this->free_slots.back(); this->free_slots.pop_back();}
@@ -263,21 +266,22 @@ public:
 
         Member added;
         added.coords = point;
+        added.count = count;
         added.slot = slot;
 
-        // A single pass finds the new point's nearest neighbour and offers it to every local point.
+        // A single pass finds the new point's cheapest partner and offers it to every local point.
         this->for_each_local_member(point, [&](Member& current) {
 
-            uint64_t distance = get_distance(point, current.coords);
+            double cost = get_cost(added, current);
 
-            if (this->is_closer(distance, pack(current.coords), added)) {
+            if (this->is_cheaper(cost, pack(current.coords), added)) {
                 added.nearest = current.slot;
-                added.nearest_distance = distance;
+                added.nearest_cost = cost;
             }
 
-            if (this->is_closer(distance, key, current)) {
+            if (this->is_cheaper(cost, key, current)) {
                 current.nearest = slot;
-                current.nearest_distance = distance;
+                current.nearest_cost = cost;
                 this->push(current);
             }
 
@@ -288,17 +292,42 @@ public:
 
     }
 
-    // Replaces the pair returned by get_nearest with their merged point.
-    void merge(const Nearest& nearest, const std::array<uint16_t, 3>& merged) {
-        this->remove(nearest.a_slot);
-        this->remove(nearest.b_slot);
-        this->repair(nearest.a, nearest.a_slot, nearest.b_slot);
-        this->repair(nearest.b, nearest.a_slot, nearest.b_slot);
-        this->add(merged);
-        this->compact();
+public:
+
+    CoarseningGrid(uint16_t resolution) {
+        this->set_resolution(std::min(resolution, max_resolution));
     }
 
-    // Returns the closest pair among points in neighbouring cells, coarsening the grid when no such pair exists.
+    // Adds a distinct colour with its pixel count; a colour already present is ignored.
+    void add(const std::array<uint16_t, 3>& point, uint32_t count) {
+        if (this->find_slot(point) != none) {return;}
+        this->insert(point, count);
+    }
+
+    // Replaces the pair returned by get_nearest with their merged point. If the merged point lands exactly on
+    // an existing point, that point is absorbed too (their counts add up) and true is returned.
+    bool merge(const Nearest& nearest, const std::array<uint16_t, 3>& merged) {
+
+        uint32_t count = this->get_member(nearest.a_slot).count + this->get_member(nearest.b_slot).count;
+        this->remove(nearest.a_slot);
+        this->remove(nearest.b_slot);
+        this->repair(nearest.a);
+        this->repair(nearest.b);
+
+        int32_t existing = this->find_slot(merged);
+        if (existing != none) {
+            count += this->get_member(existing).count;
+            this->remove(existing);
+            this->repair(merged);
+        }
+
+        this->insert(merged, count);
+        this->compact();
+        return existing != none;
+
+    }
+
+    // Returns the cheapest pair to merge among points in neighbouring cells, coarsening the grid when no such pair exists.
     [[nodiscard]] std::optional<Nearest> get_nearest() {
 
         while (true) {
@@ -349,6 +378,11 @@ public:
         if (it != this->histogram.end()) {it->second++; return false;}
         this->histogram[color] = 1u;
         return true;
+    }
+
+    uint32_t get(const std::array<uint16_t, 3>& color) const {
+        auto it = this->histogram.find(color);
+        return it == this->histogram.end() ? 0u : it->second;
     }
 
     std::array<uint16_t, 3> merge(std::array<uint16_t, 3> a, std::array<uint16_t, 3> b) {

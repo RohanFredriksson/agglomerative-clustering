@@ -1,4 +1,4 @@
-// Average Hierarchical Agglomerative Color Clustering
+// Hierarchical Agglomerative Color Clustering (Ward's method)
 #include "clustering.hpp"
 #include <emscripten.h>
 #include <cstdlib>
@@ -30,6 +30,15 @@ uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
     return output;
 }
 
+// Writes merge record i: [merged rgb, a rgb, b rgb], downscaled to 8 bits per channel.
+void write_record(std::vector<uint8_t>& clustering, int i, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+    size_t offset = 3 + 9 * i;
+    const std::array<uint16_t, 3>* colors[3] = {&m, &a, &b};
+    for (int j = 0; j < 3; j++) {
+        for (int c = 0; c < 3; c++) {clustering[offset + 3 * j + c] = uint16_to_uint8((*colors[j])[c]);}
+    }
+}
+
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
 
     std::vector<uint8_t> clustering;
@@ -52,7 +61,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     AgglomerativeClustering::CoarseningGrid grid(r);
 
     // Pass 2: populate grid from unique colours
-    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color);}
+    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color, histogram.get(color));}
 
     size_t clustering_size = 3 + 9 * (histogram.size() - 1);
     clustering.reserve(clustering_size);
@@ -66,19 +75,15 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         std::array<uint16_t, 3> a = nearest->a;
         std::array<uint16_t, 3> b = nearest->b;
         std::array<uint16_t, 3> m = histogram.merge(a, b);
-        grid.merge(*nearest, m);
-        
-        // Add the clustering operation
-        size_t offset = 3 + 9 * i;
-        clustering[offset + 0] = uint16_to_uint8(m[0]);
-        clustering[offset + 1] = uint16_to_uint8(m[1]);
-        clustering[offset + 2] = uint16_to_uint8(m[2]);
-        clustering[offset + 3] = uint16_to_uint8(a[0]);
-        clustering[offset + 4] = uint16_to_uint8(a[1]);
-        clustering[offset + 5] = uint16_to_uint8(a[2]);
-        clustering[offset + 6] = uint16_to_uint8(b[0]);
-        clustering[offset + 7] = uint16_to_uint8(b[1]);
-        clustering[offset + 8] = uint16_to_uint8(b[2]);
+        bool absorbed = grid.merge(*nearest, m);
+        write_record(clustering, i, m, a, b);
+
+        // The merged colour landed on an existing one, which the histogram and grid folded in: record that
+        // as a second merge of two identical colours so every record still removes exactly one cluster.
+        if (absorbed && i > 0) {
+            i--;
+            write_record(clustering, i, m, m, m);
+        }
 
     }
 
