@@ -76,6 +76,9 @@ private:
     // The smallest count ever linked into each bucket. Removals don't raise it, so it may be too low, which
     // only makes it a weaker (still valid) bound.
     std::vector<uint32_t> bucket_minimum;
+    // The colour box of everything ever linked into each bucket: tighter than the cell's own extent, and
+    // removals only make it looser, so it stays a valid bound.
+    std::vector<std::array<uint16_t, 6>> bucket_box;
     std::vector<Cluster> clusters;
     size_t alive = 0;
 
@@ -137,6 +140,12 @@ private:
             this->cells[cell] = (int32_t) this->buckets.size();
             this->buckets.emplace_back();
             this->bucket_minimum.push_back(std::numeric_limits<uint32_t>::max());
+            this->bucket_box.push_back({std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0});
+        }
+        std::array<uint16_t, 6>& box = this->bucket_box[this->cells[cell]];
+        for (int axis = 0; axis < 3; axis++) {
+            box[axis] = std::min(box[axis], cluster.coords[axis]);
+            box[axis + 3] = std::max(box[axis + 3], cluster.coords[axis]);
         }
         cluster.bucket = this->cells[cell];
         this->bucket_minimum[cluster.bucket] = std::min(this->bucket_minimum[cluster.bucket], cluster.count);
@@ -152,6 +161,7 @@ private:
         std::vector<std::vector<Member>> previous;
         previous.swap(this->buckets);
         this->bucket_minimum.clear();
+        this->bucket_box.clear();
         for (const std::vector<Member>& bucket : previous) {
             for (const Member& member : bucket) {this->link(member.id);}
         }
@@ -260,20 +270,19 @@ private:
         // The cost a candidate must beat to make the list: its worst entry once full.
         double bound = std::numeric_limits<double>::infinity();
 
-        // Squared distance from p to the nearest point of a cell, per axis.
-        auto axis_gap = [&](int axis, int32_t cell) -> uint64_t {
-            uint64_t lo = uint64_t(cell) * this->grid_size;
-            uint64_t hi = lo + this->grid_size - 1u;
-            uint64_t gap = p[axis] < lo ? lo - p[axis] : p[axis] > hi ? p[axis] - hi : 0u;
-            return gap * gap;
-        };
-
         auto scan = [&](int32_t x, int32_t y, int32_t z) {
             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
             if (bucket == none) {return;}
-            // No member of this cell can cost less than its lightest possible member at the cell's nearest point.
+            // No member of this cell can cost less than its lightest possible member at the nearest point of the
+            // cell's colour box.
             double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
-            if (cell_weight * double(axis_gap(0, x) + axis_gap(1, y) + axis_gap(2, z)) > bound) {return;}
+            const std::array<uint16_t, 6>& box = this->bucket_box[bucket];
+            uint64_t box_gap = 0;
+            for (int axis = 0; axis < 3; axis++) {
+                uint64_t g = p[axis] < box[axis] ? box[axis] - p[axis] : p[axis] > box[axis + 3] ? p[axis] - box[axis + 3] : 0u;
+                box_gap += g * g;
+            }
+            if (cell_weight * double(box_gap) > bound) {return;}
             examined += this->buckets[bucket].size();
             for (const Member& member : this->buckets[bucket]) {
                 if (member.id == id) {continue;}
