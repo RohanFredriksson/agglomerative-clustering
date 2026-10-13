@@ -43,11 +43,39 @@ private:
         int32_t index;
     };
 
+    // Candidate caches for clusters whose searches are expensive (see nearest).
+    static constexpr int cache_size = 16;
+    static constexpr size_t cache_after = 1024;
+
+    // The cheapest partners of one cluster in the total order of is_before, cheapest first.
+    struct Candidates {
+        int size = 0;
+        int32_t ids[cache_size];
+        double costs[cache_size];
+    };
+
+    // Every live cluster not in `candidates` costs at least `threshold`; clusters with ids from `seen` on
+    // were created after the list was built and haven't been offered yet.
+    struct Cache {
+        Candidates candidates;
+        int32_t seen = 0;
+        double threshold = 0.0;
+    };
+
+    std::vector<int32_t> cache_of;
+    std::vector<bool> expensive;
+    std::vector<Cache> caches;
+    std::vector<int32_t> free_caches;
+
     int resolution = -1;
+    size_t next_review = std::numeric_limits<size_t>::max();
     uint32_t grid_size = 0;
     int32_t dimension = 0;
     std::vector<int32_t> cells;
     std::vector<std::vector<Member>> buckets;
+    // The smallest count ever linked into each bucket. Removals don't raise it, so it may be too low, which
+    // only makes it a weaker (still valid) bound.
+    std::vector<uint32_t> bucket_minimum;
     std::vector<Cluster> clusters;
     size_t alive = 0;
 
@@ -66,11 +94,36 @@ private:
         return (uint64_t(point[0]) << 32) | (uint64_t(point[1]) << 16) | uint64_t(point[2]);
     }
 
-    // Aim for about one cluster per cell; coarser grids are cheaper to search once clusters are sparse.
-    static int resolution_for(size_t count) {
-        int r = 0;
-        while (r < max_resolution && (size_t(1) << (3 * (r + 1))) <= count) {r++;}
-        return r;
+    // Image colours fill only a small part of the RGB cube, so the resolution is chosen from how crowded the
+    // occupied cells are rather than from the cluster count: the finest grid whose occupied cells hold at
+    // least `target_occupancy` clusters on average. Finer grids mean fewer distance evaluations per search but
+    // more empty cells to step over.
+    static constexpr double target_occupancy = 6.0;
+
+    int choose_resolution() const {
+        // Morton codes at the finest resolution: dropping the low 3 bits gives the code one level coarser,
+        // so one sort answers the occupied-cell count at every resolution.
+        std::vector<uint32_t> codes;
+        codes.reserve(this->alive);
+        for (const std::vector<Member>& bucket : this->buckets) {
+            for (const Member& member : bucket) {
+                uint32_t code = 0;
+                for (int bit = max_resolution - 1; bit >= 0; bit--) {
+                    for (int axis = 0; axis < 3; axis++) {code = (code << 1) | ((member.coords[axis] >> (16 - max_resolution + bit)) & 1u);}
+                }
+                codes.push_back(code);
+            }
+        }
+        std::sort(codes.begin(), codes.end());
+        for (int r = max_resolution; r > 0; r--) {
+            int shift = 3 * (max_resolution - r);
+            size_t occupied = 0;
+            for (size_t i = 0; i < codes.size(); i++) {
+                if (i == 0 || (codes[i] >> shift) != (codes[i - 1] >> shift)) {occupied++;}
+            }
+            if (double(this->alive) >= target_occupancy * double(occupied)) {return r;}
+        }
+        return 0;
     }
 
     int32_t cell_of(uint16_t value) const {
@@ -83,8 +136,10 @@ private:
         if (this->cells[cell] == none) {
             this->cells[cell] = (int32_t) this->buckets.size();
             this->buckets.emplace_back();
+            this->bucket_minimum.push_back(std::numeric_limits<uint32_t>::max());
         }
         cluster.bucket = this->cells[cell];
+        this->bucket_minimum[cluster.bucket] = std::min(this->bucket_minimum[cluster.bucket], cluster.count);
         cluster.index = (int32_t) this->buckets[cluster.bucket].size();
         this->buckets[cluster.bucket].push_back({cluster.coords, cluster.count, id});
     }
@@ -96,6 +151,7 @@ private:
         this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
         std::vector<std::vector<Member>> previous;
         previous.swap(this->buckets);
+        this->bucket_minimum.clear();
         for (const std::vector<Member>& bucket : previous) {
             for (const Member& member : bucket) {this->link(member.id);}
         }
@@ -105,12 +161,16 @@ public:
 
     explicit WardGrid(size_t expected) {
         this->clusters.reserve(2 * expected);
-        this->rebuild(resolution_for(expected));
+        this->cache_of.reserve(2 * expected);
+        this->expensive.reserve(2 * expected);
+        this->rebuild(0);
     }
 
     int32_t add(const std::array<uint16_t, 3>& coords, uint32_t count) {
         int32_t id = (int32_t) this->clusters.size();
         this->clusters.push_back({coords, count, none, none});
+        this->cache_of.push_back(none);
+        this->expensive.push_back(false);
         this->link(id);
         this->alive++;
         return id;
@@ -125,13 +185,20 @@ public:
         }
         bucket.pop_back();
         cluster.bucket = none;
+        if (this->cache_of[id] != none) {
+            this->free_caches.push_back(this->cache_of[id]);
+            this->cache_of[id] = none;
+        }
         this->alive--;
     }
 
-    // Coarsens the grid once clusters have thinned out enough for a lower resolution.
-    void coarsen() {
-        int target = resolution_for(this->alive);
-        if (target < this->resolution) {this->rebuild(target);}
+    // Re-picks the resolution (after the initial adds, then each time the cluster count halves) and rebuilds
+    // the grid if it changed.
+    void reindex() {
+        if (this->alive > this->next_review) {return;}
+        this->next_review = this->alive / 2;
+        int target = this->choose_resolution();
+        if (target != this->resolution) {this->rebuild(target);}
     }
 
     bool is_alive(int32_t id) const {return this->clusters[id].bucket != none;}
@@ -160,28 +227,62 @@ public:
         return lower(candidate_key, candidate) < lower(best_key, best);
     }
 
-    // Finds the live cluster that is cheapest to merge with `id`, searching outward ring by ring and stopping
-    // once no unvisited cell can hold a cheaper partner. Every partner has at least one pixel, so beyond
-    // distance d the cost is at least n / (n + 1) * d^2.
-    [[nodiscard]] int32_t nearest(int32_t id) const {
+private:
+
+    // Inserts a candidate if it ranks among the best `limit`; returns the cost of any candidate pushed out, else infinity.
+    double offer(int32_t id, Candidates& list, int limit, int32_t candidate, double cost) const {
+        if (list.size == limit && !this->is_before(id, cost, candidate, list.costs[limit - 1], list.ids[limit - 1])) {return cost;}
+        double evicted = list.size == limit ? list.costs[limit - 1] : std::numeric_limits<double>::infinity();
+        int i = list.size == limit ? limit - 1 : list.size++;
+        while (i > 0 && this->is_before(id, cost, candidate, list.costs[i - 1], list.ids[i - 1])) {
+            list.ids[i] = list.ids[i - 1];
+            list.costs[i] = list.costs[i - 1];
+            i--;
+        }
+        list.ids[i] = candidate;
+        list.costs[i] = cost;
+        return evicted;
+    }
+
+    // Collects the `limit` cheapest partners of `id`, searching outward ring by ring and stopping once no
+    // unvisited cell can hold a cheaper one. Every partner has at least one pixel, so beyond distance d the
+    // cost is at least n / (n + 1) * d^2. Returns how many clusters were examined.
+    size_t search(int32_t id, Candidates& list, int limit) const {
 
         const Cluster& self = this->clusters[id];
         const std::array<uint16_t, 3>& p = self.coords;
         const int32_t c[3] = {this->cell_of(p[0]), this->cell_of(p[1]), this->cell_of(p[2])};
         const int32_t last = this->dimension - 1;
         const double minimum_weight = get_weight(self.count, 1u) * (1.0 - 1e-12);
+        size_t examined = 0;
+        list.size = 0;
 
-        int32_t best = none;
-        double best_cost = std::numeric_limits<double>::infinity();
+        // The cost a candidate must beat to make the list: its worst entry once full.
+        double bound = std::numeric_limits<double>::infinity();
+
+        // Squared distance from p to the nearest point of a cell, per axis.
+        auto axis_gap = [&](int axis, int32_t cell) -> uint64_t {
+            uint64_t lo = uint64_t(cell) * this->grid_size;
+            uint64_t hi = lo + this->grid_size - 1u;
+            uint64_t gap = p[axis] < lo ? lo - p[axis] : p[axis] > hi ? p[axis] - hi : 0u;
+            return gap * gap;
+        };
 
         auto scan = [&](int32_t x, int32_t y, int32_t z) {
             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
             if (bucket == none) {return;}
+            // No member of this cell can cost less than its lightest possible member at the cell's nearest point.
+            double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
+            if (cell_weight * double(axis_gap(0, x) + axis_gap(1, y) + axis_gap(2, z)) > bound) {return;}
+            examined += this->buckets[bucket].size();
             for (const Member& member : this->buckets[bucket]) {
                 if (member.id == id) {continue;}
-                double cost = get_weight(self.count, member.count) * double(get_distance(p, member.coords));
-                if (cost > best_cost) {continue;}
-                if (this->is_before(id, cost, member.id, best_cost, best)) {best = member.id; best_cost = cost;}
+                uint64_t distance = get_distance(p, member.coords);
+                if (cell_weight * double(distance) > bound) {continue;}
+                double cost = get_weight(self.count, member.count) * double(distance);
+                if (cost > bound) {continue;}
+                this->offer(id, list, limit, member.id, cost);
+                if (list.size == limit) {bound = list.costs[limit - 1];}
             }
         };
 
@@ -195,7 +296,7 @@ public:
                     if (c[axis] + ring <= last) {gap = std::min<uint64_t>(gap, uint64_t(c[axis] + ring) * this->grid_size - p[axis]);}
                 }
                 if (gap == std::numeric_limits<uint64_t>::max()) {break;}
-                if (best != none && minimum_weight * double(gap * gap) > best_cost) {break;}
+                if (minimum_weight * double(gap * gap) > bound) {break;}
             }
 
             for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
@@ -213,7 +314,68 @@ public:
 
         }
 
-        return best;
+        return examined;
+
+    }
+
+public:
+
+    // Returns the live cluster that is cheapest to merge with `id`.
+    //
+    // A cluster at the base of the nearest-neighbour chain is queried again after every merge above it, and a
+    // large cluster's search reaches far (its bound assumes a one-pixel partner). So once a search has been
+    // expensive, the cluster keeps its `cache_size` cheapest candidates and a threshold below which no
+    // unlisted cluster can cost. Live clusters never change, so the next query only has to drop dead
+    // candidates and offer the clusters created since; it falls back to a full search when the cheapest
+    // remaining candidate isn't strictly below the threshold.
+    [[nodiscard]] int32_t nearest(int32_t id) {
+
+        int32_t slot = this->cache_of[id];
+
+        if (slot != none) {
+            Cache& cache = this->caches[slot];
+            Candidates& list = cache.candidates;
+            int kept = 0;
+            for (int i = 0; i < list.size; i++) {
+                if (!this->is_alive(list.ids[i])) {continue;}
+                list.ids[kept] = list.ids[i];
+                list.costs[kept] = list.costs[i];
+                kept++;
+            }
+            list.size = kept;
+            int32_t end = this->capacity();
+            for (int32_t other = cache.seen; other < end; other++) {
+                if (other == id || !this->is_alive(other)) {continue;}
+                double cost = this->cost(id, other);
+                if (cost >= cache.threshold) {continue;}
+                cache.threshold = std::min(cache.threshold, this->offer(id, list, cache_size, other, cost));
+            }
+            cache.seen = end;
+            if (list.size > 0 && list.costs[0] < cache.threshold) {return list.ids[0];}
+            this->search(id, list, cache_size);
+            cache.threshold = list.size == cache_size ? list.costs[cache_size - 1] : std::numeric_limits<double>::infinity();
+            return list.size > 0 ? list.ids[0] : none;
+        }
+
+        Candidates list;
+        size_t examined = this->search(id, list, 1);
+        if (examined > cache_after && !this->expensive[id]) {
+            this->expensive[id] = true;
+        } else if (examined > cache_after) {
+            if (this->free_caches.empty()) {
+                slot = (int32_t) this->caches.size();
+                this->caches.emplace_back();
+            } else {
+                slot = this->free_caches.back();
+                this->free_caches.pop_back();
+            }
+            this->cache_of[id] = slot;
+            Cache& cache = this->caches[slot];
+            this->search(id, cache.candidates, cache_size);
+            cache.seen = this->capacity();
+            cache.threshold = cache.candidates.size == cache_size ? cache.candidates.costs[cache_size - 1] : std::numeric_limits<double>::infinity();
+        }
+        return list.size > 0 ? list.ids[0] : none;
 
     }
 

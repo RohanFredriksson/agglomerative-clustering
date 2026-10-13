@@ -60,6 +60,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     // Pass 2: one cluster per unique colour
     AgglomerativeClustering::WardGrid grid(n);
     for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color, histogram.get(color));}
+    grid.reindex();
 
     // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
     // cost, raised to its children's heights where centroid rounding would put it below them, so sorting by
@@ -111,7 +112,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         grid.remove(b);
         int32_t m = grid.add(merged, count);
         heights[m] = height;
-        grid.coarsen();
+        grid.reindex();
 
     }
 
