@@ -1,7 +1,8 @@
 .vscode/
 dist/
 esm/
-lib/
+/lib/
 node_modules/
 test/visual/output/
-fixtures/images/bench/results/
+fixtures/images/
+bench/results/
