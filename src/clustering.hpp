@@ -29,11 +29,27 @@ private:
     // Cells are indexed densely, so cap the resolution to bound memory: 129^3 cell indices is ~8.5MB.
     static constexpr int max_resolution = 7;
 
-    // Each occupied cell stores its clusters contiguously with everything a scan reads.
-    struct Member {
-        std::array<uint16_t, 3> coords;
-        uint32_t count;
-        int32_t id;
+    // Each occupied cell stores its clusters in chunks of four lanes, so a scan computes four exact Ward costs
+    // at once (GCC/Clang vector extensions: WASM SIMD128 with -msimd128, SSE natively). Colours are at most
+    // 65535, so they are exact as floats. Unused lanes have id `none`, one pixel and a colour far outside the
+    // cube, so their cost is huge and a chunk whose live lanes are all too expensive is skipped whole.
+    typedef float f32x4 __attribute__((vector_size(16)));
+    typedef uint32_t u32x4 __attribute__((vector_size(16)));
+    typedef double f64x4 __attribute__((vector_size(32)));
+    typedef int64_t i64x4 __attribute__((vector_size(32)));
+    static constexpr float far_away = 1e30f;
+
+    struct Chunk {
+        f32x4 x = {far_away, far_away, far_away, far_away};
+        f32x4 y = {far_away, far_away, far_away, far_away};
+        f32x4 z = {far_away, far_away, far_away, far_away};
+        u32x4 count = {1, 1, 1, 1};
+        int32_t id[4] = {none, none, none, none};
+    };
+
+    struct Bucket {
+        std::vector<Chunk> chunks;
+        int32_t size = 0;
     };
 
     struct Cluster {
@@ -72,7 +88,7 @@ private:
     uint32_t grid_size = 0;
     int32_t dimension = 0;
     std::vector<int32_t> cells;
-    std::vector<std::vector<Member>> buckets;
+    std::vector<Bucket> buckets;
     // The smallest count ever linked into each bucket. Removals don't raise it, so it may be too low, which
     // only makes it a weaker (still valid) bound.
     std::vector<uint32_t> bucket_minimum;
@@ -105,14 +121,13 @@ private:
         // so one sort answers the occupied-cell count at every resolution.
         std::vector<uint32_t> codes;
         codes.reserve(this->alive);
-        for (const std::vector<Member>& bucket : this->buckets) {
-            for (const Member& member : bucket) {
-                uint32_t code = 0;
-                for (int bit = max_resolution - 1; bit >= 0; bit--) {
-                    for (int axis = 0; axis < 3; axis++) {code = (code << 1) | ((member.coords[axis] >> (16 - max_resolution + bit)) & 1u);}
-                }
-                codes.push_back(code);
+        for (const Cluster& cluster : this->clusters) {
+            if (cluster.bucket == none) {continue;}
+            uint32_t code = 0;
+            for (int bit = max_resolution - 1; bit >= 0; bit--) {
+                for (int axis = 0; axis < 3; axis++) {code = (code << 1) | ((cluster.coords[axis] >> (16 - max_resolution + bit)) & 1u);}
             }
+            codes.push_back(code);
         }
         std::sort(codes.begin(), codes.end());
         for (int r = max_resolution; r > 0; r--) {
@@ -140,8 +155,20 @@ private:
         }
         cluster.bucket = this->cells[cell];
         this->bucket_minimum[cluster.bucket] = std::min(this->bucket_minimum[cluster.bucket], cluster.count);
-        cluster.index = (int32_t) this->buckets[cluster.bucket].size();
-        this->buckets[cluster.bucket].push_back({cluster.coords, cluster.count, id});
+        Bucket& bucket = this->buckets[cluster.bucket];
+        cluster.index = bucket.size++;
+        if (cluster.index % 4 == 0) {bucket.chunks.emplace_back();}
+        this->set_lane(bucket, cluster.index, cluster.coords, cluster.count, id);
+    }
+
+    static void set_lane(Bucket& bucket, int32_t index, const std::array<uint16_t, 3>& coords, uint32_t count, int32_t id) {
+        Chunk& chunk = bucket.chunks[index / 4];
+        int lane = index % 4;
+        chunk.x[lane] = float(coords[0]);
+        chunk.y[lane] = float(coords[1]);
+        chunk.z[lane] = float(coords[2]);
+        chunk.count[lane] = count;
+        chunk.id[lane] = id;
     }
 
     void rebuild(int resolution) {
@@ -149,11 +176,10 @@ private:
         this->grid_size = (uint32_t(std::numeric_limits<uint16_t>::max()) + 1u) >> resolution;
         this->dimension = int32_t(1) << resolution;
         this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
-        std::vector<std::vector<Member>> previous;
-        previous.swap(this->buckets);
+        this->buckets.clear();
         this->bucket_minimum.clear();
-        for (const std::vector<Member>& bucket : previous) {
-            for (const Member& member : bucket) {this->link(member.id);}
+        for (int32_t id = 0; id < (int32_t) this->clusters.size(); id++) {
+            if (this->clusters[id].bucket != none) {this->link(id);}
         }
     }
 
@@ -178,12 +204,19 @@ public:
 
     void remove(int32_t id) {
         Cluster& cluster = this->clusters[id];
-        std::vector<Member>& bucket = this->buckets[cluster.bucket];
-        if (cluster.index != (int32_t) bucket.size() - 1) {
-            bucket[cluster.index] = bucket.back();
-            this->clusters[bucket[cluster.index].id].index = cluster.index;
+        Bucket& bucket = this->buckets[cluster.bucket];
+        int32_t last = bucket.size - 1;
+        if (cluster.index != last) {
+            int32_t moved = bucket.chunks[last / 4].id[last % 4];
+            Cluster& other = this->clusters[moved];
+            this->set_lane(bucket, cluster.index, other.coords, other.count, moved);
+            other.index = cluster.index;
         }
-        bucket.pop_back();
+        this->set_lane(bucket, last, {0, 0, 0}, 1, none);
+        Chunk& tail = bucket.chunks[last / 4];
+        tail.x[last % 4] = tail.y[last % 4] = tail.z[last % 4] = far_away;
+        bucket.size = last;
+        if (last % 4 == 0) {bucket.chunks.pop_back();}
         cluster.bucket = none;
         if (this->cache_of[id] != none) {
             this->free_caches.push_back(this->cache_of[id]);
@@ -259,6 +292,10 @@ private:
 
         // The cost a candidate must beat to make the list: its worst entry once full.
         double bound = std::numeric_limits<double>::infinity();
+        const f32x4 px = {float(p[0]), float(p[0]), float(p[0]), float(p[0])};
+        const f32x4 py = {float(p[1]), float(p[1]), float(p[1]), float(p[1])};
+        const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
+        const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
 
         // Squared distance from p to the nearest point of a cell, per axis.
         auto axis_gap = [&](int axis, int32_t cell) -> uint64_t {
@@ -274,15 +311,25 @@ private:
             // No member of this cell can cost less than its lightest possible member at the cell's nearest point.
             double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
             if (cell_weight * double(axis_gap(0, x) + axis_gap(1, y) + axis_gap(2, z)) > bound) {return;}
-            examined += this->buckets[bucket].size();
-            for (const Member& member : this->buckets[bucket]) {
-                if (member.id == id) {continue;}
-                uint64_t distance = get_distance(p, member.coords);
-                if (cell_weight * double(distance) > bound) {continue;}
-                double cost = get_weight(self.count, member.count) * double(distance);
-                if (cost > bound) {continue;}
-                this->offer(id, list, limit, member.id, cost);
-                if (list.size == limit) {bound = list.costs[limit - 1];}
+            const Bucket& members = this->buckets[bucket];
+            examined += members.size;
+            for (const Chunk& chunk : members.chunks) {
+                f32x4 dx = chunk.x - px, dy = chunk.y - py, dz = chunk.z - pz;
+                // Exact Ward costs for all four lanes: integer differences and their squares are exact in double,
+                // and the weight uses the same operations as get_weight, so these match the scalar costs bit for bit.
+                f64x4 ex = __builtin_convertvector(dx, f64x4), ey = __builtin_convertvector(dy, f64x4), ez = __builtin_convertvector(dz, f64x4);
+                f64x4 distance = ex * ex + ey * ey + ez * ez;
+                f64x4 counts = __builtin_convertvector(chunk.count, f64x4);
+                f64x4 cost = own_count * counts / (own_count + counts) * distance;
+                f64x4 bound_vector = {bound, bound, bound, bound};
+                i64x4 cheap = cost <= bound_vector;
+                if (!(cheap[0] | cheap[1] | cheap[2] | cheap[3])) {continue;}
+                for (int lane = 0; lane < 4; lane++) {
+                    if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id) {continue;}
+                    if (cost[lane] > bound) {continue;}
+                    this->offer(id, list, limit, chunk.id[lane], cost[lane]);
+                    if (list.size == limit) {bound = list.costs[limit - 1];}
+                }
             }
         };
 
