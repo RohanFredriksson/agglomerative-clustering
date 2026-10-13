@@ -13,12 +13,16 @@ An npm package (`agglomerative-clustering`) that does colour-palette extraction 
   - `npm run build:js`: Babel-transpiles `src/index.js` to `dist/index.cjs` and `dist/index.mjs`, and copies `index.d.ts`.
 - `npm test`: runs vitest over everything under `test/`.
 - Single test file: `npx vitest run test/smoke.test.js`. Single test: `npx vitest run -t "<name pattern>"`.
-- `npm run bench`: vitest bench (`bench/speed.bench.js`), compared against NeuQuant from `image-q`.
-- `npm run quality`: MSE comparison on the Kodak image suite (`bench/quality.js`).
+- `npm run bench`: quick vitest bench (`bench/speed.bench.js`): palette time at k=64 and for k=16/64/128/256, on two Kodak photos and noise, against the other libraries.
+- `npm run bench:full`: the full harness (`bench/run.js`, options documented at the top of the file). For each image (Kodak + synthetic in `bench/lib/images.js`), library and k it records palette time, quality of that palette under one shared nearest-colour mapping (MSE, PSNR, mean CIEDE2000), and the library's own quantize time/quality. Results go to `bench/results/<label>.json` (gitignored) and a summary is printed. A full run takes about 20 minutes; use `--libs none`, `--kodak-limit`, `--k` and `--sets` to narrow it.
+  - `--ac name=path/to/dist/index.mjs` (repeatable) benchmarks other builds of this library side by side, e.g. a build of `master`.
+  - `npm run bench:compare -- a.json b.json` compares results files (before/after a change).
+  - `npm run quality`: the harness without the own-quantize timings.
+- Other libraries live behind adapters in `bench/lib/quantizers.js` (image-q NeuQuant/Wu/RgbQuant, MMCQ via `quantize`, libimagequant via `libimagequant-wasm`). They are dev dependencies used only for benchmarking.
 
 **Tests and benches import from `dist/index.mjs`, not `src/`.** Rebuild (`npm run build`, or `build:wasm` after C++ changes) before you run them, or they will exercise stale code. `src/index.js` imports `./clustering.js`, which exists only in `dist/` after the WASM step.
 
-The Kodak tests (`test/visual/kodak.test.js`), `bench/quality.js` and `fixtures/kodak.js` download images on first run into `fixtures/images/` (gitignored), so they need network access. Node's `fetch` ignores `HTTPS_PROXY`, so behind a proxy, pre-download them with `curl` from one of the URLs in `fixtures/kodak.js`, saved as `fixtures/images/kodimNN.png`. Visual test output goes to `test/visual/output/` (also gitignored). `test/setup.js` polyfills `ImageData` from `canvas` so the ImageData code paths can be tested in Node.
+The Kodak tests (`test/visual/kodak.test.js`), the benchmarks and `fixtures/kodak.js` download images on first run into `fixtures/images/` (gitignored), so they need network access. Node's `fetch` ignores `HTTPS_PROXY`, so behind a proxy, pre-download them with `curl` from one of the URLs in `fixtures/kodak.js`, saved as `fixtures/images/kodimNN.png`. Visual test output goes to `test/visual/output/` (also gitignored). `test/setup.js` polyfills `ImageData` from `canvas` so the ImageData code paths can be tested in Node.
 
 ## Architecture
 

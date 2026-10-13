@@ -52,7 +52,9 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "bench": "vitest bench",
-    "quality": "node bench/quality.js"
+    "bench:full": "node bench/run.js",
+    "bench:compare": "node bench/compare.js",
+    "quality": "node bench/run.js --no-pipeline --label quality"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",
@@ -62,7 +64,9 @@
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",
     "image-q": "^4.0.0",
+    "libimagequant-wasm": "^0.3.0",
     "mkdirp": "^3.0.1",
+    "quantize": "^1.0.2",
     "vitest": "^4.1.5"
   }
 }
