@@ -2,11 +2,11 @@
 
 How `agglomerative-clustering` compares with five other JavaScript/WASM palette quantizers on quality and speed.
 
-- **Build:** commit `ef16b6b`, which is `master` plus the float pre-filter from PR #4. It is the WASM build, compiled with Emscripten 6.0.12.
-- **Machine:** Node v22.22.0 on an Intel Xeon at 2.80 GHz, in a shared cloud container.
-- **Timings:** each is the median of 3 runs. The whole run took 61 minutes.
+- **Build:** commit `ef61dea` (2.0 with the faster partner search and pixel mapping). It is the WASM build, compiled with Emscripten 6.0.12.
+- **Machine:** Node v22.22.0 on an Intel Xeon at 2.10 GHz, in a shared cloud container.
+- **Timings:** each is the median of 3 runs. The whole run took 50 minutes.
 
-**2.0:** these results also hold for 2.0. Every benchmark image is opaque, so 2.0's palettes contain exactly the same colours as the build measured here, in split order. Pixel mapping differs only where a pixel is exactly equidistant from two palette colours, which leaves MSE and PSNR unchanged.
+The quality figures are identical to the previous run of this comparison (commit `ef16b6b`, before 2.0): the speed-ups don't change any clustering, palette or mapped pixel, and every benchmark image is opaque, so 2.0's palettes hold the same colours, in split order. Only the timings changed. That earlier run was on a different machine (2.80 GHz), so compare speeds within one run, not across runs.
 
 Reproduce with:
 
@@ -39,9 +39,9 @@ node bench/run.js --runs 3 --label comparison
 
 - **Quality:** on the Kodak photos, agglomerative has the lowest MSE and highest PSNR of the six libraries at every k. The closest rivals are Wu (MSE ratio 1.03–1.11) and libimagequant (1.06–1.12). At k = 16 they each beat it on 4–5 of the 24 photos, by at most 4.2% MSE. From k = 64 up, nothing beats it on any photo.
 - **Perceptual quality:** agglomerative also has the lowest mean ΔE2000 at k = 16 and 64. libimagequant draws level at k = 128 and is slightly ahead at k = 256 (1.65 vs 1.67). agglomerative minimises squared RGB error (Ward's criterion), while libimagequant tunes for perceived colour.
-- **Speed:** a single palette takes about 160 ms per photo whatever k is. That is comparable to libimagequant (129–186 ms) and 2.6–11× faster than image-q. Only MMCQ is faster (about 30 ms), but its MSE is 2–3× higher.
-- **Several palette sizes:** because one clustering serves every k, all four palettes take 151 ms per photo, against 642 ms for libimagequant and 1.8–4.1 s for image-q.
-- **Synthetic images:** agglomerative still has the best PSNR at every k. Wu beats it on noise at k = 64 (by 5–6% MSE) and on the RGB ramp (by up to 2%). libimagequant has better ΔE here at every k. A single palette takes 280–365 ms, level with libimagequant (274–378 ms), because noise has hundreds of thousands of unique colours to cluster. All four palettes take 321 ms, against 1353 ms for libimagequant.
+- **Speed:** a single palette takes about 100 ms per photo whatever k is. That is as fast as libimagequant at k = 16 (105 ms) and faster from k = 64 up (134–169 ms), and 3.7–15× faster than image-q. Only MMCQ is faster (about 25 ms), but its MSE is 2–3× higher.
+- **Several palette sizes:** because one clustering serves every k, all four palettes take 99 ms per photo, against 552 ms for libimagequant and 1.5–3.5 s for image-q.
+- **Synthetic images:** agglomerative still has the best PSNR at every k. Wu beats it on noise at k = 64 (by 5–6% MSE) and on the RGB ramp (by up to 2%). libimagequant has better ΔE here at every k. A single palette takes 246–263 ms, slightly faster than libimagequant (261–359 ms); noise has hundreds of thousands of unique colours to cluster. All four palettes take 246 ms, against 1267 ms for libimagequant.
 
 ## Kodak (24 photos, 768×512)
 
@@ -49,30 +49,30 @@ PSNR and ΔE are means over images. Times are medians per image.
 
 | k | Library | PSNR dB | ΔE2000 | MSE ratio | Wins | Palette ms | Quantize ms | Own-map PSNR |
 |---|---|---|---|---|---|---|---|---|
-| 16 | **agglomerative** | **29.98** | **4.31** | 1.00 | – | 167 | 167 | **29.98** |
-| 16 | image-q wuquant | 29.84 | 4.47 | 1.03 | 4/24 | 756 | 1496 | 28.59 |
-| 16 | libimagequant | 29.74 | 4.39 | 1.06 | 5/24 | 129 | 157 | 29.42 |
-| 16 | image-q neuquant | 28.15 | 4.86 | 1.52 | 0/24 | 428 | 1115 | 27.16 |
-| 16 | mmcq | 26.57 | 6.08 | 2.19 | 0/24 | 37 | – | – |
-| 16 | image-q rgbquant | 25.84 | 6.68 | 2.59 | 0/24 | 450 | 1205 | 24.15 |
-| 64 | **agglomerative** | **35.72** | **2.56** | 1.00 | – | 165 | 182 | **35.72** |
-| 64 | image-q wuquant | 35.51 | 2.61 | 1.05 | 0/24 | 908 | 1621 | 34.00 |
-| 64 | libimagequant | 35.39 | 2.58 | 1.08 | 0/24 | 154 | 226 | 34.92 |
-| 64 | image-q neuquant | 34.41 | 2.78 | 1.35 | 0/24 | 717 | 1400 | 33.04 |
-| 64 | mmcq | 32.53 | 3.55 | 2.08 | 0/24 | 31 | – | – |
-| 64 | image-q rgbquant | 31.95 | 3.69 | 2.38 | 0/24 | 476 | 1206 | 30.00 |
-| 128 | **agglomerative** | **38.16** | **2.06** | 1.00 | – | 168 | 178 | **38.16** |
-| 128 | image-q wuquant | 37.88 | 2.11 | 1.07 | 0/24 | 1027 | 1826 | 36.18 |
-| 128 | libimagequant | 37.75 | **2.06** | 1.10 | 0/24 | 178 | 267 | 37.21 |
-| 128 | image-q neuquant | 37.38 | 2.19 | 1.20 | 0/24 | 1057 | 1814 | 35.81 |
-| 128 | image-q rgbquant | 34.92 | 2.85 | 2.11 | 0/24 | 450 | 1225 | 33.00 |
-| 128 | mmcq | 34.73 | 2.98 | 2.20 | 0/24 | 29 | – | – |
-| 256 | **agglomerative** | **40.49** | 1.67 | 1.00 | – | 156 | 185 | **40.49** |
-| 256 | image-q wuquant | 40.05 | 1.73 | 1.11 | 0/24 | 1266 | 2236 | 38.17 |
-| 256 | libimagequant | 39.99 | **1.65** | 1.12 | 0/24 | 186 | 286 | 39.38 |
-| 256 | image-q neuquant | 39.46 | 1.79 | 1.27 | 0/24 | 1793 | 2686 | 37.70 |
-| 256 | image-q rgbquant | 37.21 | 2.29 | 2.13 | 0/24 | 474 | 1395 | 35.17 |
-| 256 | mmcq | 35.92 | 2.71 | 2.87 | 0/24 | 29 | – | – |
+| 16 | **agglomerative** | **29.98** | **4.31** | 1.00 | – | 100 | 107 | **29.98** |
+| 16 | image-q wuquant | 29.84 | 4.47 | 1.03 | 4/24 | 646 | 1139 | 28.59 |
+| 16 | libimagequant | 29.74 | 4.39 | 1.06 | 5/24 | 105 | 130 | 29.42 |
+| 16 | image-q neuquant | 28.15 | 4.86 | 1.52 | 0/24 | 370 | 882 | 27.16 |
+| 16 | mmcq | 26.57 | 6.08 | 2.19 | 0/24 | 33 | – | – |
+| 16 | image-q rgbquant | 25.84 | 6.68 | 2.59 | 0/24 | 392 | 933 | 24.15 |
+| 64 | **agglomerative** | **35.72** | **2.56** | 1.00 | – | 97 | 101 | **35.72** |
+| 64 | image-q wuquant | 35.51 | 2.61 | 1.05 | 0/24 | 740 | 1261 | 34.00 |
+| 64 | libimagequant | 35.39 | 2.58 | 1.08 | 0/24 | 134 | 195 | 34.92 |
+| 64 | image-q neuquant | 34.41 | 2.78 | 1.35 | 0/24 | 609 | 1151 | 33.04 |
+| 64 | mmcq | 32.53 | 3.55 | 2.08 | 0/24 | 24 | – | – |
+| 64 | image-q rgbquant | 31.95 | 3.69 | 2.38 | 0/24 | 385 | 937 | 30.00 |
+| 128 | **agglomerative** | **38.16** | **2.06** | 1.00 | – | 93 | 107 | **38.16** |
+| 128 | image-q wuquant | 37.88 | 2.11 | 1.07 | 0/24 | 848 | 1484 | 36.18 |
+| 128 | libimagequant | 37.75 | **2.06** | 1.10 | 0/24 | 149 | 242 | 37.21 |
+| 128 | image-q neuquant | 37.38 | 2.19 | 1.20 | 0/24 | 923 | 1527 | 35.81 |
+| 128 | image-q rgbquant | 34.92 | 2.85 | 2.11 | 0/24 | 391 | 1000 | 33.00 |
+| 128 | mmcq | 34.73 | 2.98 | 2.20 | 0/24 | 25 | – | – |
+| 256 | **agglomerative** | **40.49** | 1.67 | 1.00 | – | 106 | 116 | **40.49** |
+| 256 | image-q wuquant | 40.05 | 1.73 | 1.11 | 0/24 | 1132 | 1787 | 38.17 |
+| 256 | libimagequant | 39.99 | **1.65** | 1.12 | 0/24 | 169 | 267 | 39.38 |
+| 256 | image-q neuquant | 39.46 | 1.79 | 1.27 | 0/24 | 1537 | 2247 | 37.70 |
+| 256 | image-q rgbquant | 37.21 | 2.29 | 2.13 | 0/24 | 377 | 1084 | 35.17 |
+| 256 | mmcq | 35.92 | 2.71 | 2.87 | 0/24 | 26 | – | – |
 
 At k = 16, the photos where another library has lower MSE are:
 - **Wu:** kodim01 (−2.9%), kodim17 (−2.7%), kodim20 (−3.6%) and kodim22 (−3.0%).
@@ -82,12 +82,12 @@ Palettes for every k in {16, 64, 128, 256}, median ms per photo:
 
 | Library | All k ms | How |
 |---|---|---|
-| **agglomerative** | **151** | One clustering, cut per k |
-| mmcq | 136 | Sum of per-k palettes |
-| libimagequant | 642 | Sum of per-k palettes |
-| image-q rgbquant | 1822 | Sum of per-k palettes |
-| image-q wuquant | 3940 | Sum of per-k palettes |
-| image-q neuquant | 4098 | Sum of per-k palettes |
+| **agglomerative** | **99** | One clustering, cut per k |
+| mmcq | 120 | Sum of per-k palettes |
+| libimagequant | 552 | Sum of per-k palettes |
+| image-q rgbquant | 1535 | Sum of per-k palettes |
+| image-q wuquant | 3387 | Sum of per-k palettes |
+| image-q neuquant | 3461 | Sum of per-k palettes |
 
 ## Synthetic (5 images)
 
@@ -95,30 +95,30 @@ The images are gradient-hsv, gradient-rgb, graphic, noise-512 and noise-1024. Fi
 
 | k | Library | PSNR dB | ΔE2000 | MSE ratio | Wins | Palette ms | Quantize ms | Own-map PSNR |
 |---|---|---|---|---|---|---|---|---|
-| 16 | **agglomerative** | **24.13** | 8.51 | 1.00 | – | 280 | 437 | **24.13** |
-| 16 | image-q wuquant | 23.88 | 8.50 | 1.06 | 1/5 | 815 | 1365 | 22.56 |
-| 16 | libimagequant | 23.62 | **8.19** | 1.12 | 0/5 | 274 | 332 | 23.39 |
-| 16 | image-q neuquant | 23.25 | 8.62 | 1.22 | 0/5 | 393 | 1007 | 21.91 |
-| 16 | image-q rgbquant | 21.11 | 10.83 | 2.01 | 0/5 | 1250 | 2624 | 18.60 |
-| 16 | mmcq | 20.03 | 10.65 | 2.57 | 0/5 | 37 | – | – |
-| 64 | **agglomerative** | **30.05** | 4.91 | 1.00 | – | 310 | 336 | **30.05** |
-| 64 | image-q wuquant | 29.66 | 4.86 | 1.09 | 3/5 | 944 | 1453 | 28.34 |
-| 64 | libimagequant | 29.06 | **4.77** | 1.25 | 0/5 | 333 | 349 | 28.79 |
-| 64 | image-q neuquant | 28.43 | 5.17 | 1.45 | 0/5 | 649 | 1291 | 26.87 |
-| 64 | image-q rgbquant | 27.44 | 6.50 | 1.82 | 0/5 | 1240 | 1955 | 25.40 |
-| 64 | mmcq | 26.24 | 5.79 | 2.40 | 0/5 | 29 | – | – |
-| 128 | **agglomerative** | **32.92** | 3.79 | 1.00 | – | 318 | 382 | **32.92** |
-| 128 | libimagequant | 32.17 | **3.54** | 1.19 | 0/5 | 378 | 473 | 32.01 |
-| 128 | image-q wuquant | 31.87 | 3.91 | 1.27 | 0/5 | 1039 | 1959 | 30.06 |
-| 128 | image-q neuquant | 30.48 | 4.00 | 1.75 | 0/5 | 994 | 1855 | 29.03 |
-| 128 | image-q rgbquant | 30.13 | 5.65 | 1.90 | 0/5 | 1022 | 2233 | 27.96 |
-| 128 | mmcq | 28.96 | 4.31 | 2.49 | 0/5 | 31 | – | – |
-| 256 | **agglomerative** | **36.19** | 2.84 | 1.00 | – | 365 | 331 | **36.19** |
-| 256 | libimagequant | 35.12 | **2.75** | 1.28 | 0/5 | 369 | 478 | 34.84 |
-| 256 | image-q wuquant | 34.23 | 2.92 | 1.57 | 1/5 | 1359 | 2234 | 32.44 |
-| 256 | image-q neuquant | 32.48 | 3.10 | 2.35 | 0/5 | 1716 | 2412 | 30.87 |
-| 256 | image-q rgbquant | 32.35 | 5.21 | 2.42 | 0/5 | 1030 | 2328 | 30.07 |
-| 256 | mmcq | 31.44 | 3.34 | 2.98 | 0/5 | 25 | – | – |
+| 16 | **agglomerative** | **24.13** | 8.51 | 1.00 | – | 246 | 254 | **24.13** |
+| 16 | image-q wuquant | 23.88 | 8.50 | 1.06 | 1/5 | 641 | 1038 | 22.56 |
+| 16 | libimagequant | 23.62 | **8.19** | 1.12 | 0/5 | 261 | 294 | 23.39 |
+| 16 | image-q neuquant | 23.25 | 8.62 | 1.22 | 0/5 | 330 | 708 | 21.91 |
+| 16 | image-q rgbquant | 21.11 | 10.83 | 2.01 | 0/5 | 939 | 1832 | 18.60 |
+| 16 | mmcq | 20.03 | 10.65 | 2.57 | 0/5 | 31 | – | – |
+| 64 | **agglomerative** | **30.05** | 4.91 | 1.00 | – | 263 | 264 | **30.05** |
+| 64 | image-q wuquant | 29.66 | 4.86 | 1.09 | 3/5 | 782 | 1234 | 28.34 |
+| 64 | libimagequant | 29.06 | **4.77** | 1.25 | 0/5 | 295 | 370 | 28.79 |
+| 64 | image-q neuquant | 28.43 | 5.17 | 1.45 | 0/5 | 564 | 977 | 26.87 |
+| 64 | image-q rgbquant | 27.44 | 6.50 | 1.82 | 0/5 | 982 | 1894 | 25.40 |
+| 64 | mmcq | 26.24 | 5.79 | 2.40 | 0/5 | 32 | – | – |
+| 128 | **agglomerative** | **32.92** | 3.79 | 1.00 | – | 249 | 272 | **32.92** |
+| 128 | libimagequant | 32.17 | **3.54** | 1.19 | 0/5 | 359 | 410 | 32.01 |
+| 128 | image-q wuquant | 31.87 | 3.91 | 1.27 | 0/5 | 864 | 1350 | 30.06 |
+| 128 | image-q neuquant | 30.48 | 4.00 | 1.75 | 0/5 | 936 | 1252 | 29.03 |
+| 128 | image-q rgbquant | 30.13 | 5.65 | 1.90 | 0/5 | 942 | 1867 | 27.96 |
+| 128 | mmcq | 28.96 | 4.31 | 2.49 | 0/5 | 22 | – | – |
+| 256 | **agglomerative** | **36.19** | 2.84 | 1.00 | – | 262 | 259 | **36.19** |
+| 256 | libimagequant | 35.12 | **2.75** | 1.28 | 0/5 | 351 | 431 | 34.84 |
+| 256 | image-q wuquant | 34.23 | 2.92 | 1.57 | 1/5 | 1049 | 1865 | 32.44 |
+| 256 | image-q neuquant | 32.48 | 3.10 | 2.35 | 0/5 | 1527 | 1880 | 30.87 |
+| 256 | image-q rgbquant | 32.35 | 5.21 | 2.42 | 0/5 | 917 | 1949 | 30.07 |
+| 256 | mmcq | 31.44 | 3.34 | 2.98 | 0/5 | 22 | – | – |
 
 Wu's wins are noise-512 (−6.5% MSE) and noise-1024 (−5.4%) at k = 64, and gradient-rgb at k = 16, 64 and 256 (−0.5%, −1.5% and −2.2%).
 
@@ -126,12 +126,12 @@ Palettes for every k in {16, 64, 128, 256}, median ms per image:
 
 | Library | All k ms | How |
 |---|---|---|
-| mmcq | 120 | Sum of per-k palettes |
-| **agglomerative** | **321** | One clustering, cut per k |
-| libimagequant | 1353 | Sum of per-k palettes |
-| image-q neuquant | 3894 | Sum of per-k palettes |
-| image-q wuquant | 4269 | Sum of per-k palettes |
-| image-q rgbquant | 4541 | Sum of per-k palettes |
+| mmcq | 99 | Sum of per-k palettes |
+| **agglomerative** | **246** | One clustering, cut per k |
+| libimagequant | 1267 | Sum of per-k palettes |
+| image-q neuquant | 3272 | Sum of per-k palettes |
+| image-q wuquant | 3333 | Sum of per-k palettes |
+| image-q rgbquant | 3781 | Sum of per-k palettes |
 
 ## Caveats
 
@@ -146,16 +146,16 @@ These are the `precision`, `colorSpace` and `dither` options, measured on the sa
 
 | Setting | PSNR k=16 | ΔE k=16 | ΔE k=64 | ΔE k=128 | ΔE k=256 | Palette ms (k=64) | All k ms |
 |---|---|---|---|---|---|---|---|
-| default (`rgb`, `precision: 8`) | 29.98 | 4.31 | 2.56 | 2.06 | 1.68 | 177 | 199 |
-| `precision: 6` | 30.03 | 4.29 | 2.56 | 2.06 | 1.68 | 59 | 61 |
-| `precision: 5` | 30.03 | 4.24 | 2.56 | 2.08 | 1.74 | 23 | 22 |
-| `colorSpace: 'oklab'` | 29.31 | 4.46 | 2.54 | 2.01 | 1.60 | 336 | 335 |
-| `colorSpace: 'oklab', precision: 6` | 29.26 | 4.44 | 2.55 | 2.02 | 1.61 | 109 | 107 |
-| `dither: true` | 26.55 | 5.06 | 3.31 | 2.68 | 2.15 | 194 | 196 |
-| libimagequant | 29.42 | 4.38 | 2.54 | 2.02 | 1.61 | 169 | 694 |
+| default (`rgb`, `precision: 8`) | 29.98 | 4.31 | 2.56 | 2.06 | 1.67 | 102 | 97 |
+| `precision: 6` | 30.03 | 4.29 | 2.56 | 2.06 | 1.68 | 31 | 31 |
+| `precision: 5` | 30.03 | 4.24 | 2.56 | 2.08 | 1.74 | 11 | 12 |
+| `colorSpace: 'oklab'` | 29.31 | 4.46 | 2.54 | 2.01 | 1.60 | 104 | 103 |
+| `colorSpace: 'oklab', precision: 6` | 29.26 | 4.44 | 2.55 | 2.02 | 1.61 | 39 | 39 |
+| `dither: true` | 26.55 | 5.06 | 3.31 | 2.68 | 2.15 | 94 | 101 |
+| libimagequant | 29.42 | 4.38 | 2.54 | 2.02 | 1.61 | 147 | 575 |
 
-Each row is from one of two runs. The `precision: 5` and OKLab + `precision: 6` rows come from a second run, in which the default build again took 177 ms at k = 64, so speeds compare across runs.
+All rows are from one run (`bench/run.js --libs libimagequant --runs 3`, commit `ef61dea`). With the faster search, exact OKLab now clusters as fast as RGB.
 
-- **`precision: 6`** is about 3× faster than exact at practically the same quality. On the synthetic set it is about 7× faster (49 vs 371 ms at k = 64), and noise-1024 drops from 5.3 s to 1.7 s.
+- **`precision: 6`** is about 3× faster than exact at practically the same quality. On the synthetic set it is about 7× faster (33 vs 238 ms at k = 64), and noise-1024 drops from 2.9 s to 0.8 s.
 - **`colorSpace: 'oklab'`** gives the lowest ΔE2000 from k = 128 up on photos, and at every k on the synthetic set (k = 64: 4.48 against libimagequant's 4.66 and RGB's 4.91), at the cost of 0.3–1 dB PSNR. At k = 16 on photos RGB is better.
 - **`dither`** lowers per-pixel scores by design. Its value is visual: it removes banding in smooth gradients at low colour counts, as in `docs/palette-sizes.png`. Quantize time rises because dithered pixels miss the colour memo more often.

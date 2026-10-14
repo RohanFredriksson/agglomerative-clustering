@@ -3,8 +3,10 @@
 ## Unreleased
 
 ### Changed
-- **Faster clustering, with identical output.** In WebAssembly, clustering a 768×512 Kodak photo is about 1.5× faster in RGB, 2.2× faster with `colorSpace: 'oklab'` and 1.5× faster with `precision: 6`. The partner search's grid now comes in sizes between powers of two and uses coarser cells, steps over empty cells with per-column occupancy bits, tests cells with a division-free float bound, and starts each search from a known partner.
-- **Faster pixel mapping, with identical output.** For palettes up to 256 colours, lookups go through a grid whose cells (built on first use) list the palette entries that can be nearest there, replacing the KD-tree. Dithering in OKLab memoises colour conversions. `quantize` is about 1.5× faster in RGB and 2× in OKLab, and dithered `quantize` about 1.8× (RGB) and 2.3× (OKLab).
+- **Faster clustering, with identical output.** On the Kodak photos (WASM, Node 22), one palette takes about 100 ms instead of 155 ms, and with `colorSpace: 'oklab'` about 110 ms instead of 250 ms, so OKLab now costs no more than RGB. `precision: 6` takes about 30 ms. The partner search's grid comes in sizes between powers of two with coarser cells, steps over empty cells with per-column occupancy bits, tests cells with a division-free float bound, and starts each search from a known partner.
+- **Faster pixel mapping, with identical output.** For palettes up to 256 colours, lookups go through a grid whose cells (built on first use) list the palette entries that can be nearest there, instead of the KD-tree, and dithering in OKLab memoises colour conversions. `quantizeWithPalette` at 64 colours takes about 6 ms per photo instead of 15 ms; a dithered `quantize` about 150 ms instead of 250–325 ms.
+- Every clustering, palette and quantized image is byte-identical to before.
+- The WebAssembly module grows from 58 KB to 65 KB.
 
 ## 2.0.0
 
