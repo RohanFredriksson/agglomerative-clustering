@@ -309,6 +309,20 @@ private:
         const f32x4 py = {float(p[1]), float(p[1]), float(p[1]), float(p[1])};
         const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
         const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
+        const f32x4 own_count_f = {float(self.count), float(self.count), float(self.count), float(self.count)};
+
+        // Once the bound is finite, chunks first go through a cheap float filter: a lane can only beat the bound
+        // if n_a * n_b * d^2 <= bound * (n_a + n_b), which needs no division and takes one f32x4 per operation
+        // instead of two f64x2. Float rounding is a few ulps (~1e-7) on each side, so widening the bound by 1e-4
+        // never rejects a lane the exact test would keep; chunks that pass get exact costs as before.
+        f32x4 filter_bound = {0.0f, 0.0f, 0.0f, 0.0f};
+        bool filtering = false;
+        auto tighten = [&](double value) __attribute__((always_inline)) {
+            bound = value;
+            float widened = float(value) * 1.0001f;
+            filter_bound = f32x4{widened, widened, widened, widened};
+            filtering = true;
+        };
 
         // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
         auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
@@ -329,6 +343,11 @@ private:
             examined += members.size;
             for (const Chunk& chunk : members.chunks) {
                 f32x4 dx = chunk.x - px, dy = chunk.y - py, dz = chunk.z - pz;
+                if (filtering) {
+                    f32x4 n = __builtin_convertvector(chunk.count, f32x4);
+                    u32x4 maybe = (u32x4) (own_count_f * n * (dx * dx + dy * dy + dz * dz) <= filter_bound * (own_count_f + n));
+                    if (!(maybe[0] | maybe[1] | maybe[2] | maybe[3])) {continue;}
+                }
                 // Exact Ward costs for all four lanes: integer differences and their squares are exact in double,
                 // and the weight uses the same operations as get_weight, so these match the scalar costs bit for bit.
                 f64x4 ex = __builtin_convertvector(dx, f64x4), ey = __builtin_convertvector(dy, f64x4), ez = __builtin_convertvector(dz, f64x4);
@@ -342,7 +361,7 @@ private:
                     if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id) {continue;}
                     if (cost[lane] > bound) {continue;}
                     this->offer(id, list, limit, chunk.id[lane], cost[lane]);
-                    if (list.size == limit) {bound = list.costs[limit - 1];}
+                    if (list.size == limit) {tighten(list.costs[limit - 1]);}
                 }
             }
         };
