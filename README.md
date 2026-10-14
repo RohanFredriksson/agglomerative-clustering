@@ -11,7 +11,8 @@
 Most colour quantizers answer one question: *give me k colours*. Ask for a different k and they start over. This library builds the complete merge hierarchy of the image's colours with Ward's method, which merges whichever two colour groups add the least squared error. Every palette size is then a cut of that one tree:
 
 - **Every palette size from one pass.** After clustering, a palette of any size takes about 0.4 ms. A colour-count slider, or a set of 8/16/32/64-colour variants, costs one clustering instead of one per size.
-- **Palettes nest.** The 16-colour palette is the 32-colour one with pairs merged, so colours stay stable as the count changes, and you can see which colours combine.
+- **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged. Index 0 is always the dominant colour, and each larger palette is the previous one with one entry refined and one colour appended, so swatches don't jump around as the count changes.
+- **Transparency-aware.** Pixels count in proportion to their opacity, so a logo's transparent background never ends up in its palette.
 - **Accurate.** Across the 24 Kodak photos it has the lowest average error of the six JavaScript quantizers we benchmarked, at every palette size from 16 to 256.
 - **Fast enough to be interactive.** A 768×512 photo takes about 160 ms exact, or about 60 ms with `precision: 6` at the same quality. That is level with libimagequant and 2.6–11× faster than image-q.
 - **Small and portable.** 55 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
@@ -49,7 +50,7 @@ slider.oninput = async () => {
 };
 ```
 
-The clustering is a compact `Uint8Array` (9 bytes per distinct colour), so you can cache it or store it next to the image.
+The clustering is a compact `Uint8Array` (a 4-byte header plus 9 bytes per distinct colour), so you can cache it or store it next to the image. It records the colour space it was made in, so `quantizeWithClustering` matches in the same space unless you say otherwise.
 
 ## How it compares
 
@@ -75,6 +76,7 @@ Every function that takes an image also takes an optional last argument of optio
 |---|---|---|---|
 | `precision` | clustering | `1`–`8`, default `8` | Groups colours that share their top `precision` bits per channel before clustering, at their mean colour. **`6` is about 3× faster on photos at practically the same quality** (−0.02 dB), and caps the work on images with huge numbers of colours. `5` is about 8× faster for a small loss. |
 | `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/), where distance tracks perceived difference. It gives lower ΔE2000 at 64+ colours and on smooth gradients, at the cost of PSNR. Use it when the result is for human eyes and you want 64 or more colours. At 16 colours, RGB is better. |
+| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
 | `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. |
 
@@ -110,7 +112,7 @@ const out = await quantize(rgbaBytes, 32, { dither: 0.8, width: 640 });
 **Probably not the right tool:**
 - **Shrinking PNG files in a build pipeline.** Use [sharp](https://sharp.pixelplumbing.com/) or pngquant, which run libimagequant natively and are tuned for compression.
 - **A handful of "dominant" swatches for a UI theme.** [color-thief](https://lokeshdhakar.com/projects/color-thief/) or [node-vibrant](https://github.com/Vibrant-Colors/node-vibrant) are lighter and pick vivid or salient colours rather than the lowest-error ones.
-- **Images where transparency matters.** Alpha is preserved but not clustered, so semi-transparent pixels are treated as opaque colours.
+- **Palettes that need their own alpha values,** as palette PNGs with translucent entries do. Pixels are weighted by opacity, but palette colours are opaque RGB, and each pixel keeps its own alpha.
 
 ## Usage
 
@@ -158,27 +160,38 @@ The `quantize*` functions return the same type they were given: a `Uint8Array` f
 ## API
 
 ### `getClustering(image, options?): Promise<Uint8Array>`
-Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`. Pass the result to `getPaletteFromClustering` or `quantizeWithClustering` to get any number of palettes without clustering again.
+Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`, `alpha`. Pass the result to `getPaletteFromClustering` or `quantizeWithClustering` to get any number of palettes without clustering again.
 
 ### `getPaletteFromClustering(clustering, k): Promise<Uint8Array>`
-Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond.
+Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour, and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 1.x too.
 
 ### `getPalette(image, k, options?): Promise<Uint8Array>`
-`getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`.
+`getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`, `alpha`.
 
 ### `quantize(image, k, options?): Promise<Uint8Array | ImageData | RawImage>`
-Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `dither`, `width`.
+Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `alpha`, `dither`, `width`.
 
 ### `quantizeWithClustering(image, clustering, k, options?)`
-Quantizes using a clustering you already have. Options: `colorSpace`, `dither`, `width`.
+Quantizes using a clustering you already have. Options: `colorSpace` (defaults to the clustering's), `dither`, `width`.
 
 ### `quantizeWithPalette(image, palette, options?)`
-Maps each pixel to its nearest colour in any palette (flat RGB bytes). Options: `colorSpace`, `dither`, `width`.
+Maps each pixel to its nearest colour in any palette (flat RGB bytes). The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
 
 ### `init(): Promise<void>`
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch.
 
 Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error.
+
+## Migrating from 1.x
+
+2.0 keeps the same functions and defaults (`rgb`, no dithering, exact `precision`). What changes:
+
+- **Palette order.** Palettes come in split order, dominant colour first, rather than in an arbitrary order. For opaque images they contain exactly the same colours as 1.2.
+- **Transparency.** RGBA pixels are weighted by opacity, so palettes of images with transparency change: fully transparent pixels no longer contribute. Pass `{ alpha: 'ignore' }` for the 1.x behaviour.
+- **Clustering bytes.** Clusterings gain a 4-byte header recording their colour space and precision. Clusterings saved by 1.x still load. Anything that inspected the raw bytes needs to skip the header.
+- **`quantizeWithClustering`** matches in the clustering's colour space unless you pass `colorSpace`.
+- **Exact ties** in pixel mapping go to the colour with the smaller RGB value, so results don't depend on palette order. A small number of pixels that sit exactly between two palette colours may map differently from 1.2.
+- **Invalid clusterings** passed to `getPaletteFromClustering` or `quantizeWithClustering` now throw instead of giving an empty palette.
 
 ## Demo
 
@@ -195,7 +208,7 @@ The demo clusters an image once, then re-cuts and re-maps it live as you drag th
 1. **Histogram.** Distinct colours are counted with an open-addressing hash table. With `precision` below 8, colours are first grouped by their top bits.
 2. **Exact Ward clustering.** A nearest-neighbour chain finds mutually cheapest pairs and merges them. Ward's criterion is reducible, so this produces exactly the same hierarchy as repeatedly merging the globally cheapest pair, without a priority queue.
 3. **Fast partner search.** Clusters live in an adaptive 3D grid. Searches prune whole cells using each cell's colour box and lightest member, compute four Ward costs at once with WASM SIMD, and skip most candidates with a division-free float test before the exact double-precision check. Clusters whose searches are expensive cache their best candidates.
-4. **Compact output.** The hierarchy is stored as 9-byte merge records in reverse order, so cutting to `k` colours replays the first `k − 1` records.
+4. **Compact output.** The hierarchy is stored as a 4-byte header and 9-byte merge records in reverse order, each listing its heavier half first. Cutting to `k` colours replays the first `k − 1` records, which gives the stable split order.
 5. **Mapping.** A KD-tree with a memo of recent colours maps pixels to the palette, with optional error-diffusion dithering.
 
 The algorithm is C++17 compiled to WebAssembly with Emscripten. Architecture notes for contributors are in [CLAUDE.md](CLAUDE.md).

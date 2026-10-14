@@ -6,6 +6,7 @@
 #include <cstring>
 #include <vector>
 #include <cmath>
+#include <unordered_map>
 
 using AgglomerativeClustering::ColorSpace;
 using AgglomerativeClustering::ColorCoordinates;
@@ -32,39 +33,59 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const ColorCoo
     for (int c = 0; c < 3; c++) {clustering[offset + c] = rgb[c];}
 }
 
-// Writes merge record i: [merged rgb, a rgb, b rgb], converted to 8-bit sRGB.
+// Clustering format version 2: a 4-byte header, then the root colour, then one 9-byte record per merge.
+// The header is [clustering_magic, clustering_version, colour space, precision]. Version 1 (1.x) had no header,
+// so its length is 3 more than a multiple of 9 (or 0), while version 2's is 7 more (or exactly 4 when empty).
+constexpr uint8_t clustering_magic = 0xAC;
+constexpr uint8_t clustering_version = 2;
+constexpr size_t clustering_header = 4;
+
+// Writes merge record i: [merged rgb, a rgb, b rgb], converted to 8-bit sRGB. `a` is the heavier child.
 void write_record(std::vector<uint8_t>& clustering, int i, const ColorCoordinates& space, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
-    size_t offset = 3 + 9 * i;
+    size_t offset = clustering_header + 3 + 9 * i;
     write_color(clustering, offset, space, m);
     write_color(clustering, offset + 3, space, a);
     write_color(clustering, offset + 6, space, b);
 }
 
-// Clusters the image's colours in `color_space`. With `precision` below 8, colours are first grouped by the
-// top `precision` bits of each channel, and each group enters the clustering as one cluster at the
-// count-weighted mean of its colours: at most 2^(3 * precision) clusters, so time is bounded on images with
-// very many distinct colours, while the means keep the palette close to exact.
-std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision) {
+// Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA pixel counts in proportion to its
+// opacity, so fully transparent pixels drop out and Ward minimises the error that is actually visible. With
+// `precision` below 8, colours are first grouped by the top `precision` bits of each channel, and each group
+// enters the clustering as one cluster at the weighted mean of its colours: at most 2^(3 * precision) clusters,
+// so time is bounded on images with very many distinct colours, while the means keep the palette close to exact.
+std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision, bool weight_alpha) {
 
-    std::vector<uint8_t> clustering;
+    std::vector<uint8_t> clustering = {clustering_magic, clustering_version, uint8_t(color_space), uint8_t(precision)};
     AgglomerativeClustering::AgglomerativeHistogram histogram;
     const ColorCoordinates space(color_space);
 
     int limit = image_format == 1 ? image_length - 2 : image_length - 3;
     int increment = image_format == 1 ? 3 : 4;
+    weight_alpha = weight_alpha && image_format == 0;
 
-    // Pass 1: build histogram and collect unique colours
+    // Pass 1: build histogram and collect unique colours. Alpha weights are in units of 1/255 of a pixel.
+    bool partial = false;
     for (int i = 0; i < limit; i += increment) {
-        histogram.add((uint32_t(image_data[i]) << 16) | (uint32_t(image_data[i+1]) << 8) | uint32_t(image_data[i+2]));
+        uint32_t key = (uint32_t(image_data[i]) << 16) | (uint32_t(image_data[i+1]) << 8) | uint32_t(image_data[i+2]);
+        if (!weight_alpha) {histogram.add(key); continue;}
+        uint8_t alpha = image_data[i+3];
+        if (alpha == 0) {continue;}
+        partial = partial || alpha != 255;
+        histogram.add(key, alpha);
     }
 
     std::vector<std::array<uint16_t, 3>> unique_colors;
-    std::vector<uint32_t> unique_counts;
+    std::vector<uint64_t> unique_counts = histogram.counts();
     unique_colors.reserve(histogram.size());
     for (uint32_t key : histogram.colors()) {
         unique_colors.push_back(space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
     }
-    unique_counts = histogram.counts();
+
+    // With no partly transparent pixels every weight is a whole number of pixels: count in pixels, so an opaque
+    // image (or one with only fully transparent holes) clusters exactly as with alpha ignored.
+    if (weight_alpha && !partial) {
+        for (uint64_t& count : unique_counts) {count /= 255u;}
+    }
 
     if (precision < 8) {
         const uint32_t channel = (0xFFu << (8 - precision)) & 0xFFu;
@@ -83,14 +104,21 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         }
     }
 
-    // An image with no pixels has no hierarchy: return an empty clustering, which cuts to an empty palette.
+    // An image with no visible pixels has no hierarchy: return just the header, which cuts to an empty palette.
     size_t n = unique_colors.size();
     if (n == 0) {return clustering;}
-    clustering.resize(3 + 9 * (n - 1));
+    clustering.resize(clustering_header + 3 + 9 * (n - 1));
+
+    // The grid counts in 32 bits. Weights only exceed that for partly transparent images above ~16.8 MP; scale
+    // those down by the smallest power of two that fits, keeping every visible colour at least 1.
+    uint64_t total = 0;
+    for (uint64_t count : unique_counts) {total += count;}
+    int shift = 0;
+    while ((total >> shift) > std::numeric_limits<uint32_t>::max() / 2u) {shift++;}
 
     // Pass 2: one cluster per unique colour
     AgglomerativeClustering::WardGrid grid(n);
-    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], unique_counts[i]);}
+    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], uint32_t(std::max<uint64_t>(unique_counts[i] >> shift, 1u)));}
     grid.reindex();
 
     // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
@@ -138,7 +166,8 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         };
 
         double height = std::max({grid.cost(a, b), heights[a], heights[b]});
-        merges.push_back({height, merged, ac, bc});
+        // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
+        if (b_count > a_count) {merges.push_back({height, merged, bc, ac});} else {merges.push_back({height, merged, ac, bc});}
         grid.remove(a);
         grid.remove(b);
         int32_t m = grid.add(merged, count);
@@ -153,42 +182,99 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     }
 
     // Add the k=1 clustering colour
-    write_color(clustering, 0, space, merges.empty() ? unique_colors[0] : merges.back().merged);
+    write_color(clustering, clustering_header, space, merges.empty() ? unique_colors[0] : merges.back().merged);
     return clustering;
 
 }
 
+// A clustering in either format, located: `body` is the root colour followed by the merge records.
+struct ClusteringView {
+    bool valid = false;
+    int version = 1;
+    ColorSpace color_space = ColorSpace::rgb;
+    bool empty = true;
+    const uint8_t* body = nullptr;
+    size_t merges = 0;
+};
+
+// Version 2 lengths are 4 (empty) or 7 more than a multiple of 9; version 1 lengths are 0 or 3 more, so the two
+// never collide. Version 1 clusterings were always clustered in RGB.
+ClusteringView read_clustering(const uint8_t* data, size_t length) {
+    ClusteringView view;
+    if (length == 0 || length % 9 == 3) {
+        view.valid = true;
+        view.empty = length == 0;
+        view.body = data;
+        view.merges = length == 0 ? 0 : (length - 3) / 9;
+        return view;
+    }
+    if ((length == clustering_header || length % 9 == 7) && data[0] == clustering_magic && data[1] == clustering_version && data[2] <= 1) {
+        view.valid = true;
+        view.version = 2;
+        view.empty = length == clustering_header;
+        view.color_space = ColorSpace(data[2]);
+        view.body = data + clustering_header;
+        view.merges = length == clustering_header ? 0 : (length - clustering_header - 3) / 9;
+    }
+    return view;
+}
+
+// Cuts a clustering to at most k colours, in split order: the root colour first, and each split keeps the
+// parent's position for its heavier half and appends the lighter half, so the palette for k + 1 is the palette
+// for k with one entry refined and one appended, and index 0 follows the dominant colour. Version 2 records list
+// the heavier child first; for version 1 the heavier child is the one nearer the parent, which is their
+// count-weighted mean. As a set, the result is the same as replaying the records into an unordered set.
 std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
 
     std::vector<uint8_t> palette;
-    if (clustering_length < 3 || k < 1) {return palette;}
+    ClusteringView view = read_clustering(clustering, clustering_length);
+    if (!view.valid || view.empty || k < 1) {return palette;}
 
-    struct ArrayHash {
-        std::size_t operator()(const std::array<uint8_t, 3>& arr) const noexcept {
-            uint32_t v = (uint32_t(arr[0]) << 16) | (uint32_t(arr[1]) << 8) | arr[2];
-            return std::hash<uint32_t>{}(v);
-        }
+    typedef std::array<uint8_t, 3> Color;
+    auto key = [](const Color& c) {return (uint32_t(c[0]) << 16) | (uint32_t(c[1]) << 8) | uint32_t(c[2]);};
+    auto read = [&](size_t offset) {return Color{view.body[offset], view.body[offset + 1], view.body[offset + 2]};};
+    auto distance = [](const Color& x, const Color& y) {
+        int d0 = int(x[0]) - int(y[0]), d1 = int(x[1]) - int(y[1]), d2 = int(x[2]) - int(y[2]);
+        return d0 * d0 + d1 * d1 + d2 * d2;
     };
 
-    int merges = (clustering_length - 3) / 9;
-    k = std::min(k - 1, merges);
-    std::unordered_set<std::array<uint8_t, 3>, ArrayHash> colors;
-    colors.insert({clustering[0], clustering[1], clustering[2]});
+    std::vector<Color> order = {read(0)};
+    std::unordered_map<uint32_t, size_t> where = {{key(order[0]), 0}};
+    const size_t splits = std::min(size_t(k - 1), view.merges);
 
-    for (int i = 0; i < k; i++) {
-        colors.erase({clustering[3+i*9], clustering[4+i*9], clustering[5+i*9]});
-        colors.insert({clustering[6+i*9], clustering[7+i*9], clustering[8+i*9]});
-        colors.insert({clustering[9+i*9], clustering[10+i*9], clustering[11+i*9]});
+    for (size_t i = 0; i < splits; i++) {
+        const Color parent = read(3 + 9 * i);
+        Color heavy = read(6 + 9 * i), light = read(9 + 9 * i);
+        if (view.version == 1 && distance(light, parent) < distance(heavy, parent)) {std::swap(heavy, light);}
+
+        size_t slot = order.size();
+        auto found = where.find(key(parent));
+        if (found != where.end()) {slot = found->second; where.erase(found);}
+
+        if (!where.count(key(heavy))) {
+            if (slot < order.size()) {
+                order[slot] = heavy;
+                where[key(heavy)] = slot;
+            } else {
+                where[key(heavy)] = order.size();
+                order.push_back(heavy);
+            }
+        } else if (slot < order.size()) {
+            // The heavier half's colour is already listed (clusters can share a colour), so the parent's place
+            // empties: close the gap. Rare, so re-indexing everything is fine.
+            order.erase(order.begin() + slot);
+            where.clear();
+            for (size_t j = 0; j < order.size(); j++) {where[key(order[j])] = j;}
+        }
+        if (!where.count(key(light))) {
+            where[key(light)] = order.size();
+            order.push_back(light);
+        }
     }
 
-    palette.reserve(colors.size());
-    for (std::array<uint8_t, 3> color : colors) {
-        palette.push_back(color[0]);
-        palette.push_back(color[1]);
-        palette.push_back(color[2]);
-    }
-
-    return palette;    
+    palette.reserve(order.size() * 3);
+    for (const Color& color : order) {palette.insert(palette.end(), color.begin(), color.end());}
+    return palette;
 
 }
 
@@ -201,16 +287,19 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     const ColorCoordinates space(color_space);
     std::vector<std::array<uint8_t, 3>> colors;
     std::vector<AgglomerativeClustering::KDTree::Point> points;
+    std::vector<uint32_t> keys;
     colors.reserve(palette_length / 3);
     points.reserve(palette_length / 3);
+    keys.reserve(palette_length / 3);
 
     for (size_t i = 0; i + 2 < palette_length; i += 3) {
         colors.push_back({palette[i], palette[i+1], palette[i+2]});
         points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
+        keys.push_back((uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]));
     }
 
     AgglomerativeClustering::KDTree tree;
-    tree.build(points);
+    tree.build(points, keys);
 
     int increment = image_format == 1 ? 3 : 4;
     size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
@@ -305,14 +394,14 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format, int color_space, int precision) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
+uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format, int color_space, int precision, int weight_alpha) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
     return pack_variable_size(clustering);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
+uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return pack_variable_size(palette);
 }
@@ -324,16 +413,18 @@ uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_le
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, double dither, int width) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
+// A negative `color_space` matches in the space the clustering was made in.
 uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width) {
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
+    ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width);
 }
 
 EMSCRIPTEN_KEEPALIVE

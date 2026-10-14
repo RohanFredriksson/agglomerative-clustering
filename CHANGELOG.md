@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.0
+
+The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
+
+### Changed
+- **Palettes come in split order.** Index 0 is the dominant colour, and the palette for `k + 1` is the palette for `k` with one entry refined (the heavier half of a split keeps its parent's place) and the lighter half appended. For opaque images the colours are exactly those of 1.2, in this order.
+- **Alpha weighting, `alpha: 'weight'` (the new default).** RGBA pixels count in proportion to their opacity: fully transparent pixels are ignored and semi-transparent ones count partially. Opaque images, and images whose pixels are all fully opaque or fully transparent, use exact pixel counts. `alpha: 'ignore'` restores the 1.x behaviour.
+- **Clusterings carry a 4-byte header:** a magic byte, the format version, the colour space and the precision. Merge records list the heavier child first. 1.x clusterings still load: they are 0 or 3 bytes more than a multiple of 9, where 2.0's are 4 or 7.
+- **`quantizeWithClustering` matches in the clustering's colour space** by default. An explicit `colorSpace` overrides it.
+- **Pixel mapping breaks exact ties by the smaller packed RGB value,** so results don't depend on palette order. Mapping is a few percent slower as a result.
+- **Invalid clusterings** now throw `Invalid clustering` instead of giving an empty palette.
+- An empty or fully transparent image gives a clustering of just the header.
+
 ## 1.2.0
 
 **Palettes differ from 1.1.x.** Clusters are now merged by Ward's method, so results change for practically every image even with default options; see Changed. The new options are all off by default.

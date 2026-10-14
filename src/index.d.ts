@@ -14,6 +14,9 @@ export type ImageLike = Uint8Array | ImageData | RawImage;
 /** The space colours are clustered and matched in. */
 export type ColorSpace = 'rgb' | 'oklab';
 
+/** How pixel opacity affects clustering. */
+export type AlphaMode = 'weight' | 'ignore';
+
 export interface ClusteringOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
@@ -26,10 +29,18 @@ export interface ClusteringOptions {
      * with very many distinct colours. 6 is a good choice for large photos.
      */
     precision?: number;
+    /**
+     * How RGBA pixels count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
+     * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
+     */
+    alpha?: AlphaMode;
 }
 
 export interface MappingOptions {
-    /** The space pixels are matched to their nearest palette colour in. Default `'rgb'`. */
+    /**
+     * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
+     * `quantizeWithClustering`, where it defaults to the space the clustering was made in.
+     */
     colorSpace?: ColorSpace;
     /**
      * Error-diffusion dithering (serpentine Floyd-Steinberg): `false` (default), `true`, or a strength from 0 to 1.
@@ -48,6 +59,10 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
 
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
 
+/**
+ * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour, and the palette for
+ * `k + 1` is the palette for `k` with one entry refined and one colour appended.
+ */
 export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
 
 export function quantize(image: Uint8Array, k: number, options?: QuantizeOptions): Promise<Uint8Array>;

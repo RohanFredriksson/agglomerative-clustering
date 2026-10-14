@@ -50,14 +50,14 @@ describe('getClustering with ImageData', () => {
         expect(result.length).toBeGreaterThan(0);
     });
 
-    it('returns 3 bytes for a solid image (1 unique color)', async () => {
+    it('returns 7 bytes for a solid image (1 unique color): 4-byte header + root colour', async () => {
         const result = await getClustering(solidRedImageData);
-        expect(result.length).toBe(3);
+        expect(result.length).toBe(7);
     });
 
-    it('returns 12 bytes for a 2-color image', async () => {
+    it('returns 16 bytes for a 2-color image: header + root + one 9-byte merge', async () => {
         const result = await getClustering(twoColorImageData);
-        expect(result.length).toBe(12);
+        expect(result.length).toBe(16);
     });
 
 });
