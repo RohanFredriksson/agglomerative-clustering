@@ -17,6 +17,7 @@ An npm package (`agglomerative-clustering`) that does colour-palette extraction 
 - `npm run bench:full`: the full harness (`bench/run.js`, options documented at the top of the file). For each image (Kodak + synthetic in `bench/lib/images.js`), library and k it records palette time, quality of that palette under one shared nearest-colour mapping (MSE, PSNR, mean CIEDE2000), and the library's own quantize time/quality. Results go to `bench/results/<label>.json` (gitignored) and a summary is printed. A full run takes about 20 minutes; use `--libs none`, `--kodak-limit`, `--k` and `--sets` to narrow it.
   - `--ac name=path/to/dist/index.mjs` (repeatable) benchmarks other builds of this library side by side, e.g. a build of `master`.
   - `npm run bench:compare -- a.json b.json` compares results files (before/after a change).
+  - `bench/COMPARISON.md`: a written-up run of the full harness against the other libraries (quality and speed). Regenerate it when the algorithm or its speed changes materially.
   - `npm run quality`: the harness without the own-quantize timings.
 - Other libraries live behind adapters in `bench/lib/quantizers.js` (image-q NeuQuant/Wu/RgbQuant, MMCQ via `quantize`, libimagequant via `libimagequant-wasm`). They are dev dependencies used only for benchmarking.
 
