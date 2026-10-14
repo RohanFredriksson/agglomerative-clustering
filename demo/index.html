@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agglomerative-clustering demo</title>
+<style>
+    :root {
+        --bg: #f6f5f2; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e3e1dc; --accent: #2f6fde;
+        color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root { --bg: #141416; --panel: #1d1d20; --text: #ececee; --muted: #9a9aa2; --line: #2e2e33; --accent: #6c9cff; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+    p.lead { margin: 0 0 24px; color: var(--muted); max-width: 70ch; }
+    .layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .controls { display: grid; gap: 18px; position: sticky; top: 16px; }
+    label.field { display: grid; gap: 6px; font-weight: 600; font-size: 13px; }
+    label.field span.value { font-weight: 400; color: var(--muted); }
+    .row { display: flex; justify-content: space-between; align-items: baseline; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+    .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); cursor: pointer; font-size: 13px; }
+    .drop.over { border-color: var(--accent); color: var(--text); }
+    .drop input { display: none; }
+    .samples { display: flex; gap: 6px; flex-wrap: wrap; }
+    button { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    .stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+    .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .images { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .images { grid-template-columns: 1fr; } }
+    figure { margin: 0; }
+    figcaption { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    canvas { width: 100%; height: auto; border-radius: 8px; display: block; background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+    .palette { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 14px; }
+    .palette div { flex: 1 0 18px; height: 28px; border-radius: 3px; min-width: 10px; }
+    .hint { font-size: 12px; color: var(--muted); }
+    code { font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+    <h1>agglomerative-clustering</h1>
+    <p class="lead">The image is clustered once. Every palette size is a cut of that one hierarchy, so dragging the
+        <b>colours</b> slider or the dithering strength never re-clusters: it only cuts the hierarchy and maps the
+        pixels. Changing the colour space or precision clusters again.</p>
+
+    <div class="layout">
+        <div class="panel controls">
+            <label class="drop" id="drop">
+                <input type="file" id="file" accept="image/*">
+                Drop an image here, click to choose one, or paste
+            </label>
+            <div class="samples" id="samples"></div>
+
+            <label class="field">
+                <div class="row">Colours <span class="value" id="kValue">16</span></div>
+                <input type="range" id="k" min="0" max="1000" value="500">
+            </label>
+
+            <label class="field">
+                <div class="row">Dithering <span class="value" id="ditherValue">off</span></div>
+                <input type="range" id="dither" min="0" max="100" value="0">
+            </label>
+
+            <label class="field">Colour space
+                <select id="colorSpace">
+                    <option value="rgb">RGB (lowest squared error)</option>
+                    <option value="oklab">OKLab (perceptual)</option>
+                </select>
+            </label>
+
+            <label class="field">Precision
+                <select id="precision">
+                    <option value="8">8 bits: exact</option>
+                    <option value="7">7 bits</option>
+                    <option value="6">6 bits: fast, near-exact</option>
+                    <option value="5">5 bits: fastest</option>
+                </select>
+            </label>
+
+            <div class="stats">
+                <span>Image</span><b id="statSize">-</b>
+                <span>Distinct colours</span><b id="statUnique">-</b>
+                <span>Clustering (once)</span><b id="statCluster">-</b>
+                <span>Cut + map, this k</span><b id="statMap">-</b>
+            </div>
+            <div class="hint">Images are scaled to at most 1024 px on their longest side.</div>
+        </div>
+
+        <div class="panel">
+            <div class="images">
+                <figure><figcaption>Original</figcaption><canvas id="original"></canvas></figure>
+                <figure><figcaption id="resultCaption">Quantized</figcaption><canvas id="result"></canvas></figure>
+            </div>
+            <div class="palette" id="palette"></div>
+        </div>
+    </div>
+</main>
+
+<script type="module">
+import { getClustering, getPaletteFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+
+const $ = (id) => document.getElementById(id);
+const original = $('original'), result = $('result');
+let image = null, clustering = null, mapping = 0;
+
+const kFromSlider = (v) => Math.max(1, Math.round(Math.exp(v / 1000 * Math.log(256))));
+const ms = (t) => t < 10 ? `${t.toFixed(1)} ms` : `${Math.round(t)} ms`;
+
+function countUnique(data) {
+    const seen = new Uint8Array(1 << 21);
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+        const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+        const bit = 1 << (key & 7);
+        if (!(seen[key >> 3] & bit)) {seen[key >> 3] |= bit; n++;}
+    }
+    return n;
+}
+
+function setImage(source) {
+    const scale = Math.min(1, 1024 / Math.max(source.width, source.height));
+    const w = Math.max(1, Math.round(source.width * scale)), h = Math.max(1, Math.round(source.height * scale));
+    original.width = result.width = w;
+    original.height = result.height = h;
+    const ctx = original.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(source, 0, 0, w, h);
+    image = ctx.getImageData(0, 0, w, h);
+    $('statSize').textContent = `${w} × ${h}`;
+    $('statUnique').textContent = countUnique(image.data).toLocaleString();
+    recluster();
+}
+
+async function recluster() {
+    if (!image) {return;}
+    const options = { colorSpace: $('colorSpace').value, precision: Number($('precision').value) };
+    const start = performance.now();
+    clustering = await getClustering(image, options);
+    $('statCluster').textContent = ms(performance.now() - start);
+    remap();
+}
+
+async function remap() {
+    if (!clustering) {return;}
+    const ticket = ++mapping;
+    const k = kFromSlider(Number($('k').value));
+    const dither = Number($('dither').value) / 100;
+    $('kValue').textContent = k;
+    $('ditherValue').textContent = dither ? `${Math.round(dither * 100)}%` : 'off';
+    const start = performance.now();
+    const palette = await getPaletteFromClustering(clustering, k);
+    const output = await quantizeWithPalette(image, palette, { colorSpace: $('colorSpace').value, dither });
+    if (ticket !== mapping) {return;}
+    $('statMap').textContent = ms(performance.now() - start);
+    result.getContext('2d').putImageData(output, 0, 0);
+    $('resultCaption').textContent = `Quantized to ${palette.length / 3} colour${palette.length === 3 ? '' : 's'}`;
+    const swatches = $('palette');
+    swatches.replaceChildren(...Array.from({ length: palette.length / 3 }, (_, i) => {
+        const div = document.createElement('div');
+        const [r, g, b] = palette.subarray(i * 3, i * 3 + 3);
+        div.style.background = `rgb(${r} ${g} ${b})`;
+        div.title = '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+        return div;
+    }));
+}
+
+// Built-in samples, drawn in code so the demo needs no image files.
+const samples = {
+    Sunset(ctx, w, h) {
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, '#1b2a6b'); sky.addColorStop(0.45, '#d9466f'); sky.addColorStop(0.7, '#f7a64a'); sky.addColorStop(1, '#2a1630');
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+        const sun = ctx.createRadialGradient(w * 0.62, h * 0.62, 0, w * 0.62, h * 0.62, h * 0.22);
+        sun.addColorStop(0, '#fff6c9'); sun.addColorStop(0.5, '#ffd36b'); sun.addColorStop(1, 'rgba(255,170,80,0)');
+        ctx.fillStyle = sun; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#20112a';
+        ctx.beginPath(); ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 8) {ctx.lineTo(x, h * 0.78 - Math.sin(x / 70) * 24 - Math.sin(x / 23) * 8);}
+        ctx.lineTo(w, h); ctx.fill();
+    },
+    Spectrum(ctx, w, h) {
+        for (let x = 0; x < w; x++) {
+            const g = ctx.createLinearGradient(0, 0, 0, h);
+            g.addColorStop(0, `hsl(${x / w * 360} 90% 85%)`); g.addColorStop(0.5, `hsl(${x / w * 360} 90% 50%)`); g.addColorStop(1, `hsl(${x / w * 360} 90% 12%)`);
+            ctx.fillStyle = g; ctx.fillRect(x, 0, 1, h);
+        }
+    },
+    Shapes(ctx, w, h) {
+        ctx.fillStyle = '#f4efe6'; ctx.fillRect(0, 0, w, h);
+        const colours = ['#1d3557', '#e63946', '#2a9d8f', '#e9c46a', '#f4a261', '#264653', '#8338ec', '#06d6a0'];
+        let s = 7;
+        const rand = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+        for (let i = 0; i < 36; i++) {
+            ctx.fillStyle = colours[i % colours.length];
+            ctx.beginPath(); ctx.arc(rand() * w, rand() * h, 20 + rand() * 80, 0, Math.PI * 2); ctx.fill();
+        }
+    },
+};
+
+for (const [name, draw] of Object.entries(samples)) {
+    const button = document.createElement('button');
+    button.textContent = name;
+    button.onclick = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 768; canvas.height = 512;
+        draw(canvas.getContext('2d'), canvas.width, canvas.height);
+        setImage(canvas);
+    };
+    $('samples').append(button);
+}
+
+async function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) {return;}
+    setImage(await createImageBitmap(file));
+}
+
+$('file').onchange = (e) => loadFile(e.target.files[0]);
+const drop = $('drop');
+drop.ondragover = (e) => {e.preventDefault(); drop.classList.add('over');};
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = (e) => {e.preventDefault(); drop.classList.remove('over'); loadFile(e.dataTransfer.files[0]);};
+window.onpaste = (e) => loadFile([...e.clipboardData.files][0]);
+$('k').oninput = remap;
+$('dither').oninput = remap;
+$('colorSpace').onchange = recluster;
+$('precision').onchange = recluster;
+
+$('samples').firstChild.click();
+</script>
+</body>
+</html>
