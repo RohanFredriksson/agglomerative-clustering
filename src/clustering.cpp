@@ -83,7 +83,9 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         }
     }
 
+    // An image with no pixels has no hierarchy: return an empty clustering, which cuts to an empty palette.
     size_t n = unique_colors.size();
+    if (n == 0) {return clustering;}
     clustering.resize(3 + 9 * (n - 1));
 
     // Pass 2: one cluster per unique colour

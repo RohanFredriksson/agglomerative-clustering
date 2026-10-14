@@ -191,3 +191,22 @@ describe('dither', () => {
     });
 
 });
+
+describe('empty images', () => {
+
+    const empty = new Uint8Array(0);
+
+    it('give an empty clustering and palette', async () => {
+        const clustering = await getClustering(empty);
+        expect(clustering.length).toBe(0);
+        expect((await getPaletteFromClustering(clustering, 4)).length).toBe(0);
+        expect((await getPalette(empty, 4)).length).toBe(0);
+    });
+
+    it('quantize to an empty image, and leave the module usable', async () => {
+        expect((await quantize(empty, 4)).length).toBe(0);
+        expect((await quantize(empty, 4, { dither: true, width: 1 })).length).toBe(0);
+        expect((await getPalette(gradient, 4)).length).toBe(12);
+    });
+
+});
