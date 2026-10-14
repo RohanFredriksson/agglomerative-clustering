@@ -5,7 +5,6 @@
 #ifndef AGGLOMERATIVE_CLUSTERING_HPP
 #define AGGLOMERATIVE_CLUSTERING_HPP
 
-#include <unordered_set>
 #include <algorithm>
 #include <vector>
 #include <cstdint>
@@ -472,7 +471,7 @@ private:
     uint32_t mask = 0;
     int shift = 0;
     std::vector<uint32_t> keys;
-    std::vector<uint32_t> totals;
+    std::vector<uint64_t> totals;
 
     // Fibonacci hashing: the top bits of the product spread neighbouring colours across the table.
     uint32_t home(uint32_t key) const {
@@ -496,8 +495,9 @@ public:
         this->resize(12);
     }
 
-    // Adds `weight` pixels of the colour packed as r << 16 | g << 8 | b, and returns the colour's index.
-    uint32_t add(uint32_t key, uint32_t weight = 1u) {
+    // Adds `weight` to the colour packed as r << 16 | g << 8 | b, and returns the colour's index. Weights are
+    // pixel counts, or alpha-weighted counts in units of 1/255 of a pixel; totals are 64-bit so neither overflows.
+    uint32_t add(uint32_t key, uint64_t weight = 1u) {
         const uint64_t tag = uint64_t(key) + 1u;
         uint32_t slot = this->home(key);
         while (true) {
@@ -515,9 +515,9 @@ public:
         return index;
     }
 
-    // The distinct colours (packed as in add) in order of first appearance, and how often each appeared.
+    // The distinct colours (packed as in add) in order of first appearance, and the total weight of each.
     const std::vector<uint32_t>& colors() const {return this->keys;}
-    const std::vector<uint32_t>& counts() const {return this->totals;}
+    const std::vector<uint64_t>& counts() const {return this->totals;}
 
     size_t size() const {
         return this->keys.size();
@@ -526,7 +526,8 @@ public:
 };
 
 // Nearest-neighbour lookup over palette colours, in whichever coordinates the caller uses (8-bit RGB values,
-// or scaled OKLab). Returns the index of the nearest point; ties go to the first one found.
+// or scaled OKLab). Returns the index of the nearest point. Equally near points are told apart by their keys
+// (the caller passes each colour's packed RGB), smallest first, so the answer doesn't depend on palette order.
 class KDTree {
 
 public:
@@ -537,6 +538,7 @@ private:
 
     struct Node {
         Point point;
+        uint32_t key;
         int32_t index;
         int left = -1;
         int right = -1;
@@ -544,6 +546,8 @@ private:
 
     std::vector<Node> nodes;
     int root = -1;
+
+    std::vector<uint32_t> keys;
 
     int build(std::vector<std::pair<Point, int32_t>>& points, int start, int end, int depth) {
 
@@ -556,7 +560,7 @@ private:
         };
 
         std::nth_element(points.begin() + start, points.begin() + mid, points.begin() + end, comparator);
-        this->nodes.push_back(Node{points[mid].first, points[mid].second, -1, -1});
+        this->nodes.push_back(Node{points[mid].first, this->keys[points[mid].second], points[mid].second, -1, -1});
         int node_index = (int) this->nodes.size() - 1;
 
         this->nodes[node_index].left = build(points, start, mid, depth + 1);
@@ -568,7 +572,8 @@ private:
 
 public:
 
-    void build(const std::vector<Point>& points) {
+    void build(const std::vector<Point>& points, const std::vector<uint32_t>& keys) {
+        this->keys = keys;
         std::vector<std::pair<Point, int32_t>> indexed;
         indexed.reserve(points.size());
         for (int32_t i = 0; i < (int32_t) points.size(); i++) {indexed.push_back({points[i], i});}
@@ -582,6 +587,7 @@ public:
         if (this->root == -1) {return -1;}
 
         int32_t best_index = -1;
+        uint32_t best_key = std::numeric_limits<uint32_t>::max();
         uint64_t best_distance = std::numeric_limits<uint64_t>::max();
 
         struct StackFrame {
@@ -600,8 +606,9 @@ public:
 
             StackFrame frame = fringe[--fringe_size];
 
-            // Skip subtrees that can't contain a closer point than one found since this frame was pushed.
-            if (frame.bound >= best_distance) {continue;}
+            // Skip subtrees that can't contain a closer (or equally close) point than one found since this frame
+            // was pushed; equally close ones still matter, for the tie-break.
+            if (frame.bound > best_distance) {continue;}
 
             const Node& node = this->nodes[frame.node_index];
             uint64_t distance = 0;
@@ -610,8 +617,9 @@ public:
                 distance += uint64_t(d * d);
             }
 
-            if (distance < best_distance) {
+            if (distance < best_distance || (distance == best_distance && node.key < best_key)) {
                 best_distance = distance;
+                best_key = node.key;
                 best_index = node.index;
             }
 
@@ -623,7 +631,7 @@ public:
 
             // Push the far side first so the near side is popped (and searched) first, tightening best_distance.
             uint64_t split_distance = uint64_t(difference * difference);
-            if (second != -1 && split_distance < best_distance) {fringe[fringe_size++] = {second, frame.depth + 1, split_distance};}
+            if (second != -1 && split_distance <= best_distance) {fringe[fringe_size++] = {second, frame.depth + 1, split_distance};}
             if (first != -1) {fringe[fringe_size++] = {first, frame.depth + 1, frame.bound};}
 
         }

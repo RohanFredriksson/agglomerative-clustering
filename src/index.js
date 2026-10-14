@@ -1,6 +1,7 @@
 import createWasmModule from './clustering.js';
 const codes = {'rgba': 0, 'rgb': 1};
 const colorSpaces = {'rgb': 0, 'oklab': 1};
+const alphaModes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
 export const init = async () => {
@@ -66,7 +67,9 @@ const check = (k) => {
 }
 
 // Validates `options` against the keys a function accepts and fills in defaults:
-//   colorSpace: 'rgb' (default) or 'oklab', the space colours are clustered and matched in
+//   colorSpace: 'rgb' (default) or 'oklab', the space colours are clustered and matched in; when mapping with a
+//               clustering, the default is the space the clustering was made in (code -1)
+//   alpha:      'weight' (default) counts RGBA pixels in proportion to their opacity; 'ignore' counts every pixel
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
@@ -83,6 +86,11 @@ const parseOptions = (options, allowed, image) => {
     const colorSpace = options.colorSpace === undefined ? 'rgb' : options.colorSpace;
     if (!Object.keys(colorSpaces).includes(colorSpace)) {
         throw new Error("Invalid colorSpace: must be 'rgb' or 'oklab'.");
+    }
+
+    const alpha = options.alpha === undefined ? 'weight' : options.alpha;
+    if (!Object.keys(alphaModes).includes(alpha)) {
+        throw new Error("Invalid alpha: must be 'weight' or 'ignore'.");
     }
 
     const precision = options.precision === undefined ? 8 : options.precision;
@@ -106,13 +114,26 @@ const parseOptions = (options, allowed, image) => {
         }
     }
 
-    return {colorSpace: colorSpaces[colorSpace], precision, dither, width: dither > 0 ? width : 0};
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0};
 
 };
 
-const clusterOptions = ['colorSpace', 'precision'];
-const quantizeOptions = ['colorSpace', 'precision', 'dither', 'width'];
+const clusterOptions = ['colorSpace', 'precision', 'alpha'];
+const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width'];
+
+// Clusterings are 0 or 3 bytes more than a multiple of 9 (1.x, no header), or 4 or 7 more with the 2.x header.
+const checkClustering = (clustering) => {
+    if (!(clustering instanceof Uint8Array)) {
+        throw new Error("Invalid clustering: must be a Uint8Array from getClustering.");
+    }
+    const rest = clustering.length % 9;
+    const legacy = clustering.length === 0 || rest === 3;
+    const current = (clustering.length === 4 || rest === 7) && clustering[0] === 0xAC && clustering[1] === 2 && clustering[2] <= 1;
+    if (!legacy && !current) {
+        throw new Error("Invalid clustering: not a clustering from getClustering.");
+    }
+};
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards.
@@ -140,7 +161,7 @@ export const getClustering = async (image, options) => {
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
 
-    return call([image.data], (imagePointer) => Module._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision));
+    return call([image.data], (imagePointer) => Module._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha));
 
 };
 
@@ -151,13 +172,14 @@ export const getPalette = async (image, k, options) => {
     check(k);
     const o = parseOptions(options, clusterOptions, image);
 
-    return call([image.data], (imagePointer) => Module._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision));
+    return call([image.data], (imagePointer) => Module._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
 
 };
 
 export const getPaletteFromClustering = async (clustering, k) => {
 
     await init();
+    checkClustering(clustering);
     check(k);
 
     return call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
@@ -172,7 +194,7 @@ export const quantize = async (image, k, options) => {
     check(k);
     const o = parseOptions(options, quantizeOptions, image);
 
-    return wrap(call([image.data], (imagePointer) => Module._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.dither, o.width)));
+    return wrap(call([image.data], (imagePointer) => Module._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
 
 };
 
@@ -181,10 +203,12 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
     await init();
     const wrap = getWrapper(image);
     image = load(image);
+    checkClustering(clustering);
     check(k);
     const o = parseOptions(options, mapOptions, image);
+    const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    return wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width)));
+    return wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
 
 };
 

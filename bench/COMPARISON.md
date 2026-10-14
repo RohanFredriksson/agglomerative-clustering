@@ -6,6 +6,8 @@ How `agglomerative-clustering` compares with five other JavaScript/WASM palette 
 - **Machine:** Node v22.22.0 on an Intel Xeon at 2.80 GHz, in a shared cloud container.
 - **Timings:** each is the median of 3 runs. The whole run took 61 minutes.
 
+**2.0:** these results also hold for 2.0. Every benchmark image is opaque, so 2.0's palettes contain exactly the same colours as the build measured here, in split order. Pixel mapping differs only where a pixel is exactly equidistant from two palette colours, which leaves MSE and PSNR unchanged.
+
 Reproduce with:
 
 ```sh

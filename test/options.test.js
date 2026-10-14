@@ -196,9 +196,9 @@ describe('empty images', () => {
 
     const empty = new Uint8Array(0);
 
-    it('give an empty clustering and palette', async () => {
+    it('give an empty clustering (just the header) and palette', async () => {
         const clustering = await getClustering(empty);
-        expect(clustering.length).toBe(0);
+        expect(clustering.length).toBe(4);
         expect((await getPaletteFromClustering(clustering, 4)).length).toBe(0);
         expect((await getPalette(empty, 4)).length).toBe(0);
     });
