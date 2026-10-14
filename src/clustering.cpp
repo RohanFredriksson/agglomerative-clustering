@@ -221,17 +221,21 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
     std::vector<int32_t> memo_values(size_t(1) << memo_bits);
     const std::array<uint8_t, 3> black = {0u, 0u, 0u};
-    auto nearest = [&](uint8_t r, uint8_t g, uint8_t b) -> const std::array<uint8_t, 3>& {
+    auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
         uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
         uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
         if (memo_keys[slot] != key) {
             memo_keys[slot] = key;
             memo_values[slot] = tree.get_nearest(space.match(r, g, b));
         }
-        return memo_values[slot] < 0 ? black : colors[memo_values[slot]];
+        return memo_values[slot];
+    };
+    auto nearest = [&](uint8_t r, uint8_t g, uint8_t b) -> const std::array<uint8_t, 3>& {
+        int32_t index = nearest_index(r, g, b);
+        return index < 0 ? black : colors[index];
     };
 
-    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0) {
+    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || colors.empty()) {
         for (size_t p = 0; p < pixels; p++) {
             const uint8_t* pixel = image_data + p * increment;
             uint8_t* out = output + p * increment;
@@ -248,6 +252,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     const size_t height = pixels / size_t(width);
     std::vector<float> current(3 * (size_t(width) + 2), 0.0f), next(3 * (size_t(width) + 2), 0.0f);
     const float strength = float(std::min(dither, 1.0));
+    const float limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
 
     for (size_t y = 0; y < height; y++) {
         const bool forward = y % 2 == 0;
@@ -264,19 +269,23 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
                 for (int c = 0; c < 3; c++) {out[c] = chosen[c]; e[c] = 0.0f;}
                 continue;
             }
+            // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
+            // is the one that best cancels it; mixing spaces lets error pile up into streaks.
+            const AgglomerativeClustering::KDTree::Point base = space.match(pixel[0], pixel[1], pixel[2]);
             float wanted[3];
-            uint8_t target[3];
+            AgglomerativeClustering::KDTree::Point target;
             for (int c = 0; c < 3; c++) {
-                wanted[c] = std::clamp(float(pixel[c]) + e[c], 0.0f, 255.0f);
-                target[c] = uint8_t(std::lround(wanted[c]));
+                wanted[c] = std::clamp(float(base[c]) + e[c], 0.0f, limit);
+                target[c] = uint16_t(std::lround(wanted[c]));
                 e[c] = 0.0f;
             }
-            const std::array<uint8_t, 3>& chosen = nearest(target[0], target[1], target[2]);
+            const int32_t index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : tree.get_nearest(target);
+            const std::array<uint8_t, 3>& chosen = colors[index];
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];
             for (int c = 0; c < 3; c++) {
                 out[c] = chosen[c];
-                float error = (wanted[c] - float(chosen[c])) * strength;
+                float error = (wanted[c] - float(points[index][c])) * strength;
                 e[c + ahead] += error * (7.0f / 16.0f);
                 below[c - ahead] += error * (3.0f / 16.0f);
                 below[c] += error * (5.0f / 16.0f);

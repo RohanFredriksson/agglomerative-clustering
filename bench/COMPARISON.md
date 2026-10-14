@@ -137,3 +137,23 @@ Palettes for every k in {16, 64, 128, 256}, median ms per image:
 - **Noisy timings.** These are wall-clock medians on a shared cloud machine and can vary by about ±10% between runs. Rankings separated by less than that aren't meaningful.
 - **Ward's criterion favours MSE and PSNR.** It minimises squared RGB error, which is exactly what MSE and PSNR measure. ΔE2000 is the fairer metric for comparing with libimagequant, which tunes for perceived colour.
 - **Quantize ms differs by design.** It uses each library's own pixel mapping: dithering is off for libimagequant, and image-q's defaults are used. So it measures each library's whole pipeline rather than palette quality.
+
+## Options
+
+These are the `precision`, `colorSpace` and `dither` options, measured on the same machine with `--libs libimagequant --runs 3` and builds passed as `--ac name=dist/index.mjs#option=value`. PSNR and ΔE2000 here are for each build's own quantize output, so OKLab palettes are also matched in OKLab. Kodak means:
+
+| Setting | PSNR k=16 | ΔE k=16 | ΔE k=64 | ΔE k=128 | ΔE k=256 | Palette ms (k=64) | All k ms |
+|---|---|---|---|---|---|---|---|
+| default (`rgb`, `precision: 8`) | 29.98 | 4.31 | 2.56 | 2.06 | 1.68 | 177 | 199 |
+| `precision: 6` | 30.03 | 4.29 | 2.56 | 2.06 | 1.68 | 59 | 61 |
+| `precision: 5` | 30.03 | 4.24 | 2.56 | 2.08 | 1.74 | 23 | 22 |
+| `colorSpace: 'oklab'` | 29.31 | 4.46 | 2.54 | 2.01 | 1.60 | 336 | 335 |
+| `colorSpace: 'oklab', precision: 6` | 29.26 | 4.44 | 2.55 | 2.02 | 1.61 | 109 | 107 |
+| `dither: true` | 26.55 | 5.06 | 3.31 | 2.68 | 2.15 | 194 | 196 |
+| libimagequant | 29.42 | 4.38 | 2.54 | 2.02 | 1.61 | 169 | 694 |
+
+Each row is from one of two runs. The `precision: 5` and OKLab + `precision: 6` rows come from a second run, in which the default build again took 177 ms at k = 64, so speeds compare across runs.
+
+- **`precision: 6`** is about 3× faster than exact at practically the same quality. On the synthetic set it is about 7× faster (49 vs 371 ms at k = 64), and noise-1024 drops from 5.3 s to 1.7 s.
+- **`colorSpace: 'oklab'`** gives the lowest ΔE2000 from k = 128 up on photos, and at every k on the synthetic set (k = 64: 4.48 against libimagequant's 4.66 and RGB's 4.91), at the cost of 0.3–1 dB PSNR. At k = 16 on photos RGB is better.
+- **`dither`** lowers per-pixel scores by design. Its value is visual: it removes banding in smooth gradients at low colour counts, as in `docs/palette-sizes.png`. Quantize time rises because dithered pixels miss the colour memo more often.
