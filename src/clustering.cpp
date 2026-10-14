@@ -48,18 +48,21 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     int increment = image_format == 1 ? 3 : 4;
 
     // Pass 1: build histogram and collect unique colours
-    std::vector<std::array<uint16_t, 3>> unique_colors;
     for (int i = 0; i < limit; i += increment) {
-        std::array<uint16_t, 3> color = {uint8_to_uint16(image_data[i]), uint8_to_uint16(image_data[i+1]), uint8_to_uint16(image_data[i+2])};
-        if (histogram.count(color)) {unique_colors.push_back(color);}
+        histogram.count((uint32_t(image_data[i]) << 16) | (uint32_t(image_data[i+1]) << 8) | uint32_t(image_data[i+2]));
     }
 
-    size_t n = unique_colors.size();
+    size_t n = histogram.size();
+    std::vector<std::array<uint16_t, 3>> unique_colors;
+    unique_colors.reserve(n);
+    for (uint32_t key : histogram.colors()) {
+        unique_colors.push_back({uint8_to_uint16(uint8_t(key >> 16)), uint8_to_uint16(uint8_t(key >> 8)), uint8_to_uint16(uint8_t(key))});
+    }
     clustering.resize(3 + 9 * (n - 1));
 
     // Pass 2: one cluster per unique colour
     AgglomerativeClustering::WardGrid grid(n);
-    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color, histogram.get(color));}
+    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], histogram.counts()[i]);}
     grid.reindex();
 
     // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
@@ -183,11 +186,23 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     uint8_t* packed = allocate_variable_size(pixels * increment);
     uint8_t* output = packed + 4;
 
+    // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
+    // pixels skip the tree. A colour always maps to the same palette entry, so the output is unchanged.
+    constexpr int memo_bits = 14;
+    std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+    std::vector<std::array<uint8_t, 3>> memo_values(size_t(1) << memo_bits);
+
     for (size_t p = 0; p < pixels; p++) {
         const uint8_t* pixel = image_data + p * increment;
         uint8_t* out = output + p * increment;
         std::array<uint8_t, 3> color = {pixel[0], pixel[1], pixel[2]};
-        std::array<uint8_t, 3> nearest = tree.get_nearest(color);
+        uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
+        uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+        if (memo_keys[slot] != key) {
+            memo_keys[slot] = key;
+            memo_values[slot] = tree.get_nearest(color);
+        }
+        const std::array<uint8_t, 3>& nearest = memo_values[slot];
         out[0] = nearest[0];
         out[1] = nearest[1];
         out[2] = nearest[2];
