@@ -54,7 +54,8 @@
     "bench": "vitest bench",
     "bench:full": "node bench/run.js",
     "bench:compare": "node bench/compare.js",
-    "quality": "node bench/run.js --no-pipeline --label quality"
+    "quality": "node bench/run.js --no-pipeline --label quality",
+    "demo": "node demo/serve.mjs"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",

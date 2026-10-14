@@ -1,18 +1,14 @@
 // Hierarchical Agglomerative Color Clustering (Ward's method)
 #include "clustering.hpp"
+#include "colorspace.hpp"
 #include <emscripten.h>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
 #include <cmath>
 
-inline uint16_t uint8_to_uint16(uint8_t value) {
-    return (uint16_t(value) * std::numeric_limits<uint16_t>::max()) / std::numeric_limits<uint8_t>::max();
-}
-
-inline uint8_t uint16_to_uint8(uint16_t value) {
-    return static_cast<uint8_t>((static_cast<uint32_t>(value) * std::numeric_limits<uint8_t>::max() + (std::numeric_limits<uint16_t>::max() / 2)) / std::numeric_limits<uint16_t>::max());
-}
+using AgglomerativeClustering::ColorSpace;
+using AgglomerativeClustering::ColorCoordinates;
 
 // Allocates a buffer with a 4-byte little-endian length prefix; returns the base pointer (payload starts at +4).
 uint8_t* allocate_variable_size(size_t size) {
@@ -30,39 +26,69 @@ uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
     return output;
 }
 
-// Writes merge record i: [merged rgb, a rgb, b rgb], downscaled to 8 bits per channel.
-void write_record(std::vector<uint8_t>& clustering, int i, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
-    size_t offset = 3 + 9 * i;
-    const std::array<uint16_t, 3>* colors[3] = {&m, &a, &b};
-    for (int j = 0; j < 3; j++) {
-        for (int c = 0; c < 3; c++) {clustering[offset + 3 * j + c] = uint16_to_uint8((*colors[j])[c]);}
-    }
+// Writes 16-bit clustering coordinates as an 8-bit sRGB colour.
+void write_color(std::vector<uint8_t>& clustering, size_t offset, const ColorCoordinates& space, const std::array<uint16_t, 3>& coords) {
+    std::array<uint8_t, 3> rgb = space.to_rgb(coords);
+    for (int c = 0; c < 3; c++) {clustering[offset + c] = rgb[c];}
 }
 
-std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
+// Writes merge record i: [merged rgb, a rgb, b rgb], converted to 8-bit sRGB.
+void write_record(std::vector<uint8_t>& clustering, int i, const ColorCoordinates& space, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+    size_t offset = 3 + 9 * i;
+    write_color(clustering, offset, space, m);
+    write_color(clustering, offset + 3, space, a);
+    write_color(clustering, offset + 6, space, b);
+}
+
+// Clusters the image's colours in `color_space`. With `precision` below 8, colours are first grouped by the
+// top `precision` bits of each channel, and each group enters the clustering as one cluster at the
+// count-weighted mean of its colours: at most 2^(3 * precision) clusters, so time is bounded on images with
+// very many distinct colours, while the means keep the palette close to exact.
+std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision) {
 
     std::vector<uint8_t> clustering;
     AgglomerativeClustering::AgglomerativeHistogram histogram;
+    const ColorCoordinates space(color_space);
 
     int limit = image_format == 1 ? image_length - 2 : image_length - 3;
     int increment = image_format == 1 ? 3 : 4;
 
     // Pass 1: build histogram and collect unique colours
     for (int i = 0; i < limit; i += increment) {
-        histogram.count((uint32_t(image_data[i]) << 16) | (uint32_t(image_data[i+1]) << 8) | uint32_t(image_data[i+2]));
+        histogram.add((uint32_t(image_data[i]) << 16) | (uint32_t(image_data[i+1]) << 8) | uint32_t(image_data[i+2]));
     }
 
-    size_t n = histogram.size();
     std::vector<std::array<uint16_t, 3>> unique_colors;
-    unique_colors.reserve(n);
+    std::vector<uint32_t> unique_counts;
+    unique_colors.reserve(histogram.size());
     for (uint32_t key : histogram.colors()) {
-        unique_colors.push_back({uint8_to_uint16(uint8_t(key >> 16)), uint8_to_uint16(uint8_t(key >> 8)), uint8_to_uint16(uint8_t(key))});
+        unique_colors.push_back(space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
     }
+    unique_counts = histogram.counts();
+
+    if (precision < 8) {
+        const uint32_t channel = (0xFFu << (8 - precision)) & 0xFFu;
+        const uint32_t mask = (channel << 16) | (channel << 8) | channel;
+        AgglomerativeClustering::AgglomerativeHistogram bins;
+        std::vector<std::array<uint64_t, 3>> sums;
+        for (size_t i = 0; i < unique_colors.size(); i++) {
+            uint32_t bin = bins.add(histogram.colors()[i] & mask, unique_counts[i]);
+            if (bin == sums.size()) {sums.push_back({0u, 0u, 0u});}
+            for (int c = 0; c < 3; c++) {sums[bin][c] += uint64_t(unique_colors[i][c]) * unique_counts[i];}
+        }
+        unique_colors.resize(bins.size());
+        unique_counts = bins.counts();
+        for (size_t b = 0; b < bins.size(); b++) {
+            for (int c = 0; c < 3; c++) {unique_colors[b][c] = uint16_t(sums[b][c] / unique_counts[b]);}
+        }
+    }
+
+    size_t n = unique_colors.size();
     clustering.resize(3 + 9 * (n - 1));
 
     // Pass 2: one cluster per unique colour
     AgglomerativeClustering::WardGrid grid(n);
-    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], histogram.counts()[i]);}
+    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], unique_counts[i]);}
     grid.reindex();
 
     // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
@@ -121,14 +147,11 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     std::stable_sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height;});
     for (size_t j = 0; j < merges.size(); j++) {
-        write_record(clustering, int(merges.size() - 1 - j), merges[j].merged, merges[j].a, merges[j].b);
+        write_record(clustering, int(merges.size() - 1 - j), space, merges[j].merged, merges[j].a, merges[j].b);
     }
 
     // Add the k=1 clustering colour
-    std::array<uint16_t, 3> root = merges.empty() ? unique_colors[0] : merges.back().merged;
-    clustering[0] = uint16_to_uint8(root[0]);
-    clustering[1] = uint16_to_uint8(root[1]);
-    clustering[2] = uint16_to_uint8(root[2]);
+    write_color(clustering, 0, space, merges.empty() ? unique_colors[0] : merges.back().merged);
     return clustering;
 
 }
@@ -167,19 +190,25 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
 
 }
 
-// Returns a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
-uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length) {
-    
+// Maps each pixel to its nearest palette colour, matching in `color_space`. With `dither` > 0 the
+// remaining error is diffused to neighbouring pixels (serpentine Floyd-Steinberg, scaled by `dither`), which
+// needs the image's `width`. Returns a length-prefixed buffer (see allocate_variable_size) so the output is
+// written once, in place.
+uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width) {
+
+    const ColorCoordinates space(color_space);
     std::vector<std::array<uint8_t, 3>> colors;
+    std::vector<AgglomerativeClustering::KDTree::Point> points;
     colors.reserve(palette_length / 3);
+    points.reserve(palette_length / 3);
 
     for (size_t i = 0; i + 2 < palette_length; i += 3) {
-        std::array<uint8_t, 3> color = {palette[i], palette[i+1], palette[i+2]};
-        colors.push_back(color);
+        colors.push_back({palette[i], palette[i+1], palette[i+2]});
+        points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
     }
 
     AgglomerativeClustering::KDTree tree;
-    tree.build(colors);
+    tree.build(points);
 
     int increment = image_format == 1 ? 3 : 4;
     size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
@@ -190,23 +219,72 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     // pixels skip the tree. A colour always maps to the same palette entry, so the output is unchanged.
     constexpr int memo_bits = 14;
     std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
-    std::vector<std::array<uint8_t, 3>> memo_values(size_t(1) << memo_bits);
-
-    for (size_t p = 0; p < pixels; p++) {
-        const uint8_t* pixel = image_data + p * increment;
-        uint8_t* out = output + p * increment;
-        std::array<uint8_t, 3> color = {pixel[0], pixel[1], pixel[2]};
-        uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
+    std::vector<int32_t> memo_values(size_t(1) << memo_bits);
+    const std::array<uint8_t, 3> black = {0u, 0u, 0u};
+    auto nearest = [&](uint8_t r, uint8_t g, uint8_t b) -> const std::array<uint8_t, 3>& {
+        uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
         uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
         if (memo_keys[slot] != key) {
             memo_keys[slot] = key;
-            memo_values[slot] = tree.get_nearest(color);
+            memo_values[slot] = tree.get_nearest(space.match(r, g, b));
         }
-        const std::array<uint8_t, 3>& nearest = memo_values[slot];
-        out[0] = nearest[0];
-        out[1] = nearest[1];
-        out[2] = nearest[2];
-        if (image_format == 0) {out[3] = pixel[3];}
+        return memo_values[slot] < 0 ? black : colors[memo_values[slot]];
+    };
+
+    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0) {
+        for (size_t p = 0; p < pixels; p++) {
+            const uint8_t* pixel = image_data + p * increment;
+            uint8_t* out = output + p * increment;
+            const std::array<uint8_t, 3>& chosen = nearest(pixel[0], pixel[1], pixel[2]);
+            out[0] = chosen[0];
+            out[1] = chosen[1];
+            out[2] = chosen[2];
+            if (image_format == 0) {out[3] = pixel[3];}
+        }
+        return packed;
+    }
+
+    // Error for the current and next rows, one pixel of padding on each side so neighbours need no checks.
+    const size_t height = pixels / size_t(width);
+    std::vector<float> current(3 * (size_t(width) + 2), 0.0f), next(3 * (size_t(width) + 2), 0.0f);
+    const float strength = float(std::min(dither, 1.0));
+
+    for (size_t y = 0; y < height; y++) {
+        const bool forward = y % 2 == 0;
+        for (size_t i = 0; i < size_t(width); i++) {
+            const size_t x = forward ? i : size_t(width) - 1 - i;
+            const size_t p = y * size_t(width) + x;
+            const uint8_t* pixel = image_data + p * increment;
+            uint8_t* out = output + p * increment;
+            if (image_format == 0) {out[3] = pixel[3];}
+            float* e = &current[3 * (x + 1)];
+            // Fully transparent pixels neither take error nor pass any on: their colour isn't seen.
+            if (image_format == 0 && pixel[3] == 0) {
+                const std::array<uint8_t, 3>& chosen = nearest(pixel[0], pixel[1], pixel[2]);
+                for (int c = 0; c < 3; c++) {out[c] = chosen[c]; e[c] = 0.0f;}
+                continue;
+            }
+            float wanted[3];
+            uint8_t target[3];
+            for (int c = 0; c < 3; c++) {
+                wanted[c] = std::clamp(float(pixel[c]) + e[c], 0.0f, 255.0f);
+                target[c] = uint8_t(std::lround(wanted[c]));
+                e[c] = 0.0f;
+            }
+            const std::array<uint8_t, 3>& chosen = nearest(target[0], target[1], target[2]);
+            const ptrdiff_t ahead = forward ? 3 : -3;
+            float* below = &next[3 * (x + 1)];
+            for (int c = 0; c < 3; c++) {
+                out[c] = chosen[c];
+                float error = (wanted[c] - float(chosen[c])) * strength;
+                e[c + ahead] += error * (7.0f / 16.0f);
+                below[c - ahead] += error * (3.0f / 16.0f);
+                below[c] += error * (5.0f / 16.0f);
+                below[c + ahead] += error * (1.0f / 16.0f);
+            }
+        }
+        std::swap(current, next);
+        std::fill(next.begin(), next.end(), 0.0f);
     }
 
     return packed;
@@ -216,14 +294,14 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format, int color_space, int precision) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
     return pack_variable_size(clustering);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return pack_variable_size(palette);
 }
@@ -235,21 +313,21 @@ uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_le
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format);
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, double dither, int width) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size());
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k) {
+uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width) {
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size());
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length) {
-    return _quantize(image_data, image_length, image_format, palette_data, palette_length);
+uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int width) {
+    return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, width);
 }
 
 }

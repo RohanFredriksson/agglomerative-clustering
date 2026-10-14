@@ -22,7 +22,9 @@
  *   --runs 1                     timed runs per measurement (median is kept)
  *   --kodak-limit 24             only the first N Kodak images
  *   --ac name=path/index.mjs     an agglomerative-clustering build to include (repeatable;
- *                                default: agglomerative=dist/index.mjs)
+ *                                default: agglomerative=dist/index.mjs). Append #key=value,...
+ *                                to pass options, e.g. oklab=dist/index.mjs#colorSpace=oklab
+ *                                (numbers and true/false are parsed; dither gets the width).
  *   --no-pipeline                skip the libraries' own quantize
  *   --label name                 results file name (default: timestamp)
  */
@@ -51,7 +53,17 @@ function parseArgs(argv) {
             case '--k': args.k = value().split(',').map(Number); break;
             case '--runs': args.runs = Number(value()); break;
             case '--kodak-limit': args.kodakLimit = Number(value()); break;
-            case '--ac': {const [name, path] = value().split('='); args.ac.push({ name, path }); break;}
+            case '--ac': {
+                const [name, rest] = value().split(/=(.*)/s);
+                const [path, query] = rest.split('#');
+                const options = {};
+                for (const pair of query ? query.split(',') : []) {
+                    const [key, raw] = pair.split('=');
+                    options[key] = raw === 'true' ? true : raw === 'false' ? false : Number.isNaN(Number(raw)) ? raw : Number(raw);
+                }
+                args.ac.push({ name, path, options });
+                break;
+            }
             case '--no-pipeline': args.pipeline = false; break;
             case '--label': args.label = value(); break;
             default: throw new Error(`Unknown option ${flag}`);
@@ -81,7 +93,7 @@ function gitCommit() {
 
 const args = parseArgs(process.argv.slice(2));
 const libraries = [];
-for (const { name, path } of args.ac) {libraries.push(await agglomerative(name, path));}
+for (const { name, path, options } of args.ac) {libraries.push(await agglomerative(name, path, options));}
 for (const lib of args.libs) {libraries.push(LIBRARIES[lib]());}
 for (const lib of libraries) {await lib.init?.();}
 

@@ -16,21 +16,29 @@ import { resolve } from 'path';
 
 const require = createRequire(import.meta.url);
 
-/** agglomerative-clustering, loaded from a built dist/index.mjs (this repo's by default). */
-export async function agglomerative(name = 'agglomerative', distPath = 'dist/index.mjs') {
+/**
+ * agglomerative-clustering, loaded from a built dist/index.mjs (this repo's by default). `options` are
+ * passed to every call: colorSpace and precision to clustering, colorSpace and dither to quantize (with the
+ * image's width).
+ */
+export async function agglomerative(name = 'agglomerative', distPath = 'dist/index.mjs', options = {}) {
     const ac = await import(pathToFileURL(resolve(distPath)).href);
     await ac.init();
+    const { dither, ...clusterOptions } = options;
+    const has = Object.keys(options).length > 0;
+    const cluster = has ? [clusterOptions] : [];
+    const quantizeOptions = (image) => has ? [{ ...clusterOptions, ...(dither ? { dither, width: image.width } : {}) }] : [];
     return {
         name,
-        palette: (image, k) => ac.getPalette(image.rgba, k),
+        palette: (image, k) => ac.getPalette(image.rgba, k, ...cluster),
         // The point of a hierarchical clustering: cluster once, then cut it at any k.
         paletteSweep: async (image, ks) => {
-            const clustering = await ac.getClustering(image.rgba);
+            const clustering = await ac.getClustering(image.rgba, ...cluster);
             const palettes = [];
             for (const k of ks) {palettes.push(await ac.getPaletteFromClustering(clustering, k));}
             return palettes;
         },
-        quantize: (image, k) => ac.quantize(image.rgba, k),
+        quantize: (image, k) => ac.quantize(image.rgba, k, ...quantizeOptions(image)),
     };
 }
 

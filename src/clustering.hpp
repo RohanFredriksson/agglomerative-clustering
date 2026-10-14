@@ -496,25 +496,26 @@ public:
         this->resize(12);
     }
 
-    // Counts one pixel of the colour packed as r << 16 | g << 8 | b.
-    void count(uint32_t key) {
+    // Adds `weight` pixels of the colour packed as r << 16 | g << 8 | b, and returns the colour's index.
+    uint32_t add(uint32_t key, uint32_t weight = 1u) {
         const uint64_t tag = uint64_t(key) + 1u;
         uint32_t slot = this->home(key);
         while (true) {
             uint64_t entry = this->slots[slot];
             if (entry == 0u) {break;}
-            if ((entry >> 32) == tag) {this->totals[uint32_t(entry)]++; return;}
+            if ((entry >> 32) == tag) {this->totals[uint32_t(entry)] += weight; return uint32_t(entry);}
             slot = (slot + 1u) & this->mask;
         }
         uint32_t index = (uint32_t) this->keys.size();
         this->slots[slot] = tag << 32 | index;
         this->keys.push_back(key);
-        this->totals.push_back(1u);
+        this->totals.push_back(weight);
         // Keep the load factor at most 1/2 so probes stay short.
         if (2 * this->keys.size() > this->slots.size()) {this->resize(64 - this->shift + 1);}
+        return index;
     }
 
-    // The distinct colours (packed as in count) in order of first appearance, and how often each appeared.
+    // The distinct colours (packed as in add) in order of first appearance, and how often each appeared.
     const std::vector<uint32_t>& colors() const {return this->keys;}
     const std::vector<uint32_t>& counts() const {return this->totals;}
 
@@ -524,12 +525,19 @@ public:
 
 };
 
+// Nearest-neighbour lookup over palette colours, in whichever coordinates the caller uses (8-bit RGB values,
+// or scaled OKLab). Returns the index of the nearest point; ties go to the first one found.
 class KDTree {
+
+public:
+
+    typedef std::array<uint16_t, 3> Point;
 
 private:
 
     struct Node {
-        std::array<uint8_t, 3> point;
+        Point point;
+        int32_t index;
         int left = -1;
         int right = -1;
     };
@@ -537,20 +545,18 @@ private:
     std::vector<Node> nodes;
     int root = -1;
 
-    int build(std::vector<std::array<uint8_t, 3>>& points, int start, int end, int depth) {
+    int build(std::vector<std::pair<Point, int32_t>>& points, int start, int end, int depth) {
 
         if (start >= end) {return -1;}
         int mid = (start + end) / 2;
         int axis = depth % 3;
-        
-        auto comparator = [axis](const std::array<uint8_t, 3>& a, const std::array<uint8_t, 3>& b) {
-            if (axis == 0) {return a[0] < b[0];}
-            if (axis == 1) {return a[1] < b[1];}
-            return a[2] < b[2];
+
+        auto comparator = [axis](const std::pair<Point, int32_t>& a, const std::pair<Point, int32_t>& b) {
+            return a.first[axis] < b.first[axis];
         };
 
         std::nth_element(points.begin() + start, points.begin() + mid, points.begin() + end, comparator);
-        this->nodes.push_back(Node{points[mid], -1, -1});
+        this->nodes.push_back(Node{points[mid].first, points[mid].second, -1, -1});
         int node_index = (int) this->nodes.size() - 1;
 
         this->nodes[node_index].left = build(points, start, mid, depth + 1);
@@ -562,25 +568,26 @@ private:
 
 public:
 
-    void build(std::vector<std::array<uint8_t, 3>> points) {
+    void build(const std::vector<Point>& points) {
+        std::vector<std::pair<Point, int32_t>> indexed;
+        indexed.reserve(points.size());
+        for (int32_t i = 0; i < (int32_t) points.size(); i++) {indexed.push_back({points[i], i});}
         this->nodes.clear();
-        this->root = this->build(points, 0, (int) points.size(), 0);
+        this->root = this->build(indexed, 0, (int) indexed.size(), 0);
     }
 
-    [[nodiscard]] std::array<uint8_t, 3> get_nearest(const std::array<uint8_t, 3>& target) const {
+    // The index of the point nearest to `target`, or -1 if the tree is empty.
+    [[nodiscard]] int32_t get_nearest(const Point& target) const {
 
-        if (this->root == -1) {
-            std::array<uint8_t, 3> result = {0u, 0u, 0u};
-            return result;
-        }
+        if (this->root == -1) {return -1;}
 
-        std::array<uint8_t, 3> best_point;
-        uint32_t best_distance = std::numeric_limits<uint32_t>::max();
+        int32_t best_index = -1;
+        uint64_t best_distance = std::numeric_limits<uint64_t>::max();
 
         struct StackFrame {
             int node_index;
             int depth;
-            uint32_t bound;
+            uint64_t bound;
         };
 
         // The tree is median-split, so its depth is at most ~log2(n) and each pop pushes at most two
@@ -597,34 +604,32 @@ public:
             if (frame.bound >= best_distance) {continue;}
 
             const Node& node = this->nodes[frame.node_index];
-            uint32_t dx = static_cast<uint32_t>(node.point[0] > target[0] ? node.point[0] - target[0] : target[0] - node.point[0]);
-            uint32_t dy = static_cast<uint32_t>(node.point[1] > target[1] ? node.point[1] - target[1] : target[1] - node.point[1]);
-            uint32_t dz = static_cast<uint32_t>(node.point[2] > target[2] ? node.point[2] - target[2] : target[2] - node.point[2]);
-            uint32_t distance = dx * dx + dy * dy + dz * dz;
+            uint64_t distance = 0;
+            for (int axis = 0; axis < 3; axis++) {
+                int64_t d = int64_t(node.point[axis]) - int64_t(target[axis]);
+                distance += uint64_t(d * d);
+            }
 
             if (distance < best_distance) {
                 best_distance = distance;
-                best_point = node.point;
+                best_index = node.index;
             }
 
             int axis = frame.depth % 3;
-            int difference = 0;
-            if (axis == 0)      {difference = int(target[0]) - int(node.point[0]);}
-            else if (axis == 1) {difference = int(target[1]) - int(node.point[1]);}
-            else                {difference = int(target[2]) - int(node.point[2]);}
+            int64_t difference = int64_t(target[axis]) - int64_t(node.point[axis]);
 
             int first = difference < 0 ? node.left : node.right;
             int second = difference < 0 ? node.right : node.left;
 
             // Push the far side first so the near side is popped (and searched) first, tightening best_distance.
-            uint32_t split_distance = static_cast<uint32_t>(difference * difference);
+            uint64_t split_distance = uint64_t(difference * difference);
             if (second != -1 && split_distance < best_distance) {fringe[fringe_size++] = {second, frame.depth + 1, split_distance};}
             if (first != -1) {fringe[fringe_size++] = {first, frame.depth + 1, frame.bound};}
 
         }
 
-        return best_point;
-    
+        return best_index;
+
     }
 
 };
