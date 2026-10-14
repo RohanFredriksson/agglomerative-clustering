@@ -94,6 +94,20 @@ private:
     // The colour box of everything ever linked into each bucket: tighter than the cell's own extent, and
     // removals only make it looser, so it stays a valid bound.
     std::vector<std::array<uint16_t, 6>> bucket_box;
+
+    // A coarse grid of blocks, each `block_side`^3 cells, so far-reaching searches can skip whole empty or
+    // too-expensive regions instead of stepping over every cell. Only used when the grid is at least two blocks
+    // across. Like the cell bounds, a block's minimum count and colour box cover everything ever linked into it;
+    // its live count is exact, so an empty block is always skipped.
+    static constexpr int block_shift = 2;
+    static constexpr int32_t block_side = int32_t(1) << block_shift;
+    // Cell rings a search scans before it switches to blocks. Most searches finish within them.
+    static constexpr int32_t fine_rings = FINE_RINGS;
+    int32_t block_dimension = 0;
+    std::vector<int32_t> block_live;
+    std::vector<uint32_t> block_minimum;
+    std::vector<std::array<uint16_t, 6>> block_box;
+
     std::vector<Cluster> clusters;
     size_t alive = 0;
 
@@ -151,6 +165,20 @@ private:
         return int32_t(value / this->grid_size);
     }
 
+    int32_t block_of(const std::array<uint16_t, 3>& coords) const {
+        int32_t bx = this->cell_of(coords[0]) >> block_shift, by = this->cell_of(coords[1]) >> block_shift, bz = this->cell_of(coords[2]) >> block_shift;
+        return (bx * this->block_dimension + by) * this->block_dimension + bz;
+    }
+
+    static void extend(std::array<uint16_t, 6>& box, const std::array<uint16_t, 3>& coords) {
+        for (int axis = 0; axis < 3; axis++) {
+            box[axis] = std::min(box[axis], coords[axis]);
+            box[axis + 3] = std::max(box[axis + 3], coords[axis]);
+        }
+    }
+
+    static constexpr std::array<uint16_t, 6> empty_box = {std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0};
+
     void link(int32_t id) {
         Cluster& cluster = this->clusters[id];
         int32_t cell = (this->cell_of(cluster.coords[0]) * this->dimension + this->cell_of(cluster.coords[1])) * this->dimension + this->cell_of(cluster.coords[2]);
@@ -158,13 +186,13 @@ private:
             this->cells[cell] = (int32_t) this->buckets.size();
             this->buckets.emplace_back();
             this->bucket_minimum.push_back(std::numeric_limits<uint32_t>::max());
-            this->bucket_box.push_back({std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0});
+            this->bucket_box.push_back(empty_box);
         }
-        std::array<uint16_t, 6>& box = this->bucket_box[this->cells[cell]];
-        for (int axis = 0; axis < 3; axis++) {
-            box[axis] = std::min(box[axis], cluster.coords[axis]);
-            box[axis + 3] = std::max(box[axis + 3], cluster.coords[axis]);
-        }
+        extend(this->bucket_box[this->cells[cell]], cluster.coords);
+        int32_t block = this->block_of(cluster.coords);
+        this->block_live[block]++;
+        this->block_minimum[block] = std::min(this->block_minimum[block], cluster.count);
+        extend(this->block_box[block], cluster.coords);
         cluster.bucket = this->cells[cell];
         this->bucket_minimum[cluster.bucket] = std::min(this->bucket_minimum[cluster.bucket], cluster.count);
         Bucket& bucket = this->buckets[cluster.bucket];
@@ -191,6 +219,11 @@ private:
         this->buckets.clear();
         this->bucket_minimum.clear();
         this->bucket_box.clear();
+        this->block_dimension = std::max<int32_t>(this->dimension >> block_shift, 1);
+        size_t blocks = size_t(this->block_dimension) * this->block_dimension * this->block_dimension;
+        this->block_live.assign(blocks, 0);
+        this->block_minimum.assign(blocks, std::numeric_limits<uint32_t>::max());
+        this->block_box.assign(blocks, empty_box);
         for (int32_t id = 0; id < (int32_t) this->clusters.size(); id++) {
             if (this->clusters[id].bucket != none) {this->link(id);}
         }
@@ -230,6 +263,7 @@ public:
         tail.x[last % 4] = tail.y[last % 4] = tail.z[last % 4] = far_away;
         bucket.size = last;
         if (last % 4 == 0) {bucket.chunks.pop_back();}
+        this->block_live[this->block_of(cluster.coords)]--;
         cluster.bucket = none;
         if (this->cache_of[id] != none) {
             this->free_caches.push_back(this->cache_of[id]);
@@ -292,7 +326,9 @@ private:
 
     // Collects the `limit` cheapest partners of `id`, searching outward ring by ring and stopping once no
     // unvisited cell can hold a cheaper one. Every partner has at least one pixel, so beyond distance d the
-    // cost is at least n / (n + 1) * d^2. Returns how many clusters were examined.
+    // cost is at least n / (n + 1) * d^2. The first `fine_rings` rings go cell by cell; past them, a grid at
+    // least two blocks across continues by rings of blocks, so empty and too-expensive regions are skipped
+    // whole. Returns how many clusters were examined.
     size_t search(int32_t id, Candidates& list, int limit) const {
 
         const Cluster& self = this->clusters[id];
@@ -310,21 +346,24 @@ private:
         const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
         const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
 
-        // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
-        auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
-            int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
-            if (bucket == none) {return;}
-            // No member of this cell can cost less than its lightest possible member at the nearest point of the
-            // cell's colour box.
-            double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
-            const std::array<uint16_t, 6>& box = this->bucket_box[bucket];
+        // No member of a cell or block can cost less than its lightest possible member at the nearest point of
+        // its colour box.
+        auto floor_cost = [&](uint32_t minimum, const std::array<uint16_t, 6>& box) __attribute__((always_inline)) {
+            double weight = get_weight(self.count, minimum) * (1.0 - 1e-12);
             uint64_t box_gap = 0;
             for (int axis = 0; axis < 3; axis++) {
                 // Branchless: at most one of the two differences is positive, and each square fits in 32 bits.
                 int32_t g = std::max({int32_t(box[axis]) - int32_t(p[axis]), int32_t(p[axis]) - int32_t(box[axis + 3]), 0});
                 box_gap += uint64_t(uint32_t(g) * uint32_t(g));
             }
-            if (cell_weight * double(box_gap) > bound) {return;}
+            return weight * double(box_gap);
+        };
+
+        // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
+        auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
+            int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
+            if (bucket == none) {return;}
+            if (floor_cost(this->bucket_minimum[bucket], this->bucket_box[bucket]) > bound) {return;}
             const Bucket& members = this->buckets[bucket];
             examined += members.size;
             for (const Chunk& chunk : members.chunks) {
@@ -347,36 +386,77 @@ private:
             }
         };
 
+        // Whether anything outside the cube of `ring - 1` units around unit `u` (units of `size` colour values,
+        // `end` the last unit) could still beat the bound: everything outside lies past one of its faces.
+        auto unfinished = [&](const int32_t* u, int32_t ring, int32_t end, uint64_t size) __attribute__((always_inline)) {
+            uint64_t gap = std::numeric_limits<uint64_t>::max();
+            for (int axis = 0; axis < 3; axis++) {
+                if (u[axis] - ring >= 0) {gap = std::min<uint64_t>(gap, uint64_t(p[axis]) - (uint64_t(u[axis] - ring + 1) * size - 1u));}
+                if (u[axis] + ring <= end) {gap = std::min<uint64_t>(gap, uint64_t(u[axis] + ring) * size - p[axis]);}
+            }
+            return gap != std::numeric_limits<uint64_t>::max() && !(minimum_weight * double(gap * gap) > bound);
+        };
+
+        const bool blocked = this->block_dimension >= 2;
         for (int32_t ring = 0; ; ring++) {
 
-            // Anything outside the cells already searched lies past one of the cube's faces.
-            if (ring > 0) {
-                uint64_t gap = std::numeric_limits<uint64_t>::max();
-                for (int axis = 0; axis < 3; axis++) {
-                    if (c[axis] - ring >= 0) {gap = std::min<uint64_t>(gap, uint64_t(p[axis]) - (uint64_t(c[axis] - ring + 1) * this->grid_size - 1u));}
-                    if (c[axis] + ring <= last) {gap = std::min<uint64_t>(gap, uint64_t(c[axis] + ring) * this->grid_size - p[axis]);}
-                }
-                if (gap == std::numeric_limits<uint64_t>::max()) {break;}
-                if (minimum_weight * double(gap * gap) > bound) {break;}
+            if (ring > 0 && !unfinished(c, ring, last, this->grid_size)) {break;}
+            if (blocked && ring > fine_rings) {
+                this->search_blocks(c, scan, floor_cost, unfinished, bound);
+                break;
             }
 
-            for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
-                bool x_edge = x == c[0] - ring || x == c[0] + ring;
-                for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
-                    bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
-                    if (xy_edge) {
-                        for (int32_t z = std::max(c[2] - ring, 0); z <= std::min(c[2] + ring, last); z++) {scan(x, y, z);}
-                    } else {
-                        if (c[2] - ring >= 0) {scan(x, y, c[2] - ring);}
-                        if (ring > 0 && c[2] + ring <= last) {scan(x, y, c[2] + ring);}
-                    }
-                }
-            }
+            for_ring(c, ring, last, scan);
 
         }
 
         return examined;
 
+    }
+
+    // Continues a search past its first `fine_rings` cell rings, by rings of blocks around the cell's block.
+    // Cells within `fine_rings` of the search's own cell were already scanned and are skipped.
+    template <typename Scan, typename Floor, typename Unfinished>
+    void search_blocks(const int32_t* c, Scan& scan, Floor& floor_cost, Unfinished& unfinished, const double& bound) const {
+        const int32_t b[3] = {c[0] >> block_shift, c[1] >> block_shift, c[2] >> block_shift};
+        const int32_t last = this->block_dimension - 1;
+        const uint64_t size = uint64_t(this->grid_size) << block_shift;
+        auto visit = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
+            int32_t block = (x * this->block_dimension + y) * this->block_dimension + z;
+            if (this->block_live[block] == 0) {return;}
+            if (floor_cost(this->block_minimum[block], this->block_box[block]) > bound) {return;}
+            for (int32_t cx = x << block_shift; cx < (x + 1) << block_shift; cx++) {
+                bool x_near = cx >= c[0] - fine_rings && cx <= c[0] + fine_rings;
+                for (int32_t cy = y << block_shift; cy < (y + 1) << block_shift; cy++) {
+                    bool xy_near = x_near && cy >= c[1] - fine_rings && cy <= c[1] + fine_rings;
+                    for (int32_t cz = z << block_shift; cz < (z + 1) << block_shift; cz++) {
+                        if (xy_near && cz >= c[2] - fine_rings && cz <= c[2] + fine_rings) {continue;}
+                        scan(cx, cy, cz);
+                    }
+                }
+            }
+        };
+        for (int32_t ring = 0; ; ring++) {
+            if (ring > 0 && !unfinished(b, ring, last, size)) {break;}
+            for_ring(b, ring, last, visit);
+        }
+    }
+
+    // Calls `visit` on every unit of the shell at Chebyshev distance `ring` around `u`, clipped to [0, end].
+    template <typename Visit>
+    static void for_ring(const int32_t* u, int32_t ring, int32_t end, Visit& visit) {
+        for (int32_t x = std::max(u[0] - ring, 0); x <= std::min(u[0] + ring, end); x++) {
+            bool x_edge = x == u[0] - ring || x == u[0] + ring;
+            for (int32_t y = std::max(u[1] - ring, 0); y <= std::min(u[1] + ring, end); y++) {
+                bool xy_edge = x_edge || y == u[1] - ring || y == u[1] + ring;
+                if (xy_edge) {
+                    for (int32_t z = std::max(u[2] - ring, 0); z <= std::min(u[2] + ring, end); z++) {visit(x, y, z);}
+                } else {
+                    if (u[2] - ring >= 0) {visit(x, y, u[2] - ring);}
+                    if (ring > 0 && u[2] + ring <= end) {visit(x, y, u[2] + ring);}
+                }
+            }
+        }
     }
 
 public:
