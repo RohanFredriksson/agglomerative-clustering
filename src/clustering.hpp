@@ -5,7 +5,6 @@
 #ifndef AGGLOMERATIVE_CLUSTERING_HPP
 #define AGGLOMERATIVE_CLUSTERING_HPP
 
-#include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
 #include <vector>
@@ -120,8 +119,8 @@ private:
     static constexpr double target_occupancy = 6.0;
 
     int choose_resolution() const {
-        // Morton codes at the finest resolution: dropping the low 3 bits gives the code one level coarser,
-        // so one sort answers the occupied-cell count at every resolution.
+        // Morton codes at the finest resolution: dropping the low 3 bits gives the code one level coarser, so
+        // one bitmap per resolution (at most 2^21 bits) counts its occupied cells without sorting.
         std::vector<uint32_t> codes;
         codes.reserve(this->alive);
         for (const Cluster& cluster : this->clusters) {
@@ -132,12 +131,16 @@ private:
             }
             codes.push_back(code);
         }
-        std::sort(codes.begin(), codes.end());
+        std::vector<uint64_t> occupancy;
         for (int r = max_resolution; r > 0; r--) {
             int shift = 3 * (max_resolution - r);
+            occupancy.assign(((size_t(1) << (3 * r)) + 63) / 64, 0u);
             size_t occupied = 0;
-            for (size_t i = 0; i < codes.size(); i++) {
-                if (i == 0 || (codes[i] >> shift) != (codes[i - 1] >> shift)) {occupied++;}
+            for (uint32_t code : codes) {
+                uint32_t cell = code >> shift;
+                uint64_t bit = uint64_t(1) << (cell & 63u);
+                occupied += (occupancy[cell >> 6] & bit) == 0;
+                occupancy[cell >> 6] |= bit;
             }
             if (double(this->alive) >= target_occupancy * double(occupied)) {return r;}
         }
@@ -307,7 +310,8 @@ private:
         const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
         const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
 
-        auto scan = [&](int32_t x, int32_t y, int32_t z) {
+        // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
+        auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
             if (bucket == none) {return;}
             // No member of this cell can cost less than its lightest possible member at the nearest point of the
@@ -316,8 +320,9 @@ private:
             const std::array<uint16_t, 6>& box = this->bucket_box[bucket];
             uint64_t box_gap = 0;
             for (int axis = 0; axis < 3; axis++) {
-                uint64_t g = p[axis] < box[axis] ? box[axis] - p[axis] : p[axis] > box[axis + 3] ? p[axis] - box[axis + 3] : 0u;
-                box_gap += g * g;
+                // Branchless: at most one of the two differences is positive, and each square fits in 32 bits.
+                int32_t g = std::max({int32_t(box[axis]) - int32_t(p[axis]), int32_t(p[axis]) - int32_t(box[axis + 3]), 0});
+                box_gap += uint64_t(uint32_t(g) * uint32_t(g));
             }
             if (cell_weight * double(box_gap) > bound) {return;}
             const Bucket& members = this->buckets[bucket];
@@ -437,40 +442,65 @@ public:
 
 };
 
+// Counts 8-bit colours, keeping them in order of first appearance.
+// An open-addressing table with linear probing: each slot packs (colour + 1) << 32 | index into one word, so a
+// probe is a single load, and 0 marks an empty slot. It grows with the number of distinct colours, not pixels.
 class AgglomerativeHistogram {
 
 private:
 
-    struct ArrayHash {
-        std::size_t operator()(const std::array<uint16_t, 3>& arr) const noexcept {
-            uint64_t v = (uint64_t(arr[0]) << 32) | (uint64_t(arr[1]) << 16) | arr[2];
-            v ^= v >> 33;
-            v *= 0xff51afd7ed558ccdULL;
-            v ^= v >> 33;
-            v *= 0xc4ceb9fe1a85ec53ULL;
-            v ^= v >> 33;
-            return static_cast<std::size_t>(v);
-        }
-    };
+    std::vector<uint64_t> slots;
+    uint32_t mask = 0;
+    int shift = 0;
+    std::vector<uint32_t> keys;
+    std::vector<uint32_t> totals;
 
-    std::unordered_map<std::array<uint16_t, 3>, uint32_t, ArrayHash> histogram;
+    // Fibonacci hashing: the top bits of the product spread neighbouring colours across the table.
+    uint32_t home(uint32_t key) const {
+        return uint32_t((uint64_t(key) * 0x9E3779B97F4A7C15ULL) >> this->shift);
+    }
+
+    void resize(int bits) {
+        this->slots.assign(size_t(1) << bits, 0u);
+        this->mask = (uint32_t(1) << bits) - 1u;
+        this->shift = 64 - bits;
+        for (uint32_t index = 0; index < (uint32_t) this->keys.size(); index++) {
+            uint32_t slot = this->home(this->keys[index]);
+            while (this->slots[slot] != 0u) {slot = (slot + 1u) & this->mask;}
+            this->slots[slot] = (uint64_t(this->keys[index]) + 1u) << 32 | index;
+        }
+    }
 
 public:
 
-    bool count(std::array<uint16_t, 3> color) {
-        auto it = this->histogram.find(color);
-        if (it != this->histogram.end()) {it->second++; return false;}
-        this->histogram[color] = 1u;
-        return true;
+    AgglomerativeHistogram() {
+        this->resize(12);
     }
 
-    uint32_t get(const std::array<uint16_t, 3>& color) const {
-        auto it = this->histogram.find(color);
-        return it == this->histogram.end() ? 0u : it->second;
+    // Counts one pixel of the colour packed as r << 16 | g << 8 | b.
+    void count(uint32_t key) {
+        const uint64_t tag = uint64_t(key) + 1u;
+        uint32_t slot = this->home(key);
+        while (true) {
+            uint64_t entry = this->slots[slot];
+            if (entry == 0u) {break;}
+            if ((entry >> 32) == tag) {this->totals[uint32_t(entry)]++; return;}
+            slot = (slot + 1u) & this->mask;
+        }
+        uint32_t index = (uint32_t) this->keys.size();
+        this->slots[slot] = tag << 32 | index;
+        this->keys.push_back(key);
+        this->totals.push_back(1u);
+        // Keep the load factor at most 1/2 so probes stay short.
+        if (2 * this->keys.size() > this->slots.size()) {this->resize(64 - this->shift + 1);}
     }
+
+    // The distinct colours (packed as in count) in order of first appearance, and how often each appeared.
+    const std::vector<uint32_t>& colors() const {return this->keys;}
+    const std::vector<uint32_t>& counts() const {return this->totals;}
 
     size_t size() const {
-        return this->histogram.size();
+        return this->keys.size();
     }
 
 };
