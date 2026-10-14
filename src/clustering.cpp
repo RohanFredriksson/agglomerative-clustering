@@ -27,9 +27,9 @@ uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
     return output;
 }
 
-// Writes 16-bit clustering coordinates as an 8-bit sRGB colour.
-void write_color(std::vector<uint8_t>& clustering, size_t offset, const ColorCoordinates& space, const std::array<uint16_t, 3>& coords) {
-    std::array<uint8_t, 3> rgb = space.to_rgb(coords);
+typedef std::array<uint8_t, 3> Rgb;
+
+void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb) {
     for (int c = 0; c < 3; c++) {clustering[offset + c] = rgb[c];}
 }
 
@@ -40,12 +40,12 @@ constexpr uint8_t clustering_magic = 0xAC;
 constexpr uint8_t clustering_version = 2;
 constexpr size_t clustering_header = 4;
 
-// Writes merge record i: [merged rgb, a rgb, b rgb], converted to 8-bit sRGB. `a` is the heavier child.
-void write_record(std::vector<uint8_t>& clustering, int i, const ColorCoordinates& space, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+// Writes merge record i: [merged rgb, a rgb, b rgb]. `a` is the heavier child.
+void write_record(std::vector<uint8_t>& clustering, int i, const Rgb& m, const Rgb& a, const Rgb& b) {
     size_t offset = clustering_header + 3 + 9 * i;
-    write_color(clustering, offset, space, m);
-    write_color(clustering, offset + 3, space, a);
-    write_color(clustering, offset + 6, space, b);
+    write_color(clustering, offset, m);
+    write_color(clustering, offset + 3, a);
+    write_color(clustering, offset + 6, b);
 }
 
 // Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA pixel counts in proportion to its
@@ -126,7 +126,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     // height keeps every merge after the merges that formed its clusters.
     struct Merge {
         double height;
-        std::array<uint16_t, 3> merged, a, b;
+        int32_t merged, a, b;
     };
     std::vector<Merge> merges;
     merges.reserve(n - 1);
@@ -144,7 +144,8 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         }
 
         int32_t a = chain.back();
-        int32_t b = grid.nearest(a);
+        // The cluster below `a` in the chain is a live partner, so its cost bounds the search.
+        int32_t b = grid.nearest(a, chain.size() >= 2 ? chain[chain.size() - 2] : AgglomerativeClustering::WardGrid::none);
 
         if (chain.size() < 2 || chain[chain.size() - 2] != b) {
             chain.push_back(b);
@@ -166,23 +167,28 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         };
 
         double height = std::max({grid.cost(a, b), heights[a], heights[b]});
-        // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
-        if (b_count > a_count) {merges.push_back({height, merged, bc, ac});} else {merges.push_back({height, merged, ac, bc});}
         grid.remove(a);
         grid.remove(b);
         int32_t m = grid.add(merged, count);
         heights[m] = height;
+        // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
+        if (b_count > a_count) {merges.push_back({height, m, b, a});} else {merges.push_back({height, m, a, b});}
         grid.reindex();
 
     }
 
+    // Every cluster (dead ones keep their coordinates) is converted to 8-bit sRGB once: in OKLab that takes
+    // three powers, and most clusters appear in two records.
+    std::vector<Rgb> rgb(grid.capacity());
+    for (int32_t id = 0; id < grid.capacity(); id++) {rgb[id] = space.to_rgb(grid.coords(id));}
+
     std::stable_sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height;});
     for (size_t j = 0; j < merges.size(); j++) {
-        write_record(clustering, int(merges.size() - 1 - j), space, merges[j].merged, merges[j].a, merges[j].b);
+        write_record(clustering, int(merges.size() - 1 - j), rgb[merges[j].merged], rgb[merges[j].a], rgb[merges[j].b]);
     }
 
     // Add the k=1 clustering colour
-    write_color(clustering, clustering_header, space, merges.empty() ? unique_colors[0] : merges.back().merged);
+    write_color(clustering, clustering_header, rgb[merges.empty() ? 0 : merges.back().merged]);
     return clustering;
 
 }
@@ -298,8 +304,14 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
         keys.push_back((uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]));
     }
 
+    // Up to 256 colours a lazily built cell index answers lookups fastest. Each cell it builds costs a pass over
+    // the palette, so larger palettes (rare, and only through a custom palette) use the k-d tree. Both give
+    // the same answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
+    const bool small = points.size() <= 256;
+    AgglomerativeClustering::PaletteIndex cells;
     AgglomerativeClustering::KDTree tree;
-    tree.build(points, keys);
+    if (small) {cells.build(points, keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {tree.build(points, keys);}
+    auto lookup = [&](const AgglomerativeClustering::KDTree::Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
 
     int increment = image_format == 1 ? 3 : 4;
     size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
@@ -307,7 +319,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     uint8_t* output = packed + 4;
 
     // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
-    // pixels skip the tree. A colour always maps to the same palette entry, so the output is unchanged.
+    // pixels skip the lookup. A colour always maps to the same palette entry, so the output is unchanged.
     constexpr int memo_bits = 14;
     std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
     std::vector<int32_t> memo_values(size_t(1) << memo_bits);
@@ -317,7 +329,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
         uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
         if (memo_keys[slot] != key) {
             memo_keys[slot] = key;
-            memo_values[slot] = tree.get_nearest(space.match(r, g, b));
+            memo_values[slot] = lookup(space.match(r, g, b));
         }
         return memo_values[slot];
     };
@@ -345,6 +357,21 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     const float strength = float(std::min(dither, 1.0));
     const float limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
 
+    // OKLab conversion costs three cube roots, so dithering in OKLab memoises each pixel's coordinates the same
+    // way as the lookups above.
+    std::vector<uint32_t> match_keys(color_space == ColorSpace::rgb ? 0 : size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+    std::vector<AgglomerativeClustering::KDTree::Point> match_values(match_keys.size());
+    auto match = [&](uint8_t r, uint8_t g, uint8_t b) -> AgglomerativeClustering::KDTree::Point {
+        if (color_space == ColorSpace::rgb) {return {r, g, b};}
+        uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+        uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+        if (match_keys[slot] != key) {
+            match_keys[slot] = key;
+            match_values[slot] = space.match(r, g, b);
+        }
+        return match_values[slot];
+    };
+
     for (size_t y = 0; y < height; y++) {
         const bool forward = y % 2 == 0;
         for (size_t i = 0; i < size_t(width); i++) {
@@ -362,7 +389,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
             }
             // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
             // is the one that best cancels it; mixing spaces lets error pile up into streaks.
-            const AgglomerativeClustering::KDTree::Point base = space.match(pixel[0], pixel[1], pixel[2]);
+            const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
             float wanted[3];
             AgglomerativeClustering::KDTree::Point target;
             for (int c = 0; c < 3; c++) {
@@ -370,7 +397,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
                 target[c] = uint16_t(std::lround(wanted[c]));
                 e[c] = 0.0f;
             }
-            const int32_t index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : tree.get_nearest(target);
+            const int32_t index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
             const std::array<uint8_t, 3>& chosen = colors[index];
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];

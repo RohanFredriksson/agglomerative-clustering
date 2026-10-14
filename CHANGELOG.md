@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Faster clustering, with identical output.** In WebAssembly, clustering a 768×512 Kodak photo is about 1.5× faster in RGB, 2.2× faster with `colorSpace: 'oklab'` and 1.5× faster with `precision: 6`. The partner search's grid now comes in sizes between powers of two and uses coarser cells, steps over empty cells with per-column occupancy bits, tests cells with a division-free float bound, and starts each search from a known partner.
+- **Faster pixel mapping, with identical output.** For palettes up to 256 colours, lookups go through a grid whose cells (built on first use) list the palette entries that can be nearest there, replacing the KD-tree. Dithering in OKLab memoises colour conversions. `quantize` is about 1.5× faster in RGB and 2× in OKLab, and dithered `quantize` about 1.8× (RGB) and 2.3× (OKLab).
+
 ## 2.0.0
 
 The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
