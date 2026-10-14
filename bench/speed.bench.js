@@ -1,80 +1,46 @@
 /**
- * Speed benchmark: agglomerative-clustering vs NeuQuant (image-q)
+ * Quick speed benchmark (vitest bench): agglomerative-clustering against other palette
+ * quantizers, using the same adapters as the full harness (bench/run.js).
  *
- * All libraries perform the same task: reduce an RGBA image to k colours.
- * NeuQuant is a fast neural-network-based quantizer; agglomerative clustering
- * trades speed for higher palette quality.
- * - agglomerative-clustering: quantize()
- * - NeuQuant (neural-network quantization): buildPaletteSync(..., { paletteQuantization: 'neuquant' })
+ * Every library does the same job: produce a palette (no pixel mapping). Two cases:
+ * - one palette at k = 64
+ * - palettes at k = 16, 64, 128 and 256. agglomerative-clustering clusters once and cuts
+ *   the hierarchy at each k; the other libraries have to start over for each k.
+ *
+ * Images: two Kodak photos (busy and smooth) and uniform noise, the worst case for
+ * clustering. For quality, and for every image and k, use `npm run bench:full`.
  */
 
-import { createRequire } from 'module';
-import { bench, describe, beforeAll } from 'vitest';
-import { init, quantize as acQuantize } from '../dist/index.mjs';
+import { bench, describe } from 'vitest';
+import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
+import { syntheticImages } from './lib/images.js';
+import { agglomerative, LIBRARIES } from './lib/quantizers.js';
 
-const require = createRequire(import.meta.url);
-const iq = require('image-q');
+const options = { iterations: 3, warmupIterations: 1, time: 0, warmupTime: 0 };
+const sweepKs = [16, 64, 128, 256];
 
-// ---------------------------------------------------------------------------
-// Image helpers
-// ---------------------------------------------------------------------------
-
-/** Build a reproducible pseudo-random RGBA Uint8Array (LCG so it's fast). */
-function makeImage(pixels) {
-    const data = new Uint8Array(pixels * 4);
-    let s = 0xdeadbeef;
-    for (let i = 0; i < data.length; i++) {
-        s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-        data[i] = s >>> 24;
-    }
-    return data;
+const images = [];
+for (const name of ['kodim05', 'kodim23']) {
+    const { rgba, width, height } = await getImageRgba(await ensureImage(KODAK_IMAGES.find(img => img.name === name)));
+    images.push({ name, rgba, width, height });
 }
+images.push(syntheticImages().find(image => image.name === 'noise-512'));
 
-function toPointContainer(rgba, side) {
-    return iq.utils.PointContainer.fromUint8Array(rgba, side, side);
-}
+const libraries = [await agglomerative('agglomerative-clustering')];
+for (const make of Object.values(LIBRARIES)) {libraries.push(make());}
+for (const lib of libraries) {await lib.init?.();}
 
-// Pre-build images at each size
-const sizes = {
-    '64x64':     { pixels: 64   * 64,   side: 64   },
-    '256x256':   { pixels: 256  * 256,  side: 256  },
-    '512x512':   { pixels: 512  * 512,  side: 512  },
-    //'1024x1024': { pixels: 1024 * 1024, side: 1024 },
-};
+for (const image of images) {
+    describe(`palette, k = 64: ${image.name}`, () => {
+        for (const lib of libraries) {bench(lib.name, () => lib.palette(image, 64), options);}
+    });
 
-for (const [, s] of Object.entries(sizes)) {
-    s.rgba           = makeImage(s.pixels);
-    s.pointContainer = toPointContainer(s.rgba, s.side);
-}
-
-const kValues = [16, 64, 128, 256];
-
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
-beforeAll(async () => {
-    await init();
-});
-
-// ---------------------------------------------------------------------------
-// Benchmarks
-// ---------------------------------------------------------------------------
-
-for (const k of kValues) {
-    for (const [label, { rgba, pointContainer }] of Object.entries(sizes)) {
-
-        describe(`quantize to ${k} colours — ${label}`, () => {
-
-            bench('agglomerative-clustering (wasm)', async () => {
-                await acQuantize(rgba, k);
-            });
-
-            bench('NeuQuant (image-q)', () => {
-                iq.buildPaletteSync([pointContainer], { paletteQuantization: 'neuquant', colors: k });
-            });
-
-        });
-
-    }
+    describe(`palettes at k = ${sweepKs.join(', ')}: ${image.name}`, () => {
+        for (const lib of libraries) {
+            bench(lib.name, async () => {
+                if (lib.paletteSweep) {return lib.paletteSweep(image, sweepKs);}
+                for (const k of sweepKs) {await lib.palette(image, k);}
+            }, options);
+        }
+    });
 }

@@ -1,4 +1,4 @@
-// Average Hierarchical Agglomerative Color Clustering
+// Hierarchical Agglomerative Color Clustering (Ward's method)
 #include "clustering.hpp"
 #include <emscripten.h>
 #include <cstdlib>
@@ -30,6 +30,15 @@ uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
     return output;
 }
 
+// Writes merge record i: [merged rgb, a rgb, b rgb], downscaled to 8 bits per channel.
+void write_record(std::vector<uint8_t>& clustering, int i, const std::array<uint16_t, 3>& m, const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+    size_t offset = 3 + 9 * i;
+    const std::array<uint16_t, 3>* colors[3] = {&m, &a, &b};
+    for (int j = 0; j < 3; j++) {
+        for (int c = 0; c < 3; c++) {clustering[offset + 3 * j + c] = uint16_to_uint8((*colors[j])[c]);}
+    }
+}
+
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format) {
 
     std::vector<uint8_t> clustering;
@@ -45,48 +54,78 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         if (histogram.count(color)) {unique_colors.push_back(color);}
     }
 
-    // Choose resolution so that a 3×3×3 neighbourhood contains ~1 point on average:
-    // 27N / 2^(3r) >= 1  =>  r <= log2(27N) / 3
-    size_t N = histogram.size();
-    int r = N > 1 ? std::max(0, (int)std::floor(std::log2(27.0 * N) / 3.0) - 1) : 0;
-    AgglomerativeClustering::CoarseningGrid grid(r);
+    size_t n = unique_colors.size();
+    clustering.resize(3 + 9 * (n - 1));
 
-    // Pass 2: populate grid from unique colours
-    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color);}
+    // Pass 2: one cluster per unique colour
+    AgglomerativeClustering::WardGrid grid(n);
+    for (const std::array<uint16_t, 3>& color : unique_colors) {grid.add(color, histogram.get(color));}
+    grid.reindex();
 
-    size_t clustering_size = 3 + 9 * (histogram.size() - 1);
-    clustering.reserve(clustering_size);
-    clustering.resize(clustering_size);
+    // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
+    // cost, raised to its children's heights where centroid rounding would put it below them, so sorting by
+    // height keeps every merge after the merges that formed its clusters.
+    struct Merge {
+        double height;
+        std::array<uint16_t, 3> merged, a, b;
+    };
+    std::vector<Merge> merges;
+    merges.reserve(n - 1);
+    std::vector<double> heights(2 * n, 0.0);
 
-    for (int i = histogram.size() - 2; i >= 0; i--) {
+    // Ward's criterion is reducible, so merging mutual cheapest partners as the chain finds them gives the
+    // same hierarchy as always merging the globally cheapest pair.
+    std::vector<int32_t> chain;
+    int32_t next_start = 0;
+    while (grid.size() > 1) {
 
-        std::optional<AgglomerativeClustering::CoarseningGrid::Nearest> nearest = grid.get_nearest();
-        if (!nearest.has_value()) {break;}
-        
-        std::array<uint16_t, 3> a = nearest->a;
-        std::array<uint16_t, 3> b = nearest->b;
-        std::array<uint16_t, 3> m = histogram.merge(a, b);
-        grid.merge(*nearest, m);
-        
-        // Add the clustering operation
-        size_t offset = 3 + 9 * i;
-        clustering[offset + 0] = uint16_to_uint8(m[0]);
-        clustering[offset + 1] = uint16_to_uint8(m[1]);
-        clustering[offset + 2] = uint16_to_uint8(m[2]);
-        clustering[offset + 3] = uint16_to_uint8(a[0]);
-        clustering[offset + 4] = uint16_to_uint8(a[1]);
-        clustering[offset + 5] = uint16_to_uint8(a[2]);
-        clustering[offset + 6] = uint16_to_uint8(b[0]);
-        clustering[offset + 7] = uint16_to_uint8(b[1]);
-        clustering[offset + 8] = uint16_to_uint8(b[2]);
+        if (chain.empty()) {
+            while (!grid.is_alive(next_start)) {next_start++;}
+            chain.push_back(next_start);
+        }
+
+        int32_t a = chain.back();
+        int32_t b = grid.nearest(a);
+
+        if (chain.size() < 2 || chain[chain.size() - 2] != b) {
+            chain.push_back(b);
+            continue;
+        }
+
+        chain.pop_back();
+        chain.pop_back();
+
+        uint32_t a_count = grid.count(a);
+        uint32_t b_count = grid.count(b);
+        uint32_t count = a_count + b_count;
+        const std::array<uint16_t, 3>& ac = grid.coords(a);
+        const std::array<uint16_t, 3>& bc = grid.coords(b);
+        std::array<uint16_t, 3> merged = {
+            static_cast<uint16_t>((uint64_t(ac[0]) * a_count + uint64_t(bc[0]) * b_count) / count),
+            static_cast<uint16_t>((uint64_t(ac[1]) * a_count + uint64_t(bc[1]) * b_count) / count),
+            static_cast<uint16_t>((uint64_t(ac[2]) * a_count + uint64_t(bc[2]) * b_count) / count)
+        };
+
+        double height = std::max({grid.cost(a, b), heights[a], heights[b]});
+        merges.push_back({height, merged, ac, bc});
+        grid.remove(a);
+        grid.remove(b);
+        int32_t m = grid.add(merged, count);
+        heights[m] = height;
+        grid.reindex();
 
     }
 
+    std::stable_sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height;});
+    for (size_t j = 0; j < merges.size(); j++) {
+        write_record(clustering, int(merges.size() - 1 - j), merges[j].merged, merges[j].a, merges[j].b);
+    }
+
     // Add the k=1 clustering colour
-    std::array<uint16_t, 3> last = histogram.last();
-    clustering[0] = uint16_to_uint8(last[0]);
-    clustering[1] = uint16_to_uint8(last[1]);
-    clustering[2] = uint16_to_uint8(last[2]);
+    std::array<uint16_t, 3> root = merges.empty() ? unique_colors[0] : merges.back().merged;
+    clustering[0] = uint16_to_uint8(root[0]);
+    clustering[1] = uint16_to_uint8(root[1]);
+    clustering[2] = uint16_to_uint8(root[2]);
     return clustering;
 
 }

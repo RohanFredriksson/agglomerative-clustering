@@ -43,7 +43,7 @@
     "README.md"
   ],
   "scripts": {
-    "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_get_clustering','_get_palette','_get_palette_from_clustering','_quantize','_quantize_with_clustering','_quantize_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
+    "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_get_clustering','_get_palette','_get_palette_from_clustering','_quantize','_quantize_with_clustering','_quantize_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
     "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --out-file-extension .cjs",
     "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
     "build:types": "mkdirp dist && node -e \"require('fs').copyFileSync('src/index.d.ts', 'dist/index.d.ts')\"",
@@ -52,7 +52,9 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "bench": "vitest bench",
-    "quality": "node bench/quality.js"
+    "bench:full": "node bench/run.js",
+    "bench:compare": "node bench/compare.js",
+    "quality": "node bench/run.js --no-pipeline --label quality"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",
@@ -62,7 +64,9 @@
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",
     "image-q": "^4.0.0",
+    "libimagequant-wasm": "^0.3.0",
     "mkdirp": "^3.0.1",
+    "quantize": "^1.0.2",
     "vitest": "^4.1.5"
   }
 }
