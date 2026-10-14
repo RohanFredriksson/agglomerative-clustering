@@ -89,10 +89,13 @@ private:
     std::vector<int32_t> cells;
     std::vector<Bucket> buckets;
     // The smallest count in each bucket, and the colour box of its members (tighter than the cell's own extent).
-    // Both are exact: a removal that touches either recomputes them from the bucket's few members. Stale bounds
-    // would stay valid, but singletons merge away early and a bucket that kept their bounds would rarely be skipped.
-    std::vector<uint32_t> bucket_minimum;
-    std::vector<std::array<uint16_t, 6>> bucket_box;
+    // Removals only loosen them, so they stay valid bounds, but singletons merge away early and a bucket that
+    // kept their bounds would rarely be skipped. So a removal that touches either marks the bucket stale, and a
+    // search that fails to skip a stale bucket recomputes them first (lazily: most stale buckets are removed
+    // from again before anything scans them). Mutable because searches refresh them.
+    mutable std::vector<uint32_t> bucket_minimum;
+    mutable std::vector<std::array<uint16_t, 6>> bucket_box;
+    mutable std::vector<uint8_t> bucket_stale;
     std::vector<Cluster> clusters;
     size_t alive = 0;
 
@@ -158,6 +161,7 @@ private:
             this->buckets.emplace_back();
             this->bucket_minimum.push_back(std::numeric_limits<uint32_t>::max());
             this->bucket_box.push_back({std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0});
+            this->bucket_stale.push_back(0u);
         }
         std::array<uint16_t, 6>& box = this->bucket_box[this->cells[cell]];
         for (int axis = 0; axis < 3; axis++) {
@@ -184,20 +188,24 @@ private:
 
     // Recomputes a bucket's minimum count and colour box from its members. An empty bucket gets an inverted box,
     // which is far from every colour (and it has no chunks to scan) until something is linked into it again.
-    void refresh_bounds(int32_t b) {
+    void refresh_bounds(int32_t b) const {
         const Bucket& bucket = this->buckets[b];
         uint32_t minimum = std::numeric_limits<uint32_t>::max();
         std::array<uint16_t, 6> box = {std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0};
+        // Read the lanes rather than the clusters: the chunks are contiguous, and their floats hold exact colours.
         for (int32_t index = 0; index < bucket.size; index++) {
-            const Cluster& member = this->clusters[bucket.chunks[index / 4].id[index % 4]];
-            minimum = std::min(minimum, member.count);
+            const Chunk& chunk = bucket.chunks[index / 4];
+            int lane = index % 4;
+            minimum = std::min(minimum, uint32_t(chunk.count[lane]));
+            const uint16_t coords[3] = {uint16_t(chunk.x[lane]), uint16_t(chunk.y[lane]), uint16_t(chunk.z[lane])};
             for (int axis = 0; axis < 3; axis++) {
-                box[axis] = std::min(box[axis], member.coords[axis]);
-                box[axis + 3] = std::max(box[axis + 3], member.coords[axis]);
+                box[axis] = std::min(box[axis], coords[axis]);
+                box[axis + 3] = std::max(box[axis + 3], coords[axis]);
             }
         }
         this->bucket_minimum[b] = minimum;
         this->bucket_box[b] = box;
+        this->bucket_stale[b] = 0u;
     }
 
     void rebuild(int resolution) {
@@ -208,6 +216,7 @@ private:
         this->buckets.clear();
         this->bucket_minimum.clear();
         this->bucket_box.clear();
+        this->bucket_stale.clear();
         for (int32_t id = 0; id < (int32_t) this->clusters.size(); id++) {
             if (this->clusters[id].bucket != none) {this->link(id);}
         }
@@ -252,7 +261,7 @@ public:
         const std::array<uint16_t, 6>& box = this->bucket_box[b];
         bool on_bound = cluster.count == this->bucket_minimum[b];
         for (int axis = 0; axis < 3; axis++) {on_bound |= cluster.coords[axis] == box[axis] || cluster.coords[axis] == box[axis + 3];}
-        if (on_bound) {this->refresh_bounds(b);}
+        if (on_bound) {this->bucket_stale[b] = 1u;}
         if (this->cache_of[id] != none) {
             this->free_caches.push_back(this->cache_of[id]);
             this->cache_of[id] = none;
@@ -338,23 +347,30 @@ private:
         const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
         const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
 
+        // No member of a bucket can cost less than its lightest possible member at the nearest point of its colour box.
+        auto cell_floor = [&](int32_t bucket) __attribute__((always_inline)) {
+            double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
+            const std::array<uint16_t, 6>& box = this->bucket_box[bucket];
+            uint64_t box_gap = 0;
+            for (int axis = 0; axis < 3; axis++) {
+                // Branchless: for a non-empty box at most one difference is positive; each square fits in 32 bits.
+                int32_t g = std::max({int32_t(box[axis]) - int32_t(p[axis]), int32_t(p[axis]) - int32_t(box[axis + 3]), 0});
+                box_gap += uint64_t(uint32_t(g) * uint32_t(g));
+            }
+            return cell_weight * double(box_gap);
+        };
+
         // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
         auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
             // Visiting a cell costs about as much as examining a cluster, so both count as work for the cache.
             examined++;
             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
             if (bucket == none) {return;}
-            // No member of this cell can cost less than its lightest possible member at the nearest point of the
-            // cell's colour box.
-            double cell_weight = get_weight(self.count, this->bucket_minimum[bucket]) * (1.0 - 1e-12);
-            const std::array<uint16_t, 6>& box = this->bucket_box[bucket];
-            uint64_t box_gap = 0;
-            for (int axis = 0; axis < 3; axis++) {
-                // Branchless: at most one of the two differences is positive, and each square fits in 32 bits.
-                int32_t g = std::max({int32_t(box[axis]) - int32_t(p[axis]), int32_t(p[axis]) - int32_t(box[axis + 3]), 0});
-                box_gap += uint64_t(uint32_t(g) * uint32_t(g));
+            if (cell_floor(bucket) > bound) {return;}
+            if (this->bucket_stale[bucket]) {
+                this->refresh_bounds(bucket);
+                if (cell_floor(bucket) > bound) {return;}
             }
-            if (cell_weight * double(box_gap) > bound) {return;}
             const Bucket& members = this->buckets[bucket];
             examined += members.size;
             for (const Chunk& chunk : members.chunks) {
