@@ -80,6 +80,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     // same hierarchy as always merging the globally cheapest pair.
     std::vector<int32_t> chain;
     int32_t next_start = 0;
+    int32_t last_merged = AgglomerativeClustering::WardGrid::none;
     while (grid.size() > 1) {
 
         if (chain.empty()) {
@@ -88,7 +89,11 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         }
 
         int32_t a = chain.back();
-        int32_t b = grid.nearest(a);
+        // Seed the search with a cluster known to be close: the one before `a` in the chain (which found `a` as
+        // its cheapest partner), or else the cluster the last merge created, often what `a` had been chasing.
+        int32_t hint = chain.size() >= 2 ? chain[chain.size() - 2] : last_merged;
+        if (hint == a || (hint != AgglomerativeClustering::WardGrid::none && !grid.is_alive(hint))) {hint = AgglomerativeClustering::WardGrid::none;}
+        int32_t b = grid.nearest(a, hint);
 
         if (chain.size() < 2 || chain[chain.size() - 2] != b) {
             chain.push_back(b);
@@ -115,6 +120,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         grid.remove(b);
         int32_t m = grid.add(merged, count);
         heights[m] = height;
+        last_merged = m;
         grid.reindex();
 
     }

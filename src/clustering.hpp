@@ -88,11 +88,10 @@ private:
     int32_t dimension = 0;
     std::vector<int32_t> cells;
     std::vector<Bucket> buckets;
-    // The smallest count ever linked into each bucket. Removals don't raise it, so it may be too low, which
-    // only makes it a weaker (still valid) bound.
+    // The smallest count in each bucket, and the colour box of its members (tighter than the cell's own extent).
+    // Both are exact: a removal that touches either recomputes them from the bucket's few members. Stale bounds
+    // would stay valid, but singletons merge away early and a bucket that kept their bounds would rarely be skipped.
     std::vector<uint32_t> bucket_minimum;
-    // The colour box of everything ever linked into each bucket: tighter than the cell's own extent, and
-    // removals only make it looser, so it stays a valid bound.
     std::vector<std::array<uint16_t, 6>> bucket_box;
     std::vector<Cluster> clusters;
     size_t alive = 0;
@@ -183,6 +182,24 @@ private:
         chunk.id[lane] = id;
     }
 
+    // Recomputes a bucket's minimum count and colour box from its members. An empty bucket gets an inverted box,
+    // which is far from every colour (and it has no chunks to scan) until something is linked into it again.
+    void refresh_bounds(int32_t b) {
+        const Bucket& bucket = this->buckets[b];
+        uint32_t minimum = std::numeric_limits<uint32_t>::max();
+        std::array<uint16_t, 6> box = {std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max(), 0, 0, 0};
+        for (int32_t index = 0; index < bucket.size; index++) {
+            const Cluster& member = this->clusters[bucket.chunks[index / 4].id[index % 4]];
+            minimum = std::min(minimum, member.count);
+            for (int axis = 0; axis < 3; axis++) {
+                box[axis] = std::min(box[axis], member.coords[axis]);
+                box[axis + 3] = std::max(box[axis + 3], member.coords[axis]);
+            }
+        }
+        this->bucket_minimum[b] = minimum;
+        this->bucket_box[b] = box;
+    }
+
     void rebuild(int resolution) {
         this->resolution = resolution;
         this->grid_size = (uint32_t(std::numeric_limits<uint16_t>::max()) + 1u) >> resolution;
@@ -230,7 +247,12 @@ public:
         tail.x[last % 4] = tail.y[last % 4] = tail.z[last % 4] = far_away;
         bucket.size = last;
         if (last % 4 == 0) {bucket.chunks.pop_back();}
+        int32_t b = cluster.bucket;
         cluster.bucket = none;
+        const std::array<uint16_t, 6>& box = this->bucket_box[b];
+        bool on_bound = cluster.count == this->bucket_minimum[b];
+        for (int axis = 0; axis < 3; axis++) {on_bound |= cluster.coords[axis] == box[axis] || cluster.coords[axis] == box[axis + 3];}
+        if (on_bound) {this->refresh_bounds(b);}
         if (this->cache_of[id] != none) {
             this->free_caches.push_back(this->cache_of[id]);
             this->cache_of[id] = none;
@@ -292,8 +314,10 @@ private:
 
     // Collects the `limit` cheapest partners of `id`, searching outward ring by ring and stopping once no
     // unvisited cell can hold a cheaper one. Every partner has at least one pixel, so beyond distance d the
-    // cost is at least n / (n + 1) * d^2. Returns how many clusters were examined.
-    size_t search(int32_t id, Candidates& list, int limit) const {
+    // cost is at least n / (n + 1) * d^2. `hint`, if given, is a live cluster offered before the scan so that
+    // pruning starts from its cost; it is only for limit 1, where offering it again would be harmless anyway.
+    // Returns the work done: cells visited plus clusters examined.
+    size_t search(int32_t id, Candidates& list, int limit, int32_t hint = none) const {
 
         const Cluster& self = this->clusters[id];
         const std::array<uint16_t, 3>& p = self.coords;
@@ -305,6 +329,10 @@ private:
 
         // The cost a candidate must beat to make the list: its worst entry once full.
         double bound = std::numeric_limits<double>::infinity();
+        if (hint != none) {
+            this->offer(id, list, limit, hint, this->cost(id, hint));
+            if (list.size == limit) {bound = list.costs[limit - 1];}
+        }
         const f32x4 px = {float(p[0]), float(p[0]), float(p[0]), float(p[0])};
         const f32x4 py = {float(p[1]), float(p[1]), float(p[1]), float(p[1])};
         const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
@@ -312,6 +340,8 @@ private:
 
         // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
         auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
+            // Visiting a cell costs about as much as examining a cluster, so both count as work for the cache.
+            examined++;
             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
             if (bucket == none) {return;}
             // No member of this cell can cost less than its lightest possible member at the nearest point of the
@@ -339,7 +369,7 @@ private:
                 i64x4 cheap = cost <= bound_vector;
                 if (!(cheap[0] | cheap[1] | cheap[2] | cheap[3])) {continue;}
                 for (int lane = 0; lane < 4; lane++) {
-                    if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id) {continue;}
+                    if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id || chunk.id[lane] == hint) {continue;}
                     if (cost[lane] > bound) {continue;}
                     this->offer(id, list, limit, chunk.id[lane], cost[lane]);
                     if (list.size == limit) {bound = list.costs[limit - 1];}
@@ -389,7 +419,10 @@ public:
     // unlisted cluster can cost. Live clusters never change, so the next query only has to drop dead
     // candidates and offer the clusters created since; it falls back to a full search when the cheapest
     // remaining candidate isn't strictly below the threshold.
-    [[nodiscard]] int32_t nearest(int32_t id) {
+    //
+    // `hint` is an optional live cluster other than `id` whose cost is likely to be competitive; it only
+    // tightens the search's starting bound, so it never changes the answer.
+    [[nodiscard]] int32_t nearest(int32_t id, int32_t hint = none) {
 
         int32_t slot = this->cache_of[id];
 
@@ -419,7 +452,7 @@ public:
         }
 
         Candidates list;
-        size_t examined = this->search(id, list, 1);
+        size_t examined = this->search(id, list, 1, hint);
         if (examined > cache_after && !this->expensive[id]) {
             this->expensive[id] = true;
         } else if (examined > cache_after) {
