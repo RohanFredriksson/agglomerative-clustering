@@ -1,16 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
 
-### Changed
+The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
+
+### Performance
 - **Faster clustering, with identical output.** On the Kodak photos (WASM, Node 22), one palette takes about 100 ms instead of 155 ms, and with `colorSpace: 'oklab'` about 110 ms instead of 250 ms, so OKLab now costs no more than RGB. `precision: 6` takes about 30 ms. The partner search's grid comes in sizes between powers of two with coarser cells, steps over empty cells with per-column occupancy bits, tests cells with a division-free float bound, and starts each search from a known partner.
 - **Faster pixel mapping, with identical output.** For palettes up to 256 colours, lookups go through a grid whose cells (built on first use) list the palette entries that can be nearest there, instead of the KD-tree, and dithering in OKLab memoises colour conversions. `quantizeWithPalette` at 64 colours takes about 6 ms per photo instead of 15 ms; a dithered `quantize` about 150 ms instead of 250–325 ms.
 - Every clustering, palette and quantized image is byte-identical to before.
 - The WebAssembly module grows from 58 KB to 65 KB.
-
-## 2.0.0
-
-The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
 
 ### Changed
 - **Palettes come in split order.** Index 0 is the dominant colour, and the palette for `k + 1` is the palette for `k` with one entry refined (the heavier half of a split keeps its parent's place) and the lighter half appended. For opaque images the colours are exactly those of 1.2, in this order.
