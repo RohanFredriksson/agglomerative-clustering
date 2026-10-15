@@ -14,8 +14,8 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged. Index 0 is always the dominant colour, and each larger palette is the previous one with one entry refined and one colour appended, so swatches don't jump around as the count changes.
 - **Transparency-aware.** Pixels count in proportion to their opacity, so a logo's transparent background never ends up in its palette.
 - **Accurate.** Across the 24 Kodak photos it has the lowest average error of the six JavaScript quantizers we benchmarked, at every palette size from 16 to 256.
-- **Fast enough to be interactive.** A 768×512 photo takes about 160 ms exact, or about 60 ms with `precision: 6` at the same quality. That is level with libimagequant and 2.6–11× faster than image-q.
-- **Small and portable.** 55 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
+- **Fast enough to be interactive.** A 768×512 photo takes about 100 ms exact, in RGB or OKLab, or about 30 ms with `precision: 6` at the same quality. That is level with or faster than libimagequant and 3.7–15× faster than image-q.
+- **Small and portable.** 65 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
 
 **[Try the demo](#demo)**: drop in an image and drag the palette-size slider.
 
@@ -45,7 +45,7 @@ const clustering = await getClustering(imageData);         // the expensive step
 slider.oninput = async () => {
     const k = Number(slider.value);
     const palette = await getPaletteFromClustering(clustering, k);   // ~0.4 ms for any k
-    const result = await quantizeWithPalette(imageData, palette);    // ~25-40 ms for a 768×512 image
+    const result = await quantizeWithPalette(imageData, palette);    // ~5-12 ms for a 768×512 image
     ctx.putImageData(result, 0, 0);
 };
 ```
@@ -58,13 +58,13 @@ This table covers the 24 Kodak photos (768×512) at 64 colours. "Error vs ours" 
 
 | Library | PSNR | Error vs ours | One palette | Palettes at 16/64/128/256 |
 |---|---|---|---|---|
-| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 165 ms | **151 ms** |
-| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 59 ms | 61 ms |
-| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 154 ms | 642 ms |
-| image-q Wu | 35.51 dB | 1.05× | 908 ms | 3940 ms |
-| image-q NeuQuant | 34.41 dB | 1.35× | 717 ms | 4098 ms |
-| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 31 ms | 136 ms |
-| image-q RgbQuant | 31.95 dB | 2.38× | 476 ms | 1822 ms |
+| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 97 ms | **99 ms** |
+| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 31 ms | 31 ms |
+| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 134 ms | 552 ms |
+| image-q Wu | 35.51 dB | 1.05× | 740 ms | 3387 ms |
+| image-q NeuQuant | 34.41 dB | 1.35× | 609 ms | 3461 ms |
+| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 24 ms | 120 ms |
+| image-q RgbQuant | 31.95 dB | 2.38× | 385 ms | 1535 ms |
 
 The `precision: 6` row comes from a separate run on the same machine. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](bench/COMPARISON.md). You can reproduce them with `node bench/run.js`.
 
@@ -86,10 +86,11 @@ Measured on the Kodak photos:
 
 | Setting | 16 colours ΔE2000 | 256 colours ΔE2000 | One 64-colour palette |
 |---|---|---|---|
-| default (`rgb`, exact) | **4.31** | 1.68 | 177 ms |
-| `precision: 6` | **4.29** | 1.68 | 59 ms |
-| `colorSpace: 'oklab', precision: 6` | 4.44 | **1.61** | 109 ms |
-| libimagequant, for reference | 4.38 | **1.61** | 169 ms |
+| default (`rgb`, exact) | **4.31** | 1.67 | 102 ms |
+| `precision: 6` | **4.29** | 1.68 | 31 ms |
+| `colorSpace: 'oklab'` | 4.46 | **1.60** | 104 ms |
+| `colorSpace: 'oklab', precision: 6` | 4.44 | 1.61 | 39 ms |
+| libimagequant, for reference | 4.38 | 1.61 | 147 ms |
 
 ```js
 // Perceptual palettes for a photo, quickly
@@ -207,9 +208,9 @@ The demo clusters an image once, then re-cuts and re-maps it live as you drag th
 
 1. **Histogram.** Distinct colours are counted with an open-addressing hash table. With `precision` below 8, colours are first grouped by their top bits.
 2. **Exact Ward clustering.** A nearest-neighbour chain finds mutually cheapest pairs and merges them. Ward's criterion is reducible, so this produces exactly the same hierarchy as repeatedly merging the globally cheapest pair, without a priority queue.
-3. **Fast partner search.** Clusters live in an adaptive 3D grid. Searches prune whole cells using each cell's colour box and lightest member, compute four Ward costs at once with WASM SIMD, and skip most candidates with a division-free float test before the exact double-precision check. Clusters whose searches are expensive cache their best candidates.
+3. **Fast partner search.** Clusters live in an adaptive 3D grid sized to the occupied part of colour space, with per-column occupancy bits so searches step over empty cells. Searches prune whole cells using each cell's colour box and lightest member, compute four Ward costs at once with WASM SIMD, and skip most candidates with a division-free float test before the exact double-precision check. Clusters whose searches are expensive cache their best candidates.
 4. **Compact output.** The hierarchy is stored as a 4-byte header and 9-byte merge records in reverse order, each listing its heavier half first. Cutting to `k` colours replays the first `k − 1` records, which gives the stable split order.
-5. **Mapping.** A KD-tree with a memo of recent colours maps pixels to the palette, with optional error-diffusion dithering.
+5. **Mapping.** A memo of recent colours, then a grid over colour space whose cells list the palette entries that can be nearest there (a KD-tree for palettes above 256 colours), maps pixels to the palette, with optional error-diffusion dithering.
 
 The algorithm is C++17 compiled to WebAssembly with Emscripten. Architecture notes for contributors are in [CLAUDE.md](CLAUDE.md).
 
