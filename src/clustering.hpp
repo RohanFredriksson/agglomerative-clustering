@@ -11,6 +11,10 @@
 #include <utility>
 #include <limits>
 #include <array>
+#include <cstring>
+#if defined(__wasm_simd128__)
+#include <wasm_simd128.h>
+#endif
 
 namespace AgglomerativeClustering {
 
@@ -38,13 +42,23 @@ private:
     typedef int64_t i64x4 __attribute__((vector_size(32)));
     static constexpr float far_away = 1e30f;
 
+    // Whether any lane of a comparison mask is set: one v128.any_true in WASM, where reading the lanes one by
+    // one would cost four extracts and three ors.
+    static bool any_lane(u32x4 mask) {
+#if defined(__wasm_simd128__)
+        return wasm_v128_any_true((v128_t) mask);
+#else
+        return (mask[0] | mask[1] | mask[2] | mask[3]) != 0u;
+#endif
+    }
+
     struct Chunk {
         f32x4 x = {far_away, far_away, far_away, far_away};
         f32x4 y = {far_away, far_away, far_away, far_away};
         f32x4 z = {far_away, far_away, far_away, far_away};
         u32x4 count = {1, 1, 1, 1};
-        // The counts again as floats (rounded above 2^24), for the float filter: x86 has no unsigned convert.
-        f32x4 weight = {1.0f, 1.0f, 1.0f, 1.0f};
+        // The reciprocals of the counts as floats, for the float filter (see search).
+        f32x4 inverse = {1.0f, 1.0f, 1.0f, 1.0f};
         int32_t id[4] = {none, none, none, none};
     };
 
@@ -129,7 +143,9 @@ private:
     static constexpr double target_occupancy = 24.0;
 
     // Clusters only merge, so the grid only needs to get coarser: sizes are tried from the current one down,
-    // counting each one's occupied cells in a bitmap.
+    // counting each one's occupied cells in a bitmap. The live clusters are read from the buckets, which hold
+    // only those (most of `clusters` is dead by the later reviews), and at the current size the occupied cells
+    // are just the non-empty buckets.
     int32_t choose_dimension() const {
         std::vector<uint64_t> occupancy;
         int index = int(std::size(dimensions)) - 1;
@@ -137,14 +153,23 @@ private:
         if (this->next_review == std::numeric_limits<size_t>::max()) {index = int(std::size(dimensions)) - 1;}
         for (; index > 0; index--) {
             const uint32_t d = uint32_t(dimensions[index]);
-            occupancy.assign((size_t(d) * d * d + 63) / 64, 0u);
             size_t occupied = 0;
-            for (const Cluster& cluster : this->clusters) {
-                if (cluster.bucket == none) {continue;}
-                uint32_t cell = (((cluster.coords[0] * d) >> 16) * d + ((cluster.coords[1] * d) >> 16)) * d + ((cluster.coords[2] * d) >> 16);
-                uint64_t bit = uint64_t(1) << (cell & 63u);
-                occupied += (occupancy[cell >> 6] & bit) == 0;
-                occupancy[cell >> 6] |= bit;
+            if (int32_t(d) == this->dimension) {
+                for (const Bucket& bucket : this->buckets) {occupied += bucket.size > 0;}
+            } else {
+                occupancy.assign((size_t(d) * d * d + 63) / 64, 0u);
+                for (const Bucket& bucket : this->buckets) {
+                    for (const Chunk& chunk : bucket.chunks) {
+                        for (int lane = 0; lane < 4; lane++) {
+                            if (chunk.id[lane] == none) {continue;}
+                            const uint32_t x = uint32_t(chunk.x[lane]), y = uint32_t(chunk.y[lane]), z = uint32_t(chunk.z[lane]);
+                            uint32_t cell = (((x * d) >> 16) * d + ((y * d) >> 16)) * d + ((z * d) >> 16);
+                            uint64_t bit = uint64_t(1) << (cell & 63u);
+                            occupied += (occupancy[cell >> 6] & bit) == 0;
+                            occupancy[cell >> 6] |= bit;
+                        }
+                    }
+                }
             }
             if (double(this->alive) >= target_occupancy * double(occupied)) {break;}
         }
@@ -166,27 +191,32 @@ private:
             this->bucket_bounds.emplace_back();
         }
         cluster.bucket = this->cells[cell];
+        // Whole-vector min and max: lane 3 of `low` stays 0, and lane 3 of `high` takes the min of the counts.
         Bounds& bounds = this->bucket_bounds[cluster.bucket];
-        for (int axis = 0; axis < 3; axis++) {
-            bounds.low[axis] = std::min(bounds.low[axis], float(cluster.coords[axis]));
-            bounds.high[axis] = std::max(bounds.high[axis], float(cluster.coords[axis]));
-        }
-        bounds.high[3] = std::min(bounds.high[3], float(cluster.count));
+        const f32x4 point = {float(cluster.coords[0]), float(cluster.coords[1]), float(cluster.coords[2]), float(cluster.count)};
+        const f32x4 origin = {float(cluster.coords[0]), float(cluster.coords[1]), float(cluster.coords[2]), 0.0f};
+        bounds.low = bounds.low < origin ? bounds.low : origin;
+        const f32x4 larger = bounds.high > point ? bounds.high : point;
+        const f32x4 smaller = bounds.high < point ? bounds.high : point;
+        bounds.high = __builtin_shufflevector(larger, smaller, 0, 1, 2, 7);
         Bucket& bucket = this->buckets[cluster.bucket];
         cluster.index = bucket.size++;
         if (cluster.index % 4 == 0) {bucket.chunks.emplace_back();}
         this->set_lane(bucket, cluster.index, cluster.coords, cluster.count, id);
     }
 
+    // Writes one lane through memory: assigning a vector element at a variable index makes WASM spill the
+    // whole vector to the stack and reload it.
     static void set_lane(Bucket& bucket, int32_t index, const std::array<uint16_t, 3>& coords, uint32_t count, int32_t id) {
         Chunk& chunk = bucket.chunks[index / 4];
-        int lane = index % 4;
-        chunk.x[lane] = float(coords[0]);
-        chunk.y[lane] = float(coords[1]);
-        chunk.z[lane] = float(coords[2]);
-        chunk.count[lane] = count;
-        chunk.weight[lane] = float(count);
-        chunk.id[lane] = id;
+        const size_t lane = size_t(index % 4) * 4u;
+        const float x = float(coords[0]), y = float(coords[1]), z = float(coords[2]), inverse = 1.0f / float(count);
+        std::memcpy(reinterpret_cast<char*>(&chunk.x) + lane, &x, 4);
+        std::memcpy(reinterpret_cast<char*>(&chunk.y) + lane, &y, 4);
+        std::memcpy(reinterpret_cast<char*>(&chunk.z) + lane, &z, 4);
+        std::memcpy(reinterpret_cast<char*>(&chunk.count) + lane, &count, 4);
+        std::memcpy(reinterpret_cast<char*>(&chunk.inverse) + lane, &inverse, 4);
+        chunk.id[index % 4] = id;
     }
 
     void rebuild(int32_t dimension) {
@@ -234,7 +264,10 @@ public:
         }
         this->set_lane(bucket, last, {0, 0, 0}, 1, none);
         Chunk& tail = bucket.chunks[last / 4];
-        tail.x[last % 4] = tail.y[last % 4] = tail.z[last % 4] = far_away;
+        const size_t lane = size_t(last % 4) * 4u;
+        std::memcpy(reinterpret_cast<char*>(&tail.x) + lane, &far_away, 4);
+        std::memcpy(reinterpret_cast<char*>(&tail.y) + lane, &far_away, 4);
+        std::memcpy(reinterpret_cast<char*>(&tail.z) + lane, &far_away, 4);
         bucket.size = last;
         if (last % 4 == 0) {bucket.chunks.pop_back();}
         cluster.bucket = none;
@@ -321,15 +354,19 @@ private:
 
         // Cells and chunks first go through cheap float filters: a partner can only beat the bound if
         // n_a * n_b * d^2 <= bound * (n_a + n_b), which needs no division and takes one f32x4 per operation
-        // instead of two f64x2. Float rounding is a few ulps (~1e-7) on each side, so widening the bound by 1e-4
-        // never rejects a lane the exact test would keep; chunks that pass get exact costs as before. While the
-        // bound is infinite, so is the filter's, and everything passes.
+        // instead of two f64x2. Chunks test the same thing divided through, d^2 <= bound / n_b + bound / n_a, with
+        // 1 / n_b stored per lane and bound / n_a kept here, which saves two multiplies. Float rounding is a few
+        // ulps (~1e-7) on each side, so widening the bound by 1e-4 never rejects a lane the exact test would keep;
+        // chunks that pass get exact costs as before. While the bound is infinite, so is the filter's, and
+        // everything passes.
         const float infinity = std::numeric_limits<float>::infinity();
         f32x4 filter_bound = {infinity, infinity, infinity, infinity};
+        f32x4 filter_own = filter_bound;
         auto tighten = [&](double value) __attribute__((always_inline)) {
             bound = value;
             float widened = float(value) * 1.0001f;
             filter_bound = f32x4{widened, widened, widened, widened};
+            filter_own = filter_bound / own_count_f;
         };
 
         // A known partner bounds the search from the start. The scan meets it again, but an equal entry never
@@ -359,8 +396,8 @@ private:
             examined += members.size;
             for (const Chunk& chunk : members.chunks) {
                 f32x4 dx = chunk.x - px, dy = chunk.y - py, dz = chunk.z - pz;
-                u32x4 maybe = (u32x4) (own_count_f * chunk.weight * (dx * dx + dy * dy + dz * dz) <= filter_bound * (own_count_f + chunk.weight));
-                if (!(maybe[0] | maybe[1] | maybe[2] | maybe[3])) {continue;}
+                u32x4 maybe = (u32x4) (dx * dx + dy * dy + dz * dz <= filter_bound * chunk.inverse + filter_own);
+                if (!any_lane(maybe)) {continue;}
                 // Exact Ward costs for all four lanes: integer differences and their squares are exact in double,
                 // and the weight uses the same operations as get_weight, so these match the scalar costs bit for bit.
                 f64x4 ex = __builtin_convertvector(dx, f64x4), ey = __builtin_convertvector(dy, f64x4), ez = __builtin_convertvector(dz, f64x4);

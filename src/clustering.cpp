@@ -182,7 +182,8 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     std::vector<Rgb> rgb(grid.capacity());
     for (int32_t id = 0; id < grid.capacity(); id++) {rgb[id] = space.to_rgb(grid.coords(id));}
 
-    std::stable_sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height;});
+    // Merged ids increase in chain order, so breaking height ties by them keeps chain order, as a stable sort would.
+    std::sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);});
     for (size_t j = 0; j < merges.size(); j++) {
         write_record(clustering, int(merges.size() - 1 - j), rgb[merges[j].merged], rgb[merges[j].a], rgb[merges[j].b]);
     }
