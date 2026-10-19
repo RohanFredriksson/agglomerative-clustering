@@ -38,3 +38,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+      # Bundles a page with Vite and runs it in the runner's Chrome: the worker and .wasm as browsers get them.
+      - run: npm run test:browser
+        if: matrix.node == 24
