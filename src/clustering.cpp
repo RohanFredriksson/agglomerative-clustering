@@ -33,19 +33,30 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
     for (int c = 0; c < 3; c++) {clustering[offset + c] = rgb[c];}
 }
 
-// Clustering format version 2: a 4-byte header, then the root colour, then one 9-byte record per merge.
-// The header is [clustering_magic, clustering_version, colour space, precision]. Version 1 (1.x) had no header,
-// so its length is 3 more than a multiple of 9 (or 0), while version 2's is 7 more (or exactly 4 when empty).
+// Clustering format version 3: a header, then the root colour, then one record per merge in split order, then
+// zero padding. Multi-byte values are little-endian.
+//   header (13 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
+//                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), 0]
+//   record (21 bytes): [merged rgb, heavier rgb, lighter rgb, parent (u32), lighter weight (u32), cost (f32)]
+// Record i splits cluster `parent` (its index in split order: the root is 0, and record i's lighter child is
+// i + 1) into its heavier child, which keeps the index, and its lighter child. Weights times 2^shift are in the
+// weight unit; the cost is the merge's increase in squared error, in weight units times squared 8-bit RGB values
+// (RGB) or squared OKLab units (OKLab). Readers find records by the stored lengths and ignore fields past the
+// ones they know, so fields can be added without a new version.
+// Version 1 (1.x) had no header and 9-byte records, so its length is 0 or 3 more than a multiple of 9. Every
+// later version pads its end so its length is 4 (empty) or 7 more, and is identified by its version byte.
+// Version 2 (2.x) had a 4-byte header [magic, 2, colour space, precision] and 9-byte records of colours only.
 constexpr uint8_t clustering_magic = 0xAC;
-constexpr uint8_t clustering_version = 2;
-constexpr size_t clustering_header = 4;
+constexpr uint8_t clustering_version = 3;
+constexpr size_t clustering_header = 13;
+constexpr size_t clustering_record = 21;
 
-// Writes merge record i: [merged rgb, a rgb, b rgb]. `a` is the heavier child.
-void write_record(std::vector<uint8_t>& clustering, int i, const Rgb& m, const Rgb& a, const Rgb& b) {
-    size_t offset = clustering_header + 3 + 9 * i;
-    write_color(clustering, offset, m);
-    write_color(clustering, offset + 3, a);
-    write_color(clustering, offset + 6, b);
+void write_u32(uint8_t* at, uint32_t value) {
+    for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}
+}
+
+uint32_t read_u32(const uint8_t* at) {
+    return uint32_t(at[0]) | (uint32_t(at[1]) << 8) | (uint32_t(at[2]) << 16) | (uint32_t(at[3]) << 24);
 }
 
 // Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA pixel counts in proportion to its
@@ -55,7 +66,13 @@ void write_record(std::vector<uint8_t>& clustering, int i, const Rgb& m, const R
 // so time is bounded on images with very many distinct colours, while the means keep the palette close to exact.
 std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision, bool weight_alpha) {
 
-    std::vector<uint8_t> clustering = {clustering_magic, clustering_version, uint8_t(color_space), uint8_t(precision)};
+    std::vector<uint8_t> clustering(clustering_header, 0);
+    clustering[0] = clustering_magic;
+    clustering[1] = clustering_version;
+    clustering[2] = uint8_t(clustering_header);
+    clustering[3] = uint8_t(clustering_record);
+    clustering[4] = uint8_t(color_space);
+    clustering[5] = uint8_t(precision);
     AgglomerativeClustering::AgglomerativeHistogram histogram;
     const ColorCoordinates space(color_space);
 
@@ -86,6 +103,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     if (weight_alpha && !partial) {
         for (uint64_t& count : unique_counts) {count /= 255u;}
     }
+    clustering[6] = weight_alpha && partial ? 1 : 0;
 
     if (precision < 8) {
         const uint32_t channel = (0xFFu << (8 - precision)) & 0xFFu;
@@ -107,7 +125,9 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     // An image with no visible pixels has no hierarchy: return just the header, which cuts to an empty palette.
     size_t n = unique_colors.size();
     if (n == 0) {return clustering;}
-    clustering.resize(clustering_header + 3 + 9 * (n - 1));
+    // Pad so the length is 7 more than a multiple of 9, which no 1.x clustering can be.
+    size_t length = clustering_header + 3 + clustering_record * (n - 1);
+    clustering.resize(length + (7 + 9 - length % 9) % 9, 0);
 
     // The grid counts in 32 bits. Weights only exceed that for partly transparent images above ~16.8 MP; scale
     // those down by the smallest power of two that fits, keeping every visible colour at least 1.
@@ -115,10 +135,17 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     for (uint64_t count : unique_counts) {total += count;}
     int shift = 0;
     while ((total >> shift) > std::numeric_limits<uint32_t>::max() / 2u) {shift++;}
+    clustering[7] = uint8_t(shift);
 
     // Pass 2: one cluster per unique colour
     AgglomerativeClustering::WardGrid grid(n);
-    for (size_t i = 0; i < n; i++) {grid.add(unique_colors[i], uint32_t(std::max<uint64_t>(unique_counts[i] >> shift, 1u)));}
+    uint32_t total_weight = 0;
+    for (size_t i = 0; i < n; i++) {
+        uint32_t weight = uint32_t(std::max<uint64_t>(unique_counts[i] >> shift, 1u));
+        grid.add(unique_colors[i], weight);
+        total_weight += weight;
+    }
+    write_u32(&clustering[8], total_weight);
     grid.reindex();
 
     // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
@@ -127,6 +154,8 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     struct Merge {
         double height;
         int32_t merged, a, b;
+        double cost;
+        uint32_t light;
     };
     std::vector<Merge> merges;
     merges.reserve(n - 1);
@@ -166,13 +195,14 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
             static_cast<uint16_t>((uint64_t(ac[2]) * a_count + uint64_t(bc[2]) * b_count) / count)
         };
 
-        double height = std::max({grid.cost(a, b), heights[a], heights[b]});
+        double cost = grid.cost(a, b);
+        double height = std::max({cost, heights[a], heights[b]});
         grid.remove(a);
         grid.remove(b);
         int32_t m = grid.add(merged, count);
         heights[m] = height;
         // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
-        if (b_count > a_count) {merges.push_back({height, m, b, a});} else {merges.push_back({height, m, a, b});}
+        if (b_count > a_count) {merges.push_back({height, m, b, a, cost, a_count});} else {merges.push_back({height, m, a, b, cost, b_count});}
         grid.reindex();
 
     }
@@ -184,8 +214,26 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     // Merged ids increase in chain order, so breaking height ties by them keeps chain order, as a stable sort would.
     std::sort(merges.begin(), merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);});
-    for (size_t j = 0; j < merges.size(); j++) {
-        write_record(clustering, int(merges.size() - 1 - j), rgb[merges[j].merged], rgb[merges[j].a], rgb[merges[j].b]);
+
+    // Costs are converted from 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
+    const double scale = color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
+    // Records go in split order, the reverse of merge order. Each cluster's split-order index: the root is 0,
+    // the heavier child keeps its parent's index, and record i's lighter child is i + 1.
+    std::vector<uint32_t> index(grid.capacity(), 0);
+    for (size_t i = 0; i < merges.size(); i++) {
+        const Merge& merge = merges[merges.size() - 1 - i];
+        index[merge.a] = index[merge.merged];
+        index[merge.b] = uint32_t(i + 1);
+        uint8_t* record = &clustering[clustering_header + 3 + clustering_record * i];
+        write_color(clustering, record - clustering.data(), rgb[merge.merged]);
+        write_color(clustering, record - clustering.data() + 3, rgb[merge.a]);
+        write_color(clustering, record - clustering.data() + 6, rgb[merge.b]);
+        write_u32(record + 9, index[merge.merged]);
+        write_u32(record + 13, merge.light);
+        float cost = float(merge.cost / (scale * scale));
+        uint32_t bits;
+        std::memcpy(&bits, &cost, 4);
+        write_u32(record + 17, bits);
     }
 
     // Add the k=1 clustering colour
@@ -194,34 +242,49 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
 }
 
-// A clustering in either format, located: `body` is the root colour followed by the merge records.
+// A clustering of any format version, located: `body` is the root colour followed by `merges` records of
+// `record` bytes each.
 struct ClusteringView {
     bool valid = false;
     int version = 1;
     ColorSpace color_space = ColorSpace::rgb;
     bool empty = true;
     const uint8_t* body = nullptr;
+    size_t record = 9;
     size_t merges = 0;
 };
 
-// Version 2 lengths are 4 (empty) or 7 more than a multiple of 9; version 1 lengths are 0 or 3 more, so the two
-// never collide. Version 1 clusterings were always clustered in RGB.
+// Version 1 is told apart by its length (0 or 3 more than a multiple of 9), which no later version has; later
+// versions by their version byte. The JS wrapper rejects anything this doesn't accept before calling in.
 ClusteringView read_clustering(const uint8_t* data, size_t length) {
     ClusteringView view;
-    if (length == 0 || length % 9 == 3) {
+    if (length % 9 == 0 || length % 9 == 3) {
         view.valid = true;
         view.empty = length == 0;
         view.body = data;
         view.merges = length == 0 ? 0 : (length - 3) / 9;
         return view;
     }
-    if ((length == clustering_header || length % 9 == 7) && data[0] == clustering_magic && data[1] == clustering_version && data[2] <= 1) {
+    if (length < 4 || data[0] != clustering_magic) {return view;}
+    if (data[1] == 2 && data[2] <= 1 && (length == 4 || length % 9 == 7)) {
         view.valid = true;
         view.version = 2;
-        view.empty = length == clustering_header;
+        view.empty = length == 4;
         view.color_space = ColorSpace(data[2]);
-        view.body = data + clustering_header;
-        view.merges = length == clustering_header ? 0 : (length - clustering_header - 3) / 9;
+        view.body = data + 4;
+        view.merges = length == 4 ? 0 : (length - 4 - 3) / 9;
+    }
+    if (data[1] == 3 && length >= clustering_header) {
+        const size_t header = data[2], record = data[3];
+        if (header < clustering_header || record < clustering_record || header > length || data[4] > 1) {return view;}
+        view.valid = true;
+        view.version = 3;
+        view.color_space = ColorSpace(data[4]);
+        view.empty = length < header + 3;
+        view.body = data + header;
+        view.record = record;
+        // The end is padded with fewer than 9 bytes, so this rounds the padding away.
+        view.merges = view.empty ? 0 : (length - header - 3) / record;
     }
     return view;
 }
@@ -250,8 +313,9 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     const size_t splits = std::min(size_t(k - 1), view.merges);
 
     for (size_t i = 0; i < splits; i++) {
-        const Color parent = read(3 + 9 * i);
-        Color heavy = read(6 + 9 * i), light = read(9 + 9 * i);
+        const size_t at = 3 + view.record * i;
+        const Color parent = read(at);
+        Color heavy = read(at + 3), light = read(at + 6);
         if (view.version == 1 && distance(light, parent) < distance(heavy, parent)) {std::swap(heavy, light);}
 
         size_t slot = order.size();
@@ -282,6 +346,41 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     palette.reserve(order.size() * 3);
     for (const Color& color : order) {palette.insert(palette.end(), color.begin(), color.end());}
     return palette;
+
+}
+
+// The weight, in pixels, of each colour in the k-colour palette (in the palette's order), from a version 3
+// clustering. Clusters are followed by their split-order index, since different clusters can share a colour;
+// each palette colour's weight is the total of the clusters with that colour. Returns nothing for clusterings
+// without weights (versions 1 and 2) or with a parent index that isn't an earlier cluster.
+std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clustering_length, int k) {
+
+    std::vector<double> weights;
+    ClusteringView view = read_clustering(clustering, clustering_length);
+    if (!view.valid || view.version < 3 || k < 1) {return weights;}
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, clustering_length, k);
+    if (view.empty) {return weights;}
+
+    const double pixels = std::ldexp(1.0, clustering[7]) / (clustering[6] == 1 ? 255.0 : 1.0);
+    const size_t splits = std::min(size_t(k - 1), view.merges);
+    auto key = [&](size_t offset) {return (uint32_t(view.body[offset]) << 16) | (uint32_t(view.body[offset + 1]) << 8) | uint32_t(view.body[offset + 2]);};
+    std::vector<uint32_t> colour = {key(0)};
+    std::vector<uint32_t> weight = {read_u32(clustering + 8)};
+    for (size_t i = 0; i < splits; i++) {
+        const size_t at = 3 + view.record * i;
+        const uint32_t parent = read_u32(view.body + at + 9), light = read_u32(view.body + at + 13);
+        if (parent > i || light > weight[parent]) {return weights;}
+        weight[parent] -= light;
+        colour[parent] = key(at + 3);
+        weight.push_back(light);
+        colour.push_back(key(at + 6));
+    }
+
+    std::unordered_map<uint32_t, size_t> slot;
+    for (size_t j = 0; j < palette.size() / 3; j++) {slot[(uint32_t(palette[3 * j]) << 16) | (uint32_t(palette[3 * j + 1]) << 8) | uint32_t(palette[3 * j + 2])] = j;}
+    weights.assign(palette.size() / 3, 0.0);
+    for (size_t id = 0; id < colour.size(); id++) {weights[slot.at(colour[id])] += weight[id] * pixels;}
+    return weights;
 
 }
 
@@ -479,6 +578,14 @@ EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
     return pack_variable_size(palette);
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, int k) {
+    std::vector<double> weights = _get_palette_weights(clustering_data, clustering_length, k);
+    uint8_t* output = allocate_variable_size(weights.size() * sizeof(double));
+    std::memcpy(output + 4, weights.data(), weights.size() * sizeof(double));
+    return output;
 }
 
 EMSCRIPTEN_KEEPALIVE
