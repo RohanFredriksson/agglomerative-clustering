@@ -15,7 +15,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Transparency-aware.** Pixels count in proportion to their opacity, so a logo's transparent background never ends up in its palette.
 - **Accurate.** Across the 24 Kodak photos it has the lowest average error of the six JavaScript quantizers we benchmarked, at every palette size from 16 to 256.
 - **Fast enough to be interactive.** A 768×512 photo takes about 100 ms exact, in RGB or OKLab, or about 30 ms with `precision: 6` at the same quality. That is level with or faster than libimagequant and 3.7–15× faster than image-q.
-- **Small and portable.** 65 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
+- **Small and portable.** 73 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
 
 **[Try the demo](#demo)**: drop in an image and drag the palette-size slider.
 

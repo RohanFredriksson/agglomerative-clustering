@@ -15,14 +15,18 @@ const unpack = (pointer) => {
     return outputBuffer;
 };
 
+// A Uint8Array over exactly the same bytes, so views into a larger buffer (subarrays) stay views of their own range.
+const bytes = (data) => data instanceof Uint8Array ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+
 const load = (image) => {
 
     if (image instanceof Uint8Array) {
+        if (image.length % 4 !== 0) {throw new Error("Invalid image data: length must be a multiple of 4 for 'rgba'.");}
         return {data: image, format: 'rgba'};
     }
 
     if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
-        return {data: new Uint8Array(image.data.buffer), format: 'rgba', width: image.width};
+        return {data: bytes(image.data), format: 'rgba', width: image.width};
     }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
@@ -37,7 +41,12 @@ const load = (image) => {
         throw new Error("Invalid format: must be 'rgb' or 'rgba'.");
     }
 
-    return {data: image.data instanceof Uint8ClampedArray ? new Uint8Array(image.data.buffer) : image.data, format: image.format, width: image.width};
+    const channels = image.format === 'rgb' ? 3 : 4;
+    if (image.data.length % channels !== 0) {
+        throw new Error(`Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`);
+    }
+
+    return {data: bytes(image.data), format: image.format, width: image.width};
 
 };
 
@@ -135,6 +144,17 @@ const checkClustering = (clustering) => {
     }
 };
 
+// Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
+// image, and quantize maps such an image the same way.
+const checkPalette = (palette) => {
+    if (!(palette instanceof Uint8Array) && !(palette instanceof Uint8ClampedArray) && !Array.isArray(palette)) {
+        throw new Error("Invalid palette: must be a Uint8Array of RGB bytes.");
+    }
+    if (palette.length % 3 !== 0) {
+        throw new Error("Invalid palette: length must be a multiple of 3 (flat RGB bytes).");
+    }
+};
+
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards.
 const call = (buffers, fn) => {
@@ -217,6 +237,7 @@ export const quantizeWithPalette = async (image, palette, options) => {
     await init();
     const wrap = getWrapper(image);
     image = load(image);
+    checkPalette(palette);
     const o = parseOptions(options, mapOptions, image);
 
     return wrap(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));

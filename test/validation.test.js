@@ -74,3 +74,53 @@ describe('k validation', () => {
     });
 
 });
+
+describe('image length validation', () => {
+
+    it('throws when an rgba image is not a whole number of pixels', async () => {
+        await expect(getClustering(new Uint8Array(6))).rejects.toThrow('multiple of 4');
+        await expect(quantize({ data: new Uint8Array(7), format: 'rgba' }, 2)).rejects.toThrow('multiple of 4');
+    });
+
+    it('throws when an rgb image is not a whole number of pixels', async () => {
+        await expect(getPalette({ data: new Uint8Array(4), format: 'rgb' }, 2)).rejects.toThrow('multiple of 3');
+    });
+
+});
+
+describe('typed array views', () => {
+
+    // Red pixels framed by green ones in the same buffer: a view of the middle must only see red.
+    const backing = new Uint8ClampedArray(4 * 6);
+    for (let p = 0; p < 6; p++) {backing.set(p >= 2 && p < 4 ? [255, 0, 0, 255] : [0, 255, 0, 255], p * 4);}
+    const view = backing.subarray(8, 16);
+
+    it('reads only the bytes of a Uint8ClampedArray subarray', async () => {
+        expect(Array.from(await getPalette({ data: view, format: 'rgba' }, 4))).toEqual([255, 0, 0]);
+    });
+
+    it('quantizes only the bytes of a Uint8ClampedArray subarray', async () => {
+        const result = await quantize({ data: view, format: 'rgba' }, 4);
+        expect(Array.from(result.data)).toEqual(Array.from(view));
+    });
+
+});
+
+describe('palette validation', () => {
+
+    it('throws when the palette is not bytes', async () => {
+        await expect(quantizeWithPalette(validImage, 'ff0000')).rejects.toThrow('Invalid palette');
+        await expect(quantizeWithPalette(validImage, null)).rejects.toThrow('Invalid palette');
+    });
+
+    it('throws when the palette is not whole RGB triples', async () => {
+        await expect(quantizeWithPalette(validImage, new Uint8Array([255, 0, 0, 0]))).rejects.toThrow('multiple of 3');
+    });
+
+    it('accepts Uint8ClampedArray and plain array palettes', async () => {
+        const expected = await quantizeWithPalette(validImage, new Uint8Array([255, 0, 0, 0, 0, 255]));
+        expect(await quantizeWithPalette(validImage, new Uint8ClampedArray([255, 0, 0, 0, 0, 255]))).toEqual(expected);
+        expect(await quantizeWithPalette(validImage, [255, 0, 0, 0, 0, 255])).toEqual(expected);
+    });
+
+});
