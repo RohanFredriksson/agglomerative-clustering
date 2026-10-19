@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { init, getClustering, getPaletteFromClustering, quantize, quantizeWithPalette } from '../dist/index.mjs';
+import { init, getClustering, getPaletteFromClustering, quantize, quantizeWithPalette, quantizeToIndices, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +99,9 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         const large = await getPaletteFromClustering(await getClustering(rgba), 400);
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));
         check(`${name}/map/oklab/400`, await quantizeWithPalette(rgba, large, { colorSpace: 'oklab' }));
+        const indexed = (result) => new Uint8Array([...result.palette, ...new Uint8Array(result.indices.buffer), result.transparentIndex & 255]);
+        check(`${name}/indices/rgb/16/dither/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: true, width, transparentIndex: true })));
+        check(`${name}/indices/oklab/400`, indexed(await quantizeToIndicesWithPalette(rgba, large, { colorSpace: 'oklab' })));
     }, 60_000);
 
 });

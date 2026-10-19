@@ -79,6 +79,7 @@ Every function that takes an image also takes an optional last argument of optio
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
 | `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. |
+| `transparentIndex` | indexed output | `false` (default), `true` | Gives fully transparent pixels their own palette entry in `quantizeToIndices*` results, instead of their nearest colour. |
 
 "Clustering" means `getClustering` and `getPalette`, "mapping" means `quantizeWithClustering` and `quantizeWithPalette`, and `quantize` takes both.
 
@@ -177,6 +178,18 @@ Quantizes using a clustering you already have. Options: `colorSpace` (defaults t
 
 ### `quantizeWithPalette(image, palette, options?)`
 Maps each pixel to its nearest colour in any palette (flat RGB bytes). The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
+
+### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
+Like `quantize`, but returns each pixel's palette index rather than its colour: `{ palette, indices, transparentIndex }`, plus `width` and `height` when the input has them. `palette` is flat RGB bytes and `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, `Uint16Array` up to 65536, `Uint32Array` above. This is what palette PNGs, pixel art, and embroidery or paint-by-number patterns need. Options: those of `quantize`, plus `transparentIndex`.
+
+By default, fully transparent pixels get the index of their nearest colour, like any other pixel. With `transparentIndex: true`, an RGBA image's fully transparent pixels get their own entry instead, appended after the palette, and `transparentIndex` says which it is (-1 if the image has none). For a palette PNG of at most 256 entries including the transparent one, ask for 255 colours.
+
+```js
+const { palette, indices, transparentIndex } = await quantizeToIndices(imageData, 255, { transparentIndex: true });
+```
+
+### `quantizeToIndicesWithClustering(image, clustering, k, options?)`, `quantizeToIndicesWithPalette(image, palette, options?)`
+The same for `quantizeWithClustering` and `quantizeWithPalette`. Options: theirs, plus `transparentIndex`.
 
 ### `init(): Promise<void>`
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch.

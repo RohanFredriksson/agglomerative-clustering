@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+- **Indexed output:** `quantizeToIndices`, `quantizeToIndicesWithClustering` and `quantizeToIndicesWithPalette` return `{ palette, indices, transparentIndex }` instead of a mapped image: one palette index per pixel (`Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`), for palette PNGs, pixel art and pattern generators. The indices pick out exactly the colours the matching `quantize*` call gives.
+- **`transparentIndex` option** for indexed output: fully transparent pixels get their own entry, appended after the palette, instead of their nearest colour.
+
 Every clustering, palette and quantized image is byte-identical to 2.0.0 for valid input.
 
 ### Fixed

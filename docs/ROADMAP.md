@@ -29,6 +29,8 @@ Since 2.0 every clustering starts with `[0xAC, version, colour space, precision]
 No format change, so a minor release.
 
 ### Worker entry point
+Decided: both shapes. A `createWorker()` instance with the same functions as methods, plus clustering handles that stay in the worker; and a drop-in `agglomerative-clustering/worker` module with the same exports as the main entry, built on one shared instance.
+
 The API is async but runs synchronously: clustering a photo blocks the calling thread for about 100 ms, and up to about 300 ms on images with many unique colours. That's too long for the interactive sliders the library is pitched at.
 
 - A second entry, e.g. `agglomerative-clustering/worker`, with the same functions, running the WASM module in a Web Worker (browsers) or `worker_threads` (Node).
@@ -36,11 +38,9 @@ The API is async but runs synchronously: clustering a photo blocks the calling t
 - Let a clustering stay in the worker as a handle, so a slider re-cutting and re-mapping the same image doesn't copy the image and clustering across for every frame.
 - Open questions: one shared worker or a small pool; how bundlers resolve the worker script (`new Worker(new URL(..., import.meta.url))` is the pattern Vite and webpack 5 both understand).
 
-### Indexed output
-`_quantize` already finds a palette index for every pixel, then writes its RGB value. Palette PNGs, pixel art, embroidery and paint-by-number tools need the indices.
-
-- `quantizeToIndices(image, k, options?)` and `…WithClustering` / `…WithPalette` variants returning `{ palette, indices }`, with `indices` a `Uint8Array` up to 256 colours and a `Uint16Array` above.
-- Open question: what fully transparent pixels get. Probably a reserved index (or -1 mapped to a documented value) chosen by an option, which also lays groundwork for palette alpha later.
+### Indexed output (done)
+- [x] `quantizeToIndices` and `…WithClustering` / `…WithPalette` variants returning `{ palette, indices, transparentIndex }`. `indices` is a `Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`.
+- [x] Fully transparent pixels map to their nearest colour by default. `transparentIndex: true` gives them their own entry after the palette.
 
 ### Bundler smoke test
 Browsers are the main audience, but CI only exercises Node. A small Vite and webpack build of a page that imports the package (and, after this release, the worker entry) catches broken `.wasm` resolution before users do.

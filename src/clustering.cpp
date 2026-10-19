@@ -287,9 +287,10 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
 
 // Maps each pixel to its nearest palette colour, matching in `color_space`. With `dither` > 0 the
 // remaining error is diffused to neighbouring pixels (serpentine Floyd-Steinberg, scaled by `dither`), which
-// needs the image's `width`. Returns a length-prefixed buffer (see allocate_variable_size) so the output is
-// written once, in place.
-uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width) {
+// needs the image's `width`. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1
+// when the palette is empty.
+template <typename Emit>
+void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, Emit emit) {
 
     const ColorCoordinates space(color_space);
     std::vector<std::array<uint8_t, 3>> colors;
@@ -316,15 +317,12 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 
     int increment = image_format == 1 ? 3 : 4;
     size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
-    uint8_t* packed = allocate_variable_size(pixels * increment);
-    uint8_t* output = packed + 4;
 
     // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
     // pixels skip the lookup. A colour always maps to the same palette entry, so the output is unchanged.
     constexpr int memo_bits = 14;
     std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
     std::vector<int32_t> memo_values(size_t(1) << memo_bits);
-    const std::array<uint8_t, 3> black = {0u, 0u, 0u};
     auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
         uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
         uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
@@ -334,22 +332,13 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
         }
         return memo_values[slot];
     };
-    auto nearest = [&](uint8_t r, uint8_t g, uint8_t b) -> const std::array<uint8_t, 3>& {
-        int32_t index = nearest_index(r, g, b);
-        return index < 0 ? black : colors[index];
-    };
 
     if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || colors.empty()) {
         for (size_t p = 0; p < pixels; p++) {
             const uint8_t* pixel = image_data + p * increment;
-            uint8_t* out = output + p * increment;
-            const std::array<uint8_t, 3>& chosen = nearest(pixel[0], pixel[1], pixel[2]);
-            out[0] = chosen[0];
-            out[1] = chosen[1];
-            out[2] = chosen[2];
-            if (image_format == 0) {out[3] = pixel[3];}
+            emit(p, nearest_index(pixel[0], pixel[1], pixel[2]));
         }
-        return packed;
+        return;
     }
 
     // Error for the current and next rows, one pixel of padding on each side so neighbours need no checks.
@@ -379,13 +368,11 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
             const size_t x = forward ? i : size_t(width) - 1 - i;
             const size_t p = y * size_t(width) + x;
             const uint8_t* pixel = image_data + p * increment;
-            uint8_t* out = output + p * increment;
-            if (image_format == 0) {out[3] = pixel[3];}
             float* e = &current[3 * (x + 1)];
             // Fully transparent pixels neither take error nor pass any on: their colour isn't seen.
             if (image_format == 0 && pixel[3] == 0) {
-                const std::array<uint8_t, 3>& chosen = nearest(pixel[0], pixel[1], pixel[2]);
-                for (int c = 0; c < 3; c++) {out[c] = chosen[c]; e[c] = 0.0f;}
+                emit(p, nearest_index(pixel[0], pixel[1], pixel[2]));
+                for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
                 continue;
             }
             // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
@@ -399,11 +386,10 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
                 e[c] = 0.0f;
             }
             const int32_t index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
-            const std::array<uint8_t, 3>& chosen = colors[index];
+            emit(p, index);
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];
             for (int c = 0; c < 3; c++) {
-                out[c] = chosen[c];
                 float error = (wanted[c] - float(points[index][c])) * strength;
                 e[c + ahead] += error * (7.0f / 16.0f);
                 below[c - ahead] += error * (3.0f / 16.0f);
@@ -415,8 +401,63 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
         std::fill(next.begin(), next.end(), 0.0f);
     }
 
-    return packed;
+}
 
+// Maps the image to the palette (see map_pixels) and returns the mapped image, in the input's format with alpha
+// preserved, as a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
+// With an empty palette every pixel becomes black.
+uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width) {
+    const int increment = image_format == 1 ? 3 : 4;
+    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
+    uint8_t* packed = allocate_variable_size(pixels * increment);
+    uint8_t* output = packed + 4;
+    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, width, [&](size_t p, int32_t index) {
+        uint8_t* out = output + p * increment;
+        const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
+        for (int c = 0; c < 3; c++) {out[c] = colour ? colour[c] : 0;}
+        if (image_format == 0) {out[3] = image_data[p * increment + 3];}
+    });
+    return packed;
+}
+
+// Maps the image to the palette (see map_pixels) and returns each pixel's palette index instead of its colour.
+// The length-prefixed payload is [entries (u32), transparent index (i32, -1 for none), index bytes (u32)], then
+// the palette (3 bytes per entry), then one little-endian index of `index bytes` (1, 2 or 4) per pixel.
+// An empty palette becomes a single black entry, as _quantize maps it. With `transparent_slot` and RGBA input
+// that has fully transparent pixels, those pixels get an extra black entry appended after the palette, which
+// takes no part in matching; otherwise they map to their nearest colour like any other pixel.
+uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, bool transparent_slot) {
+    const int increment = image_format == 1 ? 3 : 4;
+    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
+
+    std::vector<uint8_t> entries(palette, palette + palette_length / 3 * 3);
+    if (entries.empty()) {entries.assign(3, 0);}
+    bool transparent = false;
+    if (transparent_slot && image_format == 0) {
+        for (size_t p = 0; p < pixels && !transparent; p++) {transparent = image_data[p * 4 + 3] == 0;}
+    }
+    const size_t colours = entries.size() / 3;
+    const int32_t transparent_index = transparent ? int32_t(colours) : -1;
+    if (transparent) {entries.insert(entries.end(), 3, 0);}
+    const size_t count = entries.size() / 3;
+    const uint32_t index_bytes = count <= 256 ? 1 : count <= 65536 ? 2 : 4;
+
+    const size_t header = 12;
+    uint8_t* packed = allocate_variable_size(header + entries.size() + pixels * index_bytes);
+    uint8_t* output = packed + 4;
+    auto write32 = [](uint8_t* at, uint32_t value) {for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}};
+    write32(output, uint32_t(count));
+    write32(output + 4, uint32_t(transparent_index));
+    write32(output + 8, index_bytes);
+    std::memcpy(output + header, entries.data(), entries.size());
+    uint8_t* indices = output + header + entries.size();
+
+    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, width, [&](size_t p, int32_t index) {
+        if (transparent && image_data[p * 4 + 3] == 0) {index = transparent_index;}
+        uint8_t* out = indices + p * index_bytes;
+        for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
+    });
+    return packed;
 }
 
 extern "C" {
@@ -458,6 +499,26 @@ uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int ima
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int width) {
     return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, width);
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent_slot) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width, transparent_slot != 0);
+}
+
+EMSCRIPTEN_KEEPALIVE
+// A negative `color_space` matches in the space the clustering was made in.
+uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width, int transparent_slot) {
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
+    ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width, transparent_slot != 0);
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* quantize_indices_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int width, int transparent_slot) {
+    return _quantize_indices(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, width, transparent_slot != 0);
 }
 
 }
