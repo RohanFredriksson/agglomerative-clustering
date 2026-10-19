@@ -161,20 +161,39 @@ const mapOptions = ['colorSpace', 'dither', 'width'];
 const quantizeIndexOptions = [...quantizeOptions, 'transparentIndex'];
 const mapIndexOptions = [...mapOptions, 'transparentIndex'];
 
-// Clusterings are 0 or 3 bytes more than a multiple of 9 (1.x, no header), or 4 or 7 more with the 2.x header.
-const checkClustering = (clustering) => {
+// Reads a clustering's header, or throws if it isn't a clustering this version can read. Version 1 (1.x) has no
+// header and is told apart by its length, 0 or 3 more than a multiple of 9, which no later version has (they pad
+// to 4 or 7 more). Later versions start with the magic byte 0xAC and their version number.
+//   version 2: [0xAC, 2, colour space, precision], then 9-byte records of colours
+//   version 3: [0xAC, 3, header length, record length, colour space, precision, weight unit, weight shift,
+//              total weight (u32 LE), ...], then records of colours, parent index, lighter weight and cost
+const latestVersion = 3;
+const readHeader = (clustering) => {
     if (!(clustering instanceof Uint8Array)) {
         throw new Error("Invalid clustering: must be a Uint8Array from getClustering.");
     }
-    const rest = clustering.length % 9;
-    const legacy = clustering.length === 0 || rest === 3;
-    const current = (clustering.length === 4 || rest === 7) && clustering[0] === 0xAC && clustering[1] === 2 && clustering[2] <= 1;
-    if (!legacy && !current && clustering.length >= 4 && clustering[0] === 0xAC && clustering[1] > 2) {
-        throw new Error(`Invalid clustering: format version ${clustering[1]} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
+    const length = clustering.length;
+    if (length % 9 === 0 || length % 9 === 3) {
+        return {version: 1, colorSpace: 0, precision: null, headerLength: 0, recordLength: 9, merges: length === 0 ? 0 : (length - 3) / 9};
     }
-    if (!legacy && !current) {
-        throw new Error("Invalid clustering: not a clustering from getClustering.");
+    if (length >= 4 && clustering[0] === 0xAC) {
+        const version = clustering[1];
+        if (version === 2 && clustering[2] <= 1 && (length === 4 || length % 9 === 7)) {
+            return {version, colorSpace: clustering[2], precision: clustering[3], headerLength: 4, recordLength: 9, merges: length === 4 ? 0 : (length - 7) / 9};
+        }
+        if (version === 3 && length >= 13) {
+            const headerLength = clustering[2], recordLength = clustering[3];
+            if (headerLength >= 13 && recordLength >= 21 && headerLength <= length && clustering[4] <= 1) {
+                const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
+                const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
+                if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], headerLength, recordLength, merges};}
+            }
+        }
+        if (version > latestVersion) {
+            throw new Error(`Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
+        }
     }
+    throw new Error("Invalid clustering: not a clustering from getClustering.");
 };
 
 // Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
@@ -232,10 +251,51 @@ export const getPalette = async (image, k, options) => {
 export const getPaletteFromClustering = async (clustering, k) => {
 
     await init();
-    checkClustering(clustering);
+    readHeader(clustering);
     check(k);
 
     return call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+
+};
+
+// The weight of each colour in getPaletteFromClustering(clustering, k), in pixels: fully transparent pixels count
+// 0 and partly transparent ones in proportion to their opacity, as they did in clustering.
+export const getPaletteWeights = async (clustering, k) => {
+
+    await init();
+    const header = readHeader(clustering);
+    check(k);
+    if (header.version < 3) {
+        throw new Error(`Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
+    }
+
+    const bytes = call([clustering], (clusteringPointer) => Module._get_palette_weights(clusteringPointer, clustering.length, k));
+    if (header.merges > 0 && bytes.length === 0) {throw new Error("Invalid clustering: its weights are inconsistent.");}
+    return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
+
+};
+
+// What a clustering holds, read from its header and records without the WASM module. `errors[k - 1]` is the mean
+// squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,
+// weighted as in clustering, in 8-bit RGB values (RGB) or OKLab units (OKLab).
+export const getClusteringInfo = async (clustering) => {
+
+    const header = readHeader(clustering);
+    const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
+    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, errors: null};
+    if (header.version < 3) {return info;}
+
+    const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
+    const pixels = 2 ** clustering[7] / (clustering[6] === 1 ? 255 : 1);
+    const total = view.getUint32(8, true);
+    info.totalWeight = total * pixels;
+    info.errors = new Float64Array(colors);
+    let remaining = 0;
+    for (let i = header.merges - 1; i >= 0; i--) {
+        remaining += view.getFloat32(header.headerLength + 3 + i * header.recordLength + 17, true);
+        info.errors[i] = remaining / total / 3;
+    }
+    return info;
 
 };
 
@@ -256,7 +316,7 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
     await init();
     const wrap = getWrapper(image);
     image = load(image);
-    checkClustering(clustering);
+    readHeader(clustering);
     check(k);
     const o = parseOptions(options, mapOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
@@ -294,7 +354,7 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     await init();
     const original = image;
     image = load(image);
-    checkClustering(clustering);
+    readHeader(clustering);
     check(k);
     const o = parseOptions(options, mapIndexOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;

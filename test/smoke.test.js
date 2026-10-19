@@ -25,15 +25,15 @@ describe('getClustering', () => {
         expect(result.length).toBeGreaterThan(0);
     });
 
-    // Clustering format: 3 + 9 * (uniqueColors - 1) bytes.
-    it('returns 7 bytes for a solid image (1 unique color): 4-byte header + root colour', async () => {
+    // Clustering format: 13 + 3 + 21 * (uniqueColors - 1) bytes, padded to 7 more than a multiple of 9.
+    it('returns 16 bytes for a solid image (1 unique color): 13-byte header + root colour', async () => {
         const result = await getClustering(solidRed2x2);
-        expect(result.length).toBe(7);
+        expect(result.length).toBe(16);
     });
 
-    it('returns 16 bytes for a 2-color image: header + root + one 9-byte merge', async () => {
+    it('returns 43 bytes for a 2-color image: header + root + one 21-byte merge, padded to 7 more than a multiple of 9', async () => {
         const result = await getClustering(twoColor2x2);
-        expect(result.length).toBe(16);
+        expect(result.length).toBe(43);
     });
 
 });
