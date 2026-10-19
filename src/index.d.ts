@@ -53,6 +53,31 @@ export interface MappingOptions {
 
 export type QuantizeOptions = ClusteringOptions & MappingOptions;
 
+export interface IndexOptions {
+    /**
+     * `false` (default): fully transparent pixels get the index of their nearest colour, like any other pixel.
+     * `true`: if the image is RGBA and has fully transparent pixels, they get an extra entry appended after the
+     * palette (black, taking no part in matching), as palette PNGs expect. Its index is `transparentIndex`.
+     */
+    transparentIndex?: boolean;
+}
+
+export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
+export type MappingIndexOptions = MappingOptions & IndexOptions;
+
+export interface IndexedImage {
+    /** Flat RGB bytes, one entry per index. Includes the transparent entry, if there is one. */
+    palette: Uint8Array;
+    /** One palette index per pixel: `Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`. */
+    indices: Uint8Array | Uint16Array | Uint32Array;
+    /** The index of the entry for fully transparent pixels, or -1 if there is none. */
+    transparentIndex: number;
+    /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
+    width?: number;
+    /** Copied from the input, when it is `ImageData` or a `RawImage` with `height`. */
+    height?: number;
+}
+
 export function init(): Promise<void>;
 
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
@@ -65,6 +90,34 @@ export function getPalette(image: ImageLike, k: number, options?: ClusteringOpti
  */
 export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
 
+/**
+ * The weight of each colour in `getPaletteFromClustering(clustering, k)`, in the same order, in pixels: fully
+ * transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering.
+ * Needs a clustering from 3.x; older ones have no weights and are rejected.
+ */
+export function getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
+
+export interface ClusteringInfo {
+    /** The clustering's format version: 1 (1.x), 2 (2.x) or 3 (3.x). */
+    version: number;
+    colorSpace: ColorSpace;
+    /** Bits per channel it was clustered with, or `null` for 1.x clusterings, which don't record it. */
+    precision: number | null;
+    /** The largest palette it can be cut to: its number of distinct clustered colours. */
+    colors: number;
+    /** Total weight in pixels (opacity-weighted), or `null` before 3.x. */
+    totalWeight: number | null;
+    /**
+     * `errors[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
+     * distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (`'rgb'`) or OKLab units
+     * (`'oklab'`). Mapping pixels to their nearest palette colour usually lowers it by 10-15%. `null` before 3.x.
+     */
+    errors: Float64Array | null;
+}
+
+/** Reads what a clustering holds, including its error curve for choosing a palette size. */
+export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
+
 export function quantize(image: Uint8Array, k: number, options?: QuantizeOptions): Promise<Uint8Array>;
 export function quantize(image: ImageData, k: number, options?: QuantizeOptions): Promise<ImageData>;
 export function quantize(image: RawImage, k: number, options?: QuantizeOptions): Promise<RawImage>;
@@ -76,3 +129,15 @@ export function quantizeWithClustering(image: RawImage, clustering: Uint8Array, 
 export function quantizeWithPalette(image: Uint8Array, palette: Uint8Array, options?: MappingOptions): Promise<Uint8Array>;
 export function quantizeWithPalette(image: ImageData, palette: Uint8Array, options?: MappingOptions): Promise<ImageData>;
 export function quantizeWithPalette(image: RawImage, palette: Uint8Array, options?: MappingOptions): Promise<RawImage>;
+
+/**
+ * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette
+ * PNGs, pixel art and pattern generators). The palette is the one `getPalette` gives.
+ */
+export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
+
+/** Like `quantizeWithClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s. */
+export function quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+
+/** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */
+export function quantizeToIndicesWithPalette(image: ImageLike, palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;

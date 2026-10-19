@@ -1,19 +1,27 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 (unreleased)
 
-Every clustering, palette and quantized image is byte-identical to 2.0.0 for valid input.
+Every function and default from 2.0 is unchanged, and palettes and quantized images are byte-identical to 2.0.0. The clustering format is new, and so are the worker entry, weights, the error curve and indexed output. See "Migrating from 2.x" in the README.
+
+### Added
+- **Worker entry, `agglomerative-clustering/worker`.** The same functions, run in a Web Worker (browsers) or worker thread (Node) so clustering doesn't block the calling thread. `createWorker()` starts a worker of its own. Its `cluster(image)` returns a handle that keeps the image and its clustering in the worker, so re-cutting (`getPalette`, `getPaletteWeights`) and re-mapping (`quantize`, `quantizeToIndices`) copy nothing across. Results are transferred rather than copied, inputs too with `createWorker({ transfer: true })`, and an idle worker never keeps a Node process alive.
+- **Palette weights:** `getPaletteWeights(clustering, k)` gives each palette colour's weight in pixels (opacity-weighted, as in clustering).
+- **Clustering info and error curve:** `getClusteringInfo(clustering)` gives a clustering's format version, colour space, precision, number of colours, total weight, and `errors`, the mean squared error per channel at every palette size, for choosing a size by error.
+- **Indexed output:** `quantizeToIndices`, `quantizeToIndicesWithClustering` and `quantizeToIndicesWithPalette` return `{ palette, indices, transparentIndex }` instead of a mapped image: one palette index per pixel (`Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`), for palette PNGs, pixel art and pattern generators. The indices pick out exactly the colours the matching `quantize*` call gives.
+- **`transparentIndex` option** for indexed output: fully transparent pixels get their own entry, appended after the palette, instead of their nearest colour.
+
+### Changed
+- **Clustering format version 3.** A self-describing 13-byte header (magic byte, version, header and record lengths, colour space, precision, weight unit and total weight), then 21-byte records that add each split's parent, lighter-half weight and Ward cost to its colours. Clusterings are about 2.3 times larger than 2.x's. 1.x and 2.x clusterings still load, and a clustering from a newer format version is rejected with an error asking for an upgrade. Future versions follow the rules in `docs/ROADMAP.md`, so their clusterings can never be mistaken for older formats.
+- `package.json` declares `engines: { node: "^20.19.0 || >=22.12.0" }`. The CommonJS build loads the WebAssembly glue through `require()` of an ES module, which older Node versions don't support. CI now tests Node 20, 22 and 24, including the CommonJS entry.
+- The published WebAssembly is built with Emscripten 6.0.12 (was 4.0.10), the version the benchmarks were measured with. Output is identical, speed is the same within run-to-run variation, and the module is 2.4 KB smaller.
+- The WebAssembly module grows from 75 KB to 84 KB, mostly because pixel mapping is now compiled for both colour and index output. Clustering and mapping speed are unchanged.
 
 ### Fixed
 - A `Uint8ClampedArray` that is a view into part of a larger buffer (such as a `subarray`) was read from the start of the whole buffer, so `RawImage` data given that way was clustered and quantized from the wrong bytes. Only the view's own bytes are read now.
 - Image data whose length isn't a whole number of pixels (a multiple of 4 for RGBA, 3 for RGB) was silently truncated, giving a shorter output. It is now rejected with `Invalid image data`.
 - `quantizeWithPalette` checks its palette: anything other than a `Uint8Array`, `Uint8ClampedArray` or array, or a length that isn't a multiple of 3, is rejected with `Invalid palette` instead of being truncated or failing with an unrelated error. An empty palette is still accepted.
-- A clustering from a newer format version (written by a future release) is rejected with an error saying so and asking for an upgrade, instead of `not a clustering from getClustering`.
-- The README gave the WebAssembly module's size as 65 KB; it is 73 KB.
-
-### Changed
-- `package.json` declares `engines: { node: "^20.19.0 || >=22.12.0" }`. The CommonJS build loads the WebAssembly glue through `require()` of an ES module, which older Node versions don't support. CI now tests Node 20, 22 and 24, including the CommonJS entry.
-- The published WebAssembly is built with Emscripten 6.0.12 (was 4.0.10), the version the benchmarks were measured with. Output is identical, speed is the same within run-to-run variation, and the module is 2.4 KB smaller.
+- The README gave 2.0's WebAssembly module size as 65 KB; it was 75 KB.
 
 ## 2.0.0
 
