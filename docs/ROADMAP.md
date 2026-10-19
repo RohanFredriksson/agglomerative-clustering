@@ -10,6 +10,19 @@ What comes after 2.0, roughly in order. Each release keeps output byte-identical
 - [x] `engines` field, a CommonJS smoke test, and CI on Node 20/22/24.
 - [x] Golden-output test over clusterings, palettes and quantized images.
 - [x] The release build uses the same Emscripten version as the benchmarks (6.0.12).
+- [x] A clustering from a newer format version gets an error asking for an upgrade, not "not a clustering". 2.0.x readers will then fail clearly on 3.0 clusterings.
+
+## Clustering format versioning
+
+The clustering is the only format users store, so it is the only one that needs versioning. Palettes are plain RGB bytes, and messages between the main thread and the 2.1 worker never outlive one installed version of the package.
+
+Since 2.0 every clustering starts with `[0xAC, version, colour space, precision]`. What has been luck so far is telling it apart from 1.x clusterings, which have no header. That works only because their lengths differ: 1.x lengths are 0 or 3 more than a multiple of 9, and 2.x lengths 4 or 7 more. From v3 on, these rules hold:
+
+1. **Readers decide by the version byte, never by shape.** The length test exists only to recognise 1.x clusterings, and every version from 2 on is identified by its header.
+2. **Every new version keeps out of 1.x's lengths:** its header is 4 more than a multiple of 9 bytes long, and its records a multiple of 9 bytes (padded if needed). Its lengths are then always 4 or 7 more than a multiple of 9, so no reader, including 2.0.x, can mistake it for a 1.x clustering.
+3. **From v3 the header describes its own layout:** `[0xAC, version, header length, record length, colour space, precision, …]`. A reader finds the records from the stored lengths and ignores fields it doesn't know, so fields can be added at the end of the header or of each record without a new version. The version is bumped only when an existing field changes meaning.
+4. **Readers reject versions newer than they know** with an error asking for an upgrade (2.0.1 does this), and never guess.
+5. **Every version stays readable.** When v3 lands, commit a stored clustering of each format version (1, 2, 3) as a test fixture, with its expected palettes, so a change to the reader can't break old clusterings unnoticed.
 
 ## 2.1: off the main thread, and indexed output
 
@@ -34,12 +47,12 @@ Browsers are the main audience, but CI only exercises Node. A small Vite and web
 
 ## 3.0: clustering format v3, with weights and merge heights
 
-The header's version byte lets 3.0 add data to each record while still loading v1 and v2 clusterings. New bytes from `getClustering` were treated as a major change in 2.0, so this is planned as 3.0. If the new data turns out to be opt-in, it could ship in 2.x instead.
+Format v3 follows the versioning rules above, and 3.0 still loads v1 and v2 clusterings. New bytes from `getClustering` were treated as a major change in 2.0, so this is planned as 3.0. If the new data turns out to be opt-in, it could ship in 2.x instead.
 
 ### Palette weights
 "Dominant colours with percentages" is the most common palette request, and the weights are already computed while clustering.
 
-- Store the root's total weight once, and each record's lighter-child weight. The heavier child's weight is the parent's minus the lighter one, so every cluster's weight can be recovered top-down for about 4–5 extra bytes per record.
+- Store the root's total weight once, and each record's lighter-child weight. The heavier child's weight is the parent's minus the lighter one, so every cluster's weight can be recovered top-down from about 5 extra bytes per record. With a float32 height (below), a record is 9 + 5 + 4 = 18 bytes, which is already a multiple of 9 as rule 2 requires.
 - `getPaletteFromClustering(clustering, k, { weights: true })`, or a separate function, returning weights alongside colours (as pixel counts, or fractions of the visible total).
 - v1/v2 clusterings have no weights: either reject the option for them or document an approximation.
 

@@ -139,6 +139,9 @@ const checkClustering = (clustering) => {
     const rest = clustering.length % 9;
     const legacy = clustering.length === 0 || rest === 3;
     const current = (clustering.length === 4 || rest === 7) && clustering[0] === 0xAC && clustering[1] === 2 && clustering[2] <= 1;
+    if (!legacy && !current && clustering.length >= 4 && clustering[0] === 0xAC && clustering[1] > 2) {
+        throw new Error(`Invalid clustering: format version ${clustering[1]} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
+    }
     if (!legacy && !current) {
         throw new Error("Invalid clustering: not a clustering from getClustering.");
     }
