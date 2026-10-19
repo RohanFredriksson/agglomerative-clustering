@@ -67,6 +67,28 @@ const getWrapper = (image) => {
     return (output) => output;
 };
 
+// Decodes _quantize_indices output: [entries, transparent index, index bytes] as 32-bit little-endian values, then
+// the palette, then the indices. `image` is the caller's original input, for its width and height.
+const unpackIndices = (output, image) => {
+    const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+    const entries = view.getUint32(0, true);
+    const transparentIndex = view.getInt32(4, true);
+    const indexBytes = view.getUint32(8, true);
+    const palette = output.slice(12, 12 + 3 * entries);
+    const start = 12 + 3 * entries;
+    const count = (output.length - start) / indexBytes;
+    const Indices = indexBytes === 1 ? Uint8Array : indexBytes === 2 ? Uint16Array : Uint32Array;
+    const indices = new Indices(count);
+    // Little-endian, like the WASM heap, which Emscripten's own typed-array views already assume of the host.
+    new Uint8Array(indices.buffer).set(output.subarray(start));
+    const result = {palette, indices, transparentIndex};
+    if (!(image instanceof Uint8Array)) {
+        if (image.width !== undefined) {result.width = image.width;}
+        if (image.height !== undefined) {result.height = image.height;}
+    }
+    return result;
+};
+
 const check = (k) => {
 
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
@@ -82,6 +104,7 @@ const check = (k) => {
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
+//   transparentIndex: false (default) or true; for indexed output, gives fully transparent pixels their own entry
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
@@ -123,13 +146,20 @@ const parseOptions = (options, allowed, image) => {
         }
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0};
+    const transparentIndex = options.transparentIndex === undefined ? false : options.transparentIndex;
+    if (typeof transparentIndex !== 'boolean') {
+        throw new Error("Invalid transparentIndex: must be a boolean.");
+    }
+
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparentIndex};
 
 };
 
 const clusterOptions = ['colorSpace', 'precision', 'alpha'];
 const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width'];
+const quantizeIndexOptions = [...quantizeOptions, 'transparentIndex'];
+const mapIndexOptions = [...mapOptions, 'transparentIndex'];
 
 // Clusterings are 0 or 3 bytes more than a multiple of 9 (1.x, no header), or 4 or 7 more with the 2.x header.
 const checkClustering = (clustering) => {
@@ -244,5 +274,43 @@ export const quantizeWithPalette = async (image, palette, options) => {
     const o = parseOptions(options, mapOptions, image);
 
     return wrap(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
+
+};
+
+export const quantizeToIndices = async (image, k, options) => {
+
+    await init();
+    const original = image;
+    image = load(image);
+    check(k);
+    const o = parseOptions(options, quantizeIndexOptions, image);
+
+    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
+
+};
+
+export const quantizeToIndicesWithClustering = async (image, clustering, k, options) => {
+
+    await init();
+    const original = image;
+    image = load(image);
+    checkClustering(clustering);
+    check(k);
+    const o = parseOptions(options, mapIndexOptions, image);
+    const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
+
+    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
+
+};
+
+export const quantizeToIndicesWithPalette = async (image, palette, options) => {
+
+    await init();
+    const original = image;
+    image = load(image);
+    checkPalette(palette);
+    const o = parseOptions(options, mapIndexOptions, image);
+
+    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
 
 };
