@@ -41,6 +41,14 @@ describe('clustering header', () => {
         expect(await quantizeWithClustering(gradient, legacy, 12)).toEqual(await quantizeWithClustering(gradient, clustering, 12));
     });
 
+    it('reports clusterings from a newer format version as such', async () => {
+        const newer = new Uint8Array(await getClustering(gradient));
+        newer[1] = 3;
+        await expect(getPaletteFromClustering(newer, 4)).rejects.toThrow('format version 3 is newer');
+        await expect(quantizeWithClustering(gradient, newer, 4)).rejects.toThrow('format version 3 is newer');
+        expect(newer.length % 9).toBe(7);
+    });
+
     it('rejects things that are not clusterings', async () => {
         await expect(getPaletteFromClustering(new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
         const wrongMagic = (await getClustering(gradient)).slice();

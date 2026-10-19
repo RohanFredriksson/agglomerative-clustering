@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Every clustering, palette and quantized image is byte-identical to 2.0.0 for valid input.
+
+### Fixed
+- A `Uint8ClampedArray` that is a view into part of a larger buffer (such as a `subarray`) was read from the start of the whole buffer, so `RawImage` data given that way was clustered and quantized from the wrong bytes. Only the view's own bytes are read now.
+- Image data whose length isn't a whole number of pixels (a multiple of 4 for RGBA, 3 for RGB) was silently truncated, giving a shorter output. It is now rejected with `Invalid image data`.
+- `quantizeWithPalette` checks its palette: anything other than a `Uint8Array`, `Uint8ClampedArray` or array, or a length that isn't a multiple of 3, is rejected with `Invalid palette` instead of being truncated or failing with an unrelated error. An empty palette is still accepted.
+- A clustering from a newer format version (written by a future release) is rejected with an error saying so and asking for an upgrade, instead of `not a clustering from getClustering`.
+- The README gave the WebAssembly module's size as 65 KB; it is 73 KB.
+
+### Changed
+- `package.json` declares `engines: { node: "^20.19.0 || >=22.12.0" }`. The CommonJS build loads the WebAssembly glue through `require()` of an ES module, which older Node versions don't support. CI now tests Node 20, 22 and 24, including the CommonJS entry.
+- The published WebAssembly is built with Emscripten 6.0.12 (was 4.0.10), the version the benchmarks were measured with. Output is identical, speed is the same within run-to-run variation, and the module is 2.4 KB smaller.
+
 ## 2.0.0
 
 The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
