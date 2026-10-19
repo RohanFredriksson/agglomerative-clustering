@@ -36,6 +36,10 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.cjs",
       "import": "./dist/index.mjs"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.mjs"
     }
   },
   "engines": {
@@ -47,13 +51,14 @@
   ],
   "scripts": {
     "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_get_clustering','_get_palette','_get_palette_from_clustering','_get_palette_weights','_quantize','_quantize_with_clustering','_quantize_with_palette','_quantize_indices','_quantize_indices_with_clustering','_quantize_indices_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
-    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --out-file-extension .cjs",
+    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --ignore \"src/worker.js\",\"src/worker-thread.js\" --out-file-extension .cjs",
     "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
-    "build:types": "mkdirp dist && node -e \"require('fs').copyFileSync('src/index.d.ts', 'dist/index.d.ts')\"",
+    "build:types": "mkdirp dist && node -e \"for (const f of ['index.d.ts', 'worker.d.ts']) {require('fs').copyFileSync('src/' + f, 'dist/' + f);}\"",
     "build:js": "npm run build:types && npm run build:cjs && npm run build:esm",
     "build": "npm run build:wasm && npm run build:js",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "test:browser": "node test/browser/run.mjs",
     "bench": "vitest bench",
     "bench:full": "node bench/run.js",
     "bench:compare": "node bench/compare.js",
@@ -70,7 +75,9 @@
     "image-q": "^4.0.0",
     "libimagequant-wasm": "^0.3.0",
     "mkdirp": "^3.0.1",
+    "playwright-core": "^1.56.1",
     "quantize": "^1.0.2",
+    "vite": "^8.0.10",
     "vitest": "^4.1.5"
   }
 }
