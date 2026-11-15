@@ -548,19 +548,23 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 // Maps the image to the palette (see map_pixels) and returns each pixel's palette index instead of its colour.
 // The length-prefixed payload is [entries (u32), transparent index (i32, -1 for none), index bytes (u32)], then
 // the palette (3 bytes per entry), then one little-endian index of `index bytes` (1, 2 or 4) per pixel.
-// An empty palette becomes a single black entry, as _quantize maps it. With `transparent_slot` and RGBA input
-// that has fully transparent pixels, those pixels get an extra black entry appended after the palette, which
-// takes no part in matching; otherwise they map to their nearest colour like any other pixel.
+// With `transparent_slot` and RGBA input that has fully transparent pixels, those pixels get an extra black entry
+// appended after the palette, which takes no part in matching; otherwise they map to their nearest colour like any
+// other pixel. An empty palette stays empty unless some pixel needs an entry to point at, in which case it becomes a
+// single black entry, as _quantize maps it: so an empty image has an empty palette, and a fully transparent image
+// with `transparent_slot` has just the transparent entry (index 0).
 uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, bool transparent_slot) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
 
     std::vector<uint8_t> entries(palette, palette + palette_length / 3 * 3);
-    if (entries.empty()) {entries.assign(3, 0);}
     bool transparent = false;
     if (transparent_slot && image_format == 0) {
         for (size_t p = 0; p < pixels && !transparent; p++) {transparent = image_data[p * 4 + 3] == 0;}
     }
+    bool needs_entry = false;
+    for (size_t p = 0; p < pixels && !needs_entry; p++) {needs_entry = !(transparent && image_data[p * 4 + 3] == 0);}
+    if (entries.empty() && needs_entry) {entries.assign(3, 0);}
     const size_t colours = entries.size() / 3;
     const int32_t transparent_index = transparent ? int32_t(colours) : -1;
     if (transparent) {entries.insert(entries.end(), 3, 0);}

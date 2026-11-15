@@ -18,7 +18,7 @@ for (const k of sizes) {fixture.palettes[k] = Array.from(await library.getPalett
 if (library.getPaletteWeights) {
     fixture.weights = {};
     for (const k of sizes) {fixture.weights[k] = Array.from(await library.getPaletteWeights(clustering, k));}
-    fixture.errors = Array.from((await library.getClusteringInfo(clustering)).errors);
+    fixture.mse = Array.from((await library.getClusteringInfo(clustering)).mse);
 }
 
 writeFileSync(resolve(here, `v${version}.bin`), clustering);

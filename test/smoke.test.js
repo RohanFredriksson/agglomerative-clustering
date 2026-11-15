@@ -38,6 +38,20 @@ describe('getClustering', () => {
 
 });
 
+describe('k larger than the colour count', () => {
+
+    it('means all colours, even beyond the 32-bit range', async () => {
+        const all = await getPalette(twoColor2x2, 2);
+        for (const k of [3, 2 ** 31 - 1, 2 ** 31, 2 ** 32, Number.MAX_SAFE_INTEGER]) {
+            expect(await getPalette(twoColor2x2, k)).toEqual(all);
+        }
+        const clustering = await getClustering(twoColor2x2);
+        expect((await getPaletteFromClustering(clustering, 2 ** 40)).length).toBe(all.length);
+        expect(await quantize(twoColor2x2, 2 ** 40)).toEqual(await quantize(twoColor2x2, 2));
+    });
+
+});
+
 describe('getPalette', () => {
 
     it('returns 3 bytes for k = 1', async () => {

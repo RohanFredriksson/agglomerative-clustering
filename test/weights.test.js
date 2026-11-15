@@ -82,44 +82,44 @@ describe('getClusteringInfo', () => {
         expect(info.colorSpace).toBe('oklab');
         expect(info.precision).toBe(6);
         expect(info.totalWeight).toBe(width * height);
-        expect(info.colors).toBe(info.errors.length);
+        expect(info.colors).toBe(info.mse.length);
         expect(info.colors).toBe((await getPaletteFromClustering(await getClustering(gradient, { colorSpace: 'oklab', precision: 6 }), 1e6)).length / 3);
     });
 
     it('gives an error curve that falls to 0 with every colour separate', async () => {
-        const { errors, colors } = await getClusteringInfo(await getClustering(gradient));
-        expect(errors[colors - 1]).toBe(0);
-        for (let k = 1; k < colors; k++) {expect(errors[k]).toBeLessThanOrEqual(errors[k - 1]);}
+        const { mse, colors } = await getClusteringInfo(await getClustering(gradient));
+        expect(mse[colors - 1]).toBe(0);
+        for (let k = 1; k < colors; k++) {expect(mse[k]).toBeLessThanOrEqual(mse[k - 1]);}
     });
 
     it('starts at the variance of the image, per channel', async () => {
-        const { errors } = await getClusteringInfo(await getClustering(gradient));
+        const { mse } = await getClusteringInfo(await getClustering(gradient));
         let variance = 0;
         for (let c = 0; c < 3; c++) {
             let sum = 0, squares = 0;
             for (let p = 0; p < width * height; p++) {sum += gradient[p * 4 + c]; squares += gradient[p * 4 + c] ** 2;}
             variance += squares / (width * height) - (sum / (width * height)) ** 2;
         }
-        expect(errors[0]).toBeCloseTo(variance / 3, 0);
+        expect(mse[0]).toBeCloseTo(variance / 3, 0);
     });
 
     it('keeps the variance of the image at any precision, and no longer falls to 0', async () => {
         const exact = await getClusteringInfo(await getClustering(gradient));
         const grouped = await getClusteringInfo(await getClustering(gradient, { precision: 4 }));
         // Grouping discards error before clustering; it is added back, so the starting point is the same variance.
-        expect(grouped.errors[0]).toBeCloseTo(exact.errors[0], 0);
-        expect(grouped.errors[grouped.colors - 1]).toBeGreaterThan(0);
-        expect(exact.errors[exact.colors - 1]).toBe(0);
-        for (let k = 1; k < grouped.colors; k++) {expect(grouped.errors[k]).toBeLessThanOrEqual(grouped.errors[k - 1]);}
+        expect(grouped.mse[0]).toBeCloseTo(exact.mse[0], 0);
+        expect(grouped.mse[grouped.colors - 1]).toBeGreaterThan(0);
+        expect(exact.mse[exact.colors - 1]).toBe(0);
+        for (let k = 1; k < grouped.colors; k++) {expect(grouped.mse[k]).toBeLessThanOrEqual(grouped.mse[k - 1]);}
     });
 
     it('gives the share of variance each palette size keeps', async () => {
-        const { errors, explained, colors } = await getClusteringInfo(await getClustering(gradient));
+        const { mse, explained, colors } = await getClusteringInfo(await getClustering(gradient));
         expect(explained.length).toBe(colors);
         expect(explained[0]).toBe(0);
         expect(explained[colors - 1]).toBe(1);
         for (let k = 0; k < colors; k++) {
-            expect(explained[k]).toBeCloseTo(1 - errors[k] / errors[0], 9);
+            expect(explained[k]).toBeCloseTo(1 - mse[k] / mse[0], 9);
             if (k > 0) {expect(explained[k]).toBeGreaterThanOrEqual(explained[k - 1]);}
         }
         const flat = await getClusteringInfo(await getClustering(pixels([{ rgb: [9, 9, 9], count: 5 }])));
@@ -129,7 +129,7 @@ describe('getClusteringInfo', () => {
 
     it('describes an empty clustering', async () => {
         const info = await getClusteringInfo(await getClustering(new Uint8Array(0)));
-        expect([info.colors, info.totalWeight, info.errors.length]).toEqual([0, 0, 0]);
+        expect([info.colors, info.totalWeight, info.mse.length]).toEqual([0, 0, 0]);
     });
 
     it('rejects things that are not clusterings', async () => {

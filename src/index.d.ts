@@ -80,7 +80,11 @@ export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 
 export interface IndexedImage {
-    /** Flat RGB bytes, one entry per index. Includes the transparent entry, if there is one. */
+    /**
+     * Flat RGB bytes, one entry per index, including the transparent entry if there is one. Empty for an image with no
+     * pixels. An image with pixels but no visible colour has a single black entry, or with `reserveTransparent`, just
+     * the transparent entry.
+     */
     palette: Uint8Array;
     /** One palette index per pixel: `Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`. */
     indices: Uint8Array | Uint16Array | Uint32Array;
@@ -124,17 +128,17 @@ export interface ClusteringInfo {
     /** Total weight in pixels (opacity-weighted), or `null` before 3.x. */
     totalWeight: number | null;
     /**
-     * `errors[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
+     * `mse[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
      * distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (`'rgb'`) or OKLab units
-     * (`'oklab'`). `errors[0]` is the image's variance. At `precision: 8`, `errors[colors - 1]` is 0; with a lower
+     * (`'oklab'`). `mse[0]` is the image's variance. At `precision: 8`, `mse[colors - 1]` is 0; with a lower
      * precision it is the error that grouping colours discarded, which is recorded and included. It is an estimate,
      * computed from merge costs on integer-rounded colours. Mapping pixels to their nearest palette colour usually
      * lowers it by 10-15%. `null` before 3.x.
      */
-    errors: Float64Array | null;
+    mse: Float64Array | null;
     /**
-     * `explained[k - 1]` is the share of the image's variance the k-colour clustering keeps, `1 - errors[k - 1] /
-     * errors[0]`: 0 for one colour, rising to 1 at `colors`, and 1 throughout for an image of a single colour. It has no
+     * `explained[k - 1]` is the share of the image's variance the k-colour clustering keeps, `1 - mse[k - 1] /
+     * mse[0]`: 0 for one colour, rising to 1 at `colors`, and 1 throughout for an image of a single colour. It has no
      * units, so a target such as `0.99` means the same in `'rgb'` and `'oklab'`. `null` before 3.x.
      */
     explained: Float64Array | null;

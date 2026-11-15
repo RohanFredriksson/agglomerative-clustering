@@ -60,7 +60,7 @@ describe('clustering header', () => {
             expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));
             expect(await getPaletteWeights(extended, k)).toEqual(await getPaletteWeights(clustering, k));
         }
-        expect((await getClusteringInfo(extended)).errors).toEqual((await getClusteringInfo(clustering)).errors);
+        expect((await getClusteringInfo(extended)).mse).toEqual((await getClusteringInfo(clustering)).mse);
     });
 
     it('rejects things that are not clusterings', async () => {

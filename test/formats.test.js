@@ -20,7 +20,7 @@ it('has a fixture for every format version', () => {
 describe.each(versions)('format version %i', (version) => {
 
     const clustering = new Uint8Array(readFileSync(resolve(folder, `v${version}.bin`)));
-    const { palettes, weights, errors } = JSON.parse(readFileSync(resolve(folder, `v${version}.json`), 'utf8'));
+    const { palettes, weights, mse } = JSON.parse(readFileSync(resolve(folder, `v${version}.json`), 'utf8'));
 
     it('gives the palettes of the release that wrote it', async () => {
         for (const k of sizes) {
@@ -39,13 +39,13 @@ describe.each(versions)('format version %i', (version) => {
     if (version >= 3) {
         it('gives the weights and error curve of the release that wrote it', async () => {
             for (const k of sizes) {expect(Array.from(await getPaletteWeights(clustering, k))).toEqual(weights[k]);}
-            expect(Array.from((await getClusteringInfo(clustering)).errors)).toEqual(errors);
+            expect(Array.from((await getClusteringInfo(clustering)).mse)).toEqual(mse);
         });
     } else {
         it('has no weights or error curve', async () => {
             await expect(getPaletteWeights(clustering, 4)).rejects.toThrow('has no weights');
             const info = await getClusteringInfo(clustering);
-            expect([info.version, info.totalWeight, info.errors]).toEqual([version, null, null]);
+            expect([info.version, info.totalWeight, info.mse]).toEqual([version, null, null]);
         });
     }
 

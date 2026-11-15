@@ -134,9 +134,13 @@ describe('reserveTransparent', () => {
 
 describe('edge cases and options', () => {
 
-    it('an empty image gives no indices', async () => {
-        const result = await quantizeToIndices(new Uint8Array(0), 4);
-        expect(result.indices.length).toBe(0);
+    it('an empty image gives an empty palette and no indices', async () => {
+        for (const options of [{}, { reserveTransparent: true }, { dither: true, width: 1 }]) {
+            const result = await quantizeToIndices(new Uint8Array(0), 4, options);
+            expect(result.palette.length).toBe(0);
+            expect(result.indices.length).toBe(0);
+            expect(result.transparentIndex).toBeNull();
+        }
     });
 
     it('an image with no visible pixels maps to a single black entry, as quantize does', async () => {
@@ -144,10 +148,26 @@ describe('edge cases and options', () => {
         const result = await quantizeToIndices(hidden, 4);
         expect(Array.from(result.palette)).toEqual([0, 0, 0]);
         expect(Array.from(result.indices)).toEqual([0, 0, 0, 0]);
-        const slotted = await quantizeToIndices(hidden, 4, { reserveTransparent: true });
-        expect(Array.from(slotted.palette)).toEqual([0, 0, 0, 0, 0, 0]);
-        expect(slotted.transparentIndex).toBe(1);
-        expect(Array.from(slotted.indices)).toEqual([1, 1, 1, 1]);
+    });
+
+    it('with reserveTransparent, an image with no visible pixels has just the transparent entry', async () => {
+        const hidden = new Uint8Array(16);
+        for (const options of [{}, { dither: true, width: 2 }, { colorSpace: 'oklab' }]) {
+            const slotted = await quantizeToIndices(hidden, 4, { reserveTransparent: true, ...options });
+            expect(Array.from(slotted.palette)).toEqual([0, 0, 0]);
+            expect(slotted.transparentIndex).toBe(0);
+            expect(Array.from(slotted.indices)).toEqual([0, 0, 0, 0]);
+        }
+        const withClustering = await quantizeToIndicesWithClustering(hidden, await getClustering(hidden), 4, { reserveTransparent: true });
+        expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
+    });
+
+    it('a user palette that is empty still gets a placeholder for visible pixels', async () => {
+        const visible = new Uint8Array([10, 20, 30, 255, 0, 0, 0, 0]);
+        const result = await quantizeToIndicesWithPalette(visible, new Uint8Array(0), { reserveTransparent: true });
+        expect(Array.from(result.palette)).toEqual([0, 0, 0, 0, 0, 0]);
+        expect(result.transparentIndex).toBe(1);
+        expect(Array.from(result.indices)).toEqual([0, 1]);
     });
 
     it('copies width and height from ImageData and RawImage, not from a bare Uint8Array', async () => {

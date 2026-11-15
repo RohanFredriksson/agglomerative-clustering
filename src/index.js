@@ -95,11 +95,14 @@ const unpackIndices = (output, image) => {
     return result;
 };
 
+// Returns k, validated. Any k above the number of colours means all of them, so it is capped at the largest value
+// the WASM side holds (a larger one would overflow its int).
 const check = (k) => {
 
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
         throw fail('invalid-argument', "Invalid k: must be a strictly positive integer.")
     }
+    return Math.min(k, 0x7FFFFFFF);
 
 }
 
@@ -248,7 +251,7 @@ export const getPalette = async (image, k, options) => {
 
     await init();
     image = load(image);
-    check(k);
+    k = check(k);
     const o = parseOptions(options, clusterOptions, image);
 
     return call([image.data], (imagePointer) => Module._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
@@ -259,7 +262,7 @@ export const getPaletteFromClustering = async (clustering, k) => {
 
     await init();
     readHeader(clustering);
-    check(k);
+    k = check(k);
 
     return call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
 
@@ -271,7 +274,7 @@ export const getPaletteWeights = async (clustering, k) => {
 
     await init();
     const header = readHeader(clustering);
-    check(k);
+    k = check(k);
     if (header.version < 3) {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
     }
@@ -282,32 +285,32 @@ export const getPaletteWeights = async (clustering, k) => {
 
 };
 
-// What a clustering holds, read from its header and records without the WASM module. `errors[k - 1]` is the mean
+// What a clustering holds, read from its header and records without the WASM module. `mse[k - 1]` is the mean
 // squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,
 // weighted as in clustering, in 8-bit RGB values (RGB) or OKLab units (OKLab).
 export const getClusteringInfo = async (clustering) => {
 
     const header = readHeader(clustering);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, errors: null, explained: null};
+    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, mse: null, explained: null};
     if (header.version < 3) {return info;}
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
     const pixels = 2 ** clustering[7] / (clustering[6] === 1 ? 255 : 1);
     const total = view.getUint32(8, true);
     info.totalWeight = total * pixels;
-    info.errors = new Float64Array(colors);
+    info.mse = new Float64Array(colors);
     info.explained = new Float64Array(colors);
     // The error of the leaf clusters: what `precision` below 8 discarded by grouping colours (0 before it was recorded).
     let remaining = header.headerLength >= 17 ? view.getFloat32(13, true) : 0;
-    if (colors > 0) {info.errors[colors - 1] = remaining / total / 3;}
+    if (colors > 0) {info.mse[colors - 1] = remaining / total / 3;}
     for (let i = header.merges - 1; i >= 0; i--) {
         remaining += view.getFloat32(header.headerLength + 3 + i * header.recordLength + 17, true);
-        info.errors[i] = remaining / total / 3;
+        info.mse[i] = remaining / total / 3;
     }
     // The share of the image's variance each palette size keeps; 1 throughout for an image of one colour.
     for (let i = 0; i < colors; i++) {
-        info.explained[i] = info.errors[0] > 0 ? Math.max(0, Math.min(1, 1 - info.errors[i] / info.errors[0])) : 1;
+        info.explained[i] = info.mse[0] > 0 ? Math.max(0, Math.min(1, 1 - info.mse[i] / info.mse[0])) : 1;
     }
     return info;
 
@@ -318,7 +321,7 @@ export const quantize = async (image, k, options) => {
     await init();
     const wrap = getWrapper(image);
     image = load(image);
-    check(k);
+    k = check(k);
     const o = parseOptions(options, quantizeOptions, image);
 
     return wrap(call([image.data], (imagePointer) => Module._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
@@ -331,7 +334,7 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
     const wrap = getWrapper(image);
     image = load(image);
     readHeader(clustering);
-    check(k);
+    k = check(k);
     const o = parseOptions(options, mapOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
@@ -356,7 +359,7 @@ export const quantizeToIndices = async (image, k, options) => {
     await init();
     const original = image;
     image = load(image);
-    check(k);
+    k = check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
 
     return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
@@ -369,7 +372,7 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     const original = image;
     image = load(image);
     readHeader(clustering);
-    check(k);
+    k = check(k);
     const o = parseOptions(options, mapIndexOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
