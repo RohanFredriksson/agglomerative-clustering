@@ -1,13 +1,13 @@
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
-    IndexedImage, ClusteringInfo,
+    IndexedImage, ClusteringInfo, InitOptions,
 } from './index';
 
 /// <reference lib="esnext.disposable" />
 
 export type {
     ImageFormat, RawImage, ImageLike, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, CodedError, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
+    ErrorCode, CodedError, InitOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
 } from './index';
 
 export interface WorkerOptions {
@@ -16,6 +16,8 @@ export interface WorkerOptions {
      * which is faster for large images but leaves the caller's buffer detached (empty) afterwards.
      */
     transfer?: boolean;
+    /** Where the worker gets its WebAssembly module; see `InitOptions`. It is sent as the worker's first call. */
+    wasm?: InitOptions['wasm'];
 }
 
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */
@@ -39,7 +41,8 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
 
 /** The main entry's functions, run in a worker, plus handles and `terminate`. */
 export interface AgglomerativeWorker {
-    init(): Promise<void>;
+    /** Loads the module in the worker. `wasm` is the only option, and `createWorker({ wasm })` does the same. */
+    init(options?: InitOptions): Promise<void>;
     getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
     getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
     getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;

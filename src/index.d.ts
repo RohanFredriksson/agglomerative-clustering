@@ -98,7 +98,23 @@ export interface IndexedImage {
     height?: number;
 }
 
-export function init(): Promise<void>;
+export interface InitOptions {
+    /**
+     * Where to get the WebAssembly module, for CDNs, strict CSPs and runtimes that can't fetch or compile it from its
+     * default place next to the package's script (Cloudflare Workers, for instance). One of:
+     * - a URL or path string, or a `URL`, to the `clustering.wasm` file;
+     * - its bytes, as an `ArrayBuffer` or a typed array;
+     * - an already compiled `WebAssembly.Module`.
+     */
+    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WebAssembly.Module;
+}
+
+/**
+ * Loads the WebAssembly module. Every other function does it on first use, so calling `init` is optional, except to
+ * say where the module is (`wasm`), which must come before any other call. The first load that succeeds wins; a
+ * failed one can be retried.
+ */
+export function init(options?: InitOptions): Promise<void>;
 
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
 

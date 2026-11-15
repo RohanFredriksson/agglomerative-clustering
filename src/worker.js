@@ -75,6 +75,26 @@ const remoteError = (info, origin) => {
     return error;
 };
 
+// Checks the `wasm` option (see init in the main entry) and makes it fit for posting to the worker: a URL becomes its
+// string, and bytes and compiled modules are cloned across.
+const wasmOption = (wasm) => {
+    if (typeof wasm === 'string') {return wasm;}
+    if (typeof URL !== 'undefined' && wasm instanceof URL) {return wasm.href;}
+    if (wasm instanceof ArrayBuffer || ArrayBuffer.isView(wasm)) {return wasm;}
+    if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {return wasm;}
+    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.");
+};
+
+// Options for init: only `wasm`, or none.
+const initOptions = (options) => {
+    if (options === undefined) {return undefined;}
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    for (const key of Object.keys(options)) {
+        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
+    }
+    return options.wasm === undefined ? {} : {wasm: wasmOption(options.wasm)};
+};
+
 const imageFunctions = ['getClustering', 'getPalette', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeWithClustering', 'quantizeWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClusteringInfo'];
@@ -84,10 +104,13 @@ export const createWorker = (options) => {
     if (options === undefined) {options = {};}
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
     for (const key of Object.keys(options)) {
-        if (key !== 'transfer') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer.`);}
+        if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`);}
     }
     if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.");}
     const transfer = options.transfer === true;
+    // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
+    let initial = options.wasm === undefined ? null : {wasm: wasmOption(options.wasm)};
+    let initialising = null;
 
     let connection = null;
     let starting = null;
@@ -124,6 +147,15 @@ export const createWorker = (options) => {
             connection = await starting;
             if (terminated) {connection.terminate(); throw fail('worker-terminated', "Worker terminated.");}
         }
+        if (initial && !(method === 'init' && args.length > 0 && args[0].wasm !== undefined)) {
+            initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
+            await initialising;
+        }
+        return post(method, args, transferable, origin);
+    };
+
+    const post = (method, args, transferable, origin) => {
+        if (terminated) {return Promise.reject(fail('worker-terminated', "Worker terminated."));}
         const id = nextId++;
         return new Promise((resolve, reject) => {
             if (pending.size === 0) {connection.ref();}
@@ -155,7 +187,12 @@ export const createWorker = (options) => {
         instance[name] = (...args) => invoke(name, args, [], new Error());
     }
 
-    instance.init = () => invoke('init', [], [], new Error()).then(() => undefined);
+    instance.init = (initArgs) => {
+        const origin = new Error();
+        let checked;
+        try {checked = initOptions(initArgs);} catch (error) {return Promise.reject(error);}
+        return invoke('init', checked === undefined ? [] : [checked], [], origin).then(() => undefined);
+    };
 
     // Clusters `image` and keeps it, with its clustering, in the worker.
     instance.cluster = (image, clusterOptions) => {

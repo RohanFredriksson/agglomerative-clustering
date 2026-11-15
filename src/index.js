@@ -10,8 +10,59 @@ let Module = null;
 // 'worker-terminated', 'worker-failed' and 'invalid-handle'.
 const fail = (code, message) => Object.assign(new Error(message), {code});
 
-export const init = async () => {
-    if (!Module) {Module = await createWasmModule();}
+// Turns init's `wasm` option into the settings the Emscripten glue understands. The glue finds its .wasm file next to
+// itself by default (`new URL('clustering.wasm', import.meta.url)`); this lets a caller say where it is, or hand over
+// the bytes or an already compiled module, for CDNs, strict CSPs and runtimes (such as Cloudflare Workers) that
+// cannot fetch or compile it that way. `onError` receives instantiation errors, which the glue would otherwise swallow.
+const wasmSettings = (wasm, onError) => {
+    if (wasm === undefined) {return {};}
+    if (typeof wasm === 'string' || wasm instanceof URL) {
+        const location = String(wasm);
+        return {locateFile: (path, directory) => path.endsWith('.wasm') ? location : directory + path};
+    }
+    // Bytes and compiled modules go through `instantiateWasm`: this build of the glue reads no `wasmBinary` setting.
+    if (wasm instanceof ArrayBuffer || ArrayBuffer.isView(wasm)) {
+        const source = wasm instanceof ArrayBuffer ? wasm : new Uint8Array(wasm.buffer, wasm.byteOffset, wasm.byteLength);
+        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(source, imports).then(({instance}) => receive(instance), onError);}};
+    }
+    if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {
+        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(wasm, imports).then(receive, onError);}};
+    }
+    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.");
+};
+
+// The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
+let loading = null;
+
+// Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, except to
+// say where the .wasm file is (`wasm`), which must come before anything else. The first load that succeeds wins:
+// later calls, with or without options, get the same module.
+export const init = async (options) => {
+
+    if (options === undefined) {options = {};}
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+        throw fail('invalid-argument', "Invalid options: expected an object.");
+    }
+    for (const key of Object.keys(options)) {
+        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
+    }
+    // Checked on every call, so a bad value is reported even when the module is already loaded.
+    let reject;
+    const failed = new Promise((_, r) => {reject = r;});
+    failed.catch(() => {});
+    const settings = wasmSettings(options.wasm, reject);
+    if (Module) {return;}
+
+    if (!loading) {
+        loading = (async () => {
+            Module = await Promise.race([createWasmModule(settings), failed]);
+        })().catch((error) => {
+            loading = null;
+            throw error;
+        });
+    }
+    await loading;
+
 };
 
 const unpack = (pointer) => {

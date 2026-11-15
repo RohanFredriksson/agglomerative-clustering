@@ -41,7 +41,8 @@
       "types": "./dist/worker.d.ts",
       "import": "./dist/worker.mjs",
       "default": "./dist/worker.mjs"
-    }
+    },
+    "./clustering.wasm": "./dist/clustering.wasm"
   },
   "typesVersions": {
     "*": {

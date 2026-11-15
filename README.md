@@ -238,8 +238,17 @@ const { palette, indices, transparentIndex } = await quantizeToIndices(imageData
 ### `quantizeToIndicesWithClustering(image, clustering, k, options?)`, `quantizeToIndicesWithPalette(image, palette, options?)`
 The same for `quantizeWithClustering` and `quantizeWithPalette`. Options: theirs, plus `reserveTransparent`.
 
-### `init(): Promise<void>`
-Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch.
+### `init(options?): Promise<void>`
+Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a load that fails can be retried.
+
+By default the module is found next to the package's script (`new URL('clustering.wasm', import.meta.url)`), which Node and bundlers such as Vite handle. When that doesn't work, say where it is with `wasm`, before any other call (the first load that succeeds wins):
+
+```js
+await init({ wasm: 'https://cdn.example.com/clustering.wasm' });      // a URL or path string, or a URL
+await init({ wasm: await (await fetch(url)).arrayBuffer() });          // the bytes
+await init({ wasm: wasmModule });                                      // a compiled WebAssembly.Module
+```
+That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it themselves. The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler for Cloudflare Workers does) can give you `wasmModule` with `import wasmModule from 'agglomerative-clustering/clustering.wasm'`. That path is not tested here. A page with a strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src` to run any WebAssembly. `createWorker({ wasm })` (and `worker.init({ wasm })`) pass the same thing to a worker, which loads its own copy. The worker's own script is still found next to `worker.mjs`.
 
 Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error.
 
