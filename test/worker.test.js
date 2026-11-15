@@ -48,7 +48,7 @@ describe('a worker gives the same results as the main entry', () => {
     it('for indexed output', async () => {
         const clustering = await ac.getClustering(image);
         const palette = await ac.getPalette(image, 5);
-        expect(await worker.quantizeToIndices(raw, 300, { transparentIndex: true })).toEqual(await ac.quantizeToIndices(raw, 300, { transparentIndex: true }));
+        expect(await worker.quantizeToIndices(raw, 300, { reserveTransparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { reserveTransparent: true }));
         expect(await worker.quantizeToIndicesWithClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 6));
         expect(await worker.quantizeToIndicesWithPalette(image, palette)).toEqual(await ac.quantizeToIndicesWithPalette(image, palette));
     });
@@ -77,11 +77,21 @@ describe('handles', () => {
         expect(await handle.getClustering()).toEqual(clustering);
         expect(await handle.getPalette(9)).toEqual(await ac.getPaletteFromClustering(clustering, 9));
         expect(await handle.getPaletteWeights(9)).toEqual(await ac.getPaletteWeights(clustering, 9));
-        expect(await handle.getInfo()).toEqual(await ac.getClusteringInfo(clustering));
+        expect(await handle.getClusteringInfo()).toEqual(await ac.getClusteringInfo(clustering));
         expect(await handle.quantize(9, { dither: true, width })).toEqual(await ac.quantizeWithClustering(image, clustering, 9, { dither: true, width }));
-        expect(await handle.quantizeToIndices(9, { transparentIndex: true })).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 9, { transparentIndex: true }));
+        expect(await handle.quantizeToIndices(9, { reserveTransparent: true })).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 9, { reserveTransparent: true }));
         await handle.release();
         await expect(handle.getPalette(2)).rejects.toThrow('released');
+    });
+
+    it('release through Symbol.asyncDispose, and releasing twice is harmless', async () => {
+        const handle = await worker.cluster(image);
+        if (typeof Symbol.asyncDispose === 'symbol') {
+            await handle[Symbol.asyncDispose]();
+            await expect(handle.getPalette(2)).rejects.toThrow('released');
+        }
+        await handle.release();
+        await handle.release();
     });
 
     it('give results in the type of the image they were made from', async () => {
@@ -115,6 +125,14 @@ describe('createWorker', () => {
         await moving.terminate();
     });
 
+    it('stops and restarts the shared worker', async () => {
+        const first = await dropIn.getPalette(image, 4);
+        await dropIn.terminate();
+        await dropIn.terminate();
+        expect(await dropIn.getPalette(image, 4)).toEqual(first);
+        await dropIn.terminate();
+    });
+
     it('validates its options', () => {
         expect(() => createWorker({ transfer: 'yes' })).toThrow('Invalid transfer');
         expect(() => createWorker({ threads: 2 })).toThrow("Invalid option 'threads'");
@@ -134,7 +152,7 @@ describe('createWorker', () => {
 describe('the drop-in module', () => {
 
     it('exports the main entry\'s functions, plus createWorker', () => {
-        expect(Object.keys(dropIn).sort()).toEqual([...Object.keys(ac), 'createWorker'].sort());
+        expect(Object.keys(dropIn).sort()).toEqual([...Object.keys(ac), 'createWorker', 'terminate'].sort());
     });
 
     it('runs them in a shared worker', async () => {

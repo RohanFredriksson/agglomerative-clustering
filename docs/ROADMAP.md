@@ -29,9 +29,9 @@ Since 2.0 every clustering starts with `[0xAC, version, …]`. What was luck in 
 What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering format changes anyway.
 
 - [x] **Worker entry** `agglomerative-clustering/worker`: `createWorker()` with handles that keep an image and its clustering in the worker, and drop-in exports over one shared worker. Web Worker in browsers, `worker_threads` in Node.
-- [x] **Indexed output:** `quantizeToIndices*`, with `transparentIndex`.
+- [x] **Indexed output:** `quantizeToIndices*`, with `reserveTransparent`.
 - [x] **Clustering format v3**, following the rules above. Records are 21 bytes: colours, the split's parent index, the lighter half's weight and the Ward cost. The parent index is needed because different clusters can share an 8-bit colour, which would otherwise make weights ambiguous.
-- [x] **Palette weights** (`getPaletteWeights`) and the **error curve** (`getClusteringInfo().errors`), for choosing a palette size by error.
+- [x] **Palette weights** (`getPaletteWeights`) and the **error curve** (`getClusteringInfo().errors`, and the unitless `explained`), for choosing a palette size by error.
 - [x] **Bundler smoke test:** a Vite build run in headless Chromium, in CI.
 
 ## Next

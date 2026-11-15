@@ -68,7 +68,7 @@ describe('getPaletteWeights', () => {
 
     it('rejects a clustering whose records name an impossible parent', async () => {
         const clustering = new Uint8Array(await getClustering(gradient));
-        clustering[16 + 9] = 200; // record 0's parent index, which must be 0
+        clustering[clustering[2] + 3 + 9] = 200; // record 0's parent index, which must be 0
         await expect(getPaletteWeights(clustering, 4)).rejects.toThrow('weights are inconsistent');
     });
 
@@ -101,6 +101,30 @@ describe('getClusteringInfo', () => {
             variance += squares / (width * height) - (sum / (width * height)) ** 2;
         }
         expect(errors[0]).toBeCloseTo(variance / 3, 0);
+    });
+
+    it('keeps the variance of the image at any precision, and no longer falls to 0', async () => {
+        const exact = await getClusteringInfo(await getClustering(gradient));
+        const grouped = await getClusteringInfo(await getClustering(gradient, { precision: 4 }));
+        // Grouping discards error before clustering; it is added back, so the starting point is the same variance.
+        expect(grouped.errors[0]).toBeCloseTo(exact.errors[0], 0);
+        expect(grouped.errors[grouped.colors - 1]).toBeGreaterThan(0);
+        expect(exact.errors[exact.colors - 1]).toBe(0);
+        for (let k = 1; k < grouped.colors; k++) {expect(grouped.errors[k]).toBeLessThanOrEqual(grouped.errors[k - 1]);}
+    });
+
+    it('gives the share of variance each palette size keeps', async () => {
+        const { errors, explained, colors } = await getClusteringInfo(await getClustering(gradient));
+        expect(explained.length).toBe(colors);
+        expect(explained[0]).toBe(0);
+        expect(explained[colors - 1]).toBe(1);
+        for (let k = 0; k < colors; k++) {
+            expect(explained[k]).toBeCloseTo(1 - errors[k] / errors[0], 9);
+            if (k > 0) {expect(explained[k]).toBeGreaterThanOrEqual(explained[k - 1]);}
+        }
+        const flat = await getClusteringInfo(await getClustering(pixels([{ rgb: [9, 9, 9], count: 5 }])));
+        expect(Array.from(flat.explained)).toEqual([1]);
+        expect((await getClusteringInfo(await getClustering(new Uint8Array(0)))).explained.length).toBe(0);
     });
 
     it('describes an empty clustering', async () => {

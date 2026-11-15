@@ -27,8 +27,8 @@ describe('clustering header', () => {
 
     // Reading 1.x and 2.x clusterings is covered by test/formats.test.js, with stored clusterings of each version.
     it('starts with the magic byte, version, header and record lengths, colour space and precision', async () => {
-        expect(Array.from((await getClustering(gradient)).subarray(0, 6))).toEqual([0xAC, 3, 13, 21, 0, 8]);
-        expect(Array.from((await getClustering(gradient, { colorSpace: 'oklab', precision: 6 })).subarray(0, 6))).toEqual([0xAC, 3, 13, 21, 1, 6]);
+        expect(Array.from((await getClustering(gradient)).subarray(0, 6))).toEqual([0xAC, 3, 22, 21, 0, 8]);
+        expect(Array.from((await getClustering(gradient, { colorSpace: 'oklab', precision: 6 })).subarray(0, 6))).toEqual([0xAC, 3, 22, 21, 1, 6]);
     });
 
     it('is always 4 or 7 more than a multiple of 9 bytes long, which no 1.x clustering is', async () => {
@@ -51,10 +51,11 @@ describe('clustering header', () => {
         const clustering = await getClustering(gradient);
         const merges = (await getClusteringInfo(clustering)).colors - 1;
         // The same clustering with 9 unknown bytes after each record (keeping the length 7 more than a multiple of 9).
-        const extended = new Uint8Array(13 + 3 + 30 * merges + (7 - (16 + 30 * merges) % 9 + 9) % 9);
-        extended.set(clustering.subarray(0, 16));
+        const header = clustering[2];
+        const extended = new Uint8Array(header + 3 + 30 * merges + (7 - (header + 3 + 30 * merges) % 9 + 9) % 9);
+        extended.set(clustering.subarray(0, header + 3));
         extended[3] = 30;
-        for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(16 + 21 * i, 37 + 21 * i), 16 + 30 * i);}
+        for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(header + 3 + 21 * i, header + 24 + 21 * i), header + 3 + 30 * i);}
         for (const k of [1, 5, 40]) {
             expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));
             expect(await getPaletteWeights(extended, k)).toEqual(await getPaletteWeights(clustering, k));
@@ -142,7 +143,7 @@ describe('alpha weighting', () => {
 
     it('gives an empty palette for a fully transparent image', async () => {
         const image = new Uint8Array(pixels(16, 10, 20, 30, 0));
-        expect((await getClustering(image)).length).toBe(13);
+        expect((await getClustering(image)).length).toBe(22);
         expect((await getPalette(image, 4)).length).toBe(0);
         const result = await quantize(image, 4);
         expect(result.length).toBe(image.length);

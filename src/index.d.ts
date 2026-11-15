@@ -1,5 +1,19 @@
 export type ImageFormat = 'rgb' | 'rgba';
 
+/**
+ * What went wrong, on the `code` of every error this library throws (the message is for people and may change):
+ * `invalid-argument` (image, k, options or palette), `invalid-clustering`, `unsupported-version` (a clustering from a
+ * newer format version, or an older one that lacks what was asked for), `out-of-memory`, and in the worker entry
+ * `worker-terminated`, `worker-failed` and `invalid-handle`.
+ */
+export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory'
+    | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
+
+/** An `Error` thrown by this library. There is no class to test with `instanceof`: check `code`. */
+export interface CodedError extends Error {
+    code: ErrorCode;
+}
+
 export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;
     format: ImageFormat;
@@ -57,9 +71,9 @@ export interface IndexOptions {
     /**
      * `false` (default): fully transparent pixels get the index of their nearest colour, like any other pixel.
      * `true`: if the image is RGBA and has fully transparent pixels, they get an extra entry appended after the
-     * palette (black, taking no part in matching), as palette PNGs expect. Its index is `transparentIndex`.
+     * palette (black, taking no part in matching), as palette PNGs expect. Its index is the result's `transparentIndex`.
      */
-    transparentIndex?: boolean;
+    reserveTransparent?: boolean;
 }
 
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
@@ -70,8 +84,10 @@ export interface IndexedImage {
     palette: Uint8Array;
     /** One palette index per pixel: `Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`. */
     indices: Uint8Array | Uint16Array | Uint32Array;
-    /** The index of the entry for fully transparent pixels, or -1 if there is none. */
-    transparentIndex: number;
+    /** The index of the entry for fully transparent pixels, or `null` if there is none. */
+    transparentIndex: number | null;
+    /** The size of one index in bits: 8, 16 or 32, matching the type of `indices`. */
+    indexBits: 8 | 16 | 32;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
     width?: number;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `height`. */
@@ -110,9 +126,18 @@ export interface ClusteringInfo {
     /**
      * `errors[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
      * distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (`'rgb'`) or OKLab units
-     * (`'oklab'`). Mapping pixels to their nearest palette colour usually lowers it by 10-15%. `null` before 3.x.
+     * (`'oklab'`). `errors[0]` is the image's variance. At `precision: 8`, `errors[colors - 1]` is 0; with a lower
+     * precision it is the error that grouping colours discarded, which is recorded and included. It is an estimate,
+     * computed from merge costs on integer-rounded colours. Mapping pixels to their nearest palette colour usually
+     * lowers it by 10-15%. `null` before 3.x.
      */
     errors: Float64Array | null;
+    /**
+     * `explained[k - 1]` is the share of the image's variance the k-colour clustering keeps, `1 - errors[k - 1] /
+     * errors[0]`: 0 for one colour, rising to 1 at `colors`, and 1 throughout for an image of a single colour. It has no
+     * units, so a target such as `0.99` means the same in `'rgb'` and `'oklab'`. `null` before 3.x.
+     */
+    explained: Float64Array | null;
 }
 
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */

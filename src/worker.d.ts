@@ -3,7 +3,12 @@ import type {
     IndexedImage, ClusteringInfo,
 } from './index';
 
-export type * from './index';
+/// <reference lib="esnext.disposable" />
+
+export type {
+    ImageFormat, RawImage, ImageLike, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
+    ErrorCode, CodedError, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
+} from './index';
 
 export interface WorkerOptions {
     /**
@@ -18,12 +23,18 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getClustering(): Promise<Uint8Array>;
     getPalette(k: number): Promise<Uint8Array>;
     getPaletteWeights(k: number): Promise<Float64Array>;
-    getInfo(): Promise<ClusteringInfo>;
+    getClusteringInfo(): Promise<ClusteringInfo>;
     /** Maps the kept image to the k-colour palette. Returns the same type as the image given to `cluster`. */
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
-    /** Frees the image and clustering in the worker. Later calls on the handle fail. */
+    /**
+     * Frees the image and clustering in the worker. Later calls on the handle fail. Call it when you are done, or
+     * declare the handle with `await using`, which does. A handle that is dropped without either is freed once it is
+     * garbage-collected, but when that happens is up to the JavaScript engine.
+     */
     release(): Promise<void>;
+    /** The same as `release()`, for `await using`. Present where the runtime has `Symbol.asyncDispose`. */
+    [Symbol.asyncDispose](): Promise<void>;
 }
 
 /** The main entry's functions, run in a worker, plus handles and `terminate`. */
@@ -48,6 +59,9 @@ export interface AgglomerativeWorker {
 
 /** Starts a worker: a Web Worker in browsers, a worker thread in Node. It never keeps a Node process alive while idle. */
 export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
+
+/** Stops the shared worker used by the exports below, rejecting calls still waiting. The next call starts a new one. */
+export function terminate(): Promise<void>;
 
 // The main entry's functions, run in one shared worker started on first use.
 export const init: AgglomerativeWorker['init'];

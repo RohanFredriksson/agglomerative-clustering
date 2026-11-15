@@ -4,6 +4,8 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
+const fail = (code, message) => Object.assign(new Error(message), {code});
+
 const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
 
 // Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
@@ -57,6 +59,22 @@ const pixelBuffers = (sent) => {
     return data ? [data.buffer] : [];
 };
 
+// Rebuilds an error that happened in the worker: same name, message and code as the main entry gives for the same
+// input, the stack of the call that failed (`origin`, made when the call was sent), and the worker's own stack as `cause`.
+const remoteError = (info, origin) => {
+    const error = new Error(info.message);
+    if (info.name && info.name !== 'Error') {error.name = info.name;}
+    if (info.code !== undefined) {error.code = info.code;}
+    if (origin.stack) {error.stack = `${error.name}: ${error.message}${origin.stack.slice(origin.stack.indexOf('\n'))}`;}
+    if (info.stack) {
+        const cause = new Error(info.message);
+        cause.name = error.name;
+        cause.stack = info.stack;
+        error.cause = cause;
+    }
+    return error;
+};
+
 const imageFunctions = ['getClustering', 'getPalette', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeWithClustering', 'quantizeWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClusteringInfo'];
@@ -64,11 +82,11 @@ const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClu
 export const createWorker = (options) => {
 
     if (options === undefined) {options = {};}
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw new Error("Invalid options: expected an object.");}
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
     for (const key of Object.keys(options)) {
-        if (key !== 'transfer') {throw new Error(`Invalid option '${key}': expected transfer.`);}
+        if (key !== 'transfer') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer.`);}
     }
-    if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw new Error("Invalid transfer: must be a boolean.");}
+    if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.");}
     const transfer = options.transfer === true;
 
     let connection = null;
@@ -78,9 +96,15 @@ export const createWorker = (options) => {
     let nextHandle = 1;
     const pending = new Map();
 
+    // Safety net for handles dropped without release(): when a handle is garbage-collected, the worker frees what it
+    // kept for it. Best-effort, since collection time is up to the engine; release() or `await using` is the contract.
+    const reclaim = typeof FinalizationRegistry === 'function'
+        ? new FinalizationRegistry((id) => {if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}})
+        : null;
+
     const receive = (message) => {
         if (message.failure !== undefined) {
-            for (const {reject} of pending.values()) {reject(new Error(`Worker failed: ${message.failure}`));}
+            for (const {reject} of pending.values()) {reject(fail('worker-failed', `Worker failed: ${message.failure}`));}
             pending.clear();
             return;
         }
@@ -88,20 +112,22 @@ export const createWorker = (options) => {
         if (!call) {return;}
         pending.delete(message.id);
         if (pending.size === 0 && connection) {connection.unref();}
-        if (message.error !== undefined) {call.reject(new Error(message.error));} else {call.resolve(message.result);}
+        if (message.error !== undefined) {call.reject(remoteError(message.error, call.origin));} else {call.resolve(message.result);}
     };
 
-    const invoke = async (method, args, transferable = []) => {
-        if (terminated) {throw new Error("Worker terminated.");}
+    // `origin` is an Error made in the caller's own (non-async) function, for the stack of a failure: async helpers
+    // from transpiled code would otherwise fill the stack's frame limit before the caller shows up.
+    const invoke = async (method, args, transferable, origin) => {
+        if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
         if (!connection) {
             starting = starting || start(receive);
             connection = await starting;
-            if (terminated) {connection.terminate(); throw new Error("Worker terminated.");}
+            if (terminated) {connection.terminate(); throw fail('worker-terminated', "Worker terminated.");}
         }
         const id = nextId++;
         return new Promise((resolve, reject) => {
             if (pending.size === 0) {connection.ref();}
-            pending.set(id, {resolve, reject});
+            pending.set(id, {resolve, reject, origin});
             try {
                 connection.post({id, method, args}, transfer ? transferable : []);
             } catch (error) {
@@ -116,49 +142,62 @@ export const createWorker = (options) => {
 
     for (const name of imageFunctions) {
         const mapped = mappedImageFunctions.includes(name);
-        instance[name] = async (image, ...rest) => {
-            const sent = send(image);
-            const result = await invoke(name, [sent, ...rest], pixelBuffers(sent));
-            return mapped ? rebuild(image)(result) : result;
+        instance[name] = (image, ...rest) => {
+            const origin = new Error();
+            return (async () => {
+                const sent = send(image);
+                const result = await invoke(name, [sent, ...rest], pixelBuffers(sent), origin);
+                return mapped ? rebuild(image)(result) : result;
+            })();
         };
     }
     for (const name of otherFunctions) {
-        instance[name] = (...args) => invoke(name, args);
+        instance[name] = (...args) => invoke(name, args, [], new Error());
     }
 
-    instance.init = async () => {await invoke('init', []);};
+    instance.init = () => invoke('init', [], [], new Error()).then(() => undefined);
 
     // Clusters `image` and keeps it, with its clustering, in the worker.
-    instance.cluster = async (image, clusterOptions) => {
-        const id = nextHandle++;
-        const sent = send(image);
-        await invoke('cluster', [id, sent, clusterOptions], pixelBuffers(sent));
-        const output = rebuild(image);
-        let released = false;
-        const use = (method, args) => {
-            if (released) {return Promise.reject(new Error("Invalid handle: it was released."));}
-            return invoke(method, [id, ...args]);
-        };
-        return {
-            getClustering: () => use('handleGetClustering', []),
-            getPalette: (k) => use('handleGetPalette', [k]),
-            getPaletteWeights: (k) => use('handleGetPaletteWeights', [k]),
-            getInfo: () => use('handleGetInfo', []),
-            quantize: async (k, mapOptions) => output(await use('handleQuantize', [k, mapOptions])),
-            quantizeToIndices: (k, mapOptions) => use('handleQuantizeToIndices', [k, mapOptions]),
-            release: async () => {
-                if (released) {return;}
-                released = true;
-                await invoke('release', [id]);
-            },
-        };
+    instance.cluster = (image, clusterOptions) => {
+        const origin = new Error();
+        return (async () => {
+            const id = nextHandle++;
+            const sent = send(image);
+            await invoke('cluster', [id, sent, clusterOptions], pixelBuffers(sent), origin);
+            const output = rebuild(image);
+            let released = false;
+            // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
+            // keeps it alive and it is not reclaimed while still in use.
+            const use = (method, args) => {
+                if (released || !handle) {return Promise.reject(fail('invalid-handle', "Invalid handle: it was released."));}
+                return invoke(method, [id, ...args], [], new Error());
+            };
+            const handle = {
+                getClustering: () => use('handleGetClustering', []),
+                getPalette: (k) => use('handleGetPalette', [k]),
+                getPaletteWeights: (k) => use('handleGetPaletteWeights', [k]),
+                getClusteringInfo: () => use('handleGetClusteringInfo', []),
+                quantize: async (k, mapOptions) => output(await use('handleQuantize', [k, mapOptions])),
+                quantizeToIndices: (k, mapOptions) => use('handleQuantizeToIndices', [k, mapOptions]),
+                release: async () => {
+                    if (released) {return;}
+                    released = true;
+                    if (reclaim) {reclaim.unregister(handle);}
+                    await invoke('release', [id], [], new Error());
+                },
+            };
+            // `await using handle = await worker.cluster(image)` releases it at the end of the block.
+            if (typeof Symbol.asyncDispose === 'symbol') {handle[Symbol.asyncDispose] = handle.release;}
+            if (reclaim) {reclaim.register(handle, id, handle);}
+            return handle;
+        })();
     };
 
     // Stops the worker. Calls still waiting are rejected, and later calls fail.
     instance.terminate = async () => {
         if (terminated) {return;}
         terminated = true;
-        for (const {reject} of pending.values()) {reject(new Error("Worker terminated."));}
+        for (const {reject} of pending.values()) {reject(fail('worker-terminated', "Worker terminated."));}
         pending.clear();
         if (connection) {await connection.terminate();}
         else if (starting) {(await starting).terminate();}
@@ -170,6 +209,14 @@ export const createWorker = (options) => {
 
 let shared = null;
 const sharedWorker = () => (shared = shared || createWorker());
+
+// Stops the shared worker, rejecting calls still waiting. The next call starts a fresh one.
+export const terminate = async () => {
+    if (!shared) {return;}
+    const stopping = shared;
+    shared = null;
+    await stopping.terminate();
+};
 
 export const init = () => sharedWorker().init();
 export const getClustering = (...args) => sharedWorker().getClustering(...args);

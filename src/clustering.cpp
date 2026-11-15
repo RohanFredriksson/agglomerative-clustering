@@ -35,8 +35,13 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
 
 // Clustering format version 3: a header, then the root colour, then one record per merge in split order, then
 // zero padding. Multi-byte values are little-endian.
-//   header (13 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
-//                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), 0]
+//   header (22 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
+//                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), 0,
+//                       grouped error (f32), 5 zero bytes]
+// The grouped error is the squared error that `precision` below 8 discards before clustering (colours are grouped
+// and replaced by their mean), in the same units as the costs; 0 at precision 8. Readers add it to the costs for the
+// error of the leaf clusters. Headers of 13 bytes (before this field) are read as having 0. The header is 22 bytes
+// so that the header alone, which an empty image gives, is still 4 more than a multiple of 9.
 //   record (21 bytes): [merged rgb, heavier rgb, lighter rgb, parent (u32), lighter weight (u32), cost (f32)]
 // Record i splits cluster `parent` (its index in split order: the root is 0, and record i's lighter child is
 // i + 1) into its heavier child, which keeps the index, and its lighter child. Weights times 2^shift are in the
@@ -48,7 +53,8 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
 // Version 2 (2.x) had a 4-byte header [magic, 2, colour space, precision] and 9-byte records of colours only.
 constexpr uint8_t clustering_magic = 0xAC;
 constexpr uint8_t clustering_version = 3;
-constexpr size_t clustering_header = 13;
+constexpr size_t clustering_header = 22;
+constexpr size_t clustering_min_header = 13;
 constexpr size_t clustering_record = 21;
 
 void write_u32(uint8_t* at, uint32_t value) {
@@ -93,6 +99,7 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     std::vector<std::array<uint16_t, 3>> unique_colors;
     std::vector<uint64_t> unique_counts = histogram.counts();
+    double grouped_error = 0;  // squared error lost by grouping, in unscaled weights times squared coordinates
     unique_colors.reserve(histogram.size());
     for (uint32_t key : histogram.colors()) {
         unique_colors.push_back(space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
@@ -110,8 +117,12 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         const uint32_t mask = (channel << 16) | (channel << 8) | channel;
         AgglomerativeClustering::AgglomerativeHistogram bins;
         std::vector<std::array<uint64_t, 3>> sums;
+        const std::vector<std::array<uint16_t, 3>> original_colors = unique_colors;
+        const std::vector<uint64_t> original_counts = unique_counts;
+        std::vector<uint32_t> bin_of(unique_colors.size());
         for (size_t i = 0; i < unique_colors.size(); i++) {
             uint32_t bin = bins.add(histogram.colors()[i] & mask, unique_counts[i]);
+            bin_of[i] = bin;
             if (bin == sums.size()) {sums.push_back({0u, 0u, 0u});}
             for (int c = 0; c < 3; c++) {sums[bin][c] += uint64_t(unique_colors[i][c]) * unique_counts[i];}
         }
@@ -119,6 +130,15 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
         unique_counts = bins.counts();
         for (size_t b = 0; b < bins.size(); b++) {
             for (int c = 0; c < 3; c++) {unique_colors[b][c] = uint16_t(sums[b][c] / unique_counts[b]);}
+        }
+        // What grouping discarded: each original colour's squared distance to the mean that now stands for it.
+        for (size_t i = 0; i < original_colors.size(); i++) {
+            double squared = 0;
+            for (int c = 0; c < 3; c++) {
+                const double d = double(original_colors[i][c]) - double(unique_colors[bin_of[i]][c]);
+                squared += d * d;
+            }
+            grouped_error += squared * double(original_counts[i]);
         }
     }
 
@@ -217,6 +237,12 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
 
     // Costs are converted from 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
     const double scale = color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
+    {
+        const float grouped = float(grouped_error / double(uint64_t(1) << shift) / (scale * scale));
+        uint32_t bits;
+        std::memcpy(&bits, &grouped, 4);
+        write_u32(&clustering[13], bits);
+    }
     // Records go in split order, the reverse of merge order. Each cluster's split-order index: the root is 0,
     // the heavier child keeps its parent's index, and record i's lighter child is i + 1.
     std::vector<uint32_t> index(grid.capacity(), 0);
@@ -274,9 +300,9 @@ ClusteringView read_clustering(const uint8_t* data, size_t length) {
         view.body = data + 4;
         view.merges = length == 4 ? 0 : (length - 4 - 3) / 9;
     }
-    if (data[1] == 3 && length >= clustering_header) {
+    if (data[1] == 3 && length >= clustering_min_header) {
         const size_t header = data[2], record = data[3];
-        if (header < clustering_header || record < clustering_record || header > length || data[4] > 1) {return view;}
+        if (header < clustering_min_header || record < clustering_record || header > length || data[4] > 1) {return view;}
         view.valid = true;
         view.version = 3;
         view.color_space = ColorSpace(data[4]);

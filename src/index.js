@@ -4,6 +4,12 @@ const colorSpaces = {'rgb': 0, 'oklab': 1};
 const alphaModes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
+// Every error this library throws is an Error with a `code` saying what went wrong, so callers needn't match on
+// message text: 'invalid-argument' (image, k, options, palette), 'invalid-clustering', 'unsupported-version' (a
+// clustering from a newer format, or an older one without what was asked for), 'out-of-memory'. The worker entry adds
+// 'worker-terminated', 'worker-failed' and 'invalid-handle'.
+const fail = (code, message) => Object.assign(new Error(message), {code});
+
 export const init = async () => {
     if (!Module) {Module = await createWasmModule();}
 };
@@ -21,7 +27,7 @@ const bytes = (data) => data instanceof Uint8Array ? data : new Uint8Array(data.
 const load = (image) => {
 
     if (image instanceof Uint8Array) {
-        if (image.length % 4 !== 0) {throw new Error("Invalid image data: length must be a multiple of 4 for 'rgba'.");}
+        if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.");}
         return {data: image, format: 'rgba'};
     }
 
@@ -30,20 +36,20 @@ const load = (image) => {
     }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
-        throw new Error("Invalid image: expected object with `data` and `format`.");
+        throw fail('invalid-argument', "Invalid image: expected object with `data` and `format`.");
     }
 
     if (!(image.data instanceof Uint8Array) && !(image.data instanceof Uint8ClampedArray)) {
-        throw new Error("Invalid image data: must be Uint8Array or Uint8ClampedArray.");
+        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.");
     }
 
     if (!Object.keys(codes).includes(image.format)) {
-        throw new Error("Invalid format: must be 'rgb' or 'rgba'.");
+        throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.");
     }
 
     const channels = image.format === 'rgb' ? 3 : 4;
     if (image.data.length % channels !== 0) {
-        throw new Error(`Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`);
+        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`);
     }
 
     return {data: bytes(image.data), format: image.format, width: image.width};
@@ -72,7 +78,7 @@ const getWrapper = (image) => {
 const unpackIndices = (output, image) => {
     const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
     const entries = view.getUint32(0, true);
-    const transparentIndex = view.getInt32(4, true);
+    const transparent = view.getInt32(4, true);
     const indexBytes = view.getUint32(8, true);
     const palette = output.slice(12, 12 + 3 * entries);
     const start = 12 + 3 * entries;
@@ -81,7 +87,7 @@ const unpackIndices = (output, image) => {
     const indices = new Indices(count);
     // Little-endian, like the WASM heap, which Emscripten's own typed-array views already assume of the host.
     new Uint8Array(indices.buffer).set(output.subarray(start));
-    const result = {palette, indices, transparentIndex};
+    const result = {palette, indices, indexBits: 8 * indexBytes, transparentIndex: transparent < 0 ? null : transparent};
     if (!(image instanceof Uint8Array)) {
         if (image.width !== undefined) {result.width = image.width;}
         if (image.height !== undefined) {result.height = image.height;}
@@ -92,7 +98,7 @@ const unpackIndices = (output, image) => {
 const check = (k) => {
 
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
-        throw new Error("Invalid k: must be a strictly positive integer.")
+        throw fail('invalid-argument', "Invalid k: must be a strictly positive integer.")
     }
 
 }
@@ -104,73 +110,74 @@ const check = (k) => {
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
-//   transparentIndex: false (default) or true; for indexed output, gives fully transparent pixels their own entry
+//   reserveTransparent: false (default) or true; for indexed output, gives fully transparent pixels their own entry
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {
-        throw new Error("Invalid options: expected an object.");
+        throw fail('invalid-argument', "Invalid options: expected an object.");
     }
     for (const key of Object.keys(options)) {
-        if (!allowed.includes(key)) {throw new Error(`Invalid option '${key}': expected one of ${allowed.join(', ')}.`);}
+        if (!allowed.includes(key)) {throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.`);}
     }
 
     const colorSpace = options.colorSpace === undefined ? 'rgb' : options.colorSpace;
     if (!Object.keys(colorSpaces).includes(colorSpace)) {
-        throw new Error("Invalid colorSpace: must be 'rgb' or 'oklab'.");
+        throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");
     }
 
     const alpha = options.alpha === undefined ? 'weight' : options.alpha;
     if (!Object.keys(alphaModes).includes(alpha)) {
-        throw new Error("Invalid alpha: must be 'weight' or 'ignore'.");
+        throw fail('invalid-argument', "Invalid alpha: must be 'weight' or 'ignore'.");
     }
 
     const precision = options.precision === undefined ? 8 : options.precision;
     if (typeof precision !== 'number' || !Number.isInteger(precision) || precision < 1 || precision > 8) {
-        throw new Error("Invalid precision: must be an integer from 1 to 8.");
+        throw fail('invalid-argument', "Invalid precision: must be an integer from 1 to 8.");
     }
 
     const dither = options.dither === undefined || options.dither === false ? 0 : options.dither === true ? 1 : options.dither;
     if (typeof dither !== 'number' || !Number.isFinite(dither) || dither < 0 || dither > 1) {
-        throw new Error("Invalid dither: must be a boolean or a number from 0 to 1.");
+        throw fail('invalid-argument', "Invalid dither: must be a boolean or a number from 0 to 1.");
     }
 
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
         const channels = image.format === 'rgb' ? 3 : 4;
         if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
-            throw new Error("Invalid width: dithering needs the image width, as `options.width` or the image's `width`.");
+            throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.");
         }
         if ((image.data.length / channels) % width !== 0) {
-            throw new Error("Invalid width: the image's pixel count is not a multiple of it.");
+            throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.");
         }
     }
 
-    const transparentIndex = options.transparentIndex === undefined ? false : options.transparentIndex;
-    if (typeof transparentIndex !== 'boolean') {
-        throw new Error("Invalid transparentIndex: must be a boolean.");
+    const reserveTransparent = options.reserveTransparent === undefined ? false : options.reserveTransparent;
+    if (typeof reserveTransparent !== 'boolean') {
+        throw fail('invalid-argument', "Invalid reserveTransparent: must be a boolean.");
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparentIndex};
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, reserveTransparent};
 
 };
 
 const clusterOptions = ['colorSpace', 'precision', 'alpha'];
 const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width'];
-const quantizeIndexOptions = [...quantizeOptions, 'transparentIndex'];
-const mapIndexOptions = [...mapOptions, 'transparentIndex'];
+const quantizeIndexOptions = [...quantizeOptions, 'reserveTransparent'];
+const mapIndexOptions = [...mapOptions, 'reserveTransparent'];
 
 // Reads a clustering's header, or throws if it isn't a clustering this version can read. Version 1 (1.x) has no
 // header and is told apart by its length, 0 or 3 more than a multiple of 9, which no later version has (they pad
 // to 4 or 7 more). Later versions start with the magic byte 0xAC and their version number.
 //   version 2: [0xAC, 2, colour space, precision], then 9-byte records of colours
 //   version 3: [0xAC, 3, header length, record length, colour space, precision, weight unit, weight shift,
-//              total weight (u32 LE), ...], then records of colours, parent index, lighter weight and cost
+//              total weight (u32 LE), 0, grouped error (f32 LE, from header length 17), ...], then records of
+//              colours, parent index, lighter weight and cost
 const latestVersion = 3;
 const readHeader = (clustering) => {
     if (!(clustering instanceof Uint8Array)) {
-        throw new Error("Invalid clustering: must be a Uint8Array from getClustering.");
+        throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.");
     }
     const length = clustering.length;
     if (length % 9 === 0 || length % 9 === 3) {
@@ -190,20 +197,20 @@ const readHeader = (clustering) => {
             }
         }
         if (version > latestVersion) {
-            throw new Error(`Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
+            throw fail('unsupported-version', `Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
         }
     }
-    throw new Error("Invalid clustering: not a clustering from getClustering.");
+    throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering.");
 };
 
 // Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
 // image, and quantize maps such an image the same way.
 const checkPalette = (palette) => {
     if (!(palette instanceof Uint8Array) && !(palette instanceof Uint8ClampedArray) && !Array.isArray(palette)) {
-        throw new Error("Invalid palette: must be a Uint8Array of RGB bytes.");
+        throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.");
     }
     if (palette.length % 3 !== 0) {
-        throw new Error("Invalid palette: length must be a multiple of 3 (flat RGB bytes).");
+        throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).");
     }
 };
 
@@ -215,7 +222,7 @@ const call = (buffers, fn) => {
     try {
         for (const buffer of buffers) {
             const pointer = Module._malloc(buffer.length);
-            if (!pointer) {throw new Error("Failed to allocate WASM memory.");}
+            if (!pointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
             pointers.push(pointer);
             Module.HEAPU8.set(buffer, pointer);
         }
@@ -266,11 +273,11 @@ export const getPaletteWeights = async (clustering, k) => {
     const header = readHeader(clustering);
     check(k);
     if (header.version < 3) {
-        throw new Error(`Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
+        throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
     }
 
     const bytes = call([clustering], (clusteringPointer) => Module._get_palette_weights(clusteringPointer, clustering.length, k));
-    if (header.merges > 0 && bytes.length === 0) {throw new Error("Invalid clustering: its weights are inconsistent.");}
+    if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.");}
     return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
 
 };
@@ -282,7 +289,7 @@ export const getClusteringInfo = async (clustering) => {
 
     const header = readHeader(clustering);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, errors: null};
+    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, errors: null, explained: null};
     if (header.version < 3) {return info;}
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
@@ -290,10 +297,17 @@ export const getClusteringInfo = async (clustering) => {
     const total = view.getUint32(8, true);
     info.totalWeight = total * pixels;
     info.errors = new Float64Array(colors);
-    let remaining = 0;
+    info.explained = new Float64Array(colors);
+    // The error of the leaf clusters: what `precision` below 8 discarded by grouping colours (0 before it was recorded).
+    let remaining = header.headerLength >= 17 ? view.getFloat32(13, true) : 0;
+    if (colors > 0) {info.errors[colors - 1] = remaining / total / 3;}
     for (let i = header.merges - 1; i >= 0; i--) {
         remaining += view.getFloat32(header.headerLength + 3 + i * header.recordLength + 17, true);
         info.errors[i] = remaining / total / 3;
+    }
+    // The share of the image's variance each palette size keeps; 1 throughout for an image of one colour.
+    for (let i = 0; i < colors; i++) {
+        info.explained[i] = info.errors[0] > 0 ? Math.max(0, Math.min(1, 1 - info.errors[i] / info.errors[0])) : 1;
     }
     return info;
 
@@ -345,7 +359,7 @@ export const quantizeToIndices = async (image, k, options) => {
     check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
 
-    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
+    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
 
 };
 
@@ -359,7 +373,7 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     const o = parseOptions(options, mapIndexOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
+    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
 
 };
 
@@ -371,6 +385,6 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
 
-    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparentIndex ? 1 : 0)), original);
+    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
 
 };

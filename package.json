@@ -39,7 +39,15 @@
     },
     "./worker": {
       "types": "./dist/worker.d.ts",
-      "import": "./dist/worker.mjs"
+      "import": "./dist/worker.mjs",
+      "default": "./dist/worker.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "worker": [
+        "dist/worker.d.ts"
+      ]
     }
   },
   "engines": {

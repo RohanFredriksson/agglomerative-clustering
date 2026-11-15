@@ -7,7 +7,7 @@ const handles = new Map();
 
 const handle = (id) => {
     const entry = handles.get(id);
-    if (!entry) {throw new Error("Invalid handle: it was released, or belongs to another worker.");}
+    if (!entry) {throw Object.assign(new Error("Invalid handle: it was released, or belongs to another worker."), {code: 'invalid-handle'});}
     return entry;
 };
 
@@ -20,7 +20,7 @@ const methods = {
     handleGetClustering: async (id) => handle(id).clustering.slice(),
     handleGetPalette: async (id, k) => ac.getPaletteFromClustering(handle(id).clustering, k),
     handleGetPaletteWeights: async (id, k) => ac.getPaletteWeights(handle(id).clustering, k),
-    handleGetInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
+    handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
     handleQuantize: async (id, k, options) => ac.quantizeWithClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesWithClustering(handle(id).image, handle(id).clustering, k, options),
 };
@@ -34,11 +34,14 @@ const buffers = (value) => {
 
 const respond = async ({id, method, args}, post) => {
     try {
-        if (!Object.hasOwn(methods, method)) {throw new Error(`Unknown method '${method}'.`);}
+        if (!Object.hasOwn(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
         const result = await methods[method](...args);
         post({id, result}, [...new Set(buffers(result))]);
     } catch (error) {
-        post({id, error: error instanceof Error ? error.message : String(error)});
+        // Errors cross as plain data: the caller's side rebuilds them with the same name, message and code.
+        post({id, error: error instanceof Error
+            ? {name: error.name, message: error.message, code: error.code, stack: error.stack}
+            : {name: 'Error', message: String(error), code: 'worker-failed'}});
     }
 };
 
