@@ -46,7 +46,7 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 
 ## Engineering, alongside the releases
 
-- **Native build, sanitizers and fuzzing.** A native target (CMake or a short script) for the C++ with ASan/UBSan. It gives reproducible instruction counts (callgrind) for speed work, and a libFuzzer harness for `read_clustering`, `_get_palette_from_clustering` and `_get_palette_weights`: clusterings are stored by users and handed back as untrusted bytes.
+- **Native build and coverage-guided fuzzing.** Sanitizers are done by hand through Emscripten's ASan/UBSan WebAssembly build (recipe in CLAUDE.md; the suite and the hostile-input fuzzers are clean), but not in CI. A native target (CMake or a short script) for the C++ would add reproducible instruction counts (callgrind) for speed work and a libFuzzer harness for `read_clustering`, `_get_palette_from_clustering` and `_get_palette_weights`: clusterings are stored by users and handed back as untrusted bytes. A CI job running the suite against the sanitized build would keep it clean.
 - **Contributor setup.** Every test needs `em++`. Add a `scripts/setup-emsdk.sh` pinned to the CI version, or a devcontainer, so `npm test` works from a fresh clone, and a SessionStart hook so cloud agent sessions can build too.
 
 ## Later, if asked for
