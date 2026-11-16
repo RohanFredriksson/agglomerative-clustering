@@ -23,6 +23,7 @@ const start = async (receive) => {
     const worker = new NodeWorker(new URL('./worker-thread.mjs', import.meta.url), {execArgv: []});
     worker.on('message', receive);
     worker.on('error', (error) => receive({failure: error.message}));
+    worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
     return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => worker.ref(), unref: () => worker.unref()};
 };
@@ -128,11 +129,15 @@ export const createWorker = (options) => {
     if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.");}
     const transfer = options.transfer === true;
     // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
-    let initial = options.wasm === undefined ? null : {wasm: wasmOption(options.wasm)};
+    const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
+    let initial = initialWasm === undefined ? null : {wasm: initialWasm};
     let initialising = null;
 
     let connection = null;
     let starting = null;
+    // Counts the workers this instance has started, so a late message or error from one it already dropped is ignored.
+    let generation = 0;
+    let startingGeneration = 0;
     let terminated = false;
     let nextId = 1;
     let nextHandle = 1;
@@ -144,10 +149,25 @@ export const createWorker = (options) => {
         ? new FinalizationRegistry((id) => {if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}})
         : null;
 
+    // A worker that failed (could not start, crashed or exited) is dropped: the calls waiting on it get the failure, and
+    // the next call starts a new one, which either works or fails the same clear way. Without this, later calls would be
+    // posted to a thread that will never answer and hang forever. Handles kept in the dropped worker are gone with it.
+    const lose = (reason) => {
+        const lost = connection;
+        generation++;
+        connection = null;
+        starting = null;
+        initialising = null;
+        if (initialWasm !== undefined) {initial = {wasm: initialWasm};}
+        const calls = [...pending.values()];
+        pending.clear();
+        for (const call of calls) {call.cleanup(); call.reject(fail('worker-failed', reason));}
+        if (lost) {try {Promise.resolve(lost.terminate()).catch(() => {});} catch (ignored) {/* already gone */}}
+    };
+
     const receive = (message) => {
         if (message.failure !== undefined) {
-            for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-failed', `Worker failed: ${message.failure}`));}
-            pending.clear();
+            if (!terminated) {lose(`Worker failed: ${message.failure}`);}
             return;
         }
         const call = pending.get(message.id);
@@ -176,9 +196,21 @@ export const createWorker = (options) => {
     const invoke = async (method, args, transferable, origin, controls = {}) => {
         if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
         if (!connection) {
-            starting = starting || start(receive);
-            connection = await starting;
-            if (terminated) {connection.terminate(); throw fail('worker-terminated', "Worker terminated.");}
+            if (!starting) {
+                const mine = ++generation;
+                startingGeneration = mine;
+                // A start that fails is not kept, so the next call tries again.
+                starting = start((message) => {if (mine === generation) {receive(message);}}).catch((error) => {
+                    if (mine === generation) {starting = null;}
+                    throw Object.assign(fail('worker-failed', `Worker failed: ${error && error.message}`), {cause: error});
+                });
+            }
+            const waitingFor = startingGeneration;
+            const started = await starting;
+            if (terminated) {started.terminate(); throw fail('worker-terminated', "Worker terminated.");}
+            // The worker may have failed in the instant between starting and being adopted; it has been dropped then.
+            if (waitingFor !== generation) {throw fail('worker-failed', 'Worker failed while starting.');}
+            connection = connection || started;
         }
         if (initial && !(method === 'init' && args.length > 0 && args[0].wasm !== undefined)) {
             initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
@@ -258,7 +290,15 @@ export const createWorker = (options) => {
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = send(image);
-            await invoke('cluster', [id, sent, options], pixelBuffers(sent), origin, {signal, onProgress});
+            try {
+                await invoke('cluster', [id, sent, options], pixelBuffers(sent), origin, {signal, onProgress});
+            } catch (error) {
+                // A cancelled call is rejected at once, but the worker may have finished it just before it heard: it
+                // would then keep the image and clustering with nobody able to release them. Releasing an unknown handle
+                // is harmless, and this message follows the cluster call in the worker's queue.
+                if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
+                throw error;
+            }
             const output = rebuild(image);
             let released = false;
             // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
@@ -305,7 +345,7 @@ export const createWorker = (options) => {
         for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-terminated', "Worker terminated."));}
         pending.clear();
         if (connection) {await connection.terminate();}
-        else if (starting) {(await starting).terminate();}
+        else if (starting) {try {(await starting).terminate();} catch (ignored) {/* it never started */}}
     };
 
     return instance;
@@ -323,7 +363,7 @@ export const terminate = async () => {
     await stopping.terminate();
 };
 
-export const init = () => sharedWorker().init();
+export const init = (...args) => sharedWorker().init(...args);
 export const getClustering = (...args) => sharedWorker().getClustering(...args);
 export const getPalette = (...args) => sharedWorker().getPalette(...args);
 export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);

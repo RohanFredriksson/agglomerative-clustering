@@ -83,7 +83,9 @@ const onMessage = (data, post) => {
         return;
     }
     if (data.cancellable) {controllers.set(data.id, new AbortController());}
-    queue = queue.then(() => respond(data, post));
+    // respond() answers every failure itself; this catch only keeps one unforeseen rejection (an error that can't be posted)
+    // from leaving the queue rejected, which would silently stop the thread from running any later call.
+    queue = queue.then(() => respond(data, post)).catch(() => {});
 };
 
 // No top-level await: bundlers build workers as classic scripts by default (Vite's 'iife'), which can't have it.
