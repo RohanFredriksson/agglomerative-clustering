@@ -76,7 +76,7 @@ slider.oninput = async () => {
 };
 ```
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite and with webpack 5 (the form Next.js uses); Parcel recognises the same form but isn't tested. In Node, an idle worker never keeps the process alive.
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite and with webpack 5 (the form Next.js uses), and bundling with esbuild; Parcel 2 works too (checked by hand) once its `packageExports` option is on, since Parcel ignores a package's `exports` by default. In Node, an idle worker never keeps the process alive.
 
 ### Weights and choosing a palette size
 
@@ -299,7 +299,7 @@ await init({ wasm: 'https://cdn.example.com/clustering.wasm' });      // a URL o
 await init({ wasm: await (await fetch(url)).arrayBuffer() });          // the bytes
 await init({ wasm: wasmModule });                                      // a compiled WebAssembly.Module
 ```
-That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it themselves. The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler for Cloudflare Workers does) can give you `wasmModule` with `import wasmModule from 'agglomerative-clustering/clustering.wasm'`. That path is not tested here. A page with a strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src` to run any WebAssembly. `createWorker({ wasm })` (and `worker.init({ wasm })`) pass the same thing to a worker, which loads its own copy. The worker's own script is still found next to `worker.mjs`.
+That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it themselves. The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler for Cloudflare Workers does) can give you `wasmModule` with `import wasmModule from 'agglomerative-clustering/clustering.wasm'`. This was verified by running a Worker bundled with esbuild in Miniflare (the `workerd` runtime): it imports the module as above, passes it to `init`, then clusters, maps and honours `signal`. A page with a strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src` to run any WebAssembly. `createWorker({ wasm })` (and `worker.init({ wasm })`) pass the same thing to a worker, which loads its own copy. The worker's own script is still found next to `worker.mjs`.
 
 Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error.
 

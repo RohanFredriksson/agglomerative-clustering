@@ -90,7 +90,8 @@ const onMessage = (data, post) => {
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function') {
     self.addEventListener('message', (event) => onMessage(event.data, (message, transfer) => self.postMessage(message, transfer)));
 } else {
-    import(/* webpackIgnore: true */ /* @vite-ignore */ 'node:worker_threads').then(({parentPort}) => {
+    // Built at run time so no bundler tries to resolve it (see worker.js).
+    import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'worker_threads'].join(':')).then(({parentPort}) => {
         parentPort.on('message', (data) => onMessage(data, (message, transfer) => parentPort.postMessage(message, transfer)));
     });
 }

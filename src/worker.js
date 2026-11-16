@@ -17,7 +17,8 @@ const start = async (receive) => {
         worker.addEventListener('error', (event) => receive({failure: event.message || 'The worker failed to start.'}));
         return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => {}, unref: () => {}};
     }
-    const {Worker: NodeWorker} = await import(/* webpackIgnore: true */ /* @vite-ignore */ 'node:worker_threads');
+    // The specifier is built at run time so no bundler tries to resolve it (esbuild ignores comment hints on a literal).
+    const {Worker: NodeWorker} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'worker_threads'].join(':'));
     // The worker script needs none of the parent's flags, and some (like --input-type) are invalid in a worker.
     const worker = new NodeWorker(new URL('./worker-thread.mjs', import.meta.url), {execArgv: []});
     worker.on('message', receive);
