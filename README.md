@@ -210,6 +210,26 @@ const total = weights.reduce((a, b) => a + b, 0);
 const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / total }));
 ```
 
+**Heaviest first.** Palettes come in split order, which keeps entries in place as the size changes but doesn't put the biggest colour first (see `getPaletteFromClustering`). If you want a ranking, sort it yourself; the cost is that palettes of different sizes are then no longer nested.
+
+```js
+// A palette and its weights, heaviest first
+const order = Array.from(weights.keys()).sort((a, b) => weights[b] - weights[a]);   // old index of the 1st, 2nd, … entry
+const rankedColors = order.map((i) => colors[i]);
+const rankedShares = order.map((i) => weights[i] / total);
+
+// An indexed image, heaviest first: count how many pixels use each entry (that is what "heaviest" means for the image),
+// sort, and renumber the indices
+const used = new Uint32Array(palette.length / 3);
+for (const index of indices) {used[index]++;}
+const byUse = Array.from(used.keys()).sort((a, b) => used[b] - used[a]);
+const rank = new Uint32Array(used.length);
+byUse.forEach((old, position) => {rank[old] = position;});
+const rankedPalette = byUse.map((old) => colors[old]);
+const rankedIndices = indices.map((index) => rank[index]);                           // same typed-array type as `indices`
+const rankedTransparentIndex = transparentIndex === null ? null : rank[transparentIndex];
+```
+
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
 ```js
