@@ -28,7 +28,7 @@ describe('errors carry a code', () => {
 
     it('needs a 3.x clustering for weights', async () => {
         const v2 = new Uint8Array([0xAC, 2, 0, 8, 1, 2, 3]);
-        expect((await caught(ac.getPaletteWeights(v2, 1))).code).toBe('unsupported-version');
+        expect((await caught(ac.getSwatchesFromClustering(v2, 1))).code).toBe('unsupported-version');
     });
 
 });

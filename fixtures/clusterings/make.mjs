@@ -16,9 +16,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const clustering = await library.getClustering(fixtureImage());
 const fixture = { made_with: release ?? (await import(resolve(dirname(build), '../package.json'), { with: { type: 'json' } })).default.version, palettes: {} };
 for (const k of sizes) {fixture.palettes[k] = Array.from(await library.getPaletteFromClustering(clustering, k));}
-if (library.getPaletteWeights) {
+if (library.getSwatchesFromClustering) {
     fixture.weights = {};
-    for (const k of sizes) {fixture.weights[k] = Array.from(await library.getPaletteWeights(clustering, k));}
+    for (const k of sizes) {fixture.weights[k] = Array.from((await library.getSwatchesFromClustering(clustering, k)).weights);}
     fixture.mse = Array.from((await library.getClusteringInfo(clustering)).mse);
 }
 

@@ -198,11 +198,32 @@ export function getPalette(image: ImageLike, k: number, options?: ClusteringOpti
 export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
 
 /**
- * The weight of each colour in `getPaletteFromClustering(clustering, k)`, in the same order, in pixels: fully
- * transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering.
- * Needs a clustering from 3.x; older ones have no weights and are rejected.
+ * A palette with how much of the image each of its colours covers, for swatches with percentages. The three arrays come
+ * from one cut of one clustering, so they line up by construction: entry `i` of each describes the same colour.
  */
-export function getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
+export interface Swatches {
+    /** Flat RGB bytes in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
+    palette: Uint8Array;
+    /**
+     * Pixels per colour: fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as
+     * in clustering. They sum to the image's visible weight.
+     */
+    weights: Float64Array;
+    /** Each colour's share of the visible weight, from 0 to 1. They sum to 1 (they are empty for an image with no visible pixels). */
+    shares: Float64Array;
+}
+
+/**
+ * The palette for `image` at `k` colours with each colour's weight and share: one call for swatches with percentages.
+ * It clusters the image each time; if you already have a clustering, use `getSwatchesFromClustering`.
+ */
+export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+
+/**
+ * The same as `getSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
+ * Needs a clustering from 3.x; a 2.x clustering has no weights and is rejected.
+ */
+export function getSwatchesFromClustering(clustering: Uint8Array, k: number): Promise<Swatches>;
 
 interface ClusteringInfoFields {
     colorSpace: ColorSpace;

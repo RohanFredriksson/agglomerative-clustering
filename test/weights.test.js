@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPaletteFromClustering, getPaletteWeights, getClusteringInfo } from '../dist/index.mjs';
+import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+
+// The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
+const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
+
 
 // Pixels of the given colours, each repeated `count` times, with alpha `alpha`.
 function pixels(entries) {
@@ -18,7 +22,7 @@ for (let p = 0; p < width * height; p++) {
 
 const byColour = (palette, weights) => Object.fromEntries(Array.from(weights, (w, i) => [Array.from(palette.subarray(i * 3, i * 3 + 3)).join(','), w]));
 
-describe('getPaletteWeights', () => {
+describe('the weights of getSwatchesFromClustering', () => {
 
     const five = [
         { rgb: [250, 10, 10], count: 50 },
@@ -30,7 +34,7 @@ describe('getPaletteWeights', () => {
 
     it('gives each colour its pixel count when nothing is merged', async () => {
         const clustering = await getClustering(pixels(five));
-        const weights = await getPaletteWeights(clustering, 5);
+        const weights = await weightsOf(clustering, 5);
         expect(weights).toBeInstanceOf(Float64Array);
         expect(byColour(await getPaletteFromClustering(clustering, 5), weights)).toEqual(Object.fromEntries(five.map(({ rgb, count }) => [rgb.join(','), count])));
     });
@@ -39,13 +43,13 @@ describe('getPaletteWeights', () => {
         const clustering = await getClustering(gradient);
         for (const k of [1, 2, 3, 10, 100, 5000]) {
             const palette = await getPaletteFromClustering(clustering, k);
-            const weights = await getPaletteWeights(clustering, k);
+            const weights = await weightsOf(clustering, k);
             expect(weights.length).toBe(palette.length / 3);
             expect(weights.reduce((a, b) => a + b, 0)).toBe(width * height);
             expect(Math.min(...weights)).toBeGreaterThan(0);
         }
         // Index 0 keeps the heavier half of every split it is in.
-        const [first, second] = await getPaletteWeights(clustering, 2);
+        const [first, second] = await weightsOf(clustering, 2);
         expect(first).toBeGreaterThanOrEqual(second);
     });
 
@@ -56,20 +60,20 @@ describe('getPaletteWeights', () => {
             { rgb: [10, 10, 250], count: 10, alpha: 0 },
         ]);
         const clustering = await getClustering(image);
-        const weights = byColour(await getPaletteFromClustering(clustering, 3), await getPaletteWeights(clustering, 3));
+        const weights = byColour(await getPaletteFromClustering(clustering, 3), await weightsOf(clustering, 3));
         expect(weights).toEqual({ '250,10,10': 10, '10,250,10': 2 });
         const ignored = await getClustering(image, { alpha: 'ignore' });
-        expect(Array.from(await getPaletteWeights(ignored, 3))).toEqual([10, 10, 10]);
+        expect(Array.from(await weightsOf(ignored, 3))).toEqual([10, 10, 10]);
     });
 
     it('gives nothing for an empty clustering', async () => {
-        expect((await getPaletteWeights(await getClustering(new Uint8Array(0)), 4)).length).toBe(0);
+        expect((await weightsOf(await getClustering(new Uint8Array(0)), 4)).length).toBe(0);
     });
 
     it('rejects a clustering whose records name an impossible parent', async () => {
         const clustering = new Uint8Array(await getClustering(gradient));
         clustering[clustering[2] + 3 + 9] = 200; // record 0's parent index, which must be 0
-        await expect(getPaletteWeights(clustering, 4)).rejects.toThrow('weights are inconsistent');
+        await expect(weightsOf(clustering, 4)).rejects.toThrow('weights are inconsistent');
     });
 
 });

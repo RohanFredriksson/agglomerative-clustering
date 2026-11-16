@@ -6,7 +6,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getPaletteFromClustering, getPaletteWeights, getClusteringInfo, quantizeWithClustering } from '../dist/index.mjs';
+import { getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeWithClustering } from '../dist/index.mjs';
+
+// The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
+const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
+
 import { fixtureImage, sizes } from '../fixtures/clusterings/image.js';
 
 const folder = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/clusterings');
@@ -24,7 +28,7 @@ describe('format version 1 (1.x), which is no longer read', () => {
     it('is rejected by every function that takes a clustering, with a message that says what to do', async () => {
         for (const call of [
             () => getPaletteFromClustering(legacy, 8),
-            () => getPaletteWeights(legacy, 8),
+            () => weightsOf(legacy, 8),
             () => getClusteringInfo(legacy),
             () => quantizeWithClustering(fixtureImage(), legacy, 8),
         ]) {
@@ -56,12 +60,12 @@ describe.each(versions.filter((version) => version >= 2))('format version %i', (
 
     if (version >= 3) {
         it('gives the weights and error curve of the release that wrote it', async () => {
-            for (const k of sizes) {expect(Array.from(await getPaletteWeights(clustering, k))).toEqual(weights[k]);}
+            for (const k of sizes) {expect(Array.from(await weightsOf(clustering, k))).toEqual(weights[k]);}
             expect(Array.from((await getClusteringInfo(clustering)).mse)).toEqual(mse);
         });
     } else {
         it('has no weights or error curve', async () => {
-            await expect(getPaletteWeights(clustering, 4)).rejects.toThrow('has no weights');
+            await expect(weightsOf(clustering, 4)).rejects.toThrow('has no weights');
             const info = await getClusteringInfo(clustering);
             expect([info.version, info.totalWeight, info.mse, info.explained]).toEqual([version, null, null, null]);
         });

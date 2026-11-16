@@ -60,7 +60,8 @@ async function run() {
         && equal((await handle.quantizeWithPalette(await handle.getPalette(5))).data, (await handle.quantize(5)).data);
     const indexed = await handle.quantizeToIndices(16);
     checks.indexedOutput = indexed.indices.length === width * height && indexed.palette.length <= 48;
-    checks.weightsSumToPixels = (await handle.getPaletteWeights(16)).reduce((a, b) => a + b, 0) === width * height;
+    const swatches = await handle.getSwatches(16);
+    checks.weightsSumToPixels = swatches.weights.reduce((a, b) => a + b, 0) === width * height && Math.abs(swatches.shares.reduce((a, b) => a + b, 0) - 1) < 1e-9;
     await handle.release();
     await worker.terminate();
 

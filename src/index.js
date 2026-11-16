@@ -482,9 +482,17 @@ export const getPaletteFromClustering = async (clustering, k) => {
 
 };
 
-// The weight of each colour in getPaletteFromClustering(clustering, k), in pixels: fully transparent pixels count
-// 0 and partly transparent ones in proportion to their opacity, as they did in clustering.
-export const getPaletteWeights = async (clustering, k) => {
+// The weight of each colour in the k-colour cut, in pixels (opacity-weighted), read from the clustering's records.
+const weightsOf = (wasm, clustering, header, k) => {
+    const bytes = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_weights(clusteringPointer, clustering.length, k));
+    if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.");}
+    return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
+};
+
+// A palette with the weight and share of the image of each of its colours, from one cut of one clustering, so the three
+// arrays line up by construction. Weights are pixels: fully transparent pixels count 0 and partly transparent ones in
+// proportion to their opacity, as in clustering. Shares are the weights divided by their total, so they sum to 1.
+export const getSwatchesFromClustering = async (clustering, k) => {
 
     const wasm = await acquire();
     const header = readHeader(clustering);
@@ -493,9 +501,21 @@ export const getPaletteWeights = async (clustering, k) => {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
     }
 
-    const bytes = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_weights(clusteringPointer, clustering.length, k));
-    if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.");}
-    return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
+    const palette = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+    const weights = weightsOf(wasm, clustering, header, k);
+    let total = 0;
+    for (const weight of weights) {total += weight;}
+    const shares = new Float64Array(weights.length);
+    if (total > 0) {for (let i = 0; i < weights.length; i++) {shares[i] = weights[i] / total;}}
+    return {palette, weights, shares};
+
+};
+
+// The same for an image: clusters it, then cuts, like getPalette.
+export const getSwatches = async (image, k, options) => {
+
+    k = check(k);
+    return getSwatchesFromClustering(await getClustering(image, options), k);
 
 };
 

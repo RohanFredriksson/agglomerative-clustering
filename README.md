@@ -81,15 +81,18 @@ slider.oninput = async () => {
 
 It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite and with webpack 5 (the form Next.js uses), and bundling with esbuild; Parcel 2 works too (checked by hand) once its `packageExports` option is on, since Parcel ignores a package's `exports` by default. In Node, an idle worker never keeps the process alive.
 
-### Weights and choosing a palette size
+### Swatches, and choosing a palette size
 
 ```js
-import { getClustering, getPaletteFromClustering, getPaletteWeights, getClusteringInfo } from 'agglomerative-clustering';
+import { getSwatches, getClustering, getSwatchesFromClustering, getClusteringInfo } from 'agglomerative-clustering';
 
+// Colours with their share of the image, in one call
+const { palette, weights, shares } = await getSwatches(image, 8);
+// palette: flat RGB bytes, weights: pixels per colour, shares: each colour's share of the image (they sum to 1)
+
+// Or cluster once and cut it as often as you like (well under a millisecond each)
 const clustering = await getClustering(image);
-const palette = await getPaletteFromClustering(clustering, 8);
-const weights = await getPaletteWeights(clustering, 8);        // pixels per colour, in palette order
-const shares = weights.map((w) => w / weights.reduce((a, b) => a + b));
+const eight = await getSwatchesFromClustering(clustering, 8);
 
 // The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
 const { explained } = await getClusteringInfo(clustering);
@@ -199,7 +202,7 @@ await sharp(Buffer.from(output), { raw: { width: info.width, height: info.height
 
 ## Using the output
 
-Palettes are flat RGB bytes (`[r, g, b, r, g, b, …]`): the neutral, compact form. Encoders and UIs each want their own flavour, and each is a line or two. Given a `palette` from any function above (and `weights` from `getPaletteWeights`):
+Palettes are flat RGB bytes (`[r, g, b, r, g, b, …]`): the neutral, compact form. Encoders and UIs each want their own flavour, and each is a line or two. Given a `palette` from any function above (and `weights` and `shares` from `getSwatches`):
 
 ```js
 // [[r, g, b], …]: what gifenc, fast-png, color-thief and libimagequant use
@@ -210,8 +213,7 @@ const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i 
 const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
 
 // Swatches with their share of the image (the palette is in split order, not sorted by share: sort `swatches` by `share` to put the biggest first)
-const total = weights.reduce((a, b) => a + b, 0);
-const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / total }));
+const swatches = Array.from(shares, (share, i) => ({ color: css(i), share }));
 ```
 
 **Heaviest first.** Palettes come in split order, which keeps entries in place as the size changes but doesn't put the biggest colour first (see `getPaletteFromClustering`). If you want a ranking, sort it yourself; the cost is that palettes of different sizes are then no longer nested.
@@ -220,7 +222,7 @@ const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / tota
 // A palette and its weights, heaviest first
 const order = Array.from(weights.keys()).sort((a, b) => weights[b] - weights[a]);   // old index of the 1st, 2nd, … entry
 const rankedColors = order.map((i) => colors[i]);
-const rankedShares = order.map((i) => weights[i] / total);
+const rankedShares = order.map((i) => shares[i]);
 
 // An indexed image, heaviest first: count how many pixels use each entry (that is what "heaviest" means for the image),
 // sort, and renumber the indices
@@ -291,8 +293,11 @@ Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes
 ### `getPalette(image, k, options?): Promise<Uint8Array>`
 `getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`, `alpha`.
 
-### `getPaletteWeights(clustering, k): Promise<Float64Array>`
-The weight of each colour of `getPaletteFromClustering(clustering, k)`, in the same order, in pixels. Fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as they do in clustering (with `alpha: 'ignore'` every pixel counts 1). Needs a clustering from 3.x: older clusterings don't record weights, so they are rejected.
+### `getSwatches(image, k, options?): Promise<Swatches>`
+A palette with how much of the image each colour covers, for swatches with percentages: `{ palette, weights, shares }`. The three arrays come from one cut of one clustering, so entry `i` of each describes the same colour. `palette` is flat RGB bytes in split order (what `getPaletteFromClustering` gives), `weights` are pixels per colour (fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1), and `shares` are the weights divided by their total, so they sum to 1 (all three are empty for an image with no visible pixels). It clusters the image each time: to try several sizes, use `getClustering` once and `getSwatchesFromClustering`. Options: those of `getPalette`.
+
+### `getSwatchesFromClustering(clustering, k): Promise<Swatches>`
+The same from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected.
 
 ### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
 What a clustering holds: `{ version, colorSpace, precision, colors, totalWeight, mse, explained }`. `colors` is the largest palette it can be cut to. `mse[k - 1]` is the mean squared error per channel of the `k`-colour clustering, meaning each pixel's squared distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (or OKLab units for an OKLab clustering). It is 0 at `colors` for the default `precision: 8`. With a lower `precision`, the error that grouping colours discards is recorded and included, so `mse[0]` is still the image's variance and `mse[colors - 1]` is that discarded error, not 0. The curve is computed from merge costs on integer-rounded cluster colours, so it is an accurate estimate, not an exact sum. Mapping pixels to their nearest palette colour usually lowers it by another 10–15%, so treat it as a slightly pessimistic estimate of the result. `explained[k - 1]` is `1 - mse[k - 1] / mse[0]`: the share of the image's variance the `k`-colour palette keeps, from 0 at one colour up to 1. It has no units, so one target such as `0.99` suits both colour spaces, while `mse` is in squared 8-bit values for `'rgb'` and squared OKLab units for `'oklab'`. For a 2.x clustering, `version` is 2 and `totalWeight`, `mse` and `explained` are `null`; in TypeScript, checking `info.version === 3` narrows them to present.
@@ -355,7 +360,7 @@ Every error the library throws is an `Error` with a `code`, so you don't have to
 | --- | --- |
 | `invalid-argument` | A bad image, `k`, option or palette. |
 | `invalid-clustering` | Bytes that aren't a clustering this version can read. |
-| `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getPaletteWeights`). |
+| `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getSwatchesFromClustering`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate. |
 | `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, or a browser without SIMD. The message says what to check, and `cause` is the engine's own error. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped or failed to start, or a handle was released. |
@@ -373,7 +378,7 @@ Messages are for people and may be reworded. In the worker entry the same input 
 ### Worker entry: `agglomerative-clustering/worker`
 Exports every function above, run in one shared worker started on first use, plus `terminate()`, which stops that shared worker (the next call starts a new one), and `createWorker(options?)`, which starts a worker of its own. An instance has every function above as a method, and:
 
-- **`cluster(image, options?)`** clusters `image` and returns a handle that keeps the image and its clustering in the worker. The handle has `getClustering()`, `getPalette(k)`, `getPaletteWeights(k)`, `getClusteringInfo()`, `quantize(k, options?)` and `quantizeToIndices(k, options?)`, the last two taking mapping options. `release()` frees the image and clustering, so call it when you are done, or declare the handle with `await using handle = await worker.cluster(image)` (TypeScript 5.2+, or an engine with explicit resource management), which releases it at the end of the block. A handle you drop without either is freed once the garbage collector collects it, but the engine decides when, so don't rely on that for large images in a loop.
+- **`cluster(image, options?)`** clusters `image` and returns a handle that keeps the image and its clustering in the worker. The handle has `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)` and `quantizeToIndices(k, options?)`, the last two taking mapping options. `release()` frees the image and clustering, so call it when you are done, or declare the handle with `await using handle = await worker.cluster(image)` (TypeScript 5.2+, or an engine with explicit resource management), which releases it at the end of the block. A handle you drop without either is freed once the garbage collector collects it, but the engine decides when, so don't rely on that for large images in a loop.
 - **`terminate()`** stops the worker. Calls still waiting are rejected.
 
 Calls to a worker run one at a time, in the order they were made. `signal` and `onProgress` work as above and also stop the worker's own work (see "Cancelling and progress"); the callback runs on your side, from the worker's progress messages.
@@ -397,11 +402,11 @@ Releases may get faster, add functions, options, error codes and clustering form
 
 3.0 keeps every function and default, and palettes and quantized images are byte-identical to 2.0. What changes:
 
-- **Clustering format.** `getClustering` writes format version 3, which records weights and merge costs: 21 bytes per distinct colour instead of 9, so clusterings are about 2.3 times larger. Clusterings saved by 2.x still load; `getPaletteWeights` needs a 3.x clustering, and `getClusteringInfo` gives `null` weights, `mse` and `explained` for a 2.x one. **Clusterings saved by 1.x are no longer read.** They had no header and could only be recognised by their length, which many other byte strings share, so a palette passed in place of a clustering was accepted and returned nonsense. Cluster the image again (the README has always suggested storing the clustering next to the image). **2.x cannot read 3.x clusterings** (it rejects them as invalid), so if clusterings are stored where an older version of the package may still read them, upgrade the readers first. Anything that read the raw bytes needs the new layout (see [CLAUDE.md](CLAUDE.md)).
+- **Clustering format.** `getClustering` writes format version 3, which records weights and merge costs: 21 bytes per distinct colour instead of 9, so clusterings are about 2.3 times larger. Clusterings saved by 2.x still load; `getSwatchesFromClustering` needs a 3.x clustering, and `getClusteringInfo` gives `null` weights, `mse` and `explained` for a 2.x one. **Clusterings saved by 1.x are no longer read.** They had no header and could only be recognised by their length, which many other byte strings share, so a palette passed in place of a clustering was accepted and returned nonsense. Cluster the image again (the README has always suggested storing the clustering next to the image). **2.x cannot read 3.x clusterings** (it rejects them as invalid), so if clusterings are stored where an older version of the package may still read them, upgrade the readers first. Anything that read the raw bytes needs the new layout (see [CLAUDE.md](CLAUDE.md)).
 - **Stricter input.** Image data that isn't a whole number of pixels, and palettes that aren't whole RGB triples, now throw instead of being truncated.
 - **Node 20.19+ or 22.12+.** The CommonJS build needs Node's `require()` of ES modules.
 - **Package exports.** The package now exports `.`, `./worker` and `./clustering.wasm` (and `./package.json`); other deep imports are not available. TypeScript users get separate declarations for `import` and `require`.
-- **New, not breaking:** the worker entry, `signal` and `onProgress`, indexed output, weights and the error curve, `init({ wasm })`, and a `code` on every error.
+- **New, not breaking:** the worker entry, `signal` and `onProgress`, indexed output, swatches (weights and shares) and the error curve, `init({ wasm })`, and a `code` on every error.
 
 ## Migrating from 1.x
 

@@ -1,9 +1,9 @@
 import {
-    init, getClustering, getPalette, getPaletteFromClustering, getPaletteWeights, getClusteringInfo,
+    init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
     quantize, quantizeWithClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesWithClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
-import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions } from 'agglomerative-clustering';
+import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions, Swatches } from 'agglomerative-clustering';
 
 declare const bytes: Uint8Array;
 declare const imageData: ImageData;
@@ -24,7 +24,10 @@ async function main() {
     const clustering: Uint8Array = await getClustering(imageData, { colorSpace: 'oklab', precision: 6, alpha: 'ignore', signal: controller.signal, onProgress: (p: number) => void p });
     const palette: Uint8Array = await getPalette(bytes, 16, { signal: controller.signal });
     const cut: Uint8Array = await getPaletteFromClustering(clustering, 8);
-    const weights: Float64Array = await getPaletteWeights(clustering, 8);
+    const swatches: Swatches = await getSwatchesFromClustering(clustering, 8);
+    const weights: Float64Array = swatches.weights;
+    const shares: Float64Array = (await getSwatches(imageData, 8, { signal: controller.signal })).shares;
+    void shares;
     const info: ClusteringInfo = await getClusteringInfo(clustering);
     const mse: Float64Array | null = info.mse;
     const explained: Float64Array | null = info.explained;

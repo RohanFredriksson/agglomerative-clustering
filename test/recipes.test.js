@@ -3,7 +3,8 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { getClustering, getPaletteFromClustering, getPaletteWeights, quantizeToIndices } from '../dist/index.mjs';
+import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices } from '../dist/index.mjs';
+
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
 const GIFEncoder = gifenc.GIFEncoder ?? gifenc.default.GIFEncoder;
@@ -30,13 +31,11 @@ describe('README recipes', () => {
 
     it('palette conversions and swatches with shares', async () => {
         const clustering = await getClustering(image);
-        const palette = await getPaletteFromClustering(clustering, 3);
-        const weights = await getPaletteWeights(clustering, 3);
+        const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
         const colors = toColors(palette);
         const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
         const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
-        const total = weights.reduce((a, b) => a + b, 0);
-        const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / total }));
+        const swatches = Array.from(shares, (share, i) => ({ color: css(i), share }));
         expect(colors).toEqual([[220, 50, 40], [40, 110, 220], [60, 200, 90]]);
         expect(swatches.map((s) => s.color)).toEqual(['rgb(220 50 40)', 'rgb(40 110 220)', 'rgb(60 200 90)']);
         expect(hex(0)).toBe(0xdc3228);
@@ -55,15 +54,13 @@ describe('README recipes', () => {
 
     it('heaviest first for a palette and its weights', async () => {
         const clustering = await getClustering(split);
-        const palette = await getPaletteFromClustering(clustering, 3);
-        const weights = await getPaletteWeights(clustering, 3);
+        const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
         const colors = toColors(palette);
         expect(Array.from(weights)).toEqual([30, 40, 30]);                       // split order: not heaviest first
-        const total = weights.reduce((a, b) => a + b, 0);
 
         const order = Array.from(weights.keys()).sort((a, b) => weights[b] - weights[a]);
         const rankedColors = order.map((i) => colors[i]);
-        const rankedShares = order.map((i) => weights[i] / total);
+        const rankedShares = order.map((i) => shares[i]);
         expect(rankedColors[0]).toEqual([255, 0, 0]);
         expect(rankedShares).toEqual([0.4, 0.3, 0.3]);
         expect(rankedColors.length).toBe(colors.length);

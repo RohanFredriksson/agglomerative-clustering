@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette, getPaletteWeights, getClusteringInfo } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+
+// The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
+const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
 
 // A 48x48 RGBA gradient with many distinct colours.
 const width = 48, height = 48;
@@ -54,7 +57,7 @@ describe('clustering header', () => {
             future[index] = 2;
             await expect(getPaletteFromClustering(future, 4), `byte ${index}`).rejects.toMatchObject({ code: 'unsupported-version' });
             await expect(getClusteringInfo(future)).rejects.toMatchObject({ code: 'unsupported-version' });
-            await expect(getPaletteWeights(future, 4)).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(weightsOf(future, 4)).rejects.toMatchObject({ code: 'unsupported-version' });
         }
         // A damaged length is still just an invalid clustering.
         const damaged = new Uint8Array(await getClustering(gradient));
@@ -73,7 +76,7 @@ describe('clustering header', () => {
         for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(header + 3 + 21 * i, header + 24 + 21 * i), header + 3 + 30 * i);}
         for (const k of [1, 5, 40]) {
             expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));
-            expect(await getPaletteWeights(extended, k)).toEqual(await getPaletteWeights(clustering, k));
+            expect(await weightsOf(extended, k)).toEqual(await weightsOf(clustering, k));
         }
         expect((await getClusteringInfo(extended)).mse).toEqual((await getClusteringInfo(clustering)).mse);
     });

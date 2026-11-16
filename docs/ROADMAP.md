@@ -31,7 +31,7 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 - [x] **Worker entry** `agglomerative-clustering/worker`: `createWorker()` with handles that keep an image and its clustering in the worker, and drop-in exports over one shared worker. Web Worker in browsers, `worker_threads` in Node.
 - [x] **Indexed output:** `quantizeToIndices*`, with `transparent` (an alpha cutoff).
 - [x] **Clustering format v3**, following the rules above. Records are 21 bytes: colours, the split's parent index, the lighter half's weight and the Ward cost. The parent index is needed because different clusters can share an 8-bit colour, which would otherwise make weights ambiguous.
-- [x] **Palette weights** (`getPaletteWeights`) and the **error curve** (`getClusteringInfo().mse`, and the unitless `explained`), for choosing a palette size by error.
+- [x] **Swatches** (`getSwatches`, `getSwatchesFromClustering`: palette, weights and shares) and the **error curve** (`getClusteringInfo().mse`, and the unitless `explained`), for choosing a palette size by error.
 - [x] **Cancellation and progress:** `signal` and `onProgress` on every function with an image; the clustering is a resumable job run in slices, and the worker stops working on a cancelled call.
 - [x] **`init({ wasm })`** and the `clustering.wasm` export, for CDNs, strict CSPs and edge runtimes; one shared load.
 - [x] **Error codes** on every error, kept across the worker boundary.

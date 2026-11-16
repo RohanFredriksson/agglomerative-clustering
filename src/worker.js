@@ -113,14 +113,14 @@ const takeControls = (options) => {
 };
 
 // Where the options sit among a function's arguments after the image (see takeControls).
-const optionsPosition = {getClustering: 0, getPalette: 1, quantize: 1, quantizeWithClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithClustering: 2, quantizeToIndicesWithPalette: 1};
+const optionsPosition = {getClustering: 0, getPalette: 1, getSwatches: 1, quantize: 1, quantizeWithClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithClustering: 2, quantizeToIndicesWithPalette: 1};
 
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
-const imageFunctions = ['getClustering', 'getPalette', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
+const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeWithClustering', 'quantizeWithPalette'];
-const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClusteringInfo'];
+const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
 export const createWorker = (options) => {
 
@@ -319,7 +319,7 @@ export const createWorker = (options) => {
             const handle = {
                 getClustering: () => use('handleGetClustering', []),
                 getPalette: (k) => use('handleGetPalette', [k]),
-                getPaletteWeights: (k) => use('handleGetPaletteWeights', [k]),
+                getSwatches: (k) => use('handleGetSwatches', [k]),
                 getClusteringInfo: () => use('handleGetClusteringInfo', []),
                 quantize: async (k, mapOptions) => output(await withControls('handleQuantize', [k], mapOptions)),
                 quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', [k], mapOptions),
@@ -370,7 +370,8 @@ export const init = (...args) => sharedWorker().init(...args);
 export const getClustering = (...args) => sharedWorker().getClustering(...args);
 export const getPalette = (...args) => sharedWorker().getPalette(...args);
 export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);
-export const getPaletteWeights = (...args) => sharedWorker().getPaletteWeights(...args);
+export const getSwatches = (...args) => sharedWorker().getSwatches(...args);
+export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
 export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);
 export const quantizeWithClustering = (...args) => sharedWorker().quantizeWithClustering(...args);

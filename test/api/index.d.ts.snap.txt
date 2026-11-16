@@ -69,7 +69,13 @@ export function init(options?: InitOptions): Promise<void>;
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
 export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
-export function getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
+export interface Swatches {
+    palette: Uint8Array;
+    weights: Float64Array;
+    shares: Float64Array;
+}
+export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+export function getSwatchesFromClustering(clustering: Uint8Array, k: number): Promise<Swatches>;
 interface ClusteringInfoFields {
     colorSpace: ColorSpace;
     precision: number;
