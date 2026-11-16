@@ -84,6 +84,34 @@ async function run() {
     checks.workerAbortFreesWorker = equal(next.value, await ac.getPaletteFromClustering(await ac.getClustering(image), 4)) && next.ms < fullTime.ms * 0.5;
     await cancelWorker.terminate();
 
+    // The page stays responsive while a clustering runs in slices: timers keep firing, and the longest gap between ticks
+    // is a small fraction of the whole clustering (without slices it blocks for all of it).
+    const gaps = async (run) => {
+        let last = performance.now(), worst = 0, ticks = 0;
+        const timer = setInterval(() => {const now = performance.now(); worst = Math.max(worst, now - last); last = now; ticks++;}, 4);
+        await run();
+        clearInterval(timer);
+        return { worst, ticks };
+    };
+    const blocking = await gaps(() => ac.getClustering(big));
+    const sliced2 = await gaps(() => ac.getClustering(big, { onProgress: () => {} }));
+    checks.slicingKeepsThePageResponsive = sliced2.ticks > 10 && sliced2.worst < Math.max(150, blocking.worst * 0.5);
+
+    // transfer: true hands the pixel buffer to the worker (the caller's copy is emptied) and the result is still right.
+    const movable = new ImageData(new Uint8ClampedArray(image.data), width, height);
+    const reference = await ac.quantize(image, 8);
+    const mover = createWorker({ transfer: true });
+    const moved = await mover.quantize(movable, 8);
+    checks.transferDetachesInputAndKeepsResult = movable.data.length === 0 && moved instanceof ImageData && equal(moved.data, reference.data);
+    await mover.terminate();
+
+    // Disposal: where the browser has Symbol.asyncDispose, a handle disposes through it and then refuses calls.
+    const disposer = createWorker();
+    const disposable = await disposer.cluster(image);
+    if (typeof Symbol.asyncDispose === 'symbol') {await disposable[Symbol.asyncDispose]();} else {await disposable.release();}
+    checks.disposedHandleRefusesCalls = await disposable.getPalette(2).then(() => false, (error) => error.code === 'invalid-handle');
+    await disposer.terminate();
+
     // Telling a worker where its WebAssembly is: a URL, the bytes, a compiled module.
     const expected = await ac.getPalette(image, 6);
     const sources = {
