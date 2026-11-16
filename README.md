@@ -145,6 +145,8 @@ Every function that takes an image also takes an optional last argument of optio
 
 `'oklab'` also takes 10–30% longer. If you pass a palette to `quantizeWithPalette`, give it the `colorSpace` the palette was made in.
 
+**Options objects.** Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error.
+
 **Colour spaces.** Pixel values are used as they are, as sRGB numbers, whatever the canvas colour space. A wide-gamut `ImageData` (`display-p3`) comes back as `ImageData` in the same colour space, so its colours are not shifted; `colorSpace: 'oklab'` still assumes sRGB primaries, so for wide-gamut data it is approximate.
 
 **Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.

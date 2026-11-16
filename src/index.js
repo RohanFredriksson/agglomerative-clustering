@@ -46,6 +46,7 @@ const acquire = async (options) => {
     if (!isOptionsObject(options)) {
         throw fail('invalid-argument', "Invalid options: expected an object.");
     }
+    options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
     }
@@ -208,12 +209,23 @@ const check = (k) => {
 // (an iframe, a test sandbox) are fine.
 const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
 
+// One plain copy of an options object, taken once: every enumerable property, own or inherited (so options layered with
+// Object.create(defaults) work and an inherited typo is still caught), each read a single time. Everything after this
+// uses the copy, so what is validated is what is used, even if a property is a getter that answers differently each time.
+// The copy has no prototype, so a key like '__proto__' is just a name.
+const snapshot = (options) => {
+    const copy = Object.create(null);
+    for (const key in options) {copy[key] = options[key];}
+    return copy;
+};
+
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
     if (!isOptionsObject(options)) {
         throw fail('invalid-argument', "Invalid options: expected an object.");
     }
+    options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.`);}
     }

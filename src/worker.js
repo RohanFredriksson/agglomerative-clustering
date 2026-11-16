@@ -9,6 +9,16 @@ const fail = (code, message) => Object.assign(new Error(message), {code});
 // An options object is an ordinary object (see isOptionsObject in index.js).
 const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
 
+// One plain copy of an options object, taken once: every enumerable property, own or inherited (so options layered with
+// Object.create(defaults) work and an inherited typo is still caught), each read a single time. Everything after this
+// uses the copy, so what is validated is what is used, even if a property is a getter that answers differently each time.
+// The copy has no prototype, so a key like '__proto__' is just a name.
+const snapshot = (options) => {
+    const copy = Object.create(null);
+    for (const key in options) {copy[key] = options[key];}
+    return copy;
+};
+
 const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
 
 // Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
@@ -94,6 +104,7 @@ const wasmOption = (wasm) => {
 const initOptions = (options) => {
     if (options === undefined) {return undefined;}
     if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
     }
@@ -103,7 +114,10 @@ const initOptions = (options) => {
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
 const takeControls = (options) => {
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {return {options, signal: undefined, onProgress: undefined};}
+    // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
+    // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
+    if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
+    options = snapshot(options);
     const {signal, onProgress} = options;
     if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
     if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
@@ -126,6 +140,7 @@ export const createWorker = (options) => {
 
     if (options === undefined) {options = {};}
     if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`);}
     }

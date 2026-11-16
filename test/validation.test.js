@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as ac from '../dist/index.mjs';
+import { createWorker } from '../dist/worker.mjs';
 import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 
 // A minimal valid 2x2 solid red RGBA image.
@@ -264,5 +265,45 @@ describe('width given twice', () => {
         expect(same.data).toEqual((await ac.quantize(raw, 4, { dither: true })).data);
         const bare = await ac.quantize(data, 4, { dither: true, width: 100 });
         expect(bare).toEqual(same.data);
+    });
+});
+
+describe('options objects are read once, as a plain copy', () => {
+    const image = new Uint8Array(40 * 4).map((_, i) => (i * 37) & 255);
+
+    it('honours inherited options, and still rejects an inherited unknown one', async () => {
+        const defaults = { colorSpace: 'oklab', precision: 6 };
+        const layered = Object.create(defaults);
+        expect(await ac.getPalette(image, 4, layered)).toEqual(await ac.getPalette(image, 4, { ...defaults }));
+        const typo = Object.create({ colorSpce: 'oklab' });
+        await expect(ac.getPalette(image, 4, typo)).rejects.toThrow("Invalid option 'colorSpce'");
+        // a key that is only a name, even '__proto__' as an own key (what JSON.parse makes)
+        await expect(ac.getPalette(image, 4, JSON.parse('{"__proto__": {"colorSpace": "oklab"}}'))).rejects.toThrow("Invalid option '__proto__'");
+    });
+
+    it('reads each property once, so what is validated is what is used', async () => {
+        let reads = 0;
+        // 'rgb' the first time it is read, 'oklab' after: a second read would use a value that was never validated.
+        const tricky = { get colorSpace() { reads++; return reads === 1 ? 'rgb' : 'oklab'; } };
+        expect(await ac.getPalette(image, 4, tricky)).toEqual(await ac.getPalette(image, 4, { colorSpace: 'rgb' }));
+        expect(reads).toBe(1);
+        await expect(ac.init({ get wasm() { throw new Error('read'); } })).rejects.toThrow('read');
+    });
+
+    it('works the same through the worker, which structured cloning would otherwise strip', async () => {
+        const worker = createWorker();
+        try {
+            const layered = Object.create({ colorSpace: 'oklab', precision: 6 });
+            expect(await worker.getPalette(image, 4, layered)).toEqual(await ac.getPalette(image, 4, { colorSpace: 'oklab', precision: 6 }));
+            await expect(worker.getPalette(image, 4, Object.create({ colorSpce: 'oklab' }))).rejects.toThrow("Invalid option 'colorSpce'");
+            let reads = 0;
+            await worker.getPalette(image, 4, { get colorSpace() { reads++; return 'rgb'; } });
+            expect(reads).toBe(1);
+            // with a progress callback too (which takes the controls path)
+            expect(await worker.getPalette(image, 4, Object.assign(Object.create({ colorSpace: 'oklab' }), { onProgress() {} })))
+                .toEqual(await ac.getPalette(image, 4, { colorSpace: 'oklab' }));
+        } finally {
+            await worker.terminate();
+        }
     });
 });
