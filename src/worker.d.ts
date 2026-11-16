@@ -1,14 +1,16 @@
+// `[Symbol.asyncDispose]` on handles needs TypeScript's `esnext.disposable` lib (TypeScript 5.2 and newer); this
+// directive pulls it in. Older TypeScript versions report it unless `skipLibCheck` is on, as it is in most setups.
+/// <reference lib="esnext.disposable" />
+
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
     IndexedImage, ClusteringInfo, InitOptions,
-} from './index';
-
-/// <reference lib="esnext.disposable" />
+} from './index.js';
 
 export type {
     ImageFormat, RawImage, ImageLike, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
     ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
-} from './index';
+} from './index.js';
 
 export interface WorkerOptions {
     /**

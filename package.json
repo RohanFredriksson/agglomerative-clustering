@@ -33,9 +33,14 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.cjs",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./worker": {
       "types": "./dist/worker.d.ts",
@@ -62,7 +67,7 @@
     "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_get_clustering','_clustering_job_start','_clustering_job_step','_clustering_job_result','_clustering_job_free','_get_palette','_get_palette_from_clustering','_get_palette_weights','_quantize','_quantize_with_clustering','_quantize_with_palette','_quantize_indices','_quantize_indices_with_clustering','_quantize_indices_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js",
     "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --ignore \"src/worker.js\",\"src/worker-thread.js\" --out-file-extension .cjs",
     "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
-    "build:types": "mkdirp dist && node -e \"for (const f of ['index.d.ts', 'worker.d.ts']) {require('fs').copyFileSync('src/' + f, 'dist/' + f);}\"",
+    "build:types": "mkdirp dist && node -e \"const fs = require('fs'); for (const f of ['index.d.ts', 'worker.d.ts']) {fs.copyFileSync('src/' + f, 'dist/' + f);} fs.copyFileSync('src/index.d.ts', 'dist/index.d.cts');\"",
     "build:js": "npm run build:types && npm run build:cjs && npm run build:esm",
     "build": "npm run build:wasm && npm run build:js",
     "prepublishOnly": "npm run build",
@@ -72,7 +77,8 @@
     "bench:full": "node bench/run.js",
     "bench:compare": "node bench/compare.js",
     "quality": "node bench/run.js --no-pipeline --label quality",
-    "demo": "node demo/serve.mjs"
+    "demo": "node demo/serve.mjs",
+    "test:types": "tsc -p test/types/tsconfig.nodenext.json && tsc -p test/types/tsconfig.bundler.json"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",
@@ -86,6 +92,7 @@
     "mkdirp": "^3.0.1",
     "playwright-core": "^1.56.1",
     "quantize": "^1.0.2",
+    "typescript": "^5.9.3",
     "vite": "^8.0.10",
     "vitest": "^4.1.5"
   }

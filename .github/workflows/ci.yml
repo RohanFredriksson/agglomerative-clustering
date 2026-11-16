@@ -39,6 +39,9 @@ jobs:
       - run: npm run build
       - run: npm test
 
+      # Compiles consumer code against the built declarations under nodenext (ESM and CommonJS) and bundler resolution.
+      - run: npm run test:types
+
       # Bundles a page with Vite and runs it in the runner's Chrome: the worker and .wasm as browsers get them.
       - run: npm run test:browser
         if: matrix.node == 24

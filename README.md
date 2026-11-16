@@ -301,6 +301,9 @@ Calls to a worker run one at a time, in the order they were made. `signal` and `
 
 Results are transferred back without copying. Images are copied to the worker, unless you create it with `createWorker({ transfer: true })`. That's faster for large images, but leaves your buffer empty afterwards. The worker entry is an ES module, and `require('agglomerative-clustering/worker')` works too on the Node versions this package supports (it loads the ES module, like the main CommonJS entry). Its types also resolve under TypeScript's older `moduleResolution: "node"`.
 
+### TypeScript
+The package ships its own declarations for both entries, checked in CI with strict mode under `nodenext` (ES module and CommonJS importers) and `bundler` resolution. The worker entry's declarations use TypeScript's `esnext.disposable` lib for `await using` on handles, so they need **TypeScript 5.2 or newer**, or `skipLibCheck: true` (the default in most templates); the main entry works on older versions. `agglomerative-clustering/worker` is an ES module: from a CommonJS file, use `await import('agglomerative-clustering/worker')`, or TypeScript 5.8+ with `module: nodenext`, which understands `require()` of ES modules.
+
 ## Migrating from 2.x
 
 3.0 keeps every function and default, and palettes and quantized images are byte-identical to 2.0. What changes:
