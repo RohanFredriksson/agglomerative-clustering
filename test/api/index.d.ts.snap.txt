@@ -29,7 +29,7 @@ export class Palette extends Uint8Array {
     readonly colorSpace: ColorSpace;
 }
 export class Clustering extends Uint8Array {
-    constructor(bytes: ArrayLike<number>);
+    constructor(bytes: Uint8Array | Uint8ClampedArray | readonly number[]);
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     readonly [clusteringBrand]: true;
 }

@@ -81,8 +81,11 @@ export class Palette extends Uint8Array {
  * wants it) and checks they are a clustering.
  */
 export class Clustering extends Uint8Array {
-    /** Bytes (copied), or a view of a buffer, as for any typed array. Throws `invalid-clustering` unless they are a clustering. */
-    constructor(bytes: ArrayLike<number>);
+    /**
+     * Bytes (a `Uint8Array`, `Uint8ClampedArray` or plain array of integers 0-255, copied), or a view of a buffer. Throws
+     * `invalid-clustering` unless they are a clustering: a number, or anything that isn't bytes, is refused rather than coerced.
+     */
+    constructor(bytes: Uint8Array | Uint8ClampedArray | readonly number[]);
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     /** Only a type: what makes a `Clustering` different from a palette or other bytes to the compiler. */
     readonly [clusteringBrand]: true;
@@ -163,8 +166,10 @@ export interface ClusteringOptions extends RunOptions {
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
 export interface MappingOptions extends CancelOptions {
     /**
-     * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
-     * `quantizeFromClustering`, where it defaults to the space the clustering was made in.
+     * The space pixels are matched to their nearest palette colour in. The default is the space the colours were made in:
+     * the clustering's in `quantizeFromClustering`, a `Palette`'s own in `quantizeWithPalette` and
+     * `quantizeToIndicesWithPalette`; `'rgb'` for plain bytes, and in `quantize` and `quantizeToIndices`, which match in the
+     * space they cluster in.
      */
     colorSpace?: ColorSpace;
     /**

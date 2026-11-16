@@ -45,7 +45,16 @@ export function Palette(source, colorSpace = 'rgb') {
 Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 
 export function Clustering(...args) {
-    const bytes = new Uint8Array(...args);
+    const [source] = args;
+    const isBuffer = source instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && source instanceof SharedArrayBuffer);
+    if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !isBuffer && !Array.isArray(source)) {
+        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from getClustering.");
+    }
+    if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
+        throw fail('invalid-clustering', "Invalid clustering: a plain array must hold byte values, integers from 0 to 255.");
+    }
+    let bytes;
+    try {bytes = new Uint8Array(...args);} catch (error) {throw fail('invalid-clustering', `Invalid clustering: ${error.message}.`);}
     // A brief check, so bytes that are plainly not a clustering fail here; reading the header in full (versions, lengths) is
     // done by the functions that use one, as in the main entry.
     if (bytes.length < 4 || bytes[0] !== 0xAC) {throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering.");}

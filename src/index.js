@@ -50,7 +50,18 @@ Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 // The bytes of a clustering, checked: `new Clustering(bytes)` is how stored clusterings get their type back. Arguments are
 // those of a Uint8Array (bytes to copy, or a buffer with an offset and length to view).
 export function Clustering(...args) {
-    const bytes = new Uint8Array(...args);
+    const [source] = args;
+    // Bytes, or a buffer to view: never a number (a length would allocate and make an empty clustering) or anything a Uint8Array
+    // would coerce. A plain array must hold byte values, as for a palette.
+    const isBuffer = source instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && source instanceof SharedArrayBuffer);
+    if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !isBuffer && !Array.isArray(source)) {
+        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from getClustering.");
+    }
+    if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
+        throw fail('invalid-clustering', "Invalid clustering: a plain array must hold byte values, integers from 0 to 255.");
+    }
+    let bytes;
+    try {bytes = new Uint8Array(...args);} catch (error) {throw fail('invalid-clustering', `Invalid clustering: ${error.message}.`);}
     readHeader(bytes);
     return markClustering(bytes);
 }

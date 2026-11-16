@@ -181,6 +181,29 @@ describe('the README', () => {
         }
     });
 
+    it('lists, for each function, exactly the options it accepts', async () => {
+        const checked = [];
+        for (const name of Object.keys(callArguments)) {
+            const section = readme.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
+            expect(section, `README has a section for ${name}`).not.toBeNull();
+            const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
+            if (!line || /those of|theirs/.test(line)) {continue;}          // these point at another function's list
+            const listed = [...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).filter((word) => !/^(getPaletteFromClustering|quantizeFromClustering)$/.test(word)).sort();
+            expect(listed, `Options listed for ${name}`).toEqual(await enforcedKeys(name));
+            checked.push(name);
+        }
+        expect(checked).toEqual(expect.arrayContaining(['getClustering', 'getPalette', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette']));
+    });
+
+    it('does not use names that no longer exist', () => {
+        // Each of these was renamed or removed; a match is a sentence nobody updated.
+        const stale = ['getPaletteWeights', 'info.version', 'mse[colors', 'at `colors`', 'reserveTransparent', 'getPaletteFromClustering(clustering, k): Promise<Uint8Array>'];
+        for (const phrase of stale) {expect(readme.includes(phrase), `README still says ${phrase}`).toBe(false);}
+        // quantizeWithClustering is the 2.x name: it may appear only where the migration notes explain the rename
+        const uses = readme.split('\n').filter((line) => line.includes('quantizeWithClustering'));
+        expect(uses.every((line) => /rename|now `quantizeFromClustering`/.test(line)), uses.join('\n')).toBe(true);
+    });
+
     it('lists every error code, and only the ones that exist', () => {
         const codes = declaredType('index.d.ts', 'ErrorCode').types.map((type) => type.value).sort();
         const listed = [...readme.matchAll(/^\| `([a-z-]+)`(?:, `([a-z-]+)`)*/gm)].flatMap((match) => match[0].match(/`[a-z-]+`/g).map((s) => s.slice(1, -1)));

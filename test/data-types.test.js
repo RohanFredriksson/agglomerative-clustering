@@ -52,6 +52,18 @@ describe('Palette', () => {
         expect((await ac.getPalette(photo, 5)).colorSpace).toBe('rgb');
     });
 
+    it('maps in its own space where 2.x mapped in RGB: the one deliberate difference from 2.0', async () => {
+        // In 2.x getPalette returned plain bytes, so quantizeWithPalette(image, oklabPalette) matched in RGB. A 3.0 Palette knows its
+        // space and matches in it; `colorSpace: 'rgb'` (or plain bytes) gives the 2.x result. The README says so in "Migrating from 2.x".
+        const oklab = await ac.getPalette(photo, 12, { colorSpace: 'oklab' });
+        const twoDotX = await ac.quantizeWithPalette(photo, new Uint8Array(oklab));
+        expect(await ac.quantizeWithPalette(photo, oklab, { colorSpace: 'rgb' })).toEqual(twoDotX);
+        expect(await ac.quantizeWithPalette(photo, oklab)).not.toEqual(twoDotX);
+        // an RGB palette, the default, is unchanged from 2.x either way
+        const rgb = await ac.getPalette(photo, 12);
+        expect(await ac.quantizeWithPalette(photo, rgb)).toEqual(await ac.quantizeWithPalette(photo, new Uint8Array(rgb)));
+    });
+
     it('is mapped in its own colour space unless one is named', async () => {
         const oklab = await ac.getPalette(photo, 12, { colorSpace: 'oklab' });
         const inOklab = await ac.quantizeWithPalette(photo, new Uint8Array(oklab), { colorSpace: 'oklab' });
@@ -112,6 +124,20 @@ describe('Clustering', () => {
         const view = new Clustering(stored.buffer, stored.byteOffset, stored.length);
         stored[stored.length - 1] ^= 0;
         expect(view.buffer).toBe(stored.buffer);
+    });
+
+    it('refuses what is not bytes with a coded error, instead of coercing it or allocating', async () => {
+        for (const bad of [-3, 2 ** 40, 1.5, 7, NaN, Symbol('x'), 10n, {}, 'str', null, undefined, new Map(), () => 1, new Float32Array(30), [300, 0], ['a'], [1.5], new DataView(new ArrayBuffer(8))]) {
+            for (const make of [Clustering, workerEntry.Clustering]) {
+                expect(() => make(bad), String(typeof bad === 'symbol' ? 'symbol' : bad)).toThrow(expect.objectContaining({ code: 'invalid-clustering' }));
+            }
+        }
+        const stored = new Uint8Array(await ac.getClustering(photo));
+        for (const bad of [[stored.buffer, -1, 4], [stored.buffer, 3, 2 ** 40], [stored.buffer, stored.length + 5]]) {
+            expect(() => new Clustering(...bad)).toThrow(expect.objectContaining({ code: 'invalid-clustering' }));
+        }
+        expect(new Clustering(Array.from(stored))).toEqual(new Uint8Array(stored));          // a plain array of bytes is fine
+        expect(new Clustering(stored.buffer.slice(0), 0, stored.length)).toEqual(new Uint8Array(stored));
     });
 
     it('is not accepted as a palette, and a palette is not accepted as a clustering, with no guessing', async () => {
