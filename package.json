@@ -79,13 +79,14 @@
     "bench:compare": "node bench/compare.js",
     "quality": "node bench/run.js --no-pipeline --label quality",
     "demo": "node demo/serve.mjs",
-    "test:types": "tsc -p test/types/tsconfig.nodenext.json && tsc -p test/types/tsconfig.bundler.json"
+    "test:types": "tsc -p test/types/tsconfig.nodenext.json && tsc -p test/types/tsconfig.bundler.json && tsc -p test/types/tsconfig.node.json"
   },
   "devDependencies": {
     "@babel/cli": "^7.27.2",
     "@babel/core": "^7.27.4",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
+    "@types/node": "^22.20.5",
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",
     "image-q": "^4.0.0",

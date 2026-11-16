@@ -23,7 +23,24 @@ export interface RawImage {
     height?: number;
 }
 
-export type ImageLike = Uint8Array | ImageData | RawImage;
+/**
+ * The platform's `ImageData` class where the global exists (the DOM lib, or typings for a canvas polyfill), and `never`
+ * where it doesn't, so these declarations compile with or without the DOM lib, in browser and Node-only projects.
+ */
+export type PlatformImageData = typeof globalThis extends { ImageData: { prototype: infer T } } ? T : never;
+
+/** What a function that returns an image gives back for the input it was given: the same kind of thing. */
+export type ImageResult<I extends ImageLike> =
+    I extends Uint8Array ? Uint8Array
+    : I extends RawImage ? RawImage
+    : I extends PlatformImageData ? PlatformImageData
+    : never;
+
+/** Raw RGBA bytes, `ImageData`, or `{ data, format }`. Functions that return an image give back the same kind. */
+export type ImageLike = Uint8Array | PlatformImageData | RawImage;
+
+/** `WebAssembly.Module` where the global exists, else `never` (see `PlatformImageData`). */
+export type WasmModule = typeof globalThis extends { WebAssembly: { Module: { prototype: infer M } } } ? M : never;
 
 /** The space colours are clustered and matched in. */
 export type ColorSpace = 'rgb' | 'oklab';
@@ -127,7 +144,7 @@ export interface InitOptions {
      * - its bytes, as an `ArrayBuffer` or a typed array;
      * - an already compiled `WebAssembly.Module`.
      */
-    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WebAssembly.Module;
+    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
 }
 
 /**
@@ -184,17 +201,13 @@ export interface ClusteringInfo {
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */
 export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
 
-export function quantize(image: Uint8Array, k: number, options?: QuantizeOptions): Promise<Uint8Array>;
-export function quantize(image: ImageData, k: number, options?: QuantizeOptions): Promise<ImageData>;
-export function quantize(image: RawImage, k: number, options?: QuantizeOptions): Promise<RawImage>;
+// The image comes back as the kind it went in as (`ImageResult`): a `Uint8Array` for a `Uint8Array`, `ImageData` for
+// `ImageData`, and an object with the same `format` for a `RawImage`. A value typed as the union `ImageLike` gives the union.
+export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
 
-export function quantizeWithClustering(image: Uint8Array, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<Uint8Array>;
-export function quantizeWithClustering(image: ImageData, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageData>;
-export function quantizeWithClustering(image: RawImage, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<RawImage>;
+export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
-export function quantizeWithPalette(image: Uint8Array, palette: Uint8Array, options?: MappingOptions): Promise<Uint8Array>;
-export function quantizeWithPalette(image: ImageData, palette: Uint8Array, options?: MappingOptions): Promise<ImageData>;
-export function quantizeWithPalette(image: RawImage, palette: Uint8Array, options?: MappingOptions): Promise<RawImage>;
+export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Uint8Array, options?: MappingOptions): Promise<ImageResult<I>>;
 
 /**
  * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette

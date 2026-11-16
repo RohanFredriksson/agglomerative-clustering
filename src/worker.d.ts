@@ -4,11 +4,11 @@
 
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
-    IndexedImage, ClusteringInfo, InitOptions,
+    IndexedImage, ClusteringInfo, InitOptions, ImageResult,
 } from './index.js';
 
 export type {
-    ImageFormat, RawImage, ImageLike, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
+    ImageFormat, RawImage, ImageLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
     ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
 } from './index.js';
 
@@ -50,14 +50,14 @@ export interface AgglomerativeWorker {
     getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
     getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
     getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
-    quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<Image extends ImageData ? ImageData : Image extends RawImage ? RawImage : Uint8Array>;
-    quantizeWithClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<Image extends ImageData ? ImageData : Image extends RawImage ? RawImage : Uint8Array>;
-    quantizeWithPalette<Image extends ImageLike>(image: Image, palette: Uint8Array, options?: MappingOptions): Promise<Image extends ImageData ? ImageData : Image extends RawImage ? RawImage : Uint8Array>;
+    quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
+    quantizeWithClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeWithPalette<Image extends ImageLike>(image: Image, palette: Uint8Array, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithPalette(image: ImageLike, palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
-    cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<Image extends ImageData ? ImageData : Image extends RawImage ? RawImage : Uint8Array>>;
+    cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
     /** Stops the worker. Calls still waiting are rejected, and later calls fail. */
     terminate(): Promise<void>;
 }

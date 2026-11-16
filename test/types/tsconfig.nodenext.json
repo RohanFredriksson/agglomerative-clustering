@@ -4,10 +4,19 @@
     "strict": true,
     "skipLibCheck": false,
     "target": "es2022",
-    "lib": ["es2022", "dom"],
+    "lib": [
+      "es2022",
+      "dom"
+    ],
     "types": [],
     "module": "nodenext",
     "moduleResolution": "nodenext"
   },
-  "files": ["main.mts", "worker.mts", "disposable.mts", "main-commonjs.cts"]
+  "files": [
+    "main.mts",
+    "worker.mts",
+    "disposable.mts",
+    "main-commonjs.cts",
+    "union.mts"
+  ]
 }
