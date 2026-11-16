@@ -128,9 +128,10 @@ describe('handles', () => {
         await expect(handle.quantizeWithPalette(palette, new Map())).rejects.toMatchObject({ code: 'invalid-argument' });
         await handle.release();
 
-        // An RGB handle is unchanged.
+        // Plain bytes carry no space, so they are matched in the handle's own; a Palette knows its own, which wins over the handle's.
         const rgbHandle = await worker.cluster(photo);
-        expect(await rgbHandle.quantizeWithPalette(palette)).toEqual(inRgb);
+        expect(await rgbHandle.quantizeWithPalette(new Uint8Array(palette))).toEqual(inRgb);
+        expect(await rgbHandle.quantizeWithPalette(palette)).toEqual(inOklab);
         await rgbHandle.release();
     });
 

@@ -6,7 +6,47 @@ export const version = '2.0.0';
 const codes = {'rgba': 0, 'rgb': 1};
 const colorSpaces = {'rgb': 0, 'oklab': 1};
 const alphaModes = {'ignore': 0, 'weight': 1};
+const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 let Module = null;
+
+// ----- Palette and Clustering ----------------------------------------------------------------------------------------
+// Palettes and clusterings are byte arrays, and nothing about a Uint8Array says which one it is, or (for a palette) which
+// colour space its colours were made in. So the ones this library returns are ordinary Uint8Arrays carrying two hidden,
+// non-enumerable tags: what they are (a symbol property) and, for a palette, `colorSpace`. Being plain Uint8Arrays is the
+// point: everything that takes bytes takes them (indexing, `subarray`, files, encoders), `constructor` is Uint8Array, so
+// `toEqual(new Uint8Array(...))` in a test still passes, and `slice`, `subarray` and structured clones (postMessage,
+// IndexedDB) give plain untagged Uint8Arrays. `Palette` and `Clustering` are how to make one by hand, and `instanceof`
+// recognises them. The tags are found by a symbol registered with Symbol.for, so a copy of the library loaded twice (the
+// ES module and CommonJS builds, a bundler's duplicate, the worker entry's own copy) recognises the other's.
+const paletteBrand = Symbol.for('agglomerative-clustering.palette');
+const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
+const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
+const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
+const markPalette = (bytes, colorSpace) => {
+    Object.defineProperty(bytes, paletteBrand, {value: true});
+    Object.defineProperty(bytes, 'colorSpace', {value: colorSpace});
+    return bytes;
+};
+const markClustering = (bytes) => Object.defineProperty(bytes, clusteringBrand, {value: true});
+
+// Flat RGB bytes with the colour space they were made in, so mapping with one matches the way it was made. `new Palette(bytes,
+// 'oklab')` copies `bytes` (or makes `length` zeros, or takes an array of byte values) and returns a Uint8Array tagged so.
+// A function and not a `class`, because it returns a plain Uint8Array and answers `instanceof` itself, which transpiled class
+// checks would trip over.
+export function Palette(source, colorSpace = 'rgb') {
+    if (!Object.keys(colorSpaces).includes(colorSpace)) {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
+    return markPalette(new Uint8Array(source === undefined ? 0 : source), colorSpace);
+}
+Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
+
+// The bytes of a clustering, checked: `new Clustering(bytes)` is how stored clusterings get their type back. Arguments are
+// those of a Uint8Array (bytes to copy, or a buffer with an offset and length to view).
+export function Clustering(...args) {
+    const bytes = new Uint8Array(...args);
+    readHeader(bytes);
+    return markClustering(bytes);
+}
+Object.defineProperty(Clustering, Symbol.hasInstance, {value: isClustering});
 
 // Every error this library throws is an Error with a `code` saying what went wrong, so callers needn't match on
 // message text: 'invalid-argument' (image, k, options, palette), 'invalid-clustering', 'unsupported-version' (a
@@ -238,12 +278,12 @@ const getWrapper = (image) => {
 
 // Decodes _quantize_indices output: [entries, transparent index, index bytes] as 32-bit little-endian values, then
 // the palette, then the indices. `image` is the caller's original input, for its width and height.
-const unpackIndices = (output, image) => {
+const unpackIndices = (output, image, colorSpace) => {
     const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
     const entries = view.getUint32(0, true);
     const transparent = view.getInt32(4, true);
     const indexBytes = view.getUint32(8, true);
-    const palette = output.slice(12, 12 + 3 * entries);
+    const palette = markPalette(output.slice(12, 12 + 3 * entries), colorSpace);
     const start = 12 + 3 * entries;
     const count = (output.length - start) / indexBytes;
     const Indices = indexBytes === 1 ? Uint8Array : indexBytes === 2 ? Uint16Array : Uint32Array;
@@ -384,6 +424,9 @@ const latestVersion = 3;
 // `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
 export const formatVersion = latestVersion;
 const readHeader = (clustering) => {
+    if (isPalette(clustering)) {
+        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from getPalette and getPaletteFromClustering; a clustering comes from getClustering.");
+    }
     if (!(clustering instanceof Uint8Array)) {
         throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.");
     }
@@ -416,6 +459,9 @@ const readHeader = (clustering) => {
 // Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
 // image, and quantize maps such an image the same way.
 const checkPalette = (palette) => {
+    if (isClustering(palette)) {
+        throw fail('invalid-argument', "Invalid palette: this is a clustering (from getClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.");
+    }
     if (!(palette instanceof Uint8Array) && !(palette instanceof Uint8ClampedArray) && !Array.isArray(palette)) {
         throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.");
     }
@@ -432,6 +478,9 @@ const checkPalette = (palette) => {
         }
     }
 };
+
+// The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
+const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards.
@@ -544,10 +593,10 @@ export const getClustering = async (image, options) => {
         const report = reporter(o);
         const clustering = await clusterInSlices(wasm, image, o, report, 1);
         report(1);
-        return clustering;
+        return markClustering(clustering);
     }
 
-    return call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent));
+    return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent)));
 
 };
 
@@ -564,20 +613,20 @@ export const getPalette = async (image, k, options) => {
         checkAborted(o.signal);
         const palette = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
         report(1);
-        return palette;
+        return markPalette(palette, colorSpaceName(o.colorSpace));
     }
 
-    return call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent));
+    return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent)), colorSpaceName(o.colorSpace));
 
 };
 
 export const getPaletteFromClustering = async (clustering, k) => {
 
     const wasm = await acquire();
-    readHeader(clustering);
+    const header = readHeader(clustering);
     k = check(k);
 
-    return call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+    return markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
 
 };
 
@@ -600,7 +649,7 @@ export const getSwatchesFromClustering = async (clustering, k) => {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
     }
 
-    const palette = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+    const palette = markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
     const weights = weightsOf(wasm, clustering, header, k);
     let total = 0;
     for (const weight of weights) {total += weight;}
@@ -627,7 +676,7 @@ export const getClusteringInfo = async (clustering) => {
 
     const header = readHeader(clustering);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {formatVersion: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, maxColors: colors, totalWeight: null, mse: null, explained: null};
+    const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, maxColors: colors, totalWeight: null, mse: null, explained: null};
     if (header.version < 3) {return info;}
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
@@ -697,7 +746,7 @@ export const quantizeWithPalette = async (image, palette, options) => {
     const o = parseOptions(options, mapOptions, image);
     checkAborted(o.signal);
 
-    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
+    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, matchingSpace(o, palette), o.dither, o.width)));
     return result;
 
 };
@@ -714,12 +763,12 @@ export const quantizeToIndices = async (image, k, options) => {
         const report = reporter(o);
         const clustering = await clusterInSlices(wasm, image, o, report, 0.9);
         checkAborted(o.signal);
-        const indexed = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width, o.transparent)), original);
+        const indexed = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width, o.transparent)), original, colorSpaceName(o.colorSpace));
         report(1);
         return indexed;
     }
 
-    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original);
+    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original, colorSpaceName(o.colorSpace));
 
 };
 
@@ -728,13 +777,13 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
     const wasm = await acquire();
     const original = image;
     image = load(image);
-    readHeader(clustering);
+    const header = readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapIndexOptions, image);
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original, colorSpaceName(header.colorSpace));
     return result;
 
 };
@@ -747,8 +796,9 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
     checkAborted(o.signal);
+    const space = matchingSpace(o, palette);
 
-    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.width, o.transparent)), original, isPalette(palette) ? palette.colorSpace : colorSpaceName(space));
     return result;
 
 };

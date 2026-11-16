@@ -55,7 +55,7 @@ slider.oninput = async () => {
 };
 ```
 
-The clustering is a `Uint8Array` you can cache or store next to the image: a 22-byte header plus 21 bytes per distinct colour, about 1.3 MB for a 768×512 photo, or 0.45 MB with `precision: 6`. It records the colour space it was made in, so `quantizeFromClustering` matches in the same space unless you say otherwise. Its format is versioned: later releases will keep reading it, and older ones say so rather than misreading a newer one.
+The clustering is a `Clustering`, a `Uint8Array` you can cache or store next to the image (see "`Palette` and `Clustering`" for getting its type back from stored bytes): a 22-byte header plus 21 bytes per distinct colour, about 1.3 MB for a 768×512 photo, or 0.45 MB with `precision: 6`. It records the colour space it was made in, so `quantizeFromClustering` matches in the same space unless you say otherwise. Its format is versioned: later releases will keep reading it, and older ones say so rather than misreading a newer one.
 
 ### Off the main thread
 
@@ -327,13 +327,13 @@ Pick the output you want (a row) and where the colours come from (a column). The
 
 `getClustering` builds the clustering to hold, `getClusteringInfo` reads one, and `init` loads the WebAssembly module (optional). The one-shot functions in the first column are what most code needs; the other columns are for clustering once and cutting many times, or for your own palette.
 
-### `getClustering(image, options?): Promise<Uint8Array>`
+### `getClustering(image, options?): Promise<Clustering>`
 Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`, `alpha`. Pass the result to `getPaletteFromClustering` or `quantizeFromClustering` to get any number of palettes without clustering again.
 
-### `getPaletteFromClustering(clustering, k): Promise<Uint8Array>`
+### `getPaletteFromClustering(clustering, k): Promise<Palette>`
 Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too.
 
-### `getPalette(image, k, options?): Promise<Uint8Array>`
+### `getPalette(image, k, options?): Promise<Palette>`
 `getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`, `alpha`.
 
 ### `getSwatches(image, k, options?): Promise<Swatches>`
@@ -345,6 +345,26 @@ The same from a clustering you already have, well under a millisecond. Needs a c
 ### `version: string` and `formatVersion: number`
 Two numbers, for two questions. `version` is the library's version, as in its `package.json` (`'3.0.0'`): which copy of the code is loaded, for bug reports and runtime checks. `formatVersion` is the version of the data the library stores (today the clusterings from `getClustering`, which carry it in their header): one integer for all of it, which changes only when the stored format does, so a new release that keeps the format keeps the number. Compare it with a stored clustering's `getClusteringInfo(stored).formatVersion`: if they differ, the clustering is from another format (2.x ones still load but have no weights) and the image should be clustered again. The worker entry exports both too, with the same values. The WebAssembly module knows its version as well: if the `.wasm` doesn't match the script, loading fails with `wasm-load-failed`.
 
+### `Palette` and `Clustering`
+The palettes and clusterings this library returns are ordinary `Uint8Array`s that carry a hidden tag saying what they are, and for a palette, the colour space its colours were made in. Everything that takes bytes takes them (indexing, `length`, `subarray`, files, encoders), their `constructor` is `Uint8Array` (so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests), and `JSON`, `Buffer.from` and structured clones see plain bytes. What the tags buy:
+
+- **A palette maps in the space it was made in.** `getPalette(image, 8, { colorSpace: 'oklab' })` returns a palette with `colorSpace: 'oklab'`, and `quantizeWithPalette(image, palette)` matches in OKLab without being told. Name a `colorSpace` to override it. Plain bytes (a `slice`, a stored copy, an array you built) carry no space and are matched in RGB; `new Palette(bytes, 'oklab')` makes a tagged one.
+- **A clustering can't be passed where a palette goes.** TypeScript rejects it, and at run time `quantizeWithPalette(image, clustering)` throws `invalid-argument` (and a palette given as a clustering throws `invalid-clustering`), with no guessing about bytes.
+- **Stored clusterings get their type back with `new Clustering(bytes)`,** which checks they are a clustering (`invalid-clustering` otherwise). Plain bytes are still accepted by the functions at run time, so existing JavaScript that stores and reloads clusterings keeps working; TypeScript wants the constructor.
+
+```js
+import { Clustering, Palette, getPaletteFromClustering } from 'agglomerative-clustering';
+
+const stored = new Uint8Array(await db.get('clustering'));       // what storage gives back: plain bytes
+const clustering = new Clustering(stored);                        // typed again, and checked
+const palette = await getPaletteFromClustering(clustering, 8);
+palette instanceof Palette;                                       // true
+palette.colorSpace;                                               // 'rgb' or 'oklab', as it was clustered
+palette.slice(0, 3) instanceof Palette;                           // false: slice, subarray and clones are plain bytes
+```
+
+Tags live on the one array: `slice`, `subarray`, `structuredClone`, `postMessage` and storage all produce plain `Uint8Array`s (the worker entry carries them across for you). They are found by a registered symbol, so two copies of the library (ES module and CommonJS, or a bundler's duplicate) recognise each other's.
+
 ### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
 What a clustering holds: `{ formatVersion, colorSpace, precision, maxColors, totalWeight, mse, explained }`. `formatVersion` is the format of its bytes (compare it with the exported `formatVersion`; the library's own `version` is a different thing) and `maxColors` is the largest palette it can be cut to. `mse[k - 1]` is the mean squared error per channel of the `k`-colour clustering, meaning each pixel's squared distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (or OKLab units for an OKLab clustering). It is 0 at `colors` for the default `precision: 8`. With a lower `precision`, the error that grouping colours discards is recorded and included, so `mse[0]` is still the image's variance and `mse[colors - 1]` is that discarded error, not 0. The curve is computed from merge costs on integer-rounded cluster colours, so it is an accurate estimate, not an exact sum. Mapping pixels to their nearest palette colour usually lowers it by another 10–15%, so treat it as a slightly pessimistic estimate of the result. `explained[k - 1]` is `1 - mse[k - 1] / mse[0]`: the share of the image's variance the `k`-colour palette keeps, from 0 at one colour up to 1. It has no units, so one target such as `0.99` suits both colour spaces, while `mse` is in squared 8-bit values for `'rgb'` and squared OKLab units for `'oklab'`. For a 2.x clustering, `version` is 2 and `totalWeight`, `mse` and `explained` are `null`; in TypeScript, checking `info.version === 3` narrows them to present.
 
@@ -355,7 +375,7 @@ Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `a
 Quantizes using a clustering you already have. Options: `colorSpace` (defaults to the clustering's), `dither`, `width`.
 
 ### `quantizeWithPalette(image, palette, options?)`
-Maps each pixel to its nearest colour in any palette (flat RGB bytes: a `Uint8Array`, a `Uint8ClampedArray`, or a plain array of integers from 0 to 255). A palette doesn't record the colour space it was made in, so if it came from an OKLab clustering pass `{ colorSpace: 'oklab' }` to match the way `quantizeFromClustering` does (a worker handle does this for you). A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
+Maps each pixel to its nearest colour in any palette (a `Palette`, or flat RGB bytes: a `Uint8Array`, a `Uint8ClampedArray`, or a plain array of integers from 0 to 255). Pixels are matched in the palette's own colour space when it is a `Palette` (one this library returned), so an OKLab palette maps the way `quantizeFromClustering` does without being told; plain bytes carry no space and are matched in RGB, or in the clustering's space for a worker handle. Pass `colorSpace` to override. A `Clustering` is rejected. A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
 
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 Like `quantize`, but returns each pixel's palette index rather than its colour: `{ palette, indices, indexBits, transparentIndex }`, plus `width` and `height` when the input has them. `palette` is flat RGB bytes and `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, `Uint16Array` up to 65536, `Uint32Array` above. `indexBits` says which (8, 16 or 32), so you can branch on it without `instanceof`. This is what palette PNGs, pixel art, and embroidery or paint-by-number patterns need. Options: those of `quantize`, plus `transparent`.
@@ -436,7 +456,7 @@ Results are transferred back without copying. Images are copied to the worker, u
 ### TypeScript
 The package ships its own declarations for both entries, checked in CI with strict mode under `nodenext` (ES module and CommonJS importers), `bundler` resolution, and a Node-only project with no DOM lib (`ImageData` and `WebAssembly.Module` are then simply absent from the types, not errors). The worker entry's declarations use TypeScript's `esnext.disposable` lib for `await using` on handles, so they need **TypeScript 5.2 or newer**, or `skipLibCheck: true` (the default in most templates); the main entry works on older versions. `agglomerative-clustering/worker` is an ES module: from a CommonJS file, use `await import('agglomerative-clustering/worker')`, or TypeScript 5.8+ with `module: nodenext`, which understands `require()` of ES modules.
 
-Results narrow where it helps: `IndexedImage` is a union on `indexBits`, so checking `result.indexBits === 8` makes `result.indices` a `Uint8Array` (16 gives `Uint16Array`, 32 `Uint32Array`), and `ClusteringInfo` is a union on `formatVersion`, so checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Functions that map with a palette take a `PaletteLike`: a `Uint8Array`, a `Uint8ClampedArray` or a plain `number[]` of bytes.
+Results narrow where it helps: `IndexedImage` is a union on `indexBits`, so checking `result.indexBits === 8` makes `result.indices` a `Uint8Array` (16 gives `Uint16Array`, 32 `Uint32Array`), and `ClusteringInfo` is a union on `formatVersion`, so checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Functions that map with a palette take a `PaletteLike`: a `Palette`, a plain `Uint8Array`, a `Uint8ClampedArray` or a plain `number[]` of bytes (not a `Clustering`).
 
 ## Compatibility and versioning
 Within a major version these don't change:

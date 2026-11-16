@@ -53,11 +53,16 @@ async function run() {
         cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeFromClustering(image, clustering, k)).data);
     }
     checks.handleCutsMatchMain = cuts;
+    // A palette made in RGB (it knows that), and the same bytes without the tag.
     const custom = await ac.getPalette(image, 5);
-    // The handle was clustered in OKLab, and maps with a palette of your own in the space it was clustered in.
-    checks.handlePaletteMatchesMain = equal((await handle.quantizeWithPalette(custom, { dither: true })).data, (await ac.quantizeWithPalette(image, custom, { dither: true, colorSpace: 'oklab' })).data)
-        && equal((await handle.quantizeToIndicesWithPalette(custom)).indices, (await ac.quantizeToIndicesWithPalette(image, custom, { colorSpace: 'oklab' })).indices)
-        && equal((await handle.quantizeWithPalette(await handle.getPalette(5))).data, (await handle.quantize(5)).data);
+    const plain = new Uint8Array(custom);
+    // The handle was clustered in OKLab: plain bytes map in the space it was clustered in, a Palette in its own, and a
+    // palette from the handle keeps the OKLab it was made in, across the worker boundary.
+    checks.handlePaletteMatchesMain = equal((await handle.quantizeWithPalette(plain, { dither: true })).data, (await ac.quantizeWithPalette(image, plain, { dither: true, colorSpace: 'oklab' })).data)
+        && equal((await handle.quantizeWithPalette(custom, { dither: true })).data, (await ac.quantizeWithPalette(image, custom, { dither: true })).data)
+        && equal((await handle.quantizeToIndicesWithPalette(plain)).indices, (await ac.quantizeToIndicesWithPalette(image, plain, { colorSpace: 'oklab' })).indices)
+        && equal((await handle.quantizeWithPalette(await handle.getPalette(5))).data, (await handle.quantize(5)).data)
+        && (await handle.getPalette(5)).colorSpace === 'oklab' && (await handle.getClustering()) instanceof ac.Clustering;
     const indexed = await handle.quantizeToIndices(16);
     checks.indexedOutput = indexed.indices.length === width * height && indexed.palette.length <= 48;
     const swatches = await handle.getSwatches(16);

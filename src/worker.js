@@ -11,6 +11,54 @@ const fail = (code, message) => Object.assign(new Error(message), {code});
 export const version = '2.0.0';
 export const formatVersion = 3;
 
+// ----- Palette and Clustering ----------------------------------------------------------------------------------------
+// The same classes as the main entry's (see there: ordinary Uint8Arrays with hidden tags), recognised across copies of the library by
+// their symbol properties. A structured clone drops those tags (a palette's colour space with them), so values that cross to or from the
+// worker thread travel as small markers (`pack`, `revive`) and become these again on the other side.
+const paletteBrand = Symbol.for('agglomerative-clustering.palette');
+const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
+const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
+const MARK = '__agglomerativeClustering';
+
+const markPalette = (bytes, colorSpace) => {
+    Object.defineProperty(bytes, paletteBrand, {value: true});
+    Object.defineProperty(bytes, 'colorSpace', {value: colorSpace});
+    return bytes;
+};
+const markClustering = (bytes) => Object.defineProperty(bytes, clusteringBrand, {value: true});
+const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
+
+export function Palette(source, colorSpace = 'rgb') {
+    if (colorSpace !== 'rgb' && colorSpace !== 'oklab') {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
+    return markPalette(new Uint8Array(source === undefined ? 0 : source), colorSpace);
+}
+Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
+
+export function Clustering(...args) {
+    const bytes = new Uint8Array(...args);
+    // A brief check, so bytes that are plainly not a clustering fail here; reading the header in full (versions, lengths) is
+    // done by the functions that use one, as in the main entry.
+    if (bytes.length < 4 || bytes[0] !== 0xAC) {throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering.");}
+    return markClustering(bytes);
+}
+Object.defineProperty(Clustering, Symbol.hasInstance, {value: isClustering});
+
+// A palette argument travels with its colour space.
+const pack = (value) => isPalette(value) ? {[MARK]: 'palette', bytes: new Uint8Array(value), colorSpace: value.colorSpace} : value;
+
+// Results come back with markers for the palettes and clusterings in them (the result itself, or a property of it).
+const reviveOne = (value) => {
+    if (!value || typeof value !== 'object' || !value[MARK]) {return value;}
+    if (value[MARK] === 'palette') {return new Palette(value.bytes, value.colorSpace);}
+    return new Clustering(value.bytes.buffer, value.bytes.byteOffset, value.bytes.length);
+};
+const revive = (result) => {
+    if (!result || typeof result !== 'object' || ArrayBuffer.isView(result)) {return result;}
+    if (result[MARK]) {return reviveOne(result);}
+    for (const key of Object.keys(result)) {result[key] = reviveOne(result[key]);}
+    return result;
+};
+
 // An options object is an ordinary object (see isOptionsObject in index.js).
 const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
 
@@ -214,7 +262,7 @@ export const createWorker = (options) => {
         pending.delete(message.id);
         call.cleanup();
         if (pending.size === 0 && connection) {connection.unref();}
-        if (message.error !== undefined) {call.reject(remoteError(message.error, call.origin));} else {call.resolve(message.result);}
+        if (message.error !== undefined) {call.reject(remoteError(message.error, call.origin));} else {call.resolve(revive(message.result));}
     };
 
     // `origin` is an Error made in the caller's own (non-async) function, for the stack of a failure: async helpers
@@ -266,7 +314,7 @@ export const createWorker = (options) => {
             }
             pending.set(id, call);
             try {
-                connection.post({id, method, args, cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
+                connection.post({id, method, args: args.map(pack), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
             } catch (error) {
                 pending.delete(id);
                 call.cleanup();

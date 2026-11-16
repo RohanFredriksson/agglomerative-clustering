@@ -1,5 +1,6 @@
 // See main.mts.
 import { createWorker, init, getPalette, quantize, quantizeToIndices, terminate } from 'agglomerative-clustering/worker';
+import { Palette, Clustering } from 'agglomerative-clustering/worker';
 import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, RunOptions, InitOptions } from 'agglomerative-clustering/worker';
 
 declare const imageData: ImageData;
@@ -11,7 +12,7 @@ async function main() {
     await worker.init({ wasm: new Uint8Array(1) });
     const handle: ClusteringHandle<ImageData> = await worker.cluster(imageData, { signal: controller.signal, onProgress: (p) => void p });
     const q: ImageData = await handle.quantize(8, { dither: true, signal: controller.signal });
-    const palette: Uint8Array = await handle.getPalette(8);
+    const palette: Palette = await handle.getPalette(8);
     const info = await handle.getClusteringInfo();
     const mse: Float64Array | null = info.mse;
     const indexed = await handle.quantizeToIndices(16, { transparent: 128 });
@@ -25,14 +26,15 @@ async function main() {
     const x: ImageData = await quantize(imageData, 4, { signal: controller.signal });
     const y: Uint8Array = await quantize(bytes, 4);
     const z = await quantizeToIndices(imageData, 4, { transparent: true });
-    const p: Uint8Array = await getPalette(imageData, 4);
+    const p: Palette = await getPalette(imageData, 4);
+    const stored: Clustering = await handle.getClustering();
     await init();
     const code: ErrorCode = 'worker-terminated';
     const e = null as unknown as CodedError;
     const run: RunOptions = {};
     const o: InitOptions = {};
     const like: ImageLike = bytes;
-    void [q, palette, mse, indexed, x, y, z, p, code, e, run, o, like];
+    void [stored, new Palette(bytes, 'oklab'), q, palette, mse, indexed, x, y, z, p, code, e, run, o, like];
 }
 
 // @ts-expect-error getInfo was renamed

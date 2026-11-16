@@ -1,9 +1,9 @@
 import {
-    version, formatVersion, init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
+    version, formatVersion, Palette, Clustering, init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
     quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
-import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions, Swatches } from 'agglomerative-clustering';
+import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace } from 'agglomerative-clustering';
 
 declare const bytes: Uint8Array;
 declare const imageData: ImageData;
@@ -21,9 +21,9 @@ async function main() {
         await init({ wasm: m });
     }
 
-    const clustering: Uint8Array = await getClustering(imageData, { colorSpace: 'oklab', precision: 6, alpha: 'ignore', signal: controller.signal, onProgress: (p: number) => void p });
-    const palette: Uint8Array = await getPalette(bytes, 16, { signal: controller.signal });
-    const cut: Uint8Array = await getPaletteFromClustering(clustering, 8);
+    const clustering: Clustering = await getClustering(imageData, { colorSpace: 'oklab', precision: 6, alpha: 'ignore', signal: controller.signal, onProgress: (p: number) => void p });
+    const palette: Palette = await getPalette(bytes, 16, { signal: controller.signal });
+    const cut: Palette = await getPaletteFromClustering(clustering, 8);
     const swatches: Swatches = await getSwatchesFromClustering(clustering, 8);
     const weights: Float64Array = swatches.weights;
     const shares: Float64Array = (await getSwatches(imageData, 8, { signal: controller.signal })).shares;
@@ -54,6 +54,17 @@ async function main() {
     await quantizeToIndicesFromClustering(imageData, clustering, 8, { transparent: false });
     await quantizeToIndicesWithPalette(raw, palette, { transparent: 1 });
 
+    // A palette knows its colour space and is a Uint8Array; stored bytes become a Clustering by construction
+    const space: ColorSpace = palette.colorSpace;
+    const asBytes: Uint8Array = palette;
+    const typed: Clustering = new Clustering(plainBytes);
+    const slice: Uint8Array = palette.slice(0, 3);
+    const made: Palette = new Palette(plainBytes, 'oklab');
+    await quantizeWithPalette(imageData, made);
+    await quantizeWithPalette(imageData, plainBytes);
+    await quantizeWithPalette(imageData, [0, 0, 0, 255, 255, 255]);
+    await getPaletteFromClustering(typed, 4);
+    void [space, asBytes, slice];
     const code: ErrorCode = 'invalid-argument';
     try { await getPalette(bytes, 0); } catch (error) { const coded = error as CodedError; const same: ErrorCode = coded.code; void same; }
     const run: RunOptions = { signal: controller.signal, onProgress(p) { void p; } };
@@ -63,13 +74,23 @@ async function main() {
 }
 
 // Things that must not compile.
+// Palettes and clusterings are different types: a plain Uint8Array is not a Clustering, and neither is a Palette
+declare const plainBytes: Uint8Array;
+// @ts-expect-error stored bytes need `new Clustering(bytes)` to be typed as a clustering
+getPaletteFromClustering(plainBytes, 4);
+// @ts-expect-error a palette is not a clustering
+getPaletteFromClustering(await getPalette(bytes, 4), 4);
+// @ts-expect-error a clustering is not a palette
+quantizeWithPalette(bytes, aClustering);
+// @ts-expect-error nor in the indexed form
+quantizeToIndicesWithPalette(bytes, aClustering);
 // @ts-expect-error unknown option
 getPalette(bytes, 4, { reserveTransparent: true });
 // @ts-expect-error the curve is called mse now
 declare const oldInfo: ClusteringInfo; oldInfo.errors;
 // transparent is a clustering option (and an indexed-output one), but the functions that only map don't take it
 quantize(bytes, 4, { transparent: true });
-declare const aClustering: Uint8Array;
+declare const aClustering: Clustering;
 // @ts-expect-error transparent is not a mapping option for quantizeFromClustering
 quantizeFromClustering(bytes, aClustering, 4, { transparent: true });
 // @ts-expect-error wrong signal type

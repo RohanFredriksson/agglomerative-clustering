@@ -6,6 +6,13 @@ import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
     IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches,
 } from './index.js';
+import type { Palette, Clustering } from './index.js';
+
+/** The same class as the main entry's `Palette`: flat RGB bytes that know their colour space. */
+export { Palette } from './index.js';
+
+/** The same class as the main entry's `Clustering`: the typed bytes of a clustering. */
+export { Clustering } from './index.js';
 
 /** The version of this library, as in its `package.json`: the same value as the main entry's `version`. */
 export const version: string;
@@ -31,8 +38,8 @@ export interface WorkerOptions {
 
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */
 export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
-    getClustering(): Promise<Uint8Array>;
-    getPalette(k: number): Promise<Uint8Array>;
+    getClustering(): Promise<Clustering>;
+    getPalette(k: number): Promise<Palette>;
     getSwatches(k: number): Promise<Swatches>;
     getClusteringInfo(): Promise<ClusteringInfo>;
     /** Maps the kept image to the k-colour palette. Returns the same type as the image given to `cluster`. */
@@ -55,17 +62,17 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
 export interface AgglomerativeWorker {
     /** Loads the module in the worker. `wasm` is the only option, and `createWorker({ wasm })` does the same. */
     init(options?: InitOptions): Promise<void>;
-    getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
-    getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
-    getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
+    getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+    getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
+    getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
     getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
-    getSwatchesFromClustering(clustering: Uint8Array, k: number): Promise<Swatches>;
-    getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
+    getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
+    getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
     quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
-    quantizeFromClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeFromClustering<Image extends ImageLike>(image: Image, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeWithPalette<Image extends ImageLike>(image: Image, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
-    quantizeToIndicesFromClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;

@@ -49,8 +49,50 @@ export type ImageLike = Uint8Array | PlatformImageData | RawImage;
 /** `WebAssembly.Module` where the global exists, else `never` (see `PlatformImageData`). */
 export type WasmModule = typeof globalThis extends { WebAssembly: { Module: { prototype: infer M } } } ? M : never;
 
-/** A palette to map with: flat RGB bytes, as a `Uint8Array` (what every function here returns), a `Uint8ClampedArray`, or a plain array of integers from 0 to 255. */
-export type PaletteLike = Uint8Array | Uint8ClampedArray | readonly number[];
+declare const clusteringBrand: unique symbol;
+
+/**
+ * A palette: flat RGB bytes (`[r, g, b, r, g, b, …]`) that also know the colour space they were made in. It is an
+ * ordinary `Uint8Array` (its `constructor` is `Uint8Array`, so `toEqual(new Uint8Array(…))` in a test passes) with a
+ * hidden `colorSpace` tag, so everything that takes bytes (indexing, `length`, `subarray`, encoders, files) takes it.
+ * What the tag adds: `quantizeWithPalette` and `quantizeToIndicesWithPalette` match pixels in a palette's own space
+ * unless you name another, so a palette made with `colorSpace: 'oklab'` is mapped the way it was made without you
+ * having to remember. Every function here that returns a palette returns this. `slice`, `subarray` and structured
+ * clones (`postMessage`, storage) give plain `Uint8Array`s without the tag, matched in RGB unless you say otherwise;
+ * `new Palette(bytes, 'oklab')` makes one by hand, and `value instanceof Palette` tells.
+ */
+export class Palette extends Uint8Array {
+    /** `source` is bytes (copied), a length, or an array of byte values. */
+    constructor(source?: ArrayLike<number> | number, colorSpace?: ColorSpace);
+    /** The space the colours were made in: how they should be matched. `'rgb'` for a palette built from plain bytes. */
+    readonly colorSpace: ColorSpace;
+}
+
+/**
+ * The bytes of a clustering, as `getClustering` returns them: an opaque `Uint8Array` (tagged, like `Palette`) that you can
+ * store (a file, IndexedDB, next to the image) and cut to a palette of any size later. It is a type of its own, so a
+ * clustering can't be passed where a palette goes (or the other way round): TypeScript says so, and at run time a
+ * `Clustering` given as a palette is rejected, with no guessing about its bytes. Stored bytes come back as a plain
+ * `Uint8Array`, which functions still accept at run time; `new Clustering(bytes)` gives them the type back (TypeScript
+ * wants it) and checks they are a clustering.
+ */
+export class Clustering extends Uint8Array {
+    /** Bytes (copied), or a view of a buffer, as for any typed array. Throws `invalid-clustering` unless they are a clustering. */
+    constructor(bytes: ArrayLike<number>);
+    constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
+    /** Only a type: what makes a `Clustering` different from a palette or other bytes to the compiler. */
+    readonly [clusteringBrand]: true;
+}
+
+/** What is not a clustering: a `Clustering` is not accepted where a palette is. */
+type NotClustering = { readonly [clusteringBrand]?: never };
+
+/**
+ * A palette to map with: a `Palette` (which knows its colour space), flat RGB bytes as a plain `Uint8Array` or
+ * `Uint8ClampedArray` (matched in RGB unless you name a space), or a plain array of integers from 0 to 255. Not a
+ * `Clustering`.
+ */
+export type PaletteLike = (Palette | Uint8Array | Uint8ClampedArray | readonly number[]) & NotClustering;
 
 /** The space colours are clustered and matched in. */
 export type ColorSpace = 'rgb' | 'oklab';
@@ -159,9 +201,9 @@ interface IndexedImageFields {
     /**
      * Flat RGB bytes, one entry per index, including the transparent entry if there is one. Empty for an image with no
      * pixels. An image with pixels but no visible colour has a single black entry, or with `transparent`, just
-     * the transparent entry.
+     * the transparent entry. A `Palette`, so it carries the colour space it was matched in.
      */
-    palette: Uint8Array;
+    palette: Palette;
     /** The index of the entry for fully transparent pixels, or `null` if there is none. */
     transparentIndex: number | null;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
@@ -210,33 +252,33 @@ export const formatVersion: 3;
 export function init(options?: InitOptions): Promise<void>;
 
 /**
- * Builds the colour hierarchy for an image: the expensive step, done once. The result is an opaque `Uint8Array` you can
+ * Builds the colour hierarchy for an image: the expensive step, done once. The result is a `Clustering` (opaque bytes) you can
  * cache or store next to the image. Cut it to a palette of any size with `getPaletteFromClustering`, or map pixels
  * with `quantizeFromClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
  */
-export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
+export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 
 /**
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
  * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `getClustering`
  * once and cut it.
  */
-export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
+export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
 
 /**
  * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour at two colours and keeps its
  * place as the palette grows (it is not always the heaviest entry of a larger one), and the palette for
  * `k + 1` is the palette for `k` with one entry refined and one colour appended.
  */
-export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
+export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 
 /**
  * A palette with how much of the image each of its colours covers, for swatches with percentages. The three arrays come
  * from one cut of one clustering, so they line up by construction: entry `i` of each describes the same colour.
  */
 export interface Swatches {
-    /** Flat RGB bytes in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
-    palette: Uint8Array;
+    /** The colours in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
+    palette: Palette;
     /**
      * Pixels per colour: fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as
      * in clustering. They sum to the image's visible weight.
@@ -256,7 +298,7 @@ export function getSwatches(image: ImageLike, k: number, options?: ClusteringOpt
  * The same as `getSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
  * Needs a clustering from 3.x; a 2.x clustering has no weights and is rejected.
  */
-export function getSwatchesFromClustering(clustering: Uint8Array, k: number): Promise<Swatches>;
+export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 
 interface ClusteringInfoFields {
     colorSpace: ColorSpace;
@@ -302,7 +344,7 @@ export interface ClusteringInfoV2 extends ClusteringInfoFields {
 export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */
-export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
+export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 
 /**
  * Reduces `image` to at most `k` colours and returns the mapped image as the same kind of thing you gave: a `Uint8Array`
@@ -316,12 +358,13 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
  * costs milliseconds. Matches in the clustering's colour space unless `colorSpace` is given. Returns the same kind of
  * thing as `quantize`.
  */
-export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
 /**
  * Maps each pixel of `image` to its nearest colour in a palette you supply (an edited swatch, a brand palette, one cut
- * from a clustering). A palette doesn't record the colour space it was made in: if it came from an OKLab clustering,
- * pass `colorSpace: 'oklab'` to map the way `quantizeFromClustering` does. Returns the same kind of thing as `quantize`.
+ * from a clustering). Pixels are matched in the palette's own colour space if it is a `Palette` (one this library made),
+ * so an OKLab palette maps the way `quantizeFromClustering` does; plain bytes carry no space and are matched in RGB. Name a
+ * `colorSpace` to override either. Returns the same kind of thing as `quantize`.
  */
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 
@@ -333,7 +376,8 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s. */
-export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */
 export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
+export {};

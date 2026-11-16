@@ -1,6 +1,6 @@
 // A Node-only project: no DOM lib, so no global `ImageData`. The declarations must compile with `skipLibCheck` off,
 // and the types must stay precise (not fall back to `any`).
-import { quantize, quantizeToIndices, init, getClusteringInfo } from 'agglomerative-clustering';
+import { quantize, quantizeToIndices, init, getClusteringInfo, getClustering } from 'agglomerative-clustering';
 import { createWorker, quantize as workerQuantize } from 'agglomerative-clustering/worker';
 import type { ImageLike, RawImage } from 'agglomerative-clustering';
 
@@ -18,7 +18,7 @@ export async function run() {
     const f = await createWorker().cluster(raw);
     const g: RawImage = await f.quantize(4);
     const indexed = await quantizeToIndices(buffer, 8, { transparent: true, signal: new AbortController().signal });
-    const info = await getClusteringInfo(new Uint8Array(0));
+    const info = await getClusteringInfo(await getClustering(bytes));
     const mse: Float64Array | null = info.mse;
     await init({ wasm: 'clustering.wasm' });
     await init({ wasm: new Uint8Array(8) });

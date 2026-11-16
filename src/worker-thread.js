@@ -14,32 +14,59 @@ const handle = (id) => {
 // A palette doesn't say which colour space it was made in. A handle's palette almost always came from the handle itself,
 // so mapping with it should match in the space the handle was clustered in, as handle.quantize does, unless the caller
 // names one. Options that aren't an ordinary object are passed on as they are for the main entry to reject.
-const inClusteringSpace = async (id, options) => {
+const inClusteringSpace = async (id, options, palette) => {
     if (options !== undefined && Object.prototype.toString.call(options) !== '[object Object]') {return options;}
+    // A Palette knows the space it was made in; the main entry uses that unless one is named.
+    if (isPalette(palette) && !(options && options.colorSpace !== undefined)) {return options;}
     const {colorSpace} = await ac.getClusteringInfo(handle(id).clustering);
     return {...options, colorSpace: options && options.colorSpace !== undefined ? options.colorSpace : colorSpace};
 };
 
+// A palette and a clustering are Uint8Array subclasses that a structured clone turns into plain ones, losing a palette's colour
+// space. So they cross as markers (see `pack` and `revive` in worker.js): arguments are revived into the classes here, and
+// results are marked before they are posted.
+const MARK = '__agglomerativeClustering';
+const paletteBrand = Symbol.for('agglomerative-clustering.palette');
+const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
+const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
+const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
+const revive = (value) => value && typeof value === 'object' && value[MARK] === 'palette' ? new ac.Palette(value.bytes, value.colorSpace) : value;
+const mark = (value) => {
+    if (isPalette(value)) {return {[MARK]: 'palette', bytes: new Uint8Array(value.buffer, value.byteOffset, value.length), colorSpace: value.colorSpace};}
+    if (isClustering(value)) {return {[MARK]: 'clustering', bytes: new Uint8Array(value.buffer, value.byteOffset, value.length)};}
+    return value;
+};
+const serialise = (result) => {
+    if (!result || typeof result !== 'object' || ArrayBuffer.isView(result)) {return mark(result);}
+    return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, mark(value)]));
+};
+
+// The functions of the main entry, by name (not its classes and constants).
+const functions = Object.fromEntries(Object.entries(ac).filter(([name, value]) => typeof value === 'function' && !/^[A-Z]/.test(name)));
+
 const methods = {
-    ...ac,
+    ...functions,
     cluster: async (id, image, options) => {
         handles.set(id, {image, clustering: await ac.getClustering(image, options)});
     },
     release: async (id) => {handles.delete(id);},
-    handleGetClustering: async (id) => handle(id).clustering.slice(),
+    handleGetClustering: async (id) => new ac.Clustering(handle(id).clustering),
     handleGetPalette: async (id, k) => ac.getPaletteFromClustering(handle(id).clustering, k),
     handleGetSwatches: async (id, k) => ac.getSwatchesFromClustering(handle(id).clustering, k),
     handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
     handleQuantize: async (id, k, options) => ac.quantizeFromClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesFromClustering(handle(id).image, handle(id).clustering, k, options),
-    handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
-    handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
+    handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
+    handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
 };
 
 // The buffers in a result, to transfer rather than copy. Results are freshly allocated, so nothing here uses them.
 const buffers = (value) => {
     if (ArrayBuffer.isView(value)) {return [value.buffer];}
-    if (value && typeof value === 'object') {return Object.values(value).filter(ArrayBuffer.isView).map((view) => view.buffer);}
+    if (value && typeof value === 'object') {
+        if (value[MARK]) {return [value.bytes.buffer];}
+        return Object.values(value).flatMap((part) => ArrayBuffer.isView(part) ? [part.buffer] : part && typeof part === 'object' && part[MARK] ? [part.bytes.buffer] : []);
+    }
     return [];
 };
 
@@ -67,7 +94,7 @@ const respond = async ({id, method, args, progress}, post) => {
             if (progress) {options.onProgress = (fraction) => post({id, progress: fraction});}
             args[index] = options;
         }
-        const result = await methods[method](...args);
+        const result = serialise(await methods[method](...args.map(revive)));
         post({id, result}, [...new Set(buffers(result))]);
     } catch (error) {
         // A cancelled call has already been rejected on the other side.

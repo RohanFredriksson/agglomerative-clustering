@@ -115,7 +115,8 @@ describe('the worker entry', () => {
 
     it('mirrors the main entry', () => {
         // Constants (the versions) are exported by both entries with the same values; only functions become worker methods.
-        const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function');
+        // (`Palette` and `Clustering` are constructors, exported by both entries but not methods.)
+        const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function' && !/^[A-Z]/.test(name));
         for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function')) {expect(worker[name], name).toBe(main[name]);}
         expect(Object.keys(worker).sort()).toEqual([...Object.keys(main), 'createWorker', 'terminate'].sort());
         expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'terminate'].sort());
@@ -175,7 +176,7 @@ describe('the README', () => {
     it('documents every function', () => {
         for (const name of [...Object.keys(worker), 'createWorker']) {
             // Functions are documented as `name(`; constants such as `version` have a heading of their own.
-            const entry = typeof worker[name] === 'function' ? '`' + name + '(' : '`' + name + '`';
+            const entry = typeof worker[name] === 'function' && !/^[A-Z]/.test(name) ? '`' + name + '(' : '`' + name + '`';
             expect(readme.includes(entry), `README has no entry for ${name}`).toBe(true);
         }
     });
