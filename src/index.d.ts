@@ -80,7 +80,7 @@ export interface RunOptions {
 export interface ClusteringOptions extends RunOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
-     * `'oklab'` clusters in OKLab, where distances track perceived colour difference.
+     * `'oklab'` clusters in OKLab. Neither is better everywhere: see "Choosing a colour space" in the README.
      */
     colorSpace?: ColorSpace;
     /**

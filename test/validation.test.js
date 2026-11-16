@@ -196,3 +196,11 @@ describe('palette validation', () => {
     });
 
 });
+
+describe('an image object without a format', () => {
+    it('says what to add', async () => {
+        const error = await getPalette({ data: new Uint8ClampedArray(16), width: 2, height: 2 }, 3).catch((e) => e);
+        expect(error.code).toBe('invalid-argument');
+        expect(error.message).toContain("add format: 'rgba'");
+    });
+});

@@ -110,7 +110,8 @@ const load = (image) => {
     }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
-        throw fail('invalid-argument', "Invalid image: expected object with `data` and `format`.");
+        const hint = image && typeof image === 'object' && image.data && !image.format ? " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage." : '';
+        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${hint}`);
     }
 
     if (!(image.data instanceof Uint8Array) && !(image.data instanceof Uint8ClampedArray)) {
