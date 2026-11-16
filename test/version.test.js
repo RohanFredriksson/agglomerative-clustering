@@ -18,7 +18,7 @@ describe('version and formatVersion', () => {
         expect(worker.version).toBe(ac.version);
         expect(ac.formatVersion).toBe(3);
         expect(worker.formatVersion).toBe(ac.formatVersion);
-        expect((await ac.getClusteringInfo(await ac.getClustering(image))).version).toBe(ac.formatVersion);
+        expect((await ac.getClusteringInfo(await ac.getClustering(image))).formatVersion).toBe(ac.formatVersion);
     });
 
     it('are in step with the .wasm and its source: the build checks it, and so does the module', () => {

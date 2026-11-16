@@ -67,7 +67,7 @@ describe.each(versions.filter((version) => version >= 2))('format version %i', (
         it('has no weights or error curve', async () => {
             await expect(weightsOf(clustering, 4)).rejects.toThrow('has no weights');
             const info = await getClusteringInfo(clustering);
-            expect([info.version, info.totalWeight, info.mse, info.explained]).toEqual([version, null, null, null]);
+            expect([info.formatVersion, info.totalWeight, info.mse, info.explained]).toEqual([version, null, null, null]);
         });
     }
 

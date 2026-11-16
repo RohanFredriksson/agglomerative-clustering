@@ -67,7 +67,7 @@ describe('clustering header', () => {
 
     it('reads records longer than it knows, ignoring the extra fields', async () => {
         const clustering = await getClustering(gradient);
-        const merges = (await getClusteringInfo(clustering)).colors - 1;
+        const merges = (await getClusteringInfo(clustering)).maxColors - 1;
         // The same clustering with 9 unknown bytes after each record (keeping the length 7 more than a multiple of 9).
         const header = clustering[2];
         const extended = new Uint8Array(header + 3 + 30 * merges + (7 - (header + 3 + 30 * merges) % 9 + 9) % 9);

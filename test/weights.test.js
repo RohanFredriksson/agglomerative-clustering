@@ -82,16 +82,16 @@ describe('getClusteringInfo', () => {
 
     it('describes the clustering', async () => {
         const info = await getClusteringInfo(await getClustering(gradient, { colorSpace: 'oklab', precision: 6 }));
-        expect(info.version).toBe(3);
+        expect(info.formatVersion).toBe(3);
         expect(info.colorSpace).toBe('oklab');
         expect(info.precision).toBe(6);
         expect(info.totalWeight).toBe(width * height);
-        expect(info.colors).toBe(info.mse.length);
-        expect(info.colors).toBe((await getPaletteFromClustering(await getClustering(gradient, { colorSpace: 'oklab', precision: 6 }), 1e6)).length / 3);
+        expect(info.maxColors).toBe(info.mse.length);
+        expect(info.maxColors).toBe((await getPaletteFromClustering(await getClustering(gradient, { colorSpace: 'oklab', precision: 6 }), 1e6)).length / 3);
     });
 
     it('gives an error curve that falls to 0 with every colour separate', async () => {
-        const { mse, colors } = await getClusteringInfo(await getClustering(gradient));
+        const { mse, maxColors: colors } = await getClusteringInfo(await getClustering(gradient));
         expect(mse[colors - 1]).toBe(0);
         for (let k = 1; k < colors; k++) {expect(mse[k]).toBeLessThanOrEqual(mse[k - 1]);}
     });
@@ -112,13 +112,13 @@ describe('getClusteringInfo', () => {
         const grouped = await getClusteringInfo(await getClustering(gradient, { precision: 4 }));
         // Grouping discards error before clustering; it is added back, so the starting point is the same variance.
         expect(grouped.mse[0]).toBeCloseTo(exact.mse[0], 0);
-        expect(grouped.mse[grouped.colors - 1]).toBeGreaterThan(0);
-        expect(exact.mse[exact.colors - 1]).toBe(0);
-        for (let k = 1; k < grouped.colors; k++) {expect(grouped.mse[k]).toBeLessThanOrEqual(grouped.mse[k - 1]);}
+        expect(grouped.mse[grouped.maxColors - 1]).toBeGreaterThan(0);
+        expect(exact.mse[exact.maxColors - 1]).toBe(0);
+        for (let k = 1; k < grouped.maxColors; k++) {expect(grouped.mse[k]).toBeLessThanOrEqual(grouped.mse[k - 1]);}
     });
 
     it('gives the share of variance each palette size keeps', async () => {
-        const { mse, explained, colors } = await getClusteringInfo(await getClustering(gradient));
+        const { mse, explained, maxColors: colors } = await getClusteringInfo(await getClustering(gradient));
         expect(explained.length).toBe(colors);
         expect(explained[0]).toBe(0);
         expect(explained[colors - 1]).toBe(1);
@@ -133,7 +133,7 @@ describe('getClusteringInfo', () => {
 
     it('describes an empty clustering', async () => {
         const info = await getClusteringInfo(await getClustering(new Uint8Array(0)));
-        expect([info.colors, info.totalWeight, info.mse.length]).toEqual([0, 0, 0]);
+        expect([info.maxColors, info.totalWeight, info.mse.length]).toEqual([0, 0, 0]);
     });
 
     it('rejects things that are not clusterings', async () => {

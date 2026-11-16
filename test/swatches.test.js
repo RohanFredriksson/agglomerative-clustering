@@ -43,7 +43,7 @@ describe('getSwatchesFromClustering', () => {
 
     it('agrees with how many pixels the colours really cover when nothing is merged', async () => {
         const clustering = await getClustering(gradient);
-        const { colors } = await getClusteringInfo(clustering);
+        const { maxColors: colors } = await getClusteringInfo(clustering);
         const { weights } = await getSwatchesFromClustering(clustering, colors);
         const indexed = await quantizeToIndicesFromClustering(gradient, clustering, colors);
         const used = new Float64Array(indexed.palette.length / 3);

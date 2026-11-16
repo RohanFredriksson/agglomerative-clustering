@@ -625,7 +625,7 @@ export const getClusteringInfo = async (clustering) => {
 
     const header = readHeader(clustering);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {version: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, colors, totalWeight: null, mse: null, explained: null};
+    const info = {formatVersion: header.version, colorSpace: header.colorSpace === 1 ? 'oklab' : 'rgb', precision: header.precision, maxColors: colors, totalWeight: null, mse: null, explained: null};
     if (header.version < 3) {return info;}
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);

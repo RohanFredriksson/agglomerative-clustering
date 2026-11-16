@@ -16,10 +16,10 @@ export async function shapes() {
     const unnarrowed: Uint8Array = indexed.indices;
     const typed: IndexedImage = indexed;
 
-    // Checking version narrows the error curve and weights to present or absent.
+    // Checking formatVersion narrows the error curve and weights to present or absent.
     const info: ClusteringInfo = await getClusteringInfo(await getClustering(raw));
     const precision: number = info.precision;                                   // never null now
-    if (info.version === 3) {
+    if (info.formatVersion === 3) {
         const mse: Float64Array = info.mse;
         const explained: Float64Array = info.explained;
         const total: number = info.totalWeight;
@@ -27,7 +27,7 @@ export async function shapes() {
         void [mse, explained, total, same];
     } else {
         const none: null = info.mse;
-        const version: 2 = info.version;
+        const version: 2 = info.formatVersion;
         void [none, version];
     }
     // @ts-expect-error not narrowed: a 2.x clustering has no error curve

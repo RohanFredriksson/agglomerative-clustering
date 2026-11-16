@@ -82,16 +82,16 @@ export function getSwatchesFromClustering(clustering: Uint8Array, k: number): Pr
 interface ClusteringInfoFields {
     colorSpace: ColorSpace;
     precision: number;
-    colors: number;
+    maxColors: number;
 }
 export interface ClusteringInfoV3 extends ClusteringInfoFields {
-    version: 3;
+    formatVersion: 3;
     totalWeight: number;
     mse: Float64Array;
     explained: Float64Array;
 }
 export interface ClusteringInfoV2 extends ClusteringInfoFields {
-    version: 2;
+    formatVersion: 2;
     totalWeight: null;
     mse: null;
     explained: null;

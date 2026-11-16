@@ -189,7 +189,7 @@ export const version: string;
 
 /**
  * The version of the data this library stores: the format of the clusterings `getClustering` writes (`getClusteringInfo`
- * reports a clustering's own as `version`). One integer for the library's stored data, unrelated to `version`: it
+ * reports a clustering's own as its `formatVersion`). One integer for the library's stored data, unrelated to `version`: it
  * changes only when the stored format does, so a new release that keeps the format keeps this number. This build reads
  * this format and the one before it (2).
  */
@@ -255,19 +255,20 @@ interface ClusteringInfoFields {
     colorSpace: ColorSpace;
     /** Bits per channel it was clustered with. */
     precision: number;
-    /** The largest palette it can be cut to: its number of distinct clustered colours. */
-    colors: number;
+    /** The largest palette it can be cut to: its number of distinct clustered colours (fewer than the image's own when `precision` is below 8). */
+    maxColors: number;
 }
 
-/** What a 3.x clustering holds. A clustering you just made with `getClustering` is this one: check `version === 3` to narrow to it. */
+/** What a 3.x clustering holds. A clustering you just made with `getClustering` is this one: check `formatVersion === 3` to narrow to it. */
 export interface ClusteringInfoV3 extends ClusteringInfoFields {
-    version: 3;
+    /** The format of the clustering's bytes: the data version (see `formatVersion`, the one this build writes), not the library's `version`. */
+    formatVersion: 3;
     /** Total weight in pixels (opacity-weighted). */
     totalWeight: number;
     /**
      * `mse[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
      * distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (`'rgb'`) or OKLab units
-     * (`'oklab'`). `mse[0]` is the image's variance. At `precision: 8`, `mse[colors - 1]` is 0; with a lower
+     * (`'oklab'`). `mse[0]` is the image's variance. At `precision: 8`, `mse[maxColors - 1]` is 0; with a lower
      * precision it is the error that grouping colours discarded, which is recorded and included. It is an estimate,
      * computed from merge costs on integer-rounded colours. Mapping pixels to their nearest palette colour usually
      * lowers it by 10-15%.
@@ -275,7 +276,7 @@ export interface ClusteringInfoV3 extends ClusteringInfoFields {
     mse: Float64Array;
     /**
      * `explained[k - 1]` is the share of the image's variance the k-colour clustering keeps, `1 - mse[k - 1] /
-     * mse[0]`: 0 for one colour, rising to 1 at `colors`, and 1 throughout for an image of a single colour. It has no
+     * mse[0]`: 0 for one colour, rising to 1 at `maxColors`, and 1 throughout for an image of a single colour. It has no
      * units, so a target such as `0.99` means the same in `'rgb'` and `'oklab'`.
      */
     explained: Float64Array;
@@ -283,13 +284,14 @@ export interface ClusteringInfoV3 extends ClusteringInfoFields {
 
 /** What a 2.x clustering holds: no weights, so no error curve. */
 export interface ClusteringInfoV2 extends ClusteringInfoFields {
-    version: 2;
+    /** The format of the clustering's bytes (see `ClusteringInfoV3.formatVersion`). */
+    formatVersion: 2;
     totalWeight: null;
     mse: null;
     explained: null;
 }
 
-/** What `getClusteringInfo` returns: check `version` to narrow to the 3.x or 2.x shape. */
+/** What `getClusteringInfo` returns: check `formatVersion` to narrow to the 3.x or 2.x shape. */
 export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */

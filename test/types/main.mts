@@ -34,7 +34,7 @@ async function main() {
     const libraryVersion: string = version;
     const stored: 3 = formatVersion;
     // The format version is the one a fresh clustering reports, so it narrows the info the same way.
-    if (info.version === formatVersion) {const total: number = info.totalWeight; void total;}
+    if (info.formatVersion === formatVersion) {const total: number = info.totalWeight; void total;}
     // @ts-expect-error the version is a constant
     version = '0';
     void libraryVersion; void stored;
@@ -69,8 +69,11 @@ async function main() {
 getPalette(bytes, 4, { reserveTransparent: true });
 // @ts-expect-error the curve is called mse now
 declare const oldInfo: ClusteringInfo; oldInfo.errors;
-// @ts-expect-error transparent is for indexed output only
+// transparent is a clustering option (and an indexed-output one), but the functions that only map don't take it
 quantize(bytes, 4, { transparent: true });
+declare const aClustering: Uint8Array;
+// @ts-expect-error transparent is not a mapping option for quantizeFromClustering
+quantizeFromClustering(bytes, aClustering, 4, { transparent: true });
 // @ts-expect-error wrong signal type
 getClustering(bytes, { signal: 'abort' });
 // @ts-expect-error cutoff must be boolean or number
