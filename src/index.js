@@ -119,9 +119,59 @@ const unpack = (wasm, pointer) => {
 // A Uint8Array over exactly the same bytes, so views into a larger buffer (subarrays) stay views of their own range.
 const bytes = (data) => data instanceof Uint8Array ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 
+// ----- Encoded image files -------------------------------------------------------------------------------------------
+// A bare Uint8Array is taken to be raw RGBA pixels, so the commonest mistake is handing over the bytes of an image *file*
+// (fs.readFile, fetch().arrayBuffer()): it passes as pixels whenever its length is a multiple of 4 and gives a palette of
+// nonsense. The signatures of the common formats are recognised so that it is reported instead. Only a bare Uint8Array is
+// looked at: an ImageData or a { data, format } object has said what its bytes are, so it is never second-guessed, and a
+// bare array that really is raw pixels can be passed as { data, format: 'rgba' } to say so.
+//
+// This is also where decoding would go. The library doesn't decode files today (that needs a decoder per format, and
+// sharp, pngjs, createImageBitmap and the like already do it); when it does, a file recognised here is decoded into
+// { data, format, width, height } instead of rejected, and `load` becomes asynchronous. See docs/ROADMAP.md.
+const ascii = (bytes, at, text) => {
+    for (let i = 0; i < text.length; i++) {if (bytes[at + i] !== text.charCodeAt(i)) {return false;}}
+    return true;
+};
+
+// The name of the encoded image format `bytes` starts with, or null. Signatures are long enough, or have enough structure
+// beyond the first few bytes, that raw pixels all but never match.
+const sniffImageFormat = (bytes) => {
+    const length = bytes.length;
+    if (length >= 8 && bytes[0] === 0x89 && ascii(bytes, 1, 'PNG') && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) {return 'PNG';}
+    // JPEG: FF D8, then a first segment: a marker that has a length (not a restart or a stuffed byte) and a length that fits
+    if (length >= 6 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF && bytes[3] >= 0xC0 && bytes[3] <= 0xFE && !(bytes[3] >= 0xD0 && bytes[3] <= 0xD9)
+        && (bytes[4] << 8 | bytes[5]) >= 2 && 4 + (bytes[4] << 8 | bytes[5]) <= length) {return 'JPEG';}
+    if (length >= 6 && (ascii(bytes, 0, 'GIF87a') || ascii(bytes, 0, 'GIF89a'))) {return 'GIF';}
+    if (length >= 12 && ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WEBP')) {return 'WebP';}
+    // BMP: 'BM', then the file's own length and two zero reserved fields, and a known header size
+    if (length >= 18 && bytes[0] === 0x42 && bytes[1] === 0x4D && bytes[6] === 0 && bytes[7] === 0 && bytes[8] === 0 && bytes[9] === 0
+        && (bytes[2] | (bytes[3] << 8) | (bytes[4] << 16) | (bytes[5] << 24)) === length && [12, 40, 52, 56, 64, 108, 124].includes(bytes[14]) && bytes[15] === 0 && bytes[16] === 0 && bytes[17] === 0) {return 'BMP';}
+    // TIFF: a byte order mark and 42, then the offset of the first directory, which must lie in the file and start with a plausible entry count
+    if (length >= 12) {
+        const little = bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2A && bytes[3] === 0;
+        const big = bytes[0] === 0x4D && bytes[1] === 0x4D && bytes[2] === 0 && bytes[3] === 0x2A;
+        if (little || big) {
+            const u16 = (at) => (little ? bytes[at] | (bytes[at + 1] << 8) : (bytes[at] << 8) | bytes[at + 1]);
+            const offset = little ? (bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24)) >>> 0 : ((bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7]) >>> 0;
+            if (offset >= 8 && offset + 2 <= length && u16(offset) >= 1 && u16(offset) <= 4096) {return 'TIFF';}
+        }
+    }
+    // ISO base media: a 'ftyp' box, then a brand
+    if (length >= 12 && ascii(bytes, 4, 'ftyp')) {
+        if (ascii(bytes, 8, 'avif') || ascii(bytes, 8, 'avis')) {return 'AVIF';}
+        if (['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'].some((brand) => ascii(bytes, 8, brand))) {return 'HEIC';}
+    }
+    return null;
+};
+
 const load = (image) => {
 
     if (image instanceof Uint8Array) {
+        const encoded = sniffImageFormat(image);
+        if (encoded) {
+            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode it first (in a browser, draw it to a canvas or use createImageBitmap, then pass getImageData(); in Node use sharp, pngjs or similar) and pass the raw pixels. If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`);
+        }
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.");}
         return {data: image, format: 'rgba'};
     }

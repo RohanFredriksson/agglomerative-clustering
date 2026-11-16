@@ -42,6 +42,7 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 - **Slicing pixel mapping.** Cancellation and progress cover the clustering, which is most of the work. Mapping (a few milliseconds for a photo, more with dithering on very large images) still runs in one piece; it could be sliced by rows the same way.
 - **A Parcel smoke test**, alongside the Vite and webpack ones.
 - **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for much of the growth from 75 KB to 88 KB.
+- **Decoding image files.** Today a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file passed as a bare `Uint8Array` is recognised (`sniffImageFormat` in `src/index.js`) and rejected with a message saying how to decode it. The goal is that an encoded image just works. The groundwork is in place: detection is in one function, in the one place images enter (`load`), and only bare byte arrays are inspected, so a `{ data, format }` or `ImageData` is never second-guessed. Decoding would be added at that seam, which makes `load` asynchronous. The open questions are where the decoders come from (the browser's `createImageBitmap` where there is one; in Node, an optional peer such as sharp, or small bundled decoders for PNG, JPEG and GIF, which would add dependencies and size) and what to do with animation and EXIF orientation and colour profiles.
 - **Suggesting a palette size** from the error curve (an elbow heuristic), if users ask for more than `mse` and `explained`.
 
 ## Engineering, alongside the releases

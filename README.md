@@ -297,6 +297,8 @@ ImageData                                    // from a canvas: always RGBA, widt
 
 > **Common mistake.** A bare `Uint8Array` is always read as RGBA, like canvas `ImageData`. RGB bytes (for example from sharp without an alpha channel) given bare are misread, and when their length happens to be a multiple of 4 there is no error, only a wrong palette. Wrap them as `{ data: rgbBytes, format: 'rgb', width }`, or give sharp's output an alpha channel with `.ensureAlpha()`, as in the example above.
 
+> **Image files are not pixels.** The functions work on decoded pixels, not on the bytes of a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file. A bare `Uint8Array` that starts like one of those files (`fs.readFile`, `fetch().arrayBuffer()`) is rejected with `invalid-argument` naming the format, instead of being read as pixels. Decode it first: in a browser draw it to a canvas (or `createImageBitmap`) and pass `getImageData()`; in Node use [sharp](https://sharp.pixelplumbing.com/) (`.raw()`), pngjs or similar. Only bare arrays are checked, so an `ImageData` or `{ data, format }` is never second-guessed: if raw pixels really do begin like a file header, pass them as `{ data, format: 'rgba' }`. Decoding files for you is planned (see `docs/ROADMAP.md`).
+
 The `quantize*` functions return the same type they were given: a `Uint8Array` for a `Uint8Array`, `ImageData` for `ImageData`, and an object with the same `format` (plus `width`/`height` if given) for an object. In TypeScript the result type follows the input (`ImageResult<I>`), so a value typed as the union `ImageLike` gives back the union.
 
 ## API

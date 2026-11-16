@@ -307,3 +307,83 @@ describe('options objects are read once, as a plain copy', () => {
         }
     });
 });
+
+describe('encoded image files passed as pixels', () => {
+    const pad = (bytes, to = 64) => { const out = new Uint8Array(to); out.set(bytes); return out; };
+    const ascii = (text) => Array.from(text, (c) => c.charCodeAt(0));
+    const files = {
+        PNG: [0x89, ...ascii('PNG'), 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13],
+        JPEG: [0xFF, 0xD8, 0xFF, 0xE0, 0, 16, ...ascii('JFIF'), 0],
+        GIF: ascii('GIF89a'),
+        WebP: [...ascii('RIFF'), 0, 0, 0, 0, ...ascii('WEBP'), ...ascii('VP8 ')],
+        TIFF: [0x49, 0x49, 0x2A, 0, 8, 0, 0, 0, 5, 0],
+        AVIF: [0, 0, 0, 28, ...ascii('ftypavif')],
+        HEIC: [0, 0, 0, 24, ...ascii('ftypheic')],
+    };
+
+    it('are recognised, named, and told how to decode', async () => {
+        for (const [format, bytes] of Object.entries(files)) {
+            for (const call of [(i) => ac.getPalette(i, 4), (i) => ac.getClustering(i), (i) => ac.quantize(i, 4), (i) => ac.quantizeToIndices(i, 4)]) {
+                const error = await call(pad(bytes)).catch((e) => e);
+                expect(error.code, format).toBe('invalid-argument');
+                expect(error.message, format).toContain(`encoded ${format} file`);
+                expect(error.message).toContain("{ data, format: 'rgba' }");
+            }
+        }
+    });
+
+    it('recognises a big-endian TIFF too', async () => {
+        const tiff = new Uint8Array(64); tiff.set([0x4D, 0x4D, 0, 0x2A, 0, 0, 0, 8, 0, 5]);
+        expect((await ac.getPalette(tiff, 4).catch((e) => e)).message).toContain('encoded TIFF file');
+    });
+
+    it('recognises a BMP by its own length and header, not just its first two bytes', async () => {
+        const bmp = new Uint8Array(64); bmp.set(ascii('BM')); bmp[2] = 64; bmp[14] = 40;
+        expect((await ac.getPalette(bmp, 4).catch((e) => e)).message).toContain('encoded BMP file');
+        // 'BM' at the start of ordinary pixels is not a file
+        const pixels = new Uint8Array(64).map((_, i) => (i * 11) & 255); pixels.set(ascii('BM'));
+        expect((await ac.getPalette(pixels, 4)).length).toBeGreaterThan(0);
+    });
+
+    it('are only looked for in a bare Uint8Array: an object that says what its bytes are is believed', async () => {
+        const looksLikeAPng = pad(files.PNG);
+        expect((await ac.getPalette({ data: looksLikeAPng, format: 'rgba' }, 4)).length).toBeGreaterThan(0);
+        expect((await ac.quantize({ data: looksLikeAPng, format: 'rgba', width: 4, height: 4 }, 4)).data.length).toBe(64);
+        // so raw pixels that begin like a file can always be passed
+        expect((await ac.getClustering({ data: pad(files.GIF), format: 'rgba' })).length).toBeGreaterThan(0);
+    });
+
+    it('do not catch ordinary pixel data, including images that start with a bright, pale pixel', async () => {
+        for (const first of [[255, 216, 255, 255], [255, 216, 255, 0], [0, 0, 1, 0], [137, 80, 78, 71], [71, 73, 70, 56], [73, 73, 42, 0]]) {
+            const pixels = new Uint8Array(64).map((_, i) => (i * 7 + 3) & 255); pixels.set(first);
+            expect((await ac.getPalette(pixels, 4)).length, first.join()).toBeGreaterThan(0);
+        }
+    });
+});
+
+describe('real encoded files', () => {
+    it('are rejected, whatever encoder made them, and the pixels they decode to are accepted', async () => {
+        const { createCanvas } = await import('canvas');
+        const canvas = createCanvas(16, 16);
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#c83'; context.fillRect(0, 0, 16, 16);
+        context.fillStyle = '#38c'; context.fillRect(4, 4, 8, 8);
+        for (const [type, name] of [['image/png', 'PNG'], ['image/jpeg', 'JPEG']]) {
+            let file;
+            try {file = new Uint8Array(canvas.toBuffer(type));} catch {continue;}     // an encoder this canvas build lacks
+            const error = await ac.getPalette(file, 4).catch((e) => e);
+            expect(error.message, name).toContain(`encoded ${name} file`);
+        }
+        const pixels = new Uint8Array(context.getImageData(0, 0, 16, 16).data);
+        expect((await ac.getPalette(pixels, 2)).length).toBe(6);
+    });
+
+    it('are not confused with random pixel data', async () => {
+        let seed = 12345;
+        const next = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24);
+        for (let n = 0; n < 4000; n++) {
+            const pixels = new Uint8Array(32).map(next);
+            await ac.getClustering(pixels);       // would throw if its first bytes looked like a file
+        }
+    });
+});
