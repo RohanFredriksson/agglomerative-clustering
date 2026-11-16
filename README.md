@@ -245,6 +245,8 @@ ImageData                                    // from a canvas: always RGBA, widt
   width?: number, height?: number }          // optional: used for dithering, copied to results
 ```
 
+> **Common mistake.** A bare `Uint8Array` is always read as RGBA, like canvas `ImageData`. RGB bytes (for example from sharp without an alpha channel) given bare are misread, and when their length happens to be a multiple of 4 there is no error, only a wrong palette. Wrap them as `{ data: rgbBytes, format: 'rgb', width }`, or give sharp's output an alpha channel with `.ensureAlpha()`, as in the example above.
+
 The `quantize*` functions return the same type they were given: a `Uint8Array` for a `Uint8Array`, `ImageData` for `ImageData`, and an object with the same `format` (plus `width`/`height` if given) for an object. In TypeScript the result type follows the input (`ImageResult<I>`), so a value typed as the union `ImageLike` gives back the union.
 
 ## API
