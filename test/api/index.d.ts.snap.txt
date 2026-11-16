@@ -26,8 +26,10 @@ export type WasmModule = typeof globalThis extends {
 export type PaletteLike = Uint8Array | Uint8ClampedArray | readonly number[];
 export type ColorSpace = 'rgb' | 'oklab';
 export type AlphaMode = 'weight' | 'ignore';
-export interface RunOptions {
+export interface CancelOptions {
     signal?: AbortSignal;
+}
+export interface RunOptions extends CancelOptions {
     onProgress?(progress: number): void;
 }
 export interface ClusteringOptions extends RunOptions {
@@ -36,7 +38,7 @@ export interface ClusteringOptions extends RunOptions {
     alpha?: AlphaMode;
     transparent?: boolean | number;
 }
-export interface MappingOptions extends RunOptions {
+export interface MappingOptions extends CancelOptions {
     colorSpace?: ColorSpace;
     dither?: boolean | number;
     width?: number;

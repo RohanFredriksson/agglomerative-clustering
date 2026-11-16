@@ -41,6 +41,9 @@ const parameterNames = (fileName, functionName) => signaturesOf(fileName, functi
 // Exports that are functions, as opposed to constants such as `version`.
 const functionExports = (fileName) => valueExports(fileName).filter((name) => signaturesOf(fileName, name).length > 0);
 
+// Functions that only map pixels: they take `signal` but not `onProgress`.
+const mappingOnly = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
+
 // The image functions of the main entry: the ones whose first parameter is the image.
 const imageFunctions = functionExports('index.d.ts').filter((name) => parameterNames('index.d.ts', name)[0] === 'image').sort();
 
@@ -131,8 +134,15 @@ describe('the worker entry', () => {
             aborted.abort();
             await expect(instance[name](...callArguments[name], { signal: aborted.signal }), `${name} with a signal`).rejects.toMatchObject({ name: 'AbortError' });
             const progress = [];
-            await instance[name](...callArguments[name], { onProgress: (value) => progress.push(value) });
-            expect(progress[progress.length - 1], `${name} reports progress`).toBe(1);
+            const run = instance[name](...callArguments[name], { onProgress: (value) => progress.push(value) });
+            if (mappingOnly.includes(name)) {
+                // they take milliseconds, so there is no progress to report: only `signal` applies
+                await expect(run, `${name} refuses onProgress`).rejects.toMatchObject({ code: 'invalid-argument' });
+                await main[name](...callArguments[name], { signal: new AbortController().signal });
+            } else {
+                await run;
+                expect(progress[progress.length - 1], `${name} reports progress`).toBe(1);
+            }
         }
     });
 
@@ -143,9 +153,9 @@ describe('the worker entry', () => {
         const calls = { quantize: [3], quantizeToIndices: [3], quantizeWithPalette: [palette], quantizeToIndicesWithPalette: [palette] };
         for (const [name, args] of Object.entries(calls)) {
             await expect(handle[name](...args, { signal: aborted.signal }), `handle.${name} with a signal`).rejects.toMatchObject({ name: 'AbortError' });
-            const progress = [];
-            await handle[name](...args, { onProgress: (value) => progress.push(value) });
-            expect(progress[progress.length - 1], `handle.${name} reports progress`).toBe(1);
+            // every handle method that takes mapping options only maps pixels: it has a signal, not a progress callback
+            await expect(handle[name](...args, { onProgress: () => {} }), `handle.${name} refuses onProgress`).rejects.toMatchObject({ code: 'invalid-argument' });
+            await handle[name](...args, { signal: new AbortController().signal });
         }
         // Every handle method that takes mapping options is covered above.
         const mapping = Object.keys(handle).filter((name) => parameterNamesOfMember('ClusteringHandle', name).includes('options')).sort();

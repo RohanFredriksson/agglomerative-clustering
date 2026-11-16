@@ -126,8 +126,8 @@ Every function that takes an image also takes an optional last argument of optio
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
 | `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. If the image has a width of its own, `width` must equal it (a different value is an error). |
-| `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
-| `onProgress` | any call with an image | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". |
+| `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". On the functions that only map pixels it is checked once, before the call starts. |
+| `onProgress` | clustering | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". Not taken by the functions that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms): they take milliseconds, so there is nothing to report. |
 | `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | RGBA pixels with alpha below the cutoff (`true` means 128) don't exist as far as the palette goes: they are left out of clustering and the rest count whole. In `quantizeToIndices*` they also get their own palette entry (counted in `k`), and every other pixel is shown fully opaque. For GIFs and palette PNGs. |
 
 ### Choosing a colour space
@@ -144,6 +144,18 @@ Every function that takes an image also takes an optional last argument of optio
 | Noisy or very varied images | any | `'oklab'` | Mean ΔE 7.0 against 7.9 at 64 colours (one synthetic image). |
 
 `'oklab'` also takes 10–30% longer. If you pass a palette to `quantizeWithPalette`, give it the `colorSpace` the palette was made in.
+
+### Transparency
+
+Three things in this library are about alpha, and they act at different stages:
+
+| | What it is | Stage | Effect |
+|---|---|---|---|
+| `'rgba'` input | The format of the pixels (bare `Uint8Array` and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none) | input | RGB images have no alpha, so nothing below applies to them. |
+| `alpha` | `'weight'` (default) or `'ignore'` | clustering | Soft: a pixel counts in proportion to its opacity, so a faint pixel barely moves the palette. `'ignore'` counts every pixel fully (1.x). |
+| `transparent` | `false` (default), `true` or a cutoff `1`–`255` | clustering and indexed output | Hard: a pixel with alpha below the cutoff doesn't exist as far as the palette goes (left out of clustering, the rest count whole); indexed output also gives those pixels one palette entry, which counts towards `k`. |
+
+Use `alpha` (the default) for swatches and for mapped images that keep each pixel's own alpha. Use `transparent` when the destination has one transparent colour, as GIF and palette PNG do, and use it for the clustering step too (it is accepted everywhere that clusters), so the palette you cut is the one you map with. Soft alpha in the palette itself (several translucent colours) is not supported.
 
 **Options objects.** Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error.
 
@@ -325,7 +337,7 @@ Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes
 `getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`, `alpha`.
 
 ### `getSwatches(image, k, options?): Promise<Swatches>`
-A palette with how much of the image each colour covers, for swatches with percentages: `{ palette, weights, shares }`. The three arrays come from one cut of one clustering, so entry `i` of each describes the same colour. `palette` is flat RGB bytes in split order (what `getPaletteFromClustering` gives), `weights` are pixels per colour (fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1), and `shares` are the weights divided by their total, so they sum to 1 (all three are empty for an image with no visible pixels). It clusters the image each time: to try several sizes, use `getClustering` once and `getSwatchesFromClustering`. Options: those of `getPalette`.
+A palette with how much of the image each colour covers, for swatches with percentages (`k` is a maximum: an image with fewer distinct colours gives fewer entries, so lay swatches out from the arrays' length, not from `k`): `{ palette, weights, shares }`. The three arrays come from one cut of one clustering, so entry `i` of each describes the same colour. `palette` is flat RGB bytes in split order (what `getPaletteFromClustering` gives), `weights` are pixels per colour (fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1), and `shares` are the weights divided by their total, so they sum to 1 (all three are empty for an image with no visible pixels). It clusters the image each time: to try several sizes, use `getClustering` once and `getSwatchesFromClustering`. Options: those of `getPalette`.
 
 ### `getSwatchesFromClustering(clustering, k): Promise<Swatches>`
 The same from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected.
@@ -337,7 +349,7 @@ Two numbers, for two questions. `version` is the library's version, as in its `p
 What a clustering holds: `{ formatVersion, colorSpace, precision, maxColors, totalWeight, mse, explained }`. `formatVersion` is the format of its bytes (compare it with the exported `formatVersion`; the library's own `version` is a different thing) and `maxColors` is the largest palette it can be cut to. `mse[k - 1]` is the mean squared error per channel of the `k`-colour clustering, meaning each pixel's squared distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (or OKLab units for an OKLab clustering). It is 0 at `colors` for the default `precision: 8`. With a lower `precision`, the error that grouping colours discards is recorded and included, so `mse[0]` is still the image's variance and `mse[colors - 1]` is that discarded error, not 0. The curve is computed from merge costs on integer-rounded cluster colours, so it is an accurate estimate, not an exact sum. Mapping pixels to their nearest palette colour usually lowers it by another 10–15%, so treat it as a slightly pessimistic estimate of the result. `explained[k - 1]` is `1 - mse[k - 1] / mse[0]`: the share of the image's variance the `k`-colour palette keeps, from 0 at one colour up to 1. It has no units, so one target such as `0.99` suits both colour spaces, while `mse` is in squared 8-bit values for `'rgb'` and squared OKLab units for `'oklab'`. For a 2.x clustering, `version` is 2 and `totalWeight`, `mse` and `explained` are `null`; in TypeScript, checking `info.version === 3` narrows them to present.
 
 ### `quantize(image, k, options?): Promise<Uint8Array | ImageData | RawImage>`
-Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `alpha`, `dither`, `width`.
+Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `alpha`, `transparent`, `dither`, `width`, `signal`, `onProgress`.
 
 ### `quantizeFromClustering(image, clustering, k, options?)`
 Quantizes using a clustering you already have. Options: `colorSpace` (defaults to the clustering's), `dither`, `width`.
@@ -372,7 +384,7 @@ That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it th
 Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error.
 
 ### Cancelling and progress
-Every function that takes an image accepts `signal` and `onProgress`:
+Every function that takes an image accepts `signal`, and the ones that cluster (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
 
 ```js
 const controller = new AbortController();
@@ -382,13 +394,13 @@ const clustering = await getClustering(image, {
 });
 ```
 - **Slices.** With either option, the clustering runs in slices of about 10 ms and the event loop gets a turn between them. The signal is checked, and progress reported, at each one, so an abort takes effect within a slice, not after the whole clustering, and a page stays responsive while it works. The result is the same as without the options. Slicing costs about 5% more time in total; without them the call runs in one go, as before.
-- **Aborting** rejects with the signal's `reason` (an `AbortError` unless you gave another), like `fetch`. A call whose signal is already aborted rejects at once and does no work.
-- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeFromClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting.
+- **Aborting** rejects with the signal's `reason` (an `AbortError` unless you gave another), like `fetch`. It is the one error that does not carry a `code` from the table below: check `error.name === 'AbortError'` (or `signal.aborted`) for it. A call whose signal is already aborted rejects at once and does no work.
+- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeFromClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting, and take no `onProgress` (it is an `invalid-argument` error there: they finish in milliseconds).
 - **Progress** is approximate, rises monotonically, ends at exactly 1, and is not linear in time: the early part of a clustering is quick and the merging is most of the work.
 - **In a worker** (see below) the same options work, and the worker itself stops: the cancel message is read between slices, so the next call doesn't wait behind work nobody wants. A call that is still queued behind another is removed and never runs.
 
 ### Errors
-Every error the library throws is an `Error` with a `code`, so you don't have to match on message text:
+Every error the library throws is an `Error` with a `code`, so you don't have to match on message text. (The one exception is the rejection of an aborted call, which is the signal's own `reason`, an `AbortError`: see "Cancelling and progress".)
 
 Arguments are checked in the order you pass them (image, then clustering or palette, then `k`, then options), so when several are wrong the error is about the first.
 

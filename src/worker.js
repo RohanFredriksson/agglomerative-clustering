@@ -118,12 +118,13 @@ const initOptions = (options) => {
 
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
-const takeControls = (options) => {
+const takeControls = (options, progressAllowed = true) => {
     // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
     // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
     options = snapshot(options);
     const {signal, onProgress} = options;
+    if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.");}
     if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
     if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
     if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.");}
@@ -139,6 +140,8 @@ const abortReason = (signal) => signal.reason !== undefined ? signal.reason : ne
 
 const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
+// These only map pixels, so they take a signal but no progress callback (see mapOptions in index.js).
+const mappingOnlyFunctions = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
 export const createWorker = (options) => {
@@ -283,7 +286,7 @@ export const createWorker = (options) => {
             const origin = new Error();
             return (async () => {
                 const position = optionsPosition[name];
-                const {options, signal, onProgress} = takeControls(rest[position]);
+                const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name));
                 // Checked before the image is copied or transferred away, so an aborted call leaves it with the caller.
                 if (signal && signal.aborted) {throw abortReason(signal);}
                 const args = rest.slice();
@@ -333,7 +336,7 @@ export const createWorker = (options) => {
             // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
             const withControls = (method, leading, mapOptions) => {
                 let taken;
-                try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
+                try {taken = takeControls(mapOptions, false);} catch (error) {return Promise.reject(error);}
                 return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
             };
             const handle = {

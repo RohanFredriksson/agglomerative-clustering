@@ -364,7 +364,9 @@ const parseOptions = (options, allowed, image) => {
 const controlOptions = ['signal', 'onProgress'];
 const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
 const quantizeOptions = [...clusterOptions, 'dither', 'width'];
-const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
+// The functions that only map pixels take just `signal`: they finish in milliseconds, so there is nothing to report progress
+// on or to interrupt part way; a signal that is already aborted does no work, which is all it can mean.
+const mapOptions = ['colorSpace', 'dither', 'width', 'signal'];
 const quantizeIndexOptions = quantizeOptions;
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
@@ -682,8 +684,6 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
     const result = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
-    reporter(o)(1);
-
     return result;
 
 };
@@ -698,8 +698,6 @@ export const quantizeWithPalette = async (image, palette, options) => {
     checkAborted(o.signal);
 
     const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
-    reporter(o)(1);
-
     return result;
 
 };
@@ -737,8 +735,6 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
     const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
-    reporter(o)(1);
-
     return result;
 
 };
@@ -753,8 +749,6 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     checkAborted(o.signal);
 
     const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
-    reporter(o)(1);
-
     return result;
 
 };

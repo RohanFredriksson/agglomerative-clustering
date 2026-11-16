@@ -58,16 +58,23 @@ export type ColorSpace = 'rgb' | 'oklab';
 /** How pixel opacity affects clustering. */
 export type AlphaMode = 'weight' | 'ignore';
 
-/** Cancelling a long call and watching it. Both are optional and can be used apart. */
-export interface RunOptions {
+/** Cancelling a call. Every function that takes an image has it; see `RunOptions.signal`. */
+export interface CancelOptions {
     /**
-     * Cancels the call. A call given a `signal` (or an `onProgress`) clusters in slices of about 10 ms and checks the
+     * Cancels the call. A call given a `signal` clusters (where it clusters) in slices of about 10 ms and checks the
      * signal between them, so an abort takes effect within a slice, not after the whole clustering. It rejects with
-     * the signal's `reason` (an `AbortError` by default), like `fetch`. Pixel mapping, which follows the
-     * clustering, can't be interrupted: it takes a few milliseconds for typical images. The call's result is the
-     * same as without a signal. In the worker entry the worker itself stops working on the call.
+     * the signal's `reason` (an `AbortError` by default), like `fetch`; note that it is that reason that is thrown, so it
+     * has the signal's own `name`, not an `ErrorCode`. A signal that is already aborted does no work. On the functions
+     * that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms) it is checked once,
+     * before the call starts, since they take milliseconds. Pixel mapping, which follows the clustering, can't be
+     * interrupted. The call's result is the same as without a signal. In the worker entry the worker itself stops
+     * working on the call, and a call still waiting its turn never starts.
      */
     signal?: AbortSignal;
+}
+
+/** Cancelling a long call and watching it, for the functions that cluster. Both are optional and can be used apart. */
+export interface RunOptions extends CancelOptions {
     /**
      * Called with the fraction done, from 0 to 1, as the call runs: a few times per slice at most, never going
      * backwards, ending with 1. It is approximate and not linear in time. Giving it also makes the call run in
@@ -105,8 +112,8 @@ export interface ClusteringOptions extends RunOptions {
     transparent?: boolean | number;
 }
 
-/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. */
-export interface MappingOptions extends RunOptions {
+/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
+export interface MappingOptions extends CancelOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
      * `quantizeFromClustering`, where it defaults to the space the clustering was made in.
