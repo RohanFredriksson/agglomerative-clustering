@@ -27,6 +27,9 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 npm install agglomerative-clustering
 ```
 
+## Where it runs
+Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers (CI runs it bundled with Vite and webpack 5 in Chromium; also checked in WebKit by hand). Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2. Firefox hasn't been tried.
+
 ## Quick start
 
 ```js

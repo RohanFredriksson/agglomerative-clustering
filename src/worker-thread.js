@@ -87,7 +87,11 @@ const onMessage = (data, post) => {
 };
 
 // No top-level await: bundlers build workers as classic scripts by default (Vite's 'iife'), which can't have it.
-if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function') {
+// Decided the way worker.js decides how it started this thread: where Node's APIs exist (Node, Deno, Bun), the thread was
+// started through worker_threads and talks through parentPort. Bun also defines the browser's `self.postMessage`
+// inside such a thread, so checking `self` first would listen on a channel the parent never writes to.
+const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
+if (!isNode && typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function') {
     self.addEventListener('message', (event) => onMessage(event.data, (message, transfer) => self.postMessage(message, transfer)));
 } else {
     // Built at run time so no bundler tries to resolve it (see worker.js).
