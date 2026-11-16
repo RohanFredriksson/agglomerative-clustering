@@ -2,7 +2,7 @@
 
 ## 3.0.0 (unreleased)
 
-Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below), and palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options (the golden tests pin this, and 2.0 clusterings still load and cut to the same palettes). New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See "Migrating from 2.x" in the README.
+Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below), and palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options (the golden tests pin this, and 2.0 clusterings still load and cut to the same palettes). New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
 ### Added
 - **`IndexedImage.colors`:** the palette without the transparent entry (the same as `palette` when there is none), tagged with its colour space, so an indexed result's colours can be passed back to `quantizeToIndicesWithPalette` without the entry being added twice.
@@ -57,7 +57,7 @@ Every 2.x function and default is unchanged except one rename (`quantizeWithClus
 
 ## 2.0.0
 
-The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See "Migrating from 1.x" in the README.
+The same functions and defaults (`rgb`, no dithering, `precision: 8`), with these changes. See [Migrating](docs/migrating.md).
 
 ### Performance
 - **Faster clustering, with identical output.** On the Kodak photos (WASM, Node 22), one palette takes about 100 ms instead of 155 ms, and with `colorSpace: 'oklab'` about 110 ms instead of 250 ms, so OKLab now costs no more than RGB. `precision: 6` takes about 30 ms. The partner search's grid comes in sizes between powers of two with coarser cells, steps over empty cells with per-column occupancy bits, tests cells with a division-free float bound, and starts each search from a known partner.

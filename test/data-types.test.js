@@ -54,7 +54,7 @@ describe('Palette', () => {
 
     it('maps in its own space where 2.x mapped in RGB: the one deliberate difference from 2.0', async () => {
         // In 2.x getPalette returned plain bytes, so quantizeWithPalette(image, oklabPalette) matched in RGB. A 3.0 Palette knows its
-        // space and matches in it; `colorSpace: 'rgb'` (or plain bytes) gives the 2.x result. The README says so in "Migrating from 2.x".
+        // space and matches in it; `colorSpace: 'rgb'` (or plain bytes) gives the 2.x result. docs/migrating.md says so.
         const oklab = await ac.getPalette(photo, 12, { colorSpace: 'oklab' });
         const twoDotX = await ac.quantizeWithPalette(photo, new Uint8Array(oklab));
         expect(await ac.quantizeWithPalette(photo, oklab, { colorSpace: 'rgb' })).toEqual(twoDotX);

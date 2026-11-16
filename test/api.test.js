@@ -199,8 +199,11 @@ describe('the README', () => {
         // Each of these was renamed or removed; a match is a sentence nobody updated.
         const stale = ['getPaletteWeights', 'info.version', 'mse[colors', 'at `colors`', 'reserveTransparent', 'getPaletteFromClustering(clustering, k): Promise<Uint8Array>'];
         for (const phrase of stale) {expect(readme.includes(phrase), `README still says ${phrase}`).toBe(false);}
-        // quantizeWithClustering is the 2.x name: it may appear only where the migration notes explain the rename
-        const uses = readme.split('\n').filter((line) => line.includes('quantizeWithClustering'));
+        // quantizeWithClustering is the 2.x name: it belongs only in the migration notes, where the rename is explained
+        expect(readme.includes('quantizeWithClustering'), 'README still says quantizeWithClustering').toBe(false);
+        const migrating = readFileSync(resolve(root, 'docs/migrating.md'), 'utf8');
+        const uses = migrating.split('\n').filter((line) => line.includes('quantizeWithClustering'));
+        expect(uses.length).toBeGreaterThan(0);
         expect(uses.every((line) => /rename|now `quantizeFromClustering`/.test(line)), uses.join('\n')).toBe(true);
     });
 
@@ -211,4 +214,30 @@ describe('the README', () => {
         expect(codes.length).toBeGreaterThan(5);
     });
 
+});
+
+describe('the documentation files', () => {
+
+    const docs = ['docs/migrating.md', 'docs/stability.md', 'docs/how-it-works.md', 'docs/ROADMAP.md'];
+
+    it('are linked from the README, and every relative link in the README and docs points at a file that exists', async () => {
+        const { existsSync } = await import('fs');
+        const checkLinks = (file, text) => {
+            for (const match of text.matchAll(/\]\((?!https?:|#|mailto:)([^)#\s]+)(#[^)\s]*)?\)/g)) {
+                const target = resolve(root, dirname(file), match[1]);
+                expect(existsSync(target), `${file} links to ${match[1]}, which does not exist`).toBe(true);
+            }
+        };
+        checkLinks('README.md', readme);
+        for (const doc of docs) {
+            expect(readme.includes(`(${doc})`), `README does not link ${doc}`).toBe(true);
+            checkLinks(doc, readFileSync(resolve(root, doc), 'utf8'));
+        }
+    });
+
+    it('send readers to anchors that exist in the README', () => {
+        const anchors = new Set([...readme.matchAll(/^#{1,6} (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[`'"()?:.,]/g, '').trim().replace(/\s+/g, '-')));
+        const wanted = [...readme.matchAll(/\]\(#([^)]+)\)/g)].map((m) => m[1]);
+        for (const anchor of wanted) {expect(anchors.has(anchor), `README links to #${anchor}, which is not a heading`).toBe(true);}
+    });
 });
