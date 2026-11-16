@@ -96,8 +96,8 @@ export interface ClusteringInfoV2 extends ClusteringInfoFields {
 export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
-export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
-export function quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;

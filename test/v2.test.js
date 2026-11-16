@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
 
 // The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
 const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
@@ -46,7 +46,7 @@ describe('clustering header', () => {
         const newer = new Uint8Array(await getClustering(gradient));
         newer[1] = 4;
         await expect(getPaletteFromClustering(newer, 4)).rejects.toThrow('format version 4 is newer');
-        await expect(quantizeWithClustering(gradient, newer, 4)).rejects.toThrow('format version 4 is newer');
+        await expect(quantizeFromClustering(gradient, newer, 4)).rejects.toThrow('format version 4 is newer');
         expect(newer.length % 9).toBe(7);
     });
 
@@ -87,7 +87,7 @@ describe('clustering header', () => {
         wrongMagic[0] = 0;
         await expect(getPaletteFromClustering(wrongMagic, 4)).rejects.toThrow('Invalid clustering');
         await expect(getPaletteFromClustering([0xAC, 2, 0, 8], 4)).rejects.toThrow('Invalid clustering');
-        await expect(quantizeWithClustering(gradient, new Uint8Array(8), 4)).rejects.toThrow('Invalid clustering');
+        await expect(quantizeFromClustering(gradient, new Uint8Array(8), 4)).rejects.toThrow('Invalid clustering');
     });
 
 });
@@ -126,18 +126,18 @@ describe('split-order palettes', () => {
 
 });
 
-describe('quantizeWithClustering colour space', () => {
+describe('quantizeFromClustering colour space', () => {
 
     it('defaults to the space the clustering was made in', async () => {
         const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
-        const inherited = await quantizeWithClustering(gradient, clustering, 16);
-        expect(inherited).toEqual(await quantizeWithClustering(gradient, clustering, 16, { colorSpace: 'oklab' }));
+        const inherited = await quantizeFromClustering(gradient, clustering, 16);
+        expect(inherited).toEqual(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'oklab' }));
     });
 
     it('can be overridden', async () => {
         const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
         const palette = await getPaletteFromClustering(clustering, 16);
-        expect(await quantizeWithClustering(gradient, clustering, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
+        expect(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
     });
 
 });

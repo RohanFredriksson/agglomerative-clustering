@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette,
-    quantizeToIndices, quantizeToIndicesWithClustering, quantizeToIndicesWithPalette,
+    getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette,
+    quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from '../dist/index.mjs';
 
 const width = 48, height = 32;
@@ -44,11 +44,11 @@ describe('indexed output matches the mapped image', () => {
         }
     });
 
-    it.each(cases)('quantizeToIndicesWithClustering, %s', async (_, options) => {
+    it.each(cases)('quantizeToIndicesFromClustering, %s', async (_, options) => {
         const clustering = await getClustering(image, { colorSpace: 'oklab' });
-        const result = await quantizeToIndicesWithClustering(image, clustering, 24, options);
+        const result = await quantizeToIndicesFromClustering(image, clustering, 24, options);
         expect(result.palette).toEqual(await getPaletteFromClustering(clustering, 24));
-        expect(expand(result, image)).toEqual(await quantizeWithClustering(image, clustering, 24, options));
+        expect(expand(result, image)).toEqual(await quantizeFromClustering(image, clustering, 24, options));
     });
 
     it.each(cases)('quantizeToIndicesWithPalette, %s', async (_, options) => {
@@ -186,7 +186,7 @@ describe('edge cases and options', () => {
             expect(slotted.transparentIndex).toBe(0);
             expect(Array.from(slotted.indices)).toEqual([0, 0, 0, 0]);
         }
-        const withClustering = await quantizeToIndicesWithClustering(hidden, await getClustering(hidden), 4, { transparent: true });
+        const withClustering = await quantizeToIndicesFromClustering(hidden, await getClustering(hidden), 4, { transparent: true });
         expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
     });
 
@@ -214,7 +214,7 @@ describe('edge cases and options', () => {
         }
         await expect(quantize(image, 4, { transparent: true })).rejects.toThrow("Invalid option 'transparent'");
         await expect(quantizeToIndicesWithPalette(image, new Uint8Array([0, 0]))).rejects.toThrow('Invalid palette');
-        await expect(quantizeToIndicesWithClustering(image, new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
+        await expect(quantizeToIndicesFromClustering(image, new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
     });
 
 });

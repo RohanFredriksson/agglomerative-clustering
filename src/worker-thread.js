@@ -30,8 +30,8 @@ const methods = {
     handleGetPalette: async (id, k) => ac.getPaletteFromClustering(handle(id).clustering, k),
     handleGetSwatches: async (id, k) => ac.getSwatchesFromClustering(handle(id).clustering, k),
     handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
-    handleQuantize: async (id, k, options) => ac.quantizeWithClustering(handle(id).image, handle(id).clustering, k, options),
-    handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesWithClustering(handle(id).image, handle(id).clustering, k, options),
+    handleQuantize: async (id, k, options) => ac.quantizeFromClustering(handle(id).image, handle(id).clustering, k, options),
+    handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesFromClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
     handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
 };
@@ -45,8 +45,8 @@ const buffers = (value) => {
 
 // Where the options sit among each method's arguments, to give them the call's signal and progress callback.
 const optionsIndex = {
-    getClustering: 1, getPalette: 2, getSwatches: 2, quantize: 2, quantizeWithClustering: 3, quantizeWithPalette: 2,
-    quantizeToIndices: 2, quantizeToIndicesWithClustering: 3, quantizeToIndicesWithPalette: 2,
+    getClustering: 1, getPalette: 2, getSwatches: 2, quantize: 2, quantizeFromClustering: 3, quantizeWithPalette: 2,
+    quantizeToIndices: 2, quantizeToIndicesFromClustering: 3, quantizeToIndicesWithPalette: 2,
     cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2, handleQuantizeWithPalette: 2, handleQuantizeToIndicesWithPalette: 2,
 };
 

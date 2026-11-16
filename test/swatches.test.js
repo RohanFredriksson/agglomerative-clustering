@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo, quantizeToIndicesWithClustering,
+    getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo, quantizeToIndicesFromClustering,
 } from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
 
@@ -45,7 +45,7 @@ describe('getSwatchesFromClustering', () => {
         const clustering = await getClustering(gradient);
         const { colors } = await getClusteringInfo(clustering);
         const { weights } = await getSwatchesFromClustering(clustering, colors);
-        const indexed = await quantizeToIndicesWithClustering(gradient, clustering, colors);
+        const indexed = await quantizeToIndicesFromClustering(gradient, clustering, colors);
         const used = new Float64Array(indexed.palette.length / 3);
         for (const index of indexed.indices) {used[index]++;}
         expect(Array.from(weights)).toEqual(Array.from(used));

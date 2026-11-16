@@ -50,7 +50,7 @@ async function run() {
     let cuts = true;
     for (const k of [2, 4, 16, 64]) {
         cuts = cuts && equal(await handle.getPalette(k), await ac.getPaletteFromClustering(clustering, k));
-        cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeWithClustering(image, clustering, k)).data);
+        cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeFromClustering(image, clustering, k)).data);
     }
     checks.handleCutsMatchMain = cuts;
     const custom = await ac.getPalette(image, 5);

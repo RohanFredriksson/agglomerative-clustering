@@ -55,7 +55,7 @@ slider.oninput = async () => {
 };
 ```
 
-The clustering is a `Uint8Array` you can cache or store next to the image: a 22-byte header plus 21 bytes per distinct colour, about 1.3 MB for a 768×512 photo, or 0.45 MB with `precision: 6`. It records the colour space it was made in, so `quantizeWithClustering` matches in the same space unless you say otherwise. Its format is versioned: later releases will keep reading it, and older ones say so rather than misreading a newer one.
+The clustering is a `Uint8Array` you can cache or store next to the image: a 22-byte header plus 21 bytes per distinct colour, about 1.3 MB for a 768×512 photo, or 0.45 MB with `precision: 6`. It records the colour space it was made in, so `quantizeFromClustering` matches in the same space unless you say otherwise. Its format is versioned: later releases will keep reading it, and older ones say so rather than misreading a newer one.
 
 ### Off the main thread
 
@@ -136,7 +136,7 @@ Every function that takes an image also takes an optional last argument of optio
 
 **Large images.** Time and memory grow with the number of *distinct colours*, not just pixels. On the machine used here: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`; 36 megapixels of random noise (the worst case, millions of distinct colours) takes about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB, and an image that needs more (for example 100 megapixels of noise, exactly) is rejected with an `out-of-memory` error that says to try `precision: 6` or a smaller image; the module is then replaced, so later calls work normally.
 
-"Clustering" means `getClustering` and `getPalette`, "mapping" means `quantizeWithClustering` and `quantizeWithPalette`, and `quantize` takes both.
+"Clustering" means `getClustering` and `getPalette`, "mapping" means `quantizeFromClustering` and `quantizeWithPalette`, and `quantize` takes both.
 
 Measured on the Kodak photos:
 
@@ -284,8 +284,20 @@ The `quantize*` functions return the same type they were given: a `Uint8Array` f
 
 ## API
 
+### Which function?
+Pick the output you want (a row) and where the colours come from (a column). The names follow one rule: **`…FromClustering`** derives the colours from a clustering you already hold, and **`…WithPalette`** takes colours you supply. With neither, the image is clustered for you.
+
+| You want | from the image | from a clustering you hold | with a palette you supply |
+|---|---|---|---|
+| a palette (flat RGB) | `getPalette` | `getPaletteFromClustering` | |
+| a palette with each colour's share | `getSwatches` | `getSwatchesFromClustering` | |
+| the image reduced to those colours | `quantize` | `quantizeFromClustering` | `quantizeWithPalette` |
+| palette indices (GIF, PNG-8) | `quantizeToIndices` | `quantizeToIndicesFromClustering` | `quantizeToIndicesWithPalette` |
+
+`getClustering` builds the clustering to hold, `getClusteringInfo` reads one, and `init` loads the WebAssembly module (optional). The one-shot functions in the first column are what most code needs; the other columns are for clustering once and cutting many times, or for your own palette.
+
 ### `getClustering(image, options?): Promise<Uint8Array>`
-Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`, `alpha`. Pass the result to `getPaletteFromClustering` or `quantizeWithClustering` to get any number of palettes without clustering again.
+Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`, `alpha`. Pass the result to `getPaletteFromClustering` or `quantizeFromClustering` to get any number of palettes without clustering again.
 
 ### `getPaletteFromClustering(clustering, k): Promise<Uint8Array>`
 Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too.
@@ -305,11 +317,11 @@ What a clustering holds: `{ version, colorSpace, precision, colors, totalWeight,
 ### `quantize(image, k, options?): Promise<Uint8Array | ImageData | RawImage>`
 Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `alpha`, `dither`, `width`.
 
-### `quantizeWithClustering(image, clustering, k, options?)`
+### `quantizeFromClustering(image, clustering, k, options?)`
 Quantizes using a clustering you already have. Options: `colorSpace` (defaults to the clustering's), `dither`, `width`.
 
 ### `quantizeWithPalette(image, palette, options?)`
-Maps each pixel to its nearest colour in any palette (flat RGB bytes: a `Uint8Array`, a `Uint8ClampedArray`, or a plain array of integers from 0 to 255). A palette doesn't record the colour space it was made in, so if it came from an OKLab clustering pass `{ colorSpace: 'oklab' }` to match the way `quantizeWithClustering` does (a worker handle does this for you). A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
+Maps each pixel to its nearest colour in any palette (flat RGB bytes: a `Uint8Array`, a `Uint8ClampedArray`, or a plain array of integers from 0 to 255). A palette doesn't record the colour space it was made in, so if it came from an OKLab clustering pass `{ colorSpace: 'oklab' }` to match the way `quantizeFromClustering` does (a worker handle does this for you). A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
 
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 Like `quantize`, but returns each pixel's palette index rather than its colour: `{ palette, indices, indexBits, transparentIndex }`, plus `width` and `height` when the input has them. `palette` is flat RGB bytes and `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, `Uint16Array` up to 65536, `Uint32Array` above. `indexBits` says which (8, 16 or 32), so you can branch on it without `instanceof`. This is what palette PNGs, pixel art, and embroidery or paint-by-number patterns need. Options: those of `quantize`, plus `transparent`.
@@ -320,8 +332,8 @@ By default every pixel gets the index of its nearest colour, whatever its alpha.
 const { palette, indices, transparentIndex } = await quantizeToIndices(imageData, 255, { transparent: true });
 ```
 
-### `quantizeToIndicesWithClustering(image, clustering, k, options?)`, `quantizeToIndicesWithPalette(image, palette, options?)`
-The same for `quantizeWithClustering` and `quantizeWithPalette`. Options: theirs, plus `transparent`.
+### `quantizeToIndicesFromClustering(image, clustering, k, options?)`, `quantizeToIndicesWithPalette(image, palette, options?)`
+The same for `quantizeFromClustering` and `quantizeWithPalette`. Options: theirs, plus `transparent`.
 
 ### `init(options?): Promise<void>`
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a load that fails can be retried.
@@ -349,7 +361,7 @@ const clustering = await getClustering(image, {
 ```
 - **Slices.** With either option, the clustering runs in slices of about 10 ms and the event loop gets a turn between them. The signal is checked, and progress reported, at each one, so an abort takes effect within a slice, not after the whole clustering, and a page stays responsive while it works. The result is the same as without the options. Slicing costs about 5% more time in total; without them the call runs in one go, as before.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` unless you gave another), like `fetch`. A call whose signal is already aborted rejects at once and does no work.
-- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeWithClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting.
+- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeFromClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting.
 - **Progress** is approximate, rises monotonically, ends at exactly 1, and is not linear in time: the early part of a clustering is quick and the merging is most of the work.
 - **In a worker** (see below) the same options work, and the worker itself stops: the cancel message is read between slices, so the next call doesn't wait behind work nobody wants. A call that is still queued behind another is removed and never runs.
 
@@ -400,7 +412,9 @@ Releases may get faster, add functions, options, error codes and clustering form
 
 ## Migrating from 2.x
 
-3.0 keeps every function and default, and palettes and quantized images are byte-identical to 2.0. What changes:
+3.0 keeps every function and default except one rename, and palettes and quantized images are byte-identical to 2.0. What changes:
+
+- **`quantizeWithClustering` is now `quantizeFromClustering`.** The same arguments and behaviour; find and replace the name. It makes one word mean "the colours come from a clustering" (see "Which function?" in the API reference).
 
 - **Clustering format.** `getClustering` writes format version 3, which records weights and merge costs: 21 bytes per distinct colour instead of 9, so clusterings are about 2.3 times larger. Clusterings saved by 2.x still load; `getSwatchesFromClustering` needs a 3.x clustering, and `getClusteringInfo` gives `null` weights, `mse` and `explained` for a 2.x one. **Clusterings saved by 1.x are no longer read.** They had no header and could only be recognised by their length, which many other byte strings share, so a palette passed in place of a clustering was accepted and returned nonsense. Cluster the image again (the README has always suggested storing the clustering next to the image). **2.x cannot read 3.x clusterings** (it rejects them as invalid), so if clusterings are stored where an older version of the package may still read them, upgrade the readers first. Anything that read the raw bytes needs the new layout (see [CLAUDE.md](CLAUDE.md)).
 - **Stricter input.** Image data that isn't a whole number of pixels, and palettes that aren't whole RGB triples, now throw instead of being truncated.
@@ -415,9 +429,9 @@ Releases may get faster, add functions, options, error codes and clustering form
 - **Palette order.** Palettes come in split order (index 0 is the dominant colour at two colours and keeps its place as the palette grows), rather than in an arbitrary order. For opaque images they contain exactly the same colours as 1.2.
 - **Transparency.** RGBA pixels are weighted by opacity, so palettes of images with transparency change: fully transparent pixels no longer contribute. Pass `{ alpha: 'ignore' }` for the 1.x behaviour.
 - **Clustering bytes.** Clusterings gain a 4-byte header recording their colour space and precision. Clusterings saved by 1.x load in 2.x but are no longer read in 3.x (cluster the image again). Anything that inspected the raw bytes needs to skip the header.
-- **`quantizeWithClustering`** matches in the clustering's colour space unless you pass `colorSpace`.
+- **`quantizeFromClustering`** matches in the clustering's colour space unless you pass `colorSpace`.
 - **Exact ties** in pixel mapping go to the colour with the smaller RGB value, so results don't depend on palette order. A small number of pixels that sit exactly between two palette colours may map differently from 1.2.
-- **Invalid clusterings** passed to `getPaletteFromClustering` or `quantizeWithClustering` now throw instead of giving an empty palette.
+- **Invalid clusterings** passed to `getPaletteFromClustering` or `quantizeFromClustering` now throw instead of giving an empty palette.
 
 ## Demo
 

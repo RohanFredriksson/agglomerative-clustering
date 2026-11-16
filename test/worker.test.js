@@ -35,7 +35,7 @@ describe('a worker gives the same results as the main entry', () => {
         const palette = await ac.getPalette(image, 5);
         expect(await worker.quantize(image, 8)).toEqual(await ac.quantize(image, 8));
         expect(await worker.quantize(raw, 8, { dither: true })).toEqual(await ac.quantize(raw, 8, { dither: true }));
-        expect(await worker.quantizeWithClustering(raw, clustering, 6)).toEqual(await ac.quantizeWithClustering(raw, clustering, 6));
+        expect(await worker.quantizeFromClustering(raw, clustering, 6)).toEqual(await ac.quantizeFromClustering(raw, clustering, 6));
         expect(await worker.quantizeWithPalette(image, palette, { colorSpace: 'oklab' })).toEqual(await ac.quantizeWithPalette(image, palette, { colorSpace: 'oklab' }));
 
         const imageData = new ImageData(new Uint8ClampedArray(image), width, height);
@@ -49,7 +49,7 @@ describe('a worker gives the same results as the main entry', () => {
         const clustering = await ac.getClustering(image);
         const palette = await ac.getPalette(image, 5);
         expect(await worker.quantizeToIndices(raw, 300, { transparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { transparent: true }));
-        expect(await worker.quantizeToIndicesWithClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 6));
+        expect(await worker.quantizeToIndicesFromClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesFromClustering(image, clustering, 6));
         expect(await worker.quantizeToIndicesWithPalette(image, palette)).toEqual(await ac.quantizeToIndicesWithPalette(image, palette));
     });
 
@@ -78,8 +78,8 @@ describe('handles', () => {
         expect(await handle.getPalette(9)).toEqual(await ac.getPaletteFromClustering(clustering, 9));
         expect(await handle.getSwatches(9)).toEqual(await ac.getSwatchesFromClustering(clustering, 9));
         expect(await handle.getClusteringInfo()).toEqual(await ac.getClusteringInfo(clustering));
-        expect(await handle.quantize(9, { dither: true, width })).toEqual(await ac.quantizeWithClustering(image, clustering, 9, { dither: true, width }));
-        expect(await handle.quantizeToIndices(9, { transparent: true })).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 9, { transparent: true }));
+        expect(await handle.quantize(9, { dither: true, width })).toEqual(await ac.quantizeFromClustering(image, clustering, 9, { dither: true, width }));
+        expect(await handle.quantizeToIndices(9, { transparent: true })).toEqual(await ac.quantizeToIndicesFromClustering(image, clustering, 9, { transparent: true }));
         await handle.release();
         await expect(handle.getPalette(2)).rejects.toThrow('released');
     });

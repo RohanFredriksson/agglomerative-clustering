@@ -56,10 +56,10 @@ export interface AgglomerativeWorker {
     getSwatchesFromClustering(clustering: Uint8Array, k: number): Promise<Swatches>;
     getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
     quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
-    quantizeWithClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeFromClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeWithPalette<Image extends ImageLike>(image: Image, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
-    quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeToIndicesFromClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
@@ -90,13 +90,13 @@ export const getSwatchesFromClustering: AgglomerativeWorker['getSwatchesFromClus
 export const getClusteringInfo: AgglomerativeWorker['getClusteringInfo'];
 /** The main entry's `quantize`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantize: AgglomerativeWorker['quantize'];
-/** The main entry's `quantizeWithClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
-export const quantizeWithClustering: AgglomerativeWorker['quantizeWithClustering'];
+/** The main entry's `quantizeFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+export const quantizeFromClustering: AgglomerativeWorker['quantizeFromClustering'];
 /** The main entry's `quantizeWithPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeWithPalette: AgglomerativeWorker['quantizeWithPalette'];
 /** The main entry's `quantizeToIndices`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeToIndices: AgglomerativeWorker['quantizeToIndices'];
-/** The main entry's `quantizeToIndicesWithClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
-export const quantizeToIndicesWithClustering: AgglomerativeWorker['quantizeToIndicesWithClustering'];
+/** The main entry's `quantizeToIndicesFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+export const quantizeToIndicesFromClustering: AgglomerativeWorker['quantizeToIndicesFromClustering'];
 /** The main entry's `quantizeToIndicesWithPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeToIndicesWithPalette: AgglomerativeWorker['quantizeToIndicesWithPalette'];

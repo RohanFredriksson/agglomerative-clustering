@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 // A smooth 64x64 RGBA gradient: many distinct colours, so palettes, binning and dithering all have work to do.
 const width = 64, height = 64;
@@ -100,7 +100,7 @@ describe('colorSpace: oklab', () => {
     it('quantizes to colours from its own palette', async () => {
         const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
         const palette = paletteSet(await getPaletteFromClustering(clustering, 12));
-        const result = await quantizeWithClustering(gradient, clustering, 12, { colorSpace: 'oklab' });
+        const result = await quantizeFromClustering(gradient, clustering, 12, { colorSpace: 'oklab' });
         for (const colour of colours(result)) {expect(palette.has(colour)).toBe(true);}
     });
 

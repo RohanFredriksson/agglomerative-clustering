@@ -105,7 +105,7 @@ describe('a worker call with a signal or onProgress', () => {
 
         const handle = await worker.cluster(small, { signal: new AbortController().signal });
         const calls = [];
-        expect(await handle.quantize(4, { onProgress: (v) => calls.push(v) })).toEqual(await worker.quantizeWithClustering(small, await ac.getClustering(small), 4));
+        expect(await handle.quantize(4, { onProgress: (v) => calls.push(v) })).toEqual(await worker.quantizeFromClustering(small, await ac.getClustering(small), 4));
         expect(calls[calls.length - 1]).toBe(1);
         const aborted = new AbortController();
         aborted.abort();

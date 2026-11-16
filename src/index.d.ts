@@ -96,11 +96,11 @@ export interface ClusteringOptions extends RunOptions {
     alpha?: AlphaMode;
 }
 
-/** Options for mapping pixels to a palette: `quantizeWithClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. */
+/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. */
 export interface MappingOptions extends RunOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
-     * `quantizeWithClustering`, where it defaults to the space the clustering was made in.
+     * `quantizeFromClustering`, where it defaults to the space the clustering was made in.
      */
     colorSpace?: ColorSpace;
     /**
@@ -130,7 +130,7 @@ export interface IndexOptions {
 
 /** The options of `quantizeToIndices`: clustering, mapping and indexed-output options. */
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
-/** The options of `quantizeToIndicesWithClustering` and `quantizeToIndicesWithPalette`: mapping and indexed-output options. */
+/** The options of `quantizeToIndicesFromClustering` and `quantizeToIndicesWithPalette`: mapping and indexed-output options. */
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 
 interface IndexedImageFields {
@@ -179,7 +179,7 @@ export function init(options?: InitOptions): Promise<void>;
 /**
  * Builds the colour hierarchy for an image: the expensive step, done once. The result is an opaque `Uint8Array` you can
  * cache or store next to the image. Cut it to a palette of any size with `getPaletteFromClustering`, or map pixels
- * with `quantizeWithClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
+ * with `quantizeFromClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
  */
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
 
@@ -281,12 +281,12 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
  * costs milliseconds. Matches in the clustering's colour space unless `colorSpace` is given. Returns the same kind of
  * thing as `quantize`.
  */
-export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
 /**
  * Maps each pixel of `image` to its nearest colour in a palette you supply (an edited swatch, a brand palette, one cut
  * from a clustering). A palette doesn't record the colour space it was made in: if it came from an OKLab clustering,
- * pass `colorSpace: 'oklab'` to map the way `quantizeWithClustering` does. Returns the same kind of thing as `quantize`.
+ * pass `colorSpace: 'oklab'` to map the way `quantizeFromClustering` does. Returns the same kind of thing as `quantize`.
  */
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 
@@ -297,8 +297,8 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
-/** Like `quantizeWithClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s. */
-export function quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+/** Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s. */
+export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */
 export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;

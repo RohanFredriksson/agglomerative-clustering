@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeWithClustering } from '../dist/index.mjs';
+import { getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering } from '../dist/index.mjs';
 
 // The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
 const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
@@ -30,7 +30,7 @@ describe('format version 1 (1.x), which is no longer read', () => {
             () => getPaletteFromClustering(legacy, 8),
             () => weightsOf(legacy, 8),
             () => getClusteringInfo(legacy),
-            () => quantizeWithClustering(fixtureImage(), legacy, 8),
+            () => quantizeFromClustering(fixtureImage(), legacy, 8),
         ]) {
             const error = await call().catch((e) => e);
             expect(error.code).toBe('invalid-clustering');
@@ -54,7 +54,7 @@ describe.each(versions.filter((version) => version >= 2))('format version %i', (
     });
 
     it('quantizes with it', async () => {
-        const result = await quantizeWithClustering(fixtureImage(), clustering, 8);
+        const result = await quantizeFromClustering(fixtureImage(), clustering, 8);
         expect(result.length).toBe(fixtureImage().length);
     });
 

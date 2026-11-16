@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 
 // A minimal valid 2x2 solid red RGBA image.
 const validImage = new Uint8Array([
@@ -115,7 +115,7 @@ describe('a palette passed where a clustering is expected', () => {
             const palette = await getPalette(validImage, 4);
             const sized = new Uint8Array(colours * 3).map((_, i) => palette[i % palette.length]);
             await expect(getPaletteFromClustering(sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
-            await expect(quantizeWithClustering(validImage, sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
+            await expect(quantizeFromClustering(validImage, sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
         }
         await expect(getPaletteFromClustering(new Uint8Array(0), 2)).rejects.toMatchObject({ code: 'invalid-clustering' });
     });

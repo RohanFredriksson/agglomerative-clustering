@@ -1,7 +1,7 @@
 import {
     init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
-    quantize, quantizeWithClustering, quantizeWithPalette,
-    quantizeToIndices, quantizeToIndicesWithClustering, quantizeToIndicesWithPalette,
+    quantize, quantizeFromClustering, quantizeWithPalette,
+    quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
 import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions, Swatches } from 'agglomerative-clustering';
 
@@ -36,7 +36,7 @@ async function main() {
     const a: Uint8Array = await quantize(bytes, 8, { dither: true, width: 10, onProgress: () => {} });
     const b: ImageData = await quantize(imageData, 8, { colorSpace: 'oklab' });
     const c: RawImage = await quantize(raw, 8);
-    const d: Uint8Array = await quantizeWithClustering(bytes, clustering, 8, { signal: controller.signal });
+    const d: Uint8Array = await quantizeFromClustering(bytes, clustering, 8, { signal: controller.signal });
     const e: ImageData = await quantizeWithPalette(imageData, palette);
 
     const indexed: IndexedImage = await quantizeToIndices(imageData, 255, { transparent: true });
@@ -44,7 +44,7 @@ async function main() {
     const t: number | null = indexed.transparentIndex;
     const bits: 8 | 16 | 32 = indexed.indexBits;
     const idx: Uint8Array | Uint16Array | Uint32Array = indexed.indices;
-    await quantizeToIndicesWithClustering(imageData, clustering, 8, { transparent: false });
+    await quantizeToIndicesFromClustering(imageData, clustering, 8, { transparent: false });
     await quantizeToIndicesWithPalette(raw, palette, { transparent: 1 });
 
     const code: ErrorCode = 'invalid-argument';

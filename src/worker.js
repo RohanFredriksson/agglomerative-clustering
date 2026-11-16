@@ -113,13 +113,13 @@ const takeControls = (options) => {
 };
 
 // Where the options sit among a function's arguments after the image (see takeControls).
-const optionsPosition = {getClustering: 0, getPalette: 1, getSwatches: 1, quantize: 1, quantizeWithClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithClustering: 2, quantizeToIndicesWithPalette: 1};
+const optionsPosition = {getClustering: 0, getPalette: 1, getSwatches: 1, quantize: 1, quantizeFromClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesFromClustering: 2, quantizeToIndicesWithPalette: 1};
 
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
-const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
-const mappedImageFunctions = ['quantize', 'quantizeWithClustering', 'quantizeWithPalette'];
+const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
+const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
 export const createWorker = (options) => {
@@ -374,8 +374,8 @@ export const getSwatches = (...args) => sharedWorker().getSwatches(...args);
 export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
 export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);
-export const quantizeWithClustering = (...args) => sharedWorker().quantizeWithClustering(...args);
+export const quantizeFromClustering = (...args) => sharedWorker().quantizeFromClustering(...args);
 export const quantizeWithPalette = (...args) => sharedWorker().quantizeWithPalette(...args);
 export const quantizeToIndices = (...args) => sharedWorker().quantizeToIndices(...args);
-export const quantizeToIndicesWithClustering = (...args) => sharedWorker().quantizeToIndicesWithClustering(...args);
+export const quantizeToIndicesFromClustering = (...args) => sharedWorker().quantizeToIndicesFromClustering(...args);
 export const quantizeToIndicesWithPalette = (...args) => sharedWorker().quantizeToIndicesWithPalette(...args);

@@ -571,7 +571,7 @@ export const quantize = async (image, k, options) => {
 
 };
 
-export const quantizeWithClustering = async (image, clustering, k, options) => {
+export const quantizeFromClustering = async (image, clustering, k, options) => {
 
     const wasm = await acquire();
     const wrap = getWrapper(image);
@@ -626,7 +626,7 @@ export const quantizeToIndices = async (image, k, options) => {
 
 };
 
-export const quantizeToIndicesWithClustering = async (image, clustering, k, options) => {
+export const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
 
     const wasm = await acquire();
     const original = image;

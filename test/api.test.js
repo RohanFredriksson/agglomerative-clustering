@@ -46,8 +46,8 @@ const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
 const clustering = await main.getClustering(image);
 const palette = await main.getPalette(image, 3);
 const callArguments = {
-    getClustering: [image], getPalette: [image, 3], getSwatches: [image, 3], quantize: [image, 3], quantizeWithClustering: [image, clustering, 3],
-    quantizeWithPalette: [image, palette], quantizeToIndices: [image, 3], quantizeToIndicesWithClustering: [image, clustering, 3],
+    getClustering: [image], getPalette: [image, 3], getSwatches: [image, 3], quantize: [image, 3], quantizeFromClustering: [image, clustering, 3],
+    quantizeWithPalette: [image, palette], quantizeToIndices: [image, 3], quantizeToIndicesFromClustering: [image, clustering, 3],
     quantizeToIndicesWithPalette: [image, palette],
 };
 const enforcedKeys = async (name) => {
