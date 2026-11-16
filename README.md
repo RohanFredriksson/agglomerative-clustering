@@ -155,7 +155,7 @@ Three things in this library are about alpha, and they act at different stages:
 | `alpha` | `'weight'` (default) or `'ignore'` | clustering | Soft: a pixel counts in proportion to its opacity, so a faint pixel barely moves the palette. `'ignore'` counts every pixel fully (1.x). |
 | `transparent` | `false` (default), `true` or a cutoff `1`–`255` | clustering and indexed output | Hard: a pixel with alpha below the cutoff doesn't exist as far as the palette goes (left out of clustering, the rest count whole); indexed output also gives those pixels one palette entry, which counts towards `k`. |
 
-Use `alpha` (the default) for swatches and for mapped images that keep each pixel's own alpha. Use `transparent` when the destination has one transparent colour, as GIF and palette PNG do, and use it for the clustering step too (it is accepted everywhere that clusters), so the palette you cut is the one you map with. Soft alpha in the palette itself (several translucent colours) is not supported.
+Give one or the other: `transparent` replaces `alpha`, so naming both is an `invalid-argument` error rather than one being silently ignored. Use `alpha` (the default) for swatches and for mapped images that keep each pixel's own alpha. Use `transparent` when the destination has one transparent colour, as GIF and palette PNG do, and use it for the clustering step too (it is accepted everywhere that clusters), so the palette you cut is the one you map with. Soft alpha in the palette itself (several translucent colours) is not supported.
 
 **Options objects.** Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error.
 

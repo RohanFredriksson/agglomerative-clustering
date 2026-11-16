@@ -155,7 +155,7 @@ export interface ClusteringOptions extends RunOptions {
      * `quantizeToIndices(image, k, { transparent })` uses, apart from that function's extra transparent entry.
      * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`). The cutoff is recorded in the
      * clustering (see `ClusteringInfo.transparent`), and `quantizeToIndicesFromClustering` uses it unless you name one.
-     * It replaces `alpha`: with a cutoff, pixels count whole or not at all.
+     * It replaces `alpha` (with a cutoff, pixels count whole or not at all), so giving both is an `invalid-argument` error.
      */
     transparent?: boolean | number;
 }

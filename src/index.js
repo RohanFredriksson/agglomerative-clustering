@@ -421,6 +421,11 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.");
     }
 
+    // A cutoff replaces opacity weighting (pixels count whole or not at all), so naming both would leave one of them ignored.
+    if (transparent > 0 && options.alpha !== undefined) {
+        throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.");
+    }
+
     return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
 
 };

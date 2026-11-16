@@ -412,3 +412,32 @@ describe('what is said about the usual wrong things to pass as an image', () => 
         });
     }
 });
+
+describe('alpha and transparent together', () => {
+    const sprite = new Uint8Array(40 * 4).map((_, i) => (i % 4 === 3 ? [0, 90, 255][i % 3] : (i * 17) & 255));
+    it('are refused, since a cutoff replaces opacity weighting and one would be ignored', async () => {
+        for (const options of [{ alpha: 'ignore', transparent: true }, { alpha: 'weight', transparent: true }, { alpha: 'weight', transparent: 200 }]) {
+            for (const call of [(o) => ac.getPalette(sprite, 4, o), (o) => ac.getClustering(sprite, o), (o) => ac.getSwatches(sprite, 4, o), (o) => ac.quantize(sprite, 4, o), (o) => ac.quantizeToIndices(sprite, 4, o)]) {
+                const error = await call(options).catch((e) => e);
+                expect(error.code, JSON.stringify(options)).toBe('invalid-argument');
+                expect(error.message).toContain('`transparent` replaces `alpha`');
+            }
+        }
+    });
+
+    it('are fine when only one is given, or when the cutoff is turned off', async () => {
+        await ac.getPalette(sprite, 4, { alpha: 'ignore' });
+        await ac.getPalette(sprite, 4, { transparent: true });
+        await ac.getPalette(sprite, 4, { alpha: 'ignore', transparent: false });
+        await ac.getPalette(sprite, 4, { alpha: undefined, transparent: true });
+    });
+
+    it('is refused through the worker too', async () => {
+        const worker = (await import('../dist/worker.mjs')).createWorker();
+        try {
+            expect((await worker.getPalette(sprite, 4, { alpha: 'ignore', transparent: true }).catch((e) => e)).code).toBe('invalid-argument');
+        } finally {
+            await worker.terminate();
+        }
+    });
+});
