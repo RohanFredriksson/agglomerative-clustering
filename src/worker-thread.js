@@ -32,24 +32,63 @@ const buffers = (value) => {
     return [];
 };
 
-const respond = async ({id, method, args}, post) => {
+// Where the options sit among each method's arguments, to give them the call's signal and progress callback.
+const optionsIndex = {
+    getClustering: 1, getPalette: 2, quantize: 2, quantizeWithClustering: 3, quantizeWithPalette: 2,
+    quantizeToIndices: 2, quantizeToIndicesWithClustering: 3, quantizeToIndicesWithPalette: 2,
+    cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2,
+};
+
+// One AbortController per call that can be cancelled, by call id. It exists from the moment the call arrives, so a call
+// still waiting its turn can be cancelled and never starts.
+const controllers = new Map();
+
+const respond = async ({id, method, args, progress}, post) => {
+    const controller = controllers.get(id);
     try {
+        if (controller && controller.signal.aborted) {return;}
         if (!Object.hasOwn(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
+        if (controller || progress) {
+            args = args.slice();
+            const index = optionsIndex[method];
+            const options = {...(args[index] || {})};
+            if (controller) {options.signal = controller.signal;}
+            if (progress) {options.onProgress = (fraction) => post({id, progress: fraction});}
+            args[index] = options;
+        }
         const result = await methods[method](...args);
         post({id, result}, [...new Set(buffers(result))]);
     } catch (error) {
+        // A cancelled call has already been rejected on the other side.
+        if (controller && controller.signal.aborted) {return;}
         // Errors cross as plain data: the caller's side rebuilds them with the same name, message and code.
         post({id, error: error instanceof Error
             ? {name: error.name, message: error.message, code: error.code, stack: error.stack}
             : {name: 'Error', message: String(error), code: 'worker-failed'}});
+    } finally {
+        controllers.delete(id);
     }
+};
+
+// Calls run one at a time, in the order they arrived. A call that takes several turns of the event loop (a clustering run
+// in slices) lets messages in between, which is how a cancel reaches it; without the queue, later calls would run
+// in between its slices instead of after it.
+let queue = Promise.resolve();
+const onMessage = (data, post) => {
+    if (data.cancel !== undefined) {
+        const controller = controllers.get(data.cancel);
+        if (controller) {controller.abort();}
+        return;
+    }
+    if (data.cancellable) {controllers.set(data.id, new AbortController());}
+    queue = queue.then(() => respond(data, post));
 };
 
 // No top-level await: bundlers build workers as classic scripts by default (Vite's 'iife'), which can't have it.
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function') {
-    self.addEventListener('message', (event) => respond(event.data, (message, transfer) => self.postMessage(message, transfer)));
+    self.addEventListener('message', (event) => onMessage(event.data, (message, transfer) => self.postMessage(message, transfer)));
 } else {
     import(/* webpackIgnore: true */ /* @vite-ignore */ 'node:worker_threads').then(({parentPort}) => {
-        parentPort.on('message', (data) => respond(data, (message, transfer) => parentPort.postMessage(message, transfer)));
+        parentPort.on('message', (data) => onMessage(data, (message, transfer) => parentPort.postMessage(message, transfer)));
     });
 }

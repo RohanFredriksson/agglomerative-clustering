@@ -164,6 +164,7 @@ const check = (k) => {
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
+//   signal, onProgress: an AbortSignal and a progress callback, which make the clustering run in slices (see clusterInSlices)
 //   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255; for indexed output, gives pixels with alpha below it their own entry
 const parseOptions = (options, allowed, image) => {
 
@@ -206,6 +207,15 @@ const parseOptions = (options, allowed, image) => {
         }
     }
 
+    const signal = options.signal;
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean')) {
+        throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");
+    }
+    const onProgress = options.onProgress;
+    if (onProgress !== undefined && typeof onProgress !== 'function') {
+        throw fail('invalid-argument', "Invalid onProgress: must be a function.");
+    }
+
     // The alpha cutoff for indexed output: 0 for none, else the pixels with alpha below it are transparent.
     const transparentOption = options.transparent === undefined ? false : options.transparent;
     const transparent = transparentOption === false ? 0 : transparentOption === true ? 128 : transparentOption;
@@ -213,13 +223,14 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.");
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent};
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent, signal, onProgress};
 
 };
 
-const clusterOptions = ['colorSpace', 'precision', 'alpha'];
-const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width'];
-const mapOptions = ['colorSpace', 'dither', 'width'];
+const controlOptions = ['signal', 'onProgress'];
+const clusterOptions = ['colorSpace', 'precision', 'alpha', ...controlOptions];
+const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width', ...controlOptions];
+const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
 const quantizeIndexOptions = [...quantizeOptions, 'transparent'];
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
@@ -290,11 +301,82 @@ const call = (buffers, fn) => {
     }
 };
 
+// ----- Interruptible work -------------------------------------------------------------------------------------------
+// A call given a `signal` or an `onProgress` runs its clustering in slices of about `sliceMs` milliseconds, giving the
+// event loop a turn between them: the signal is checked (and progress reported) each time, other tasks can run, and
+// in a worker thread the cancel message is read. Without either the call runs in one go, as it always did. The
+// result is the same either way: the slices are the same steps in the same order.
+
+const sliceMs = 10;
+
+// Gives other tasks (a cancel message, timers, painting) a turn.
+const yieldNow = () => {
+    if (typeof setImmediate === 'function') {return new Promise((resolve) => setImmediate(resolve));}
+    if (typeof MessageChannel === 'function') {
+        return new Promise((resolve) => {
+            const {port1, port2} = new MessageChannel();
+            port1.onmessage = () => {port1.close(); port2.close(); resolve();};
+            port2.postMessage(null);
+        });
+    }
+    return new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+// Like fetch, an aborted call rejects with the signal's reason (an AbortError unless the caller gave another).
+const checkAborted = (signal) => {
+    if (signal && signal.aborted) {
+        throw signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
+    }
+};
+
+// Reports progress as a fraction from 0 to 1, never going backwards and only when it changes.
+const reporter = (o) => {
+    let last = -1;
+    return (fraction) => {
+        const value = Math.min(1, Math.max(0, fraction));
+        if (o.onProgress && value > last) {last = value; o.onProgress(value);}
+    };
+};
+
+const isControlled = (o) => o.signal !== undefined || o.onProgress !== undefined;
+
+// Clusters in slices and returns the clustering. `share` is the part of the whole call's progress this takes.
+const clusterInSlices = async (image, o, report, share) => {
+    checkAborted(o.signal);
+    const imagePointer = Module._malloc(image.data.length);
+    if (!imagePointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
+    let job = 0;
+    try {
+        Module.HEAPU8.set(image.data, imagePointer);
+        job = Module._clustering_job_start(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent);
+        report(0);
+        while (true) {
+            const progress = Module._clustering_job_step(job, sliceMs);
+            if (progress >= 1000) {break;}
+            report(share * progress / 1000);
+            await yieldNow();
+            checkAborted(o.signal);
+        }
+        const pointer = Module._clustering_job_result(job);
+        try {return unpack(pointer);} finally {Module._free(pointer);}
+    } finally {
+        if (job) {Module._clustering_job_free(job);}
+        Module._free(imagePointer);
+    }
+};
+
 export const getClustering = async (image, options) => {
 
     await init();
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
+
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const clustering = await clusterInSlices(image, o, report, 1);
+        report(1);
+        return clustering;
+    }
 
     return call([image.data], (imagePointer) => Module._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha));
 
@@ -306,6 +388,15 @@ export const getPalette = async (image, k, options) => {
     image = load(image);
     k = check(k);
     const o = parseOptions(options, clusterOptions, image);
+
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const clustering = await clusterInSlices(image, o, report, 0.99);
+        checkAborted(o.signal);
+        const palette = call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+        report(1);
+        return palette;
+    }
 
     return call([image.data], (imagePointer) => Module._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
 
@@ -377,6 +468,15 @@ export const quantize = async (image, k, options) => {
     k = check(k);
     const o = parseOptions(options, quantizeOptions, image);
 
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const clustering = await clusterInSlices(image, o, report, 0.9);
+        checkAborted(o.signal);
+        const mapped = wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width)));
+        report(1);
+        return mapped;
+    }
+
     return wrap(call([image.data], (imagePointer) => Module._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
 
 };
@@ -389,9 +489,13 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
     readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapOptions, image);
+    checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    return wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
+    const result = wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
+    reporter(o)(1);
+
+    return result;
 
 };
 
@@ -402,8 +506,12 @@ export const quantizeWithPalette = async (image, palette, options) => {
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapOptions, image);
+    checkAborted(o.signal);
 
-    return wrap(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
+    const result = wrap(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
+    reporter(o)(1);
+
+    return result;
 
 };
 
@@ -414,6 +522,15 @@ export const quantizeToIndices = async (image, k, options) => {
     image = load(image);
     k = check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
+
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const clustering = await clusterInSlices(image, o, report, 0.9);
+        checkAborted(o.signal);
+        const indexed = unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width, o.transparent)), original);
+        report(1);
+        return indexed;
+    }
 
     return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original);
 
@@ -427,9 +544,13 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapIndexOptions, image);
+    checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
+    reporter(o)(1);
+
+    return result;
 
 };
 
@@ -440,7 +561,11 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
+    checkAborted(o.signal);
 
-    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
+    reporter(o)(1);
+
+    return result;
 
 };

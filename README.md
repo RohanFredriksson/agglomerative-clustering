@@ -120,6 +120,8 @@ Every function that takes an image also takes an optional last argument of optio
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
 | `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. |
+| `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
+| `onProgress` | any call with an image | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". |
 | `transparent` | indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Gives RGBA pixels with alpha below the cutoff (`true` means 128) their own palette entry in `quantizeToIndices*` results; every other pixel is shown fully opaque. For GIFs and palette PNGs. |
 
 "Clustering" means `getClustering` and `getPalette`, "mapping" means `quantizeWithClustering` and `quantizeWithPalette`, and `quantize` takes both.
@@ -252,6 +254,22 @@ That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it th
 
 Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error.
 
+### Cancelling and progress
+Every function that takes an image accepts `signal` and `onProgress`:
+
+```js
+const controller = new AbortController();
+const clustering = await getClustering(image, {
+  signal: controller.signal,                       // controller.abort() cancels it
+  onProgress: (fraction) => bar.value = fraction,  // 0 to 1
+});
+```
+- **Slices.** With either option, the clustering runs in slices of about 10 ms and the event loop gets a turn between them. The signal is checked, and progress reported, at each one, so an abort takes effect within a slice, not after the whole clustering, and a page stays responsive while it works. The result is the same as without the options. Slicing costs about 5% more time in total; without them the call runs in one go, as before.
+- **Aborting** rejects with the signal's `reason` (an `AbortError` unless you gave another), like `fetch`. A call whose signal is already aborted rejects at once and does no work.
+- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeWithClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting.
+- **Progress** is approximate, rises monotonically, ends at exactly 1, and is not linear in time: the early part of a clustering is quick and the merging is most of the work.
+- **In a worker** (see below) the same options work, and the worker itself stops: the cancel message is read between slices, so the next call doesn't wait behind work nobody wants. A call that is still queued behind another is removed and never runs.
+
 ### Errors
 Every error the library throws is an `Error` with a `code`, so you don't have to match on message text:
 
@@ -278,6 +296,8 @@ Exports every function above, run in one shared worker started on first use, plu
 
 - **`cluster(image, options?)`** clusters `image` and returns a handle that keeps the image and its clustering in the worker. The handle has `getClustering()`, `getPalette(k)`, `getPaletteWeights(k)`, `getClusteringInfo()`, `quantize(k, options?)` and `quantizeToIndices(k, options?)`, the last two taking mapping options. `release()` frees the image and clustering, so call it when you are done, or declare the handle with `await using handle = await worker.cluster(image)` (TypeScript 5.2+, or an engine with explicit resource management), which releases it at the end of the block. A handle you drop without either is freed once the garbage collector collects it, but the engine decides when, so don't rely on that for large images in a loop.
 - **`terminate()`** stops the worker. Calls still waiting are rejected.
+
+Calls to a worker run one at a time, in the order they were made. `signal` and `onProgress` work as above and also stop the worker's own work (see "Cancelling and progress"); the callback runs on your side, from the worker's progress messages.
 
 Results are transferred back without copying. Images are copied to the worker, unless you create it with `createWorker({ transfer: true })`. That's faster for large images, but leaves your buffer empty afterwards. The worker entry is an ES module, and `require('agglomerative-clustering/worker')` works too on the Node versions this package supports (it loads the ES module, like the main CommonJS entry). Its types also resolve under TypeScript's older `moduleResolution: "node"`.
 

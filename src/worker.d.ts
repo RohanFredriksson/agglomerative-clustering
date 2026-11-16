@@ -7,7 +7,7 @@ import type {
 
 export type {
     ImageFormat, RawImage, ImageLike, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, CodedError, InitOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
+    ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
 } from './index';
 
 export interface WorkerOptions {

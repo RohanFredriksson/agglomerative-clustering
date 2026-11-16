@@ -36,6 +36,8 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 
 ## Next
 
+- **Slicing pixel mapping.** Cancellation and progress cover the clustering, which is most of the work. Mapping (a few milliseconds for a photo, more with dithering on very large images) still runs in one piece; it could be sliced by rows the same way.
+
 - **Webpack and Parcel smoke tests**, alongside the Vite one.
 - **Quieter bundling.** Vite warns that the Emscripten glue's Node-only `import('module')` is externalized for the browser. Building separate web and Node glue (`-s ENVIRONMENT`) would remove it.
 - **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for most of the growth from 75 KB to 84 KB.

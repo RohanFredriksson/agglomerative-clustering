@@ -95,6 +95,24 @@ const initOptions = (options) => {
     return options.wasm === undefined ? {} : {wasm: wasmOption(options.wasm)};
 };
 
+// A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
+// them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
+const takeControls = (options) => {
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {return {options, signal: undefined, onProgress: undefined};}
+    const {signal, onProgress} = options;
+    if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
+    if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.");}
+    const {signal: _signal, onProgress: _onProgress, ...rest} = options;
+    return {options: rest, signal, onProgress};
+};
+
+// Where the options sit among a function's arguments after the image (see takeControls).
+const optionsPosition = {getClustering: 0, getPalette: 1, quantize: 1, quantizeWithClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithClustering: 2, quantizeToIndicesWithPalette: 1};
+
+// Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
+const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
+
 const imageFunctions = ['getClustering', 'getPalette', 'quantize', 'quantizeWithClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeWithClustering', 'quantizeWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClusteringInfo'];
@@ -127,20 +145,26 @@ export const createWorker = (options) => {
 
     const receive = (message) => {
         if (message.failure !== undefined) {
-            for (const {reject} of pending.values()) {reject(fail('worker-failed', `Worker failed: ${message.failure}`));}
+            for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-failed', `Worker failed: ${message.failure}`));}
             pending.clear();
             return;
         }
         const call = pending.get(message.id);
         if (!call) {return;}
+        if (message.progress !== undefined) {
+            // An exception in the caller's callback must not break the worker's message loop: report it as uncaught.
+            if (call.onProgress) {try {call.onProgress(message.progress);} catch (error) {queueMicrotask(() => {throw error;});}}
+            return;
+        }
         pending.delete(message.id);
+        call.cleanup();
         if (pending.size === 0 && connection) {connection.unref();}
         if (message.error !== undefined) {call.reject(remoteError(message.error, call.origin));} else {call.resolve(message.result);}
     };
 
     // `origin` is an Error made in the caller's own (non-async) function, for the stack of a failure: async helpers
     // from transpiled code would otherwise fill the stack's frame limit before the caller shows up.
-    const invoke = async (method, args, transferable, origin) => {
+    const invoke = async (method, args, transferable, origin, controls = {}) => {
         if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
         if (!connection) {
             starting = starting || start(receive);
@@ -151,19 +175,34 @@ export const createWorker = (options) => {
             initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
             await initialising;
         }
-        return post(method, args, transferable, origin);
+        return post(method, args, transferable, origin, controls);
     };
 
-    const post = (method, args, transferable, origin) => {
+    const post = (method, args, transferable, origin, {signal, onProgress} = {}) => {
         if (terminated) {return Promise.reject(fail('worker-terminated', "Worker terminated."));}
+        if (signal && signal.aborted) {return Promise.reject(abortReason(signal));}
         const id = nextId++;
         return new Promise((resolve, reject) => {
             if (pending.size === 0) {connection.ref();}
-            pending.set(id, {resolve, reject, origin});
+            const call = {resolve, reject, origin, onProgress, cleanup: () => {}};
+            if (signal) {
+                // Rejects at once; the worker is told to stop (it may still be working on an earlier call or this one,
+                // and drops whatever it produces). The thread no longer keeps a Node process alive for this call.
+                const abort = () => {
+                    if (!pending.delete(id)) {return;}
+                    if (pending.size === 0) {connection.unref();}
+                    try {connection.post({cancel: id}, []);} catch (error) {/* the worker is gone anyway */}
+                    reject(abortReason(signal));
+                };
+                signal.addEventListener('abort', abort, {once: true});
+                call.cleanup = () => signal.removeEventListener('abort', abort);
+            }
+            pending.set(id, call);
             try {
-                connection.post({id, method, args}, transfer ? transferable : []);
+                connection.post({id, method, args, cancellable: signal !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
             } catch (error) {
                 pending.delete(id);
+                call.cleanup();
                 if (pending.size === 0) {connection.unref();}
                 reject(error);
             }
@@ -177,8 +216,14 @@ export const createWorker = (options) => {
         instance[name] = (image, ...rest) => {
             const origin = new Error();
             return (async () => {
+                const position = optionsPosition[name];
+                const {options, signal, onProgress} = takeControls(rest[position]);
+                // Checked before the image is copied or transferred away, so an aborted call leaves it with the caller.
+                if (signal && signal.aborted) {throw abortReason(signal);}
+                const args = rest.slice();
+                if (position < args.length) {args[position] = options;}
                 const sent = send(image);
-                const result = await invoke(name, [sent, ...rest], pixelBuffers(sent), origin);
+                const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
                 return mapped ? rebuild(image)(result) : result;
             })();
         };
@@ -198,24 +243,32 @@ export const createWorker = (options) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
+            const {options, signal, onProgress} = takeControls(clusterOptions);
+            if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = send(image);
-            await invoke('cluster', [id, sent, clusterOptions], pixelBuffers(sent), origin);
+            await invoke('cluster', [id, sent, options], pixelBuffers(sent), origin, {signal, onProgress});
             const output = rebuild(image);
             let released = false;
             // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
             // keeps it alive and it is not reclaimed while still in use.
-            const use = (method, args) => {
+            const use = (method, args, controls) => {
                 if (released || !handle) {return Promise.reject(fail('invalid-handle', "Invalid handle: it was released."));}
-                return invoke(method, [id, ...args], [], new Error());
+                return invoke(method, [id, ...args], [], new Error(), controls);
+            };
+            // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
+            const withControls = (method, k, mapOptions) => {
+                let taken;
+                try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
+                return use(method, [k, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
             };
             const handle = {
                 getClustering: () => use('handleGetClustering', []),
                 getPalette: (k) => use('handleGetPalette', [k]),
                 getPaletteWeights: (k) => use('handleGetPaletteWeights', [k]),
                 getClusteringInfo: () => use('handleGetClusteringInfo', []),
-                quantize: async (k, mapOptions) => output(await use('handleQuantize', [k, mapOptions])),
-                quantizeToIndices: (k, mapOptions) => use('handleQuantizeToIndices', [k, mapOptions]),
+                quantize: async (k, mapOptions) => output(await withControls('handleQuantize', k, mapOptions)),
+                quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', k, mapOptions),
                 release: async () => {
                     if (released) {return;}
                     released = true;
@@ -234,7 +287,7 @@ export const createWorker = (options) => {
     instance.terminate = async () => {
         if (terminated) {return;}
         terminated = true;
-        for (const {reject} of pending.values()) {reject(fail('worker-terminated', "Worker terminated."));}
+        for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-terminated', "Worker terminated."));}
         pending.clear();
         if (connection) {await connection.terminate();}
         else if (starting) {(await starting).terminate();}

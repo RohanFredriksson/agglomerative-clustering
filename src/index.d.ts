@@ -31,7 +31,25 @@ export type ColorSpace = 'rgb' | 'oklab';
 /** How pixel opacity affects clustering. */
 export type AlphaMode = 'weight' | 'ignore';
 
-export interface ClusteringOptions {
+/** Cancelling a long call and watching it. Both are optional and can be used apart. */
+export interface RunOptions {
+    /**
+     * Cancels the call. A call given a `signal` (or an `onProgress`) clusters in slices of about 10 ms and checks the
+     * signal between them, so an abort takes effect within a slice, not after the whole clustering. It rejects with
+     * the signal's `reason` (an `AbortError` by default), like `fetch`. Pixel mapping, which follows the
+     * clustering, can't be interrupted: it takes a few milliseconds for typical images. The call's result is the
+     * same as without a signal. In the worker entry the worker itself stops working on the call.
+     */
+    signal?: AbortSignal;
+    /**
+     * Called with the fraction done, from 0 to 1, as the call runs: a few times per slice at most, never going
+     * backwards, ending with 1. It is approximate and not linear in time. Giving it also makes the call run in
+     * slices, so other tasks (such as painting) get a turn while it works.
+     */
+    onProgress?(progress: number): void;
+}
+
+export interface ClusteringOptions extends RunOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
      * `'oklab'` clusters in OKLab, where distances track perceived colour difference.
@@ -50,7 +68,7 @@ export interface ClusteringOptions {
     alpha?: AlphaMode;
 }
 
-export interface MappingOptions {
+export interface MappingOptions extends RunOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
      * `quantizeWithClustering`, where it defaults to the space the clustering was made in.
