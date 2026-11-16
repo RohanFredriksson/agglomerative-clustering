@@ -1,4 +1,8 @@
 import createWasmModule from './clustering.js';
+// The library's version: package.json is the source, and scripts/sync-version.mjs keeps this line (and the copy in
+// worker.js and the one the .wasm is built from) in step with it. Do not edit it by hand.
+export const version = '2.0.0';
+
 const codes = {'rgba': 0, 'rgb': 1};
 const colorSpaces = {'rgb': 0, 'oklab': 1};
 const alphaModes = {'ignore': 0, 'weight': 1};
@@ -35,6 +39,25 @@ const wasmSettings = (wasm, onError) => {
 // browser without WebAssembly SIMD. The engine's own error (a CompileError, a failed fetch) says little about which.
 const wasmLoadFailed = (cause) => Object.assign(fail('wasm-load-failed', `Could not load the WebAssembly module (${String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0].slice(0, 140)}). It needs WebAssembly with SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4 or newer). If the file is missing or blocked, check that the .wasm is served and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).`), {cause});
 
+// The .wasm and the script that drives it are built together, and the byte layouts and entry points between them are
+// not a public interface. One left over from another version (a stale cache, a CDN serving an old file, an `init({ wasm })`
+// pointing at the wrong one) would misbehave in ways nothing explains, so the module says which version it is and a
+// mismatch is reported when it loads.
+const checkWasmVersion = (instance) => {
+    let found = 'an unknown version (from before 3.0)';
+    if (typeof instance._library_version === 'function') {
+        const heap = instance.HEAPU8;
+        let end = instance._library_version();
+        const start = end;
+        while (heap[end] !== 0 && end - start < 64) {end++;}
+        found = String.fromCharCode(...heap.subarray(start, end));
+    }
+    const expected = `agglomerative-clustering@${version}`;
+    if (found !== expected) {
+        throw fail('wasm-load-failed', `The WebAssembly module is ${found}, but this script is ${expected}: a stale or mixed-up clustering.wasm (a cache or CDN serving another version, or init({ wasm }) pointing at one). Serve the .wasm that came with this version of the package.`);
+    }
+};
+
 // The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
 let loading = null;
 
@@ -60,6 +83,7 @@ const acquire = async (options) => {
     if (!loading) {
         loading = (async () => {
             const instance = await Promise.race([createWasmModule(settings), failed]).catch((error) => {throw wasmLoadFailed(error);});
+            checkWasmVersion(instance);
             Module = instance;
             return instance;
         })().catch((error) => {
@@ -302,6 +326,10 @@ const mapIndexOptions = [...mapOptions, 'transparent'];
 //              total weight (u32 LE), 0, grouped error (f32 LE, from header length 17), ...], then records of
 //              colours, parent index, lighter weight and cost
 const latestVersion = 3;
+
+// The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
+// `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
+export const formatVersion = latestVersion;
 const readHeader = (clustering) => {
     if (!(clustering instanceof Uint8Array)) {
         throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.");

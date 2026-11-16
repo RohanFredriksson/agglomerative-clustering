@@ -6,6 +6,11 @@
 
 const fail = (code, message) => Object.assign(new Error(message), {code});
 
+// The library's version, kept in step with package.json by scripts/sync-version.mjs: do not edit by hand. And the version of
+// stored data (clusterings), which changes only when that format does; both equal the main entry's.
+export const version = '2.0.0';
+export const formatVersion = 3;
+
 // An options object is an ordinary object (see isOptionsObject in index.js).
 const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
 

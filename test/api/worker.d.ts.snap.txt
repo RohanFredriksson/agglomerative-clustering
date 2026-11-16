@@ -1,5 +1,7 @@
 /// <reference lib="esnext.disposable" />
 import type { ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, } from './index.js';
+export const version: string;
+export const formatVersion: 3;
 export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, ClusteringInfoV2, ClusteringInfoV3, Swatches, } from './index.js';
 export interface WorkerOptions {
     transfer?: boolean;

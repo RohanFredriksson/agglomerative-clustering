@@ -1,7 +1,7 @@
 // Consumer type tests, compiled by `npm run test:types` against the built declarations (dist/*.d.ts, *.d.cts) with strict mode and
 // skipLibCheck off, under nodenext (ESM and CommonJS importers) and bundler resolution. `@ts-expect-error` lines must NOT compile.
 import {
-    init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
+    version, formatVersion, init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
     quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
@@ -31,6 +31,13 @@ async function main() {
     const shares: Float64Array = (await getSwatches(imageData, 8, { signal: controller.signal })).shares;
     void shares;
     const info: ClusteringInfo = await getClusteringInfo(clustering);
+    const libraryVersion: string = version;
+    const stored: 3 = formatVersion;
+    // The format version is the one a fresh clustering reports, so it narrows the info the same way.
+    if (info.version === formatVersion) {const total: number = info.totalWeight; void total;}
+    // @ts-expect-error the version is a constant
+    version = '0';
+    void libraryVersion; void stored;
     const mse: Float64Array | null = info.mse;
     const explained: Float64Array | null = info.explained;
 

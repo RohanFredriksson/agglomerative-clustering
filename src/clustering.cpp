@@ -1,6 +1,7 @@
 // Hierarchical Agglomerative Color Clustering (Ward's method)
 #include "clustering.hpp"
 #include "colorspace.hpp"
+#include "version.hpp"
 #include <emscripten.h>
 #include <cstdlib>
 #include <cstring>
@@ -683,6 +684,13 @@ uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int imag
 }
 
 extern "C" {
+
+// The library version this module was built for, as a NUL-terminated string. The JavaScript checks it against its own when
+// the module loads, so a .wasm left over from another version (a stale cache or CDN copy) is reported, not run.
+EMSCRIPTEN_KEEPALIVE
+const char* library_version() {
+    return AGGLOMERATIVE_CLUSTERING_VERSION;
+}
 
 // A clustering run in slices (see ClusteringJob): start it, step it until it returns 1000, take the result, free it.
 // The image must stay allocated until the job has finished.

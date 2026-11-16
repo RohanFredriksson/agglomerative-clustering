@@ -65,6 +65,8 @@ export type IndexedImage = (IndexedImageFields & {
 export interface InitOptions {
     wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
 }
+export const version: string;
+export const formatVersion: 3;
 export function init(options?: InitOptions): Promise<void>;
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;

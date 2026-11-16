@@ -36,10 +36,13 @@ const parameterType = (fileName, functionName, parameterName) => {
     const parameter = signature.getParameters().find((p) => p.name === parameterName);
     return parameter && checker.getNonNullableType(checker.getTypeOfSymbol(parameter));
 };
-const parameterNames = (fileName, functionName) => checker.getSignaturesOfType(checker.getTypeOfSymbol(resolved(exported(fileName, functionName))), ts.SignatureKind.Call)[0].getParameters().map((p) => p.name);
+const signaturesOf = (fileName, name) => checker.getSignaturesOfType(checker.getTypeOfSymbol(resolved(exported(fileName, name))), ts.SignatureKind.Call);
+const parameterNames = (fileName, functionName) => signaturesOf(fileName, functionName)[0].getParameters().map((p) => p.name);
+// Exports that are functions, as opposed to constants such as `version`.
+const functionExports = (fileName) => valueExports(fileName).filter((name) => signaturesOf(fileName, name).length > 0);
 
 // The image functions of the main entry: the ones whose first parameter is the image.
-const imageFunctions = valueExports('index.d.ts').filter((name) => parameterNames('index.d.ts', name)[0] === 'image').sort();
+const imageFunctions = functionExports('index.d.ts').filter((name) => parameterNames('index.d.ts', name)[0] === 'image').sort();
 
 // The option keys the runtime enforces, read from the error it gives for an unknown key.
 const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
@@ -108,8 +111,11 @@ describe('the worker entry', () => {
     afterAll(() => instance.terminate());
 
     it('mirrors the main entry', () => {
+        // Constants (the versions) are exported by both entries with the same values; only functions become worker methods.
+        const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function');
+        for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function')) {expect(worker[name], name).toBe(main[name]);}
         expect(Object.keys(worker).sort()).toEqual([...Object.keys(main), 'createWorker', 'terminate'].sort());
-        expect(Object.keys(instance).sort()).toEqual([...Object.keys(main), 'cluster', 'terminate'].sort());
+        expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'terminate'].sort());
         expect(propertyNames(declaredType('worker.d.ts', 'AgglomerativeWorker'))).toEqual(Object.keys(instance).sort());
     });
 
@@ -158,7 +164,9 @@ describe('the README', () => {
 
     it('documents every function', () => {
         for (const name of [...Object.keys(worker), 'createWorker']) {
-            expect(readme.includes('`' + name + '('), `README has no entry for ${name}()`).toBe(true);
+            // Functions are documented as `name(`; constants such as `version` have a heading of their own.
+            const entry = typeof worker[name] === 'function' ? '`' + name + '(' : '`' + name + '`';
+            expect(readme.includes(entry), `README has no entry for ${name}`).toBe(true);
         }
     });
 

@@ -6,7 +6,7 @@ export type ImageFormat = 'rgb' | 'rgba';
  * `invalid-argument` (image, k, options or palette), `invalid-clustering`, `unsupported-version` (a clustering from a
  * newer format version or one using a colour space it doesn't know, or an older one that lacks what was asked for),
  * `out-of-memory`, `wasm-load-failed` (the WebAssembly module could not be loaded or compiled: a missing or blocked file, a
- * browser without SIMD), and in the worker entry
+ * browser without SIMD, or a `.wasm` from another version of the library), and in the worker entry
  * `worker-terminated`, `worker-failed` and `invalid-handle`.
  */
 export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed'
@@ -171,6 +171,17 @@ export interface InitOptions {
      */
     wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
 }
+
+/** The version of this library, as in its `package.json` (for example `'3.0.0'`). The WebAssembly module checks it matches its own when it loads. */
+export const version: string;
+
+/**
+ * The version of the data this library stores: the format of the clusterings `getClustering` writes (`getClusteringInfo`
+ * reports a clustering's own as `version`). One integer for the library's stored data, unrelated to `version`: it
+ * changes only when the stored format does, so a new release that keeps the format keeps this number. This build reads
+ * this format and the one before it (2).
+ */
+export const formatVersion: 3;
 
 /**
  * Loads the WebAssembly module. Every other function does it on first use, so calling `init` is optional, except to
