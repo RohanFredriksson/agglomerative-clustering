@@ -63,3 +63,43 @@ describe('a worker fails like the main entry', () => {
     });
 
 });
+
+describe('which argument an error is about', () => {
+    const image = new Uint8Array(64).map((_, i) => (i * 37) & 255);
+    const argumentOf = async (promise) => (await promise.then(() => null, (e) => e))?.argument;
+
+    it('names it for programs, in every function, and through the worker', async () => {
+        const { createWorker } = await import('../dist/worker.mjs');
+        const clustering = await ac.getClustering(image);
+        const worker = createWorker();
+        try {
+            for (const entry of [ac, worker]) {
+                expect(await argumentOf(entry.getPalette('nope', 4))).toBe('image');
+                expect(await argumentOf(entry.getPalette(image, 0))).toBe('k');
+                expect(await argumentOf(entry.getPalette(image, 4, null))).toBe('options');
+                expect(await argumentOf(entry.getPalette(image, 4, { colorSpace: 'lab' }))).toBe('options.colorSpace');
+                expect(await argumentOf(entry.getPalette(image, 4, { colourSpace: 'oklab' }))).toBe('options.colourSpace');
+                expect(await argumentOf(entry.getPalette(image, 4, { precision: 9 }))).toBe('options.precision');
+                expect(await argumentOf(entry.quantize(image, 4, { dither: true }))).toBe('options.width');
+                expect(await argumentOf(entry.getPaletteFromClustering(new Uint8Array(5), 2))).toBe('clustering');
+                expect(await argumentOf(entry.quantizeWithPalette(image, [300, 0, 0]))).toBe('palette');
+                expect(await argumentOf(entry.quantizeWithPalette(image, clustering))).toBe('palette');
+                expect(await argumentOf(entry.quantizeFromClustering(image, clustering, 4, { onProgress() {} }))).toBe('options.onProgress');
+            }
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+    it('is on constructor errors too, and absent when an error is not about an argument', async () => {
+        expect(() => new ac.Palette([1, 2, 3], 'lab')).toThrow(expect.objectContaining({ argument: 'colorSpace' }));
+        expect(() => new ac.Palette([300, 0, 0])).toThrow(expect.objectContaining({ argument: 'palette' }));
+        expect(() => new ac.Clustering(new Uint8Array(5))).toThrow(expect.objectContaining({ argument: 'clustering' }));
+        const { createWorker } = await import('../dist/worker.mjs');
+        const worker = createWorker();
+        await worker.terminate();
+        const terminated = await worker.getPalette(image, 4).catch((e) => e);
+        expect(terminated.code).toBe('worker-terminated');
+        expect('argument' in terminated).toBe(false);
+    });
+});

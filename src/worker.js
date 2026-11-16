@@ -4,92 +4,11 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-const fail = (code, message) => Object.assign(new Error(message), {code});
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion} from './shared.js';
 
-// The library's version, kept in step with package.json by scripts/sync-version.mjs: do not edit by hand. And the version of
-// stored data (clusterings), which changes only when that format does; both equal the main entry's.
-export const version = '2.0.0';
-export const formatVersion = 3;
-
-// ----- Palette and Clustering ----------------------------------------------------------------------------------------
-// The same classes as the main entry's (see there: ordinary Uint8Arrays with hidden tags), recognised across copies of the library by
-// their symbol properties. A structured clone drops those tags (a palette's colour space with them), so values that cross to or from the
-// worker thread travel as small markers (`pack`, `revive`) and become these again on the other side.
-const paletteBrand = Symbol.for('agglomerative-clustering.palette');
-const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
-const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
-const MARK = '__agglomerativeClustering';
-
-const markPalette = (bytes, colorSpace) => {
-    Object.defineProperty(bytes, paletteBrand, {value: true});
-    Object.defineProperty(bytes, 'colorSpace', {value: colorSpace});
-    return bytes;
-};
-const markClustering = (bytes) => Object.defineProperty(bytes, clusteringBrand, {value: true});
-const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
-
-export function Palette(source, colorSpace = 'rgb') {
-    if (colorSpace !== 'rgb' && colorSpace !== 'oklab') {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
-    if (source === undefined) {source = 0;}
-    // The same rules as the main entry's Palette (and as for a palette passed to a function): nothing is coerced into a byte.
-    if (typeof source === 'number') {
-        if (!Number.isInteger(source) || source < 0 || source % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: a length must be a whole number of bytes, a multiple of 3 (flat RGB bytes).");}
-    } else {
-        if (isClustering(source)) {throw fail('invalid-argument', "Invalid palette: this is a clustering (from getClustering), not a palette.");}
-        if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !Array.isArray(source)) {throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.");}
-        if (source.length % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).");}
-        if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {throw fail('invalid-argument', "Invalid palette: a plain array must be flat RGB bytes, integers from 0 to 255 (not an array of [r, g, b] colours).");}
-    }
-    return markPalette(new Uint8Array(source), colorSpace);
-}
-Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
-
-export function Clustering(...args) {
-    const [source] = args;
-    const isBuffer = source instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && source instanceof SharedArrayBuffer);
-    if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !isBuffer && !Array.isArray(source)) {
-        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from getClustering.");
-    }
-    if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
-        throw fail('invalid-clustering', "Invalid clustering: a plain array must hold byte values, integers from 0 to 255.");
-    }
-    let bytes;
-    try {bytes = new Uint8Array(...args);} catch (error) {throw fail('invalid-clustering', `Invalid clustering: ${error.message}.`);}
-    // A brief check, so bytes that are plainly not a clustering fail here; reading the header in full (versions, lengths) is
-    // done by the functions that use one, as in the main entry.
-    if (bytes.length < 4 || bytes[0] !== 0xAC) {throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering.");}
-    return markClustering(bytes);
-}
-Object.defineProperty(Clustering, Symbol.hasInstance, {value: isClustering});
-
-// A palette argument travels with its colour space.
-const pack = (value) => isPalette(value) ? {[MARK]: 'palette', bytes: new Uint8Array(value), colorSpace: value.colorSpace} : value;
-
-// Results come back with markers for the palettes and clusterings in them (the result itself, or a property of it).
-const reviveOne = (value) => {
-    if (!value || typeof value !== 'object' || !value[MARK]) {return value;}
-    if (value[MARK] === 'palette') {return new Palette(value.bytes, value.colorSpace);}
-    return new Clustering(value.bytes.buffer, value.bytes.byteOffset, value.bytes.length);
-};
-const revive = (result) => {
-    if (!result || typeof result !== 'object' || ArrayBuffer.isView(result)) {return result;}
-    if (result[MARK]) {return reviveOne(result);}
-    for (const key of Object.keys(result)) {result[key] = reviveOne(result[key]);}
-    return result;
-};
-
-// An options object is an ordinary object (see isOptionsObject in index.js).
-const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
-
-// One plain copy of an options object, taken once: every enumerable property, own or inherited (so options layered with
-// Object.create(defaults) work and an inherited typo is still caught), each read a single time. Everything after this
-// uses the copy, so what is validated is what is used, even if a property is a getter that answers differently each time.
-// The copy has no prototype, so a key like '__proto__' is just a name.
-const snapshot = (options) => {
-    const copy = Object.create(null);
-    for (const key in options) {copy[key] = options[key];}
-    return copy;
-};
+// The same version, types and data-format version as the main entry (one implementation, in shared.js).
+export {version, Palette, Clustering} from './shared.js';
+export const formatVersion = latestVersion;
 
 const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
 
@@ -152,6 +71,7 @@ const remoteError = (info, origin) => {
     const error = new Error(info.message);
     if (info.name && info.name !== 'Error') {error.name = info.name;}
     if (info.code !== undefined) {error.code = info.code;}
+    if (info.argument !== undefined) {error.argument = info.argument;}
     if (origin.stack) {error.stack = `${error.name}: ${error.message}${origin.stack.slice(origin.stack.indexOf('\n'))}`;}
     if (info.stack) {
         const cause = new Error(info.message);
@@ -169,16 +89,16 @@ const wasmOption = (wasm) => {
     if (typeof URL !== 'undefined' && wasm instanceof URL) {return wasm.href;}
     if (wasm instanceof ArrayBuffer || ArrayBuffer.isView(wasm)) {return wasm;}
     if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {return wasm;}
-    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.");
+    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
 // Options for init: only `wasm`, or none.
 const initOptions = (options) => {
     if (options === undefined) {return undefined;}
-    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.", 'options');}
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
+        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`, `options.${key}`);}
     }
     return options.wasm === undefined ? {} : {wasm: wasmOption(options.wasm)};
 };
@@ -191,10 +111,10 @@ const takeControls = (options, progressAllowed = true) => {
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
     options = snapshot(options);
     const {signal, onProgress} = options;
-    if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.");}
+    if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.", 'options.onProgress');}
     if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
-    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
-    if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.");}
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.", 'options.signal');}
+    if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.", 'options.onProgress');}
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
     return {options: rest, signal, onProgress};
 };
@@ -214,12 +134,12 @@ const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering',
 export const createWorker = (options) => {
 
     if (options === undefined) {options = {};}
-    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.", 'options');}
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`);}
+        if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`, `options.${key}`);}
     }
-    if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.");}
+    if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.", 'options.transfer');}
     const transfer = options.transfer === true;
     // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
     const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
@@ -333,7 +253,7 @@ export const createWorker = (options) => {
             }
             pending.set(id, call);
             try {
-                connection.post({id, method, args: args.map(pack), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
+                connection.post({id, method, args: args.map(mark), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
             } catch (error) {
                 pending.delete(id);
                 call.cleanup();

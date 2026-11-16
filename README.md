@@ -386,7 +386,7 @@ const clustering = await getClustering(image, {
 
 Every error the library throws is an `Error` with a `code`, so you don't have to match on message text. (The one exception is the rejection of an aborted call, which is the signal's own `reason`, an `AbortError`: see "Cancelling and progress".)
 
-Arguments are checked in the order you pass them (image, then clustering or palette, then `k`, then options), so when several are wrong the error is about the first.
+Arguments are checked in the order you pass them (image, then clustering or palette, then `k`, then options), so when several are wrong the error is about the first. When an error is about one argument, `error.argument` names it for your code: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, or `'options.<name>'` for one option (for example `'options.colorSpace'`), so a form can point at the right field without reading the message.
 
 | `code` | When |
 | --- | --- |

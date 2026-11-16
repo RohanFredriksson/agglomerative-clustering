@@ -32,16 +32,16 @@ describe('version and formatVersion', () => {
         const copy = mkdtempSync(join(tmpdir(), 'ac-version-'));
         mkdirSync(join(copy, 'src')); mkdirSync(join(copy, 'scripts'));
         const here = new URL('..', import.meta.url).pathname;
-        for (const file of ['package.json', 'src/index.js', 'src/worker.js', 'src/version.hpp', 'scripts/sync-version.mjs']) {cpSync(join(here, file), join(copy, file));}
-        const stale = readFileSync(join(copy, 'src/index.js'), 'utf8').replace(/export const version = '[^']*';/, "export const version = '0.0.1';");
-        writeFileSync(join(copy, 'src/index.js'), stale);
+        for (const file of ['package.json', 'src/shared.js', 'src/version.hpp', 'scripts/sync-version.mjs']) {cpSync(join(here, file), join(copy, file));}
+        const stale = readFileSync(join(copy, 'src/shared.js'), 'utf8').replace(/export const version = '[^']*';/, "export const version = '0.0.1';");
+        writeFileSync(join(copy, 'src/shared.js'), stale);
         const run = (...args) => spawnSync(process.execPath, ['scripts/sync-version.mjs', ...args], { cwd: copy, encoding: 'utf8' });
         expect(run('--check').status).toBe(1);
         expect(run().status).toBe(0);
         expect(run('--check').status).toBe(0);
-        expect(readFileSync(join(copy, 'src/index.js'), 'utf8')).toContain(`export const version = '${pkg.version}';`);
+        expect(readFileSync(join(copy, 'src/shared.js'), 'utf8')).toContain(`export const version = '${pkg.version}';`);
         // a reworded line can't silently stop being synced
-        writeFileSync(join(copy, 'src/worker.js'), readFileSync(join(copy, 'src/worker.js'), 'utf8').replace('export const version', 'export const libraryVersion'));
+        writeFileSync(join(copy, 'src/shared.js'), readFileSync(join(copy, 'src/shared.js'), 'utf8').replace('export const version', 'export const libraryVersion'));
         expect(run().status).not.toBe(0);
     });
 

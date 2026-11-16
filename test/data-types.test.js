@@ -23,7 +23,10 @@ describe('Palette', () => {
         // Nothing but the bytes is visible: `toEqual` against plain bytes works, and the tags are not enumerable
         expect(palette).toEqual(new Uint8Array(palette));
         expect(Object.keys(palette)).toEqual(Array.from({ length: 18 }, (_, i) => String(i)));
-        expect(Object.getOwnPropertySymbols(Object.getOwnPropertyDescriptors(palette)).length).toBe(1);
+        // two hidden symbols: what it is, and how console.log shows it; neither is enumerable
+        const symbols = Object.getOwnPropertySymbols(palette);
+        expect(symbols.map(String).sort()).toEqual(['Symbol(agglomerative-clustering.palette)', 'Symbol(nodejs.util.inspect.custom)']);
+        expect(symbols.every((symbol) => !Object.getOwnPropertyDescriptor(palette, symbol).enumerable)).toBe(true);
         expect(Object.getOwnPropertyDescriptor(palette, 'colorSpace').enumerable).toBe(false);
         expect(Buffer.from(palette).length).toBe(18);
     });
@@ -317,5 +320,31 @@ describe('the transparent cutoff a clustering was made with', () => {
         } finally {
             await worker.terminate();
         }
+    });
+});
+
+describe('one implementation behind both entries', () => {
+    it('is the same Palette and Clustering, so the entries cannot drift apart', () => {
+        expect(workerEntry.Palette).toBe(Palette);
+        expect(workerEntry.Clustering).toBe(Clustering);
+        expect(workerEntry.version).toBe(ac.version);
+    });
+
+    it('shows the tag when logged in Node', async () => {
+        const { inspect } = await import('util');
+        expect(inspect(await ac.getPalette(photo, 2, { colorSpace: 'oklab' }))).toMatch(/^Palette\(oklab\) Uint8Array\(6\) \[/);
+        expect(inspect(await ac.getClustering(photo))).toMatch(/^Clustering Uint8Array\(\d+\) \[/);
+        expect(inspect(new Uint8Array(3))).toBe('Uint8Array(3) [ 0, 0, 0 ]');      // plain bytes are untouched
+    });
+
+    it('recognises typed arrays from another realm', async () => {
+        const vm = await import('vm');
+        const foreign = vm.runInNewContext('new Uint8Array(64).map((_, i) => (i * 37) & 255)');
+        expect(foreign instanceof Uint8Array).toBe(false);                         // the reason instanceof was not enough
+        expect((await ac.getPalette(foreign, 3)).length).toBeGreaterThan(0);
+        const palette = vm.runInNewContext('new Uint8Array([10, 20, 30, 200, 100, 50])');
+        expect((await ac.quantizeWithPalette(foreign, palette)).length).toBe(64);
+        const clustering = vm.runInNewContext('(bytes) => new Uint8Array(bytes)')(await ac.getClustering(foreign));
+        expect((await ac.getClusteringInfo(clustering)).maxColors).toBeGreaterThan(0);
     });
 });

@@ -75,7 +75,7 @@
     "build:types": "mkdirp dist && node -e \"const fs = require('fs'); for (const f of ['index.d.ts', 'worker.d.ts']) {fs.copyFileSync('src/' + f, 'dist/' + f);} fs.copyFileSync('src/index.d.ts', 'dist/index.d.cts');\"",
     "build:js": "npm run build:types && npm run build:cjs && npm run build:esm",
     "build": "node scripts/sync-version.mjs --check && npm run build:wasm && npm run build:js",
-    "version": "node scripts/sync-version.mjs && git add src/index.js src/worker.js src/version.hpp",
+    "version": "node scripts/sync-version.mjs && git add src/shared.js src/version.hpp",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:browser": "node test/browser/run.mjs",

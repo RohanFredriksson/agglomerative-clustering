@@ -1,6 +1,7 @@
 // Runs inside the worker started by worker.js: receives calls, runs them with the main entry, and posts results
 // back, transferring every result buffer. Imports `./index.mjs`, which exists only in dist/ (like clustering.js).
 import * as ac from './index.mjs';
+import {MARK, mark, revive, isPalette} from './shared.js';
 
 // Images kept in the worker by `cluster`, with their clusterings, by handle id.
 const handles = new Map();
@@ -22,25 +23,8 @@ const inClusteringSpace = async (id, options, palette) => {
     return {...options, colorSpace: options && options.colorSpace !== undefined ? options.colorSpace : colorSpace};
 };
 
-// A palette and a clustering are Uint8Array subclasses that a structured clone turns into plain ones, losing a palette's colour
-// space. So they cross as markers (see `pack` and `revive` in worker.js): arguments are revived into the classes here, and
-// results are marked before they are posted.
-const MARK = '__agglomerativeClustering';
-const paletteBrand = Symbol.for('agglomerative-clustering.palette');
-const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
-const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
-const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
-const revive = (value) => value && typeof value === 'object' && value[MARK] === 'palette' ? new ac.Palette(value.bytes, value.colorSpace) : value;
-const mark = (value) => {
-    if (isPalette(value)) {return {[MARK]: 'palette', bytes: new Uint8Array(value.buffer, value.byteOffset, value.length), colorSpace: value.colorSpace};}
-    if (isClustering(value)) {return {[MARK]: 'clustering', bytes: new Uint8Array(value.buffer, value.byteOffset, value.length)};}
-    return value;
-};
-const serialise = (result) => {
-    if (!result || typeof result !== 'object' || ArrayBuffer.isView(result)) {return mark(result);}
-    return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, mark(value)]));
-};
-
+// Palettes and clusterings cross the boundary as markers (shared.js): arguments are revived here, and results are marked
+// before they are posted.
 // The functions of the main entry, by name (not its classes and constants).
 const functions = Object.fromEntries(Object.entries(ac).filter(([name, value]) => typeof value === 'function' && !/^[A-Z]/.test(name)));
 
@@ -94,14 +78,14 @@ const respond = async ({id, method, args, progress}, post) => {
             if (progress) {options.onProgress = (fraction) => post({id, progress: fraction});}
             args[index] = options;
         }
-        const result = serialise(await methods[method](...args.map(revive)));
+        const result = mark(await methods[method](...args.map(revive)));
         post({id, result}, [...new Set(buffers(result))]);
     } catch (error) {
         // A cancelled call has already been rejected on the other side.
         if (controller && controller.signal.aborted) {return;}
         // Errors cross as plain data: the caller's side rebuilds them with the same name, message and code.
         post({id, error: error instanceof Error
-            ? {name: error.name, message: error.message, code: error.code, stack: error.stack}
+            ? {name: error.name, message: error.message, code: error.code, argument: error.argument, stack: error.stack}
             : {name: 'Error', message: String(error), code: 'worker-failed'}});
     } finally {
         controllers.delete(id);

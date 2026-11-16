@@ -1,5 +1,5 @@
 // Keeps the library version in step across the places that carry a copy of it: package.json is the source, and
-// src/index.js, src/worker.js and src/version.hpp (which the .wasm is built from, so the module can say which version it
+// src/shared.js (which both entries export it from) and src/version.hpp (which the .wasm is built from, so the module can say which version it
 // is) are rewritten to match. `npm version` runs this (the "version" script) before it commits, so a release commit
 // always has all of them; `--check` (run first by `npm run build`) fails if any copy differs, so a mismatch can't be
 // built or published. Fails too if a marker is missing, so a reworded line can't silently stop being synced.
@@ -10,8 +10,7 @@ const version = JSON.parse(readFileSync(new URL('package.json', root), 'utf8')).
 const check = process.argv.includes('--check');
 
 const targets = [
-    ['src/index.js', /^export const version = '[^']*';$/m, `export const version = '${version}';`],
-    ['src/worker.js', /^export const version = '[^']*';$/m, `export const version = '${version}';`],
+    ['src/shared.js', /^export const version = '[^']*';$/m, `export const version = '${version}';`],
     ['src/version.hpp', /^#define AGGLOMERATIVE_CLUSTERING_VERSION "[^"]*"$/m, `#define AGGLOMERATIVE_CLUSTERING_VERSION "agglomerative-clustering@${version}"`],
 ];
 

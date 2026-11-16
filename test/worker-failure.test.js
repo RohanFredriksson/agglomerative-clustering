@@ -14,7 +14,7 @@ const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
 const folder = mkdtempSync(join(tmpdir(), 'ac-broken-'));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
 // The package without its worker thread script.
-for (const file of ['index.mjs', 'clustering.js', 'clustering.wasm', 'worker.mjs']) {copyFileSync(join(dist, file), join(folder, file));}
+for (const file of ['index.mjs', 'shared.mjs', 'clustering.js', 'clustering.wasm', 'worker.mjs']) {copyFileSync(join(dist, file), join(folder, file));}
 
 const settle = (promise, ms = 8000) => Promise.race([
     promise.then(() => 'resolved', (error) => error),

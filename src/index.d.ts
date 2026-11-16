@@ -12,9 +12,22 @@ export type ImageFormat = 'rgb' | 'rgba';
 export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed'
     | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
 
+/**
+ * Which argument an error is about, for programs (the message is for people and may change): the image, `k`, the
+ * clustering or palette, the options object as a whole, or one option as `options.<name>` (for example
+ * `'options.colorSpace'`). `colorSpace` is the second argument of `new Palette(source, colorSpace)`.
+ */
+export type ErrorArgument = 'image' | 'k' | 'clustering' | 'palette' | 'colorSpace' | 'options' | `options.${string}`;
+
 /** An `Error` thrown by this library. There is no class to test with `instanceof`: check `code`. */
 export interface CodedError extends Error {
     code: ErrorCode;
+    /**
+     * Which argument the error is about, when it is about one (most `invalid-argument`, `invalid-clustering` and
+     * `unsupported-version` errors), so a form can point at the right field. Absent otherwise (a failed load, running
+     * out of memory, the worker's state).
+     */
+    argument?: ErrorArgument;
 }
 
 /**

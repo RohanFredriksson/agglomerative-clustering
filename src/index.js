@@ -1,77 +1,20 @@
 import createWasmModule from './clustering.js';
-// The library's version: package.json is the source, and scripts/sync-version.mjs keeps this line (and the copy in
-// worker.js and the one the .wasm is built from) in step with it. Do not edit it by hand.
-export const version = '2.0.0';
+import {
+    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, markPalette, markClustering,
+    latestVersion, readHeader, checkPalette,
+} from './shared.js';
+
+// The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
+export {version, Palette, Clustering} from './shared.js';
+// The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
+// `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
+export const formatVersion = latestVersion;
 
 const codes = {'rgba': 0, 'rgb': 1};
-const colorSpaces = {'rgb': 0, 'oklab': 1};
 const alphaModes = {'ignore': 0, 'weight': 1};
-const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 let Module = null;
 
-// ----- Palette and Clustering ----------------------------------------------------------------------------------------
-// Palettes and clusterings are byte arrays, and nothing about a Uint8Array says which one it is, or (for a palette) which
-// colour space its colours were made in. So the ones this library returns are ordinary Uint8Arrays carrying two hidden,
-// non-enumerable tags: what they are (a symbol property) and, for a palette, `colorSpace`. Being plain Uint8Arrays is the
-// point: everything that takes bytes takes them (indexing, `subarray`, files, encoders), `constructor` is Uint8Array, so
-// `toEqual(new Uint8Array(...))` in a test still passes, and `slice`, `subarray` and structured clones (postMessage,
-// IndexedDB) give plain untagged Uint8Arrays. `Palette` and `Clustering` are how to make one by hand, and `instanceof`
-// recognises them. The tags are found by a symbol registered with Symbol.for, so a copy of the library loaded twice (the
-// ES module and CommonJS builds, a bundler's duplicate, the worker entry's own copy) recognises the other's.
-const paletteBrand = Symbol.for('agglomerative-clustering.palette');
-const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
-const isPalette = (value) => value instanceof Uint8Array && value[paletteBrand] === true;
-const isClustering = (value) => value instanceof Uint8Array && value[clusteringBrand] === true;
-const markPalette = (bytes, colorSpace) => {
-    Object.defineProperty(bytes, paletteBrand, {value: true});
-    Object.defineProperty(bytes, 'colorSpace', {value: colorSpace});
-    return bytes;
-};
-const markClustering = (bytes) => Object.defineProperty(bytes, clusteringBrand, {value: true});
 
-// Flat RGB bytes with the colour space they were made in, so mapping with one matches the way it was made. `new Palette(bytes,
-// 'oklab')` copies `bytes` (or makes `length` zeros, or takes an array of byte values) and returns a Uint8Array tagged so.
-// A function and not a `class`, because it returns a plain Uint8Array and answers `instanceof` itself, which transpiled class
-// checks would trip over.
-export function Palette(source, colorSpace = 'rgb') {
-    if (!Object.keys(colorSpaces).includes(colorSpace)) {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
-    if (source === undefined) {source = 0;}
-    // The same rules as for a palette passed to a function, so a Palette can't hold what they would reject: a number coerced to a
-    // byte (300 would become 44), a string turned into 0, or a length that isn't whole colours.
-    if (typeof source === 'number') {
-        if (!Number.isInteger(source) || source < 0 || source % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: a length must be a whole number of bytes, a multiple of 3 (flat RGB bytes).");}
-    } else {
-        checkPalette(source);
-    }
-    return markPalette(new Uint8Array(source), colorSpace);
-}
-Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
-
-// The bytes of a clustering, checked: `new Clustering(bytes)` is how stored clusterings get their type back. Arguments are
-// those of a Uint8Array (bytes to copy, or a buffer with an offset and length to view).
-export function Clustering(...args) {
-    const [source] = args;
-    // Bytes, or a buffer to view: never a number (a length would allocate and make an empty clustering) or anything a Uint8Array
-    // would coerce. A plain array must hold byte values, as for a palette.
-    const isBuffer = source instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && source instanceof SharedArrayBuffer);
-    if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !isBuffer && !Array.isArray(source)) {
-        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from getClustering.");
-    }
-    if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
-        throw fail('invalid-clustering', "Invalid clustering: a plain array must hold byte values, integers from 0 to 255.");
-    }
-    let bytes;
-    try {bytes = new Uint8Array(...args);} catch (error) {throw fail('invalid-clustering', `Invalid clustering: ${error.message}.`);}
-    readHeader(bytes);
-    return markClustering(bytes);
-}
-Object.defineProperty(Clustering, Symbol.hasInstance, {value: isClustering});
-
-// Every error this library throws is an Error with a `code` saying what went wrong, so callers needn't match on
-// message text: 'invalid-argument' (image, k, options, palette), 'invalid-clustering', 'unsupported-version' (a
-// clustering from a newer format, or an older one without what was asked for), 'out-of-memory', 'wasm-load-failed'. The worker entry adds
-// 'worker-terminated', 'worker-failed' and 'invalid-handle'.
-const fail = (code, message) => Object.assign(new Error(message), {code});
 
 // Turns init's `wasm` option into the settings the Emscripten glue understands. The glue finds its .wasm file next to
 // itself by default (`new URL('clustering.wasm', import.meta.url)`); this lets a caller say where it is, or hand over
@@ -84,14 +27,14 @@ const wasmSettings = (wasm, onError) => {
         return {locateFile: (path, directory) => path.endsWith('.wasm') ? location : directory + path};
     }
     // Bytes and compiled modules go through `instantiateWasm`: this build of the glue reads no `wasmBinary` setting.
-    if (wasm instanceof ArrayBuffer || ArrayBuffer.isView(wasm)) {
-        const source = wasm instanceof ArrayBuffer ? wasm : new Uint8Array(wasm.buffer, wasm.byteOffset, wasm.byteLength);
+    if (isArrayBufferLike(wasm) || ArrayBuffer.isView(wasm)) {
+        const source = isArrayBufferLike(wasm) ? wasm : new Uint8Array(wasm.buffer, wasm.byteOffset, wasm.byteLength);
         return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(source, imports).then(({instance}) => receive(instance), onError);}};
     }
     if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {
         return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(wasm, imports).then(receive, onError);}};
     }
-    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.");
+    throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
 // A module that cannot be loaded is the commonest first-run failure: a 404, a Content-Security-Policy that blocks it, a
@@ -126,11 +69,11 @@ const acquire = async (options) => {
 
     if (options === undefined) {options = {};}
     if (!isOptionsObject(options)) {
-        throw fail('invalid-argument', "Invalid options: expected an object.");
+        throw fail('invalid-argument', "Invalid options: expected an object.", 'options');
     }
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
+        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`, `options.${key}`);}
     }
     // Checked on every call, so a bad value is reported even when the module is already loaded.
     let reject;
@@ -176,7 +119,7 @@ const unpack = (wasm, pointer) => {
 };
 
 // A Uint8Array over exactly the same bytes, so views into a larger buffer (subarrays) stay views of their own range.
-const bytes = (data) => data instanceof Uint8Array ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+const bytes = (data) => isUint8Array(data) ? data : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 
 // ----- Encoded image files -------------------------------------------------------------------------------------------
 // A bare Uint8Array is taken to be raw RGBA pixels, so the commonest mistake is handing over the bytes of an image *file*
@@ -231,7 +174,7 @@ const imageHint = (image) => {
     if (typeof image === 'string') {return ` Got a string (a file name, URL or data URL?): load and decode it to pixels first.`;}
     if (typeof image !== 'object') {return ` Got a ${typeof image}.`;}
     if (Array.isArray(image)) {return " Got a plain array: use new Uint8Array(array) for RGBA bytes, or { data: new Uint8Array(array), format: 'rgb' }.";}
-    if (image instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && image instanceof SharedArrayBuffer)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
+    if (isArrayBufferLike(image)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
     if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
     if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
     if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
@@ -241,12 +184,12 @@ const imageHint = (image) => {
 
 const load = (image) => {
 
-    if (image instanceof Uint8Array) {
+    if (isUint8Array(image)) {
         const encoded = sniffImageFormat(image);
         if (encoded) {
-            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode it first (in a browser, draw it to a canvas or use createImageBitmap, then pass getImageData(); in Node use sharp, pngjs or similar) and pass the raw pixels. If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`);
+            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode it first (in a browser, draw it to a canvas or use createImageBitmap, then pass getImageData(); in Node use sharp, pngjs or similar) and pass the raw pixels. If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
         }
-        if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.");}
+        if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
         return {data: image, format: 'rgba'};
     }
 
@@ -255,24 +198,24 @@ const load = (image) => {
     }
 
     if (ArrayBuffer.isView(image)) {
-        throw fail('invalid-argument', "Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.");
+        throw fail('invalid-argument', "Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.", 'image');
     }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
-        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`);
+        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');
     }
 
-    if (!(image.data instanceof Uint8Array) && !(image.data instanceof Uint8ClampedArray)) {
-        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.");
+    if (!isUint8Array(image.data) && !isUint8ClampedArray(image.data)) {
+        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
     }
 
     if (!Object.keys(codes).includes(image.format)) {
-        throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.");
+        throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.", 'image');
     }
 
     const channels = image.format === 'rgb' ? 3 : 4;
     if (image.data.length % channels !== 0) {
-        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`);
+        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`, 'image');
     }
 
     // width and height are copied to results and used for dithering, so they must make sense: whole numbers that, when
@@ -280,11 +223,11 @@ const load = (image) => {
     for (const key of ['width', 'height']) {
         const value = image[key];
         if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
-            throw fail('invalid-argument', `Invalid image ${key}: must be a whole number of pixels.`);
+            throw fail('invalid-argument', `Invalid image ${key}: must be a whole number of pixels.`, 'image');
         }
     }
     if (image.width !== undefined && image.height !== undefined && image.width * image.height !== image.data.length / channels) {
-        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${image.data.length / channels} pixels.`);
+        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${image.data.length / channels} pixels.`, 'image');
     }
 
     return {data: bytes(image.data), format: image.format, width: image.width};
@@ -297,7 +240,7 @@ const getWrapper = (image) => {
         const {width, height, colorSpace} = image;
         return (output) => new ImageData(new Uint8ClampedArray(output.buffer), width, height, colorSpace ? {colorSpace} : undefined);
     }
-    if (!(image instanceof Uint8Array) && typeof image === 'object' && image && image.data && image.format) {
+    if (!isUint8Array(image) && typeof image === 'object' && image && image.data && image.format) {
         const {format, width, height} = image;
         return (output) => {
             const result = {data: output, format};
@@ -326,7 +269,7 @@ const unpackIndices = (output, image, colorSpace) => {
     // `colors` is the palette without the transparent entry, ready to map with again (the entry is black and takes no part in matching)
     const colors = transparent < 0 ? palette : markPalette(palette.slice(0, 3 * transparent), colorSpace);
     const result = {palette, colors, indices, indexBits: 8 * indexBytes, transparentIndex: transparent < 0 ? null : transparent};
-    if (!(image instanceof Uint8Array)) {
+    if (!isUint8Array(image)) {
         if (image.width !== undefined) {result.width = image.width;}
         if (image.height !== undefined) {result.height = image.height;}
     }
@@ -338,7 +281,7 @@ const unpackIndices = (output, image, colorSpace) => {
 const check = (k) => {
 
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
-        throw fail('invalid-argument', "Invalid k: must be a strictly positive integer.")
+        throw fail('invalid-argument', "Invalid k: must be a strictly positive integer.", 'k')
     }
     return Math.min(k, 0x7FFFFFFF);
 
@@ -354,87 +297,73 @@ const check = (k) => {
 //   signal, onProgress: an AbortSignal and a progress callback, which make the clustering run in slices (see clusterInSlices)
 //   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255: pixels with alpha below it are left out of clustering (and the rest count whole);
 //               indexed output also gives them their own entry, which counts towards k
-// An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
-// `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
-// (an iframe, a test sandbox) are fine.
-const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
-
-// One plain copy of an options object, taken once: every enumerable property, own or inherited (so options layered with
-// Object.create(defaults) work and an inherited typo is still caught), each read a single time. Everything after this
-// uses the copy, so what is validated is what is used, even if a property is a getter that answers differently each time.
-// The copy has no prototype, so a key like '__proto__' is just a name.
-const snapshot = (options) => {
-    const copy = Object.create(null);
-    for (const key in options) {copy[key] = options[key];}
-    return copy;
-};
 
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
     if (!isOptionsObject(options)) {
-        throw fail('invalid-argument', "Invalid options: expected an object.");
+        throw fail('invalid-argument', "Invalid options: expected an object.", 'options');
     }
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (!allowed.includes(key)) {throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.`);}
+        if (!allowed.includes(key)) {throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.`, `options.${key}`);}
     }
 
     const colorSpace = options.colorSpace === undefined ? 'rgb' : options.colorSpace;
     if (!Object.keys(colorSpaces).includes(colorSpace)) {
-        throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");
+        throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.", 'options.colorSpace');
     }
 
     const alpha = options.alpha === undefined ? 'weight' : options.alpha;
     if (!Object.keys(alphaModes).includes(alpha)) {
-        throw fail('invalid-argument', "Invalid alpha: must be 'weight' or 'ignore'.");
+        throw fail('invalid-argument', "Invalid alpha: must be 'weight' or 'ignore'.", 'options.alpha');
     }
 
     const precision = options.precision === undefined ? 8 : options.precision;
     if (typeof precision !== 'number' || !Number.isInteger(precision) || precision < 1 || precision > 8) {
-        throw fail('invalid-argument', "Invalid precision: must be an integer from 1 to 8.");
+        throw fail('invalid-argument', "Invalid precision: must be an integer from 1 to 8.", 'options.precision');
     }
 
     const dither = options.dither === undefined || options.dither === false ? 0 : options.dither === true ? 1 : options.dither;
     if (typeof dither !== 'number' || !Number.isFinite(dither) || dither < 0 || dither > 1) {
-        throw fail('invalid-argument', "Invalid dither: must be a boolean or a number from 0 to 1.");
+        throw fail('invalid-argument', "Invalid dither: must be a boolean or a number from 0 to 1.", 'options.dither');
     }
 
     // The image's own width and options.width are two sources for one fact: they may repeat each other, but not disagree
     // (a wrong row length would dither without an error, as long as it divides the pixel count).
     if (options.width !== undefined && image && image.width !== undefined && options.width !== image.width) {
-        throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`);
+        throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`, 'options.width');
     }
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
         const channels = image.format === 'rgb' ? 3 : 4;
         if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
-            throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.");
+            throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.", 'options.width');
         }
         if ((image.data.length / channels) % width !== 0) {
-            throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.");
+            throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.", 'options.width');
         }
     }
 
     const signal = options.signal;
     if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {
-        throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");
+        throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.", 'options.signal');
     }
     const onProgress = options.onProgress;
     if (onProgress !== undefined && typeof onProgress !== 'function') {
-        throw fail('invalid-argument', "Invalid onProgress: must be a function.");
+        throw fail('invalid-argument', "Invalid onProgress: must be a function.", 'options.onProgress');
     }
 
     // The alpha cutoff for indexed output: 0 for none, else the pixels with alpha below it are transparent.
     const transparentOption = options.transparent === undefined ? false : options.transparent;
     const transparent = transparentOption === false ? 0 : transparentOption === true ? 128 : transparentOption;
     if (!Number.isInteger(transparent) || transparent < 0 || transparent > 255 || (transparent === 0 && transparentOption !== false)) {
-        throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.");
+        throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.", 'options.transparent');
     }
 
     // A cutoff replaces opacity weighting (pixels count whole or not at all), so naming both would leave one of them ignored.
     if (transparent > 0 && options.alpha !== undefined) {
-        throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.");
+        throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.", 'options');
     }
 
     return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
@@ -450,74 +379,7 @@ const mapOptions = ['colorSpace', 'dither', 'width', 'signal'];
 const quantizeIndexOptions = quantizeOptions;
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
-// Reads a clustering's header, or throws if it isn't a clustering this version can read. Clusterings start with the
-// magic byte 0xAC and their version number (2 or 3). Clusterings from 1.x had no header and could only be recognised by
-// their length, which many other byte strings share (a palette of the right size passed as a clustering was accepted
-// and gave nonsense), so they are no longer read.
-//   version 2: [0xAC, 2, colour space, precision], then 9-byte records of colours
-//   version 3: [0xAC, 3, header length, record length, colour space, precision, weight unit, weight shift,
-//              total weight (u32 LE), 0, grouped error (f32 LE, from header length 17), ...], then records of
-//              colours, parent index, lighter weight and cost
-const latestVersion = 3;
 
-// The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
-// `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
-export const formatVersion = latestVersion;
-const readHeader = (clustering) => {
-    if (isPalette(clustering)) {
-        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from getPalette and getPaletteFromClustering; a clustering comes from getClustering.");
-    }
-    if (!(clustering instanceof Uint8Array)) {
-        throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.");
-    }
-    const length = clustering.length;
-    if (length >= 4 && clustering[0] === 0xAC) {
-        const version = clustering[1];
-        if (version === 2 && clustering[2] <= 1 && (length === 4 || length % 9 === 7)) {
-            return {version, colorSpace: clustering[2], precision: clustering[3], transparent: 0, headerLength: 4, recordLength: 9, merges: length === 4 ? 0 : (length - 7) / 9};
-        }
-        if (version === 3 && length >= 13) {
-            const headerLength = clustering[2], recordLength = clustering[3];
-            if (headerLength >= 13 && recordLength >= 21 && headerLength <= length) {
-                // A header field with a fixed set of meanings (colour space, weight unit) that holds a value this version
-                // doesn't know is how a later release would add one, so it asks for an upgrade rather than misreading it.
-                if (clustering[4] > 1 || clustering[6] > 1) {
-                    throw fail('unsupported-version', "Invalid clustering: it uses a colour space or weight unit that this version of agglomerative-clustering does not know. If it came from a newer version, upgrade the package; otherwise it is damaged.");
-                }
-                const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
-                const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
-                if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], transparent: clustering[12], headerLength, recordLength, merges};}
-            }
-        }
-        if (version > latestVersion) {
-            throw fail('unsupported-version', `Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
-        }
-    }
-    throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering. (Clusterings from agglomerative-clustering 1.x are no longer read: cluster the image again.)");
-};
-
-// Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
-// image, and quantize maps such an image the same way.
-const checkPalette = (palette) => {
-    if (isClustering(palette)) {
-        throw fail('invalid-argument', "Invalid palette: this is a clustering (from getClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.");
-    }
-    if (!(palette instanceof Uint8Array) && !(palette instanceof Uint8ClampedArray) && !Array.isArray(palette)) {
-        throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.");
-    }
-    if (palette.length % 3 !== 0) {
-        throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).");
-    }
-    // Typed arrays are bytes already. A plain array is copied into bytes, which would turn an array of [r, g, b] colours
-    // into zeros, strings into numbers and 300 into 44 without a word, so it must hold byte values.
-    if (Array.isArray(palette)) {
-        for (const value of palette) {
-            if (!Number.isInteger(value) || value < 0 || value > 255) {
-                throw fail('invalid-argument', "Invalid palette: a plain array must be flat RGB bytes, integers from 0 to 255 (not an array of [r, g, b] colours).");
-            }
-        }
-    }
-};
 
 // The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
 const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
@@ -673,7 +535,7 @@ export const getPaletteFromClustering = async (clustering, k) => {
 // The weight of each colour in the k-colour cut, in pixels (opacity-weighted), read from the clustering's records.
 const weightsOf = (wasm, clustering, header, k) => {
     const bytes = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_weights(clusteringPointer, clustering.length, k));
-    if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.");}
+    if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.", 'clustering');}
     return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
 };
 
@@ -686,7 +548,7 @@ export const getSwatchesFromClustering = async (clustering, k) => {
     const header = readHeader(clustering);
     k = check(k);
     if (header.version < 3) {
-        throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
+        throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
     }
 
     const palette = markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
