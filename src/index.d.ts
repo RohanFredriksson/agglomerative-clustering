@@ -1,3 +1,4 @@
+/** How pixel bytes are laid out: `'rgb'` is 3 bytes per pixel, `'rgba'` is 4 (red, green, blue, alpha). */
 export type ImageFormat = 'rgb' | 'rgba';
 
 /**
@@ -16,6 +17,10 @@ export interface CodedError extends Error {
     code: ErrorCode;
 }
 
+/**
+ * An image as raw bytes with an explicit layout: for RGB data, a `Uint8ClampedArray`, or Node, where there is no
+ * `ImageData`. Functions that return an image give back an object of this shape with the same `format`.
+ */
 export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;
     format: ImageFormat;
@@ -44,10 +49,10 @@ export type ImageLike = Uint8Array | PlatformImageData | RawImage;
 /** `WebAssembly.Module` where the global exists, else `never` (see `PlatformImageData`). */
 export type WasmModule = typeof globalThis extends { WebAssembly: { Module: { prototype: infer M } } } ? M : never;
 
-/** The space colours are clustered and matched in. */
 /** A palette to map with: flat RGB bytes, as a `Uint8Array` (what every function here returns), a `Uint8ClampedArray`, or a plain array of integers from 0 to 255. */
 export type PaletteLike = Uint8Array | Uint8ClampedArray | readonly number[];
 
+/** The space colours are clustered and matched in. */
 export type ColorSpace = 'rgb' | 'oklab';
 
 /** How pixel opacity affects clustering. */
@@ -71,6 +76,7 @@ export interface RunOptions {
     onProgress?(progress: number): void;
 }
 
+/** Options for building the colour hierarchy: `getClustering`, `getPalette`, and the clustering half of `quantize` and `quantizeToIndices`. */
 export interface ClusteringOptions extends RunOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
@@ -90,6 +96,7 @@ export interface ClusteringOptions extends RunOptions {
     alpha?: AlphaMode;
 }
 
+/** Options for mapping pixels to a palette: `quantizeWithClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. */
 export interface MappingOptions extends RunOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. Default `'rgb'`, except in
@@ -105,8 +112,10 @@ export interface MappingOptions extends RunOptions {
     width?: number;
 }
 
+/** Clustering and mapping options together, for `quantize`, which does both. */
 export type QuantizeOptions = ClusteringOptions & MappingOptions;
 
+/** Options that only the `quantizeToIndices*` functions take. */
 export interface IndexOptions {
     /**
      * `false` (default): every pixel gets the index of its nearest colour, whatever its alpha.
@@ -119,7 +128,9 @@ export interface IndexOptions {
     transparent?: boolean | number;
 }
 
+/** The options of `quantizeToIndices`: clustering, mapping and indexed-output options. */
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
+/** The options of `quantizeToIndicesWithClustering` and `quantizeToIndicesWithPalette`: mapping and indexed-output options. */
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 
 interface IndexedImageFields {
@@ -146,6 +157,7 @@ export type IndexedImage =
     | (IndexedImageFields & { indexBits: 16; indices: Uint16Array })
     | (IndexedImageFields & { indexBits: 32; indices: Uint32Array });
 
+/** Options for `init`, and for `createWorker` (which passes `wasm` on to its worker). */
 export interface InitOptions {
     /**
      * Where to get the WebAssembly module, for CDNs, strict CSPs and runtimes that can't fetch or compile it from its
@@ -164,8 +176,18 @@ export interface InitOptions {
  */
 export function init(options?: InitOptions): Promise<void>;
 
+/**
+ * Builds the colour hierarchy for an image: the expensive step, done once. The result is an opaque `Uint8Array` you can
+ * cache or store next to the image. Cut it to a palette of any size with `getPaletteFromClustering`, or map pixels
+ * with `quantizeWithClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
+ */
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
 
+/**
+ * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
+ * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `getClustering`
+ * once and cut it.
+ */
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
 
 /**
@@ -220,22 +242,37 @@ export interface ClusteringInfoV2 extends ClusteringInfoFields {
     explained: null;
 }
 
+/** What `getClusteringInfo` returns: check `version` to narrow to the 3.x or 2.x shape. */
 export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */
 export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
 
-// The image comes back as the kind it went in as (`ImageResult`): a `Uint8Array` for a `Uint8Array`, `ImageData` for
-// `ImageData`, and an object with the same `format` for a `RawImage`. A value typed as the union `ImageLike` gives the union.
+/**
+ * Reduces `image` to at most `k` colours and returns the mapped image as the same kind of thing you gave: a `Uint8Array`
+ * for a `Uint8Array`, `ImageData` for `ImageData`, an object with the same `format` for a `RawImage` (`ImageResult`; a
+ * value typed as the union `ImageLike` gives the union). Each pixel keeps its own alpha.
+ */
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
 
+/**
+ * Maps `image` to the `k`-colour cut of a clustering you already have, so trying another `k` or another image mapping
+ * costs milliseconds. Matches in the clustering's colour space unless `colorSpace` is given. Returns the same kind of
+ * thing as `quantize`.
+ */
 export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
+/**
+ * Maps each pixel of `image` to its nearest colour in a palette you supply (an edited swatch, a brand palette, one cut
+ * from a clustering). A palette doesn't record the colour space it was made in: if it came from an OKLab clustering,
+ * pass `colorSpace: 'oklab'` to map the way `quantizeWithClustering` does. Returns the same kind of thing as `quantize`.
+ */
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 
 /**
  * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette
- * PNGs, pixel art and pattern generators). The palette is the one `getPalette` gives.
+ * PNGs, pixel art and pattern generators). The palette is the one `getPalette` gives, except that with `transparent`
+ * pixels below the cutoff are left out of it.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 

@@ -1,0 +1,97 @@
+export type ImageFormat = 'rgb' | 'rgba';
+export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed' | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
+export interface CodedError extends Error {
+    code: ErrorCode;
+}
+export interface RawImage {
+    data: Uint8Array | Uint8ClampedArray;
+    format: ImageFormat;
+    width?: number;
+    height?: number;
+}
+export type PlatformImageData = typeof globalThis extends {
+    ImageData: {
+        prototype: infer T;
+    };
+} ? T : never;
+export type ImageResult<I extends ImageLike> = I extends Uint8Array ? Uint8Array : I extends RawImage ? RawImage : I extends PlatformImageData ? PlatformImageData : never;
+export type ImageLike = Uint8Array | PlatformImageData | RawImage;
+export type WasmModule = typeof globalThis extends {
+    WebAssembly: {
+        Module: {
+            prototype: infer M;
+        };
+    };
+} ? M : never;
+export type PaletteLike = Uint8Array | Uint8ClampedArray | readonly number[];
+export type ColorSpace = 'rgb' | 'oklab';
+export type AlphaMode = 'weight' | 'ignore';
+export interface RunOptions {
+    signal?: AbortSignal;
+    onProgress?(progress: number): void;
+}
+export interface ClusteringOptions extends RunOptions {
+    colorSpace?: ColorSpace;
+    precision?: number;
+    alpha?: AlphaMode;
+}
+export interface MappingOptions extends RunOptions {
+    colorSpace?: ColorSpace;
+    dither?: boolean | number;
+    width?: number;
+}
+export type QuantizeOptions = ClusteringOptions & MappingOptions;
+export interface IndexOptions {
+    transparent?: boolean | number;
+}
+export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
+export type MappingIndexOptions = MappingOptions & IndexOptions;
+interface IndexedImageFields {
+    palette: Uint8Array;
+    transparentIndex: number | null;
+    width?: number;
+    height?: number;
+}
+export type IndexedImage = (IndexedImageFields & {
+    indexBits: 8;
+    indices: Uint8Array;
+}) | (IndexedImageFields & {
+    indexBits: 16;
+    indices: Uint16Array;
+}) | (IndexedImageFields & {
+    indexBits: 32;
+    indices: Uint32Array;
+});
+export interface InitOptions {
+    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
+}
+export function init(options?: InitOptions): Promise<void>;
+export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Uint8Array>;
+export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
+export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;
+export function getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
+interface ClusteringInfoFields {
+    colorSpace: ColorSpace;
+    precision: number;
+    colors: number;
+}
+export interface ClusteringInfoV3 extends ClusteringInfoFields {
+    version: 3;
+    totalWeight: number;
+    mse: Float64Array;
+    explained: Float64Array;
+}
+export interface ClusteringInfoV2 extends ClusteringInfoFields {
+    version: 2;
+    totalWeight: null;
+    mse: null;
+    explained: null;
+}
+export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
+export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
+export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
+export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
+export function quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;

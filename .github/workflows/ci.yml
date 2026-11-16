@@ -42,6 +42,15 @@ jobs:
       # Compiles consumer code against the built declarations under nodenext (ESM and CommonJS) and bundler resolution.
       - run: npm run test:types
 
+      # The same consumer code on the oldest TypeScript the declarations support (5.2, the first with `await using`), so an
+      # accidental use of a newer type feature fails here; and on the newest, as an early warning (it may fail first for
+      # reasons outside this repo, so it doesn't block).
+      - name: Types on TypeScript 5.2
+        run: for config in nodenext bundler node; do npx -y -p typescript@5.2.2 tsc -p test/types/tsconfig.$config.json; done
+      - name: Types on the latest TypeScript
+        continue-on-error: true
+        run: for config in nodenext bundler node; do npx -y -p typescript@latest tsc -p test/types/tsconfig.$config.json; done
+
       # Bundles a page with Vite and runs it in the runner's Chrome: the worker and .wasm as browsers get them.
       - run: npm run test:browser
         if: matrix.node == 24
