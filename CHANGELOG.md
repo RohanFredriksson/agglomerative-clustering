@@ -24,6 +24,7 @@ Every 2.x function and default is unchanged, and palettes and quantized images a
 - **The published WebAssembly is built with Emscripten 6.0.12** (was 4.0.10), the version the benchmarks use. Output is identical and speed is the same within run-to-run variation. The module grows from 75 KB to 88 KB, from indexed output, cancellable clustering and the larger format.
 
 ### Fixed
+- **Bundling with webpack 5 failed.** The Emscripten glue's Node-only `import("node:module")` stopped webpack with `UnhandledSchemeError` for a browser target (and made Vite warn that the module was externalized). The build now marks that import so bundlers leave it alone (`scripts/patch-glue.mjs`, which fails the build if the glue changes shape), and CI bundles the test app with both Vite and webpack.
 - A `Uint8ClampedArray` that is a view into part of a larger buffer (such as a `subarray`) was read from the start of the whole buffer, so `RawImage` data given that way was clustered and quantized from the wrong bytes. Only the view's own bytes are read now.
 - Image data whose length isn't a whole number of pixels (a multiple of 4 for RGBA, 3 for RGB) was silently truncated, giving a shorter output. It is now rejected with `Invalid image data`.
 - `quantizeWithPalette` checks its palette: anything other than a `Uint8Array`, `Uint8ClampedArray` or array, or a length that isn't a multiple of 3, is rejected with `Invalid palette` instead of being truncated or failing with an unrelated error. An empty palette is still accepted.

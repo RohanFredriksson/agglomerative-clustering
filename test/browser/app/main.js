@@ -1,8 +1,9 @@
 // Bundled by test/browser/run.mjs. Runs both entries in the browser and reports to window.result.
 import * as ac from 'agglomerative-clustering';
 import { createWorker, quantize as workerQuantize } from 'agglomerative-clustering/worker';
-// The package exports its .wasm file, and Vite turns the import into the URL it serves it at.
-import wasmUrl from 'agglomerative-clustering/clustering.wasm?url';
+// The package exports its .wasm file; each bundler has its own way to turn that into the URL it serves it at, so
+// run.mjs writes this module per bundler.
+import wasmUrl from './wasm-url.js';
 
 const equal = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 
@@ -52,6 +53,9 @@ async function run() {
         cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeWithClustering(image, clustering, k)).data);
     }
     checks.handleCutsMatchMain = cuts;
+    const custom = await ac.getPalette(image, 5);
+    checks.handlePaletteMatchesMain = equal((await handle.quantizeWithPalette(custom, { dither: true })).data, (await ac.quantizeWithPalette(image, custom, { dither: true })).data)
+        && equal((await handle.quantizeToIndicesWithPalette(custom)).indices, (await ac.quantizeToIndicesWithPalette(image, custom)).indices);
     const indexed = await handle.quantizeToIndices(16);
     checks.indexedOutput = indexed.indices.length === width * height && indexed.palette.length <= 48;
     checks.weightsSumToPixels = (await handle.getPaletteWeights(16)).reduce((a, b) => a + b, 0) === width * height;

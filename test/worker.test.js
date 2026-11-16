@@ -145,6 +145,19 @@ describe('createWorker', () => {
         await dropIn.terminate();
     });
 
+    it('reports arguments that cannot be sent to the worker as invalid, and keeps working', async () => {
+        for (const bad of [
+            () => worker.getPalette(image, 4, { bogus: () => {} }),
+            () => worker.getPalette(image, Symbol('k')),
+            () => worker.getPalette(Promise.resolve(image), 4),
+            () => worker.quantizeWithPalette(image, class Palette {}),
+            () => worker.getPaletteFromClustering({ toJSON() {}, fn() {} }, 2),
+        ]) {
+            await expect(bad()).rejects.toMatchObject({ code: 'invalid-argument' });
+        }
+        expect(await worker.getPalette(image, 4)).toEqual(await ac.getPalette(image, 4));
+    });
+
     it('validates its options', () => {
         expect(() => createWorker({ transfer: 'yes' })).toThrow('Invalid transfer');
         expect(() => createWorker({ threads: 2 })).toThrow("Invalid option 'threads'");

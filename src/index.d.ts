@@ -159,7 +159,8 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Uint8Array>;
 
 /**
- * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour, and the palette for
+ * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour at two colours and keeps its
+ * place as the palette grows (it is not always the heaviest entry of a larger one), and the palette for
  * `k + 1` is the palette for `k` with one entry refined and one colour appended.
  */
 export function getPaletteFromClustering(clustering: Uint8Array, k: number): Promise<Uint8Array>;

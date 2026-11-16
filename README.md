@@ -11,7 +11,7 @@
 Most colour quantizers answer one question: *give me k colours*. Ask for a different k and they start over. This library builds the complete merge hierarchy of the image's colours with Ward's method, which merges whichever two colour groups add the least squared error. Every palette size is then a cut of that one tree:
 
 - **Every palette size from one pass.** After clustering, a palette of any size takes about 0.4 ms. A colour-count slider, or a set of 8/16/32/64-colour variants, costs one clustering instead of one per size.
-- **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged. Index 0 is always the dominant colour, and each larger palette is the previous one with one entry refined and one colour appended, so swatches don't jump around as the count changes.
+- **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged. Index 0 starts as the dominant colour and keeps its place as the palette grows (a larger palette can have a heavier colour elsewhere, so the palette is not sorted by share), and each larger palette is the previous one with one entry refined and one colour appended, so swatches don't jump around as the count changes.
 - **Transparency-aware.** Pixels count in proportion to their opacity, so a logo's transparent background never ends up in its palette.
 - **Knows its palettes.** The clustering records each colour's share of the image and the error at every palette size, so you can show swatches with percentages or pick the smallest palette that meets an error target.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread, and can keep an image and its clustering there for live re-cutting.
@@ -76,7 +76,7 @@ slider.oninput = async () => {
 };
 ```
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite; webpack 5 and Parcel recognise the same form but aren't tested yet. In Node, an idle worker never keeps the process alive.
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite and with webpack 5 (the form Next.js uses); Parcel recognises the same form but isn't tested. In Node, an idle worker never keeps the process alive.
 
 ### Weights and choosing a palette size
 
@@ -202,7 +202,7 @@ const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 *
 const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
 const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
 
-// Swatches with their share of the image (the palette is in split order: the dominant colour first)
+// Swatches with their share of the image (the palette is in split order, not sorted by share: sort `swatches` by `share` to put the biggest first)
 const total = weights.reduce((a, b) => a + b, 0);
 const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / total }));
 ```
@@ -257,7 +257,7 @@ The `quantize*` functions return the same type they were given: a `Uint8Array` f
 Builds the colour hierarchy for an image. Options: `colorSpace`, `precision`, `alpha`. Pass the result to `getPaletteFromClustering` or `quantizeWithClustering` to get any number of palettes without clustering again.
 
 ### `getPaletteFromClustering(clustering, k): Promise<Uint8Array>`
-Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour, and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 1.x and 2.x too.
+Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 1.x and 2.x too.
 
 ### `getPalette(image, k, options?): Promise<Uint8Array>`
 `getClustering` followed by `getPaletteFromClustering`. Options: `colorSpace`, `precision`, `alpha`.
@@ -367,7 +367,7 @@ The package ships its own declarations for both entries, checked in CI with stri
 
 2.0 keeps the same functions and defaults (`rgb`, no dithering, exact `precision`). What changes:
 
-- **Palette order.** Palettes come in split order, dominant colour first, rather than in an arbitrary order. For opaque images they contain exactly the same colours as 1.2.
+- **Palette order.** Palettes come in split order (index 0 is the dominant colour at two colours and keeps its place as the palette grows), rather than in an arbitrary order. For opaque images they contain exactly the same colours as 1.2.
 - **Transparency.** RGBA pixels are weighted by opacity, so palettes of images with transparency change: fully transparent pixels no longer contribute. Pass `{ alpha: 'ignore' }` for the 1.x behaviour.
 - **Clustering bytes.** Clusterings gain a 4-byte header recording their colour space and precision. Clusterings saved by 1.x still load. Anything that inspected the raw bytes needs to skip the header.
 - **`quantizeWithClustering`** matches in the clustering's colour space unless you pass `colorSpace`.

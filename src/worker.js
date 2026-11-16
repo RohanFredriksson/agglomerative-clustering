@@ -212,7 +212,9 @@ export const createWorker = (options) => {
                 pending.delete(id);
                 call.cleanup();
                 if (pending.size === 0) {connection.unref();}
-                reject(error);
+                // A value that can't be structured-cloned (a function, symbol or promise) is an invalid argument, as it
+                // would be if the main entry were called with it.
+                reject(error && error.name === 'DataCloneError' ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), {cause: error}) : error);
             }
         });
     };
