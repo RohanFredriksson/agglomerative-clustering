@@ -383,6 +383,8 @@ const clustering = await getClustering(image, {
 ### Errors
 Every error the library throws is an `Error` with a `code`, so you don't have to match on message text:
 
+Arguments are checked in the order you pass them (image, then clustering or palette, then `k`, then options), so when several are wrong the error is about the first.
+
 | `code` | When |
 | --- | --- |
 | `invalid-argument` | A bad image, `k`, option or palette. |

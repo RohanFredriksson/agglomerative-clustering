@@ -515,6 +515,8 @@ export const getSwatchesFromClustering = async (clustering, k) => {
 // The same for an image: clusters it, then cuts, like getPalette.
 export const getSwatches = async (image, k, options) => {
 
+    // Arguments are checked in the order they are given (image, then k, then options), as in every other function.
+    load(image);
     k = check(k);
     return getSwatchesFromClustering(await getClustering(image, options), k);
 

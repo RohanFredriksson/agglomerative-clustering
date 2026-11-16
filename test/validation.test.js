@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as ac from '../dist/index.mjs';
 import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 
 // A minimal valid 2x2 solid red RGBA image.
@@ -202,5 +203,41 @@ describe('an image object without a format', () => {
         const error = await getPalette({ data: new Uint8ClampedArray(16), width: 2, height: 2 }, 3).catch((e) => e);
         expect(error.code).toBe('invalid-argument');
         expect(error.message).toContain("add format: 'rgba'");
+    });
+});
+
+// Arguments are validated in the order they are given, so the error you get is always about the first wrong one, whatever
+// else is wrong, and the same in every function.
+describe('the order arguments are checked in', () => {
+    const image = new Uint8Array(16).map((_, i) => i * 13);
+    const bad = { image: 'not an image', clustering: new Uint8Array(5), palette: new Uint8Array(5), k: 0, options: { nope: 1 } };
+    const message = { image: 'Invalid image', clustering: 'Invalid clustering', palette: 'Invalid palette', k: 'Invalid k', options: "Invalid option 'nope'" };
+    let clustering, palette;
+    const signatures = {
+        getClustering: ['image', 'options'],
+        getPalette: ['image', 'k', 'options'],
+        getSwatches: ['image', 'k', 'options'],
+        getPaletteFromClustering: ['clustering', 'k'],
+        getSwatchesFromClustering: ['clustering', 'k'],
+        quantize: ['image', 'k', 'options'],
+        quantizeFromClustering: ['image', 'clustering', 'k', 'options'],
+        quantizeWithPalette: ['image', 'palette', 'options'],
+        quantizeToIndices: ['image', 'k', 'options'],
+        quantizeToIndicesFromClustering: ['image', 'clustering', 'k', 'options'],
+        quantizeToIndicesWithPalette: ['image', 'palette', 'options'],
+    };
+
+    it('reports the first wrong argument of every function', async () => {
+        clustering = await getClustering(image);
+        palette = await getPalette(image, 2);
+        const good = { image, clustering, palette, k: 2, options: undefined };
+        for (const [name, params] of Object.entries(signatures)) {
+            for (let wrongFrom = 0; wrongFrom < params.length; wrongFrom++) {
+                // Everything before `wrongFrom` is valid; it and everything after it are wrong.
+                const args = params.map((param, i) => (i < wrongFrom ? good[param] : bad[param]));
+                const error = await ac[name](...args).then(() => null, (e) => e);
+                expect(error && error.message, `${name} with ${params[wrongFrom]} and the rest wrong`).toContain(message[params[wrongFrom]]);
+            }
+        }
     });
 });
