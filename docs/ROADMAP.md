@@ -32,15 +32,17 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 - [x] **Indexed output:** `quantizeToIndices*`, with `transparent` (an alpha cutoff).
 - [x] **Clustering format v3**, following the rules above. Records are 21 bytes: colours, the split's parent index, the lighter half's weight and the Ward cost. The parent index is needed because different clusters can share an 8-bit colour, which would otherwise make weights ambiguous.
 - [x] **Palette weights** (`getPaletteWeights`) and the **error curve** (`getClusteringInfo().mse`, and the unitless `explained`), for choosing a palette size by error.
-- [x] **Bundler smoke test:** a Vite build run in headless Chromium, in CI.
+- [x] **Cancellation and progress:** `signal` and `onProgress` on every function with an image; the clustering is a resumable job run in slices, and the worker stops working on a cancelled call.
+- [x] **`init({ wasm })`** and the `clustering.wasm` export, for CDNs, strict CSPs and edge runtimes; one shared load.
+- [x] **Error codes** on every error, kept across the worker boundary.
+- [x] **Tests as a consumer sees the package:** a Vite build run in headless Chromium (worker, `.wasm`, slices, aborts, `wasm` locations), strict TypeScript against the built declarations, and the full suite on Node 20, 22 and 24, in CI.
 
 ## Next
 
 - **Slicing pixel mapping.** Cancellation and progress cover the clustering, which is most of the work. Mapping (a few milliseconds for a photo, more with dithering on very large images) still runs in one piece; it could be sliced by rows the same way.
-
 - **Webpack and Parcel smoke tests**, alongside the Vite one.
 - **Quieter bundling.** Vite warns that the Emscripten glue's Node-only `import('module')` is externalized for the browser. Building separate web and Node glue (`-s ENVIRONMENT`) would remove it.
-- **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for most of the growth from 75 KB to 84 KB.
+- **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for much of the growth from 75 KB to 88 KB.
 - **Suggesting a palette size** from the error curve (an elbow heuristic), if users ask for more than `mse` and `explained`.
 
 ## Engineering, alongside the releases
@@ -50,5 +52,5 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 
 ## Later, if asked for
 
-- **Palette entries with alpha**, for palette PNGs with translucent colours (clustering in RGBA rather than weighting by alpha).
+- **Palette entries with alpha**, for palette PNGs with translucent colours. A spike (exact Ward in premultiplied RGBA, on the unmerged branch `spike/rgba-4d`) was exact and matched libimagequant on that case, but was 4-6× slower on photos with smooth alpha, needed a second engine and a format change, and lost about 6 dB against today's alpha-weighted clusters with per-pixel alpha for canvas output. Not worth it for 3.0; libimagequant is the better tool for translucent palette PNGs.
 - **Very large images.** Memory is capped at 2 GB, and partly transparent images above about 16.8 MP have their weights scaled down. Streaming the histogram in chunks would remove both limits.

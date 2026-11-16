@@ -47,7 +47,8 @@
       "import": "./dist/worker.mjs",
       "default": "./dist/worker.mjs"
     },
-    "./clustering.wasm": "./dist/clustering.wasm"
+    "./clustering.wasm": "./dist/clustering.wasm",
+    "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {

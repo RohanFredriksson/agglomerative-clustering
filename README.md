@@ -17,7 +17,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread, and can keep an image and its clustering there for live re-cutting.
 - **Accurate.** Across the 24 Kodak photos it has the lowest average error of the six JavaScript quantizers we benchmarked, at every palette size from 16 to 256.
 - **Fast enough to be interactive.** A 768×512 photo takes about 100 ms exact, in RGB or OKLab, or about 30 ms with `precision: 6` at the same quality. That is level with or faster than libimagequant and 3.7–15× faster than image-q.
-- **Small and portable.** 84 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
+- **Small and portable.** 88 KB of WebAssembly with SIMD, Node and browsers, an async API, TypeScript types and no runtime dependencies. Output is deterministic.
 
 **[Try the demo](#demo)**: drop in an image and drag the palette-size slider.
 
@@ -308,9 +308,11 @@ The package ships its own declarations for both entries, checked in CI with stri
 
 3.0 keeps every function and default, and palettes and quantized images are byte-identical to 2.0. What changes:
 
-- **Clustering format.** `getClustering` writes format version 3, which records weights and merge costs: 21 bytes per distinct colour instead of 9, so clusterings are about 2.3 times larger. Clusterings saved by 1.x and 2.x still load. `getPaletteWeights` needs a 3.x clustering, and `getClusteringInfo` gives `null` weights, `mse` and `explained` for older ones. Anything that read the raw bytes needs the new layout (see [CLAUDE.md](CLAUDE.md)).
+- **Clustering format.** `getClustering` writes format version 3, which records weights and merge costs: 21 bytes per distinct colour instead of 9, so clusterings are about 2.3 times larger. Clusterings saved by 1.x and 2.x still load. `getPaletteWeights` needs a 3.x clustering, and `getClusteringInfo` gives `null` weights, `mse` and `explained` for older ones. **2.x cannot read 3.x clusterings** (it rejects them as invalid), so if clusterings are stored where an older version of the package may still read them, upgrade the readers first. Anything that read the raw bytes needs the new layout (see [CLAUDE.md](CLAUDE.md)).
 - **Stricter input.** Image data that isn't a whole number of pixels, and palettes that aren't whole RGB triples, now throw instead of being truncated.
 - **Node 20.19+ or 22.12+.** The CommonJS build needs Node's `require()` of ES modules.
+- **Package exports.** The package now exports `.`, `./worker` and `./clustering.wasm` (and `./package.json`); other deep imports are not available. TypeScript users get separate declarations for `import` and `require`.
+- **New, not breaking:** the worker entry, `signal` and `onProgress`, indexed output, weights and the error curve, `init({ wasm })`, and a `code` on every error.
 
 ## Migrating from 1.x
 

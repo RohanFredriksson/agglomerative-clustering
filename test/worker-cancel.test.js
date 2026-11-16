@@ -54,7 +54,8 @@ describe('a worker call with a signal or onProgress', () => {
     }, 60000);
 
     it('stops the worker when aborted mid-run, so the next call is not kept waiting', async () => {
-        expect(whole.ms).toBeGreaterThan(300);
+        // The test only means something if the clustering is long enough to cancel (it takes ~1 s here).
+        expect(whole.ms).toBeGreaterThan(150);
         const controller = new AbortController();
         const running = timed(worker.getClustering(big, { signal: controller.signal, onProgress: (value) => {if (value > 0.3) {controller.abort();}} }));
         const { error } = await running;
@@ -113,6 +114,35 @@ describe('a worker call with a signal or onProgress', () => {
         expect((await handle.quantizeToIndices(4, { signal: new AbortController().signal })).indices.length).toBe(256);
         await handle.release();
     }, 60000);
+
+    it('fails the call with the error of an onProgress that throws, and stops the worker, like the main thread', async () => {
+        const start = performance.now();
+        const error = await worker.getClustering(big, { onProgress: (value) => {if (value > 0.2) {throw new Error('boom');}} }).catch((e) => e);
+        expect(error.message).toBe('boom');
+        // The clustering was cancelled, not run to the end: the next call is not kept waiting for it.
+        const next = await timed(worker.getPalette(small, 4));
+        expect(next.value).toEqual(await ac.getPalette(small, 4));
+        expect(performance.now() - start).toBeLessThan(whole.ms * 0.6);
+        const handle = await worker.cluster(small);
+        await expect(handle.quantize(4, { onProgress: () => {throw new Error('boom again');} })).rejects.toThrow('boom again');
+        await handle.release();
+    }, 60000);
+
+    it('lets a handle be released after its worker was terminated, in either order', async () => {
+        const doomed = createWorker();
+        const handle = await doomed.cluster(small);
+        await doomed.terminate();
+        await handle.release();
+        await handle.release();
+        await expect(handle.getPalette(2)).rejects.toMatchObject({ code: 'invalid-handle' });
+        // And the way `await using` does it: terminate() first, then the handle's dispose at the end of the scope. (The
+        // syntax itself is left out of tests so they parse on every supported Node version; types/ checks it.)
+        const other = createWorker();
+        const kept = await other.cluster(small);
+        await kept.getPalette(2);
+        await other.terminate();
+        if (typeof Symbol.asyncDispose === 'symbol') {await kept[Symbol.asyncDispose]();}
+    });
 
     it('validates signal and onProgress on this side', async () => {
         await expect(worker.getClustering(small, { signal: {} })).rejects.toMatchObject({ code: 'invalid-argument' });

@@ -152,8 +152,16 @@ export const createWorker = (options) => {
         const call = pending.get(message.id);
         if (!call) {return;}
         if (message.progress !== undefined) {
-            // An exception in the caller's callback must not break the worker's message loop: report it as uncaught.
-            if (call.onProgress) {try {call.onProgress(message.progress);} catch (error) {queueMicrotask(() => {throw error;});}}
+            // As on the main thread, a callback that throws fails the call (with its error) and stops the work.
+            if (call.onProgress) {
+                try {call.onProgress(message.progress);} catch (error) {
+                    pending.delete(message.id);
+                    call.cleanup();
+                    if (pending.size === 0 && connection) {connection.unref();}
+                    try {connection.post({cancel: message.id}, []);} catch (ignored) {/* the worker is gone anyway */}
+                    call.reject(error);
+                }
+            }
             return;
         }
         pending.delete(message.id);
@@ -199,7 +207,7 @@ export const createWorker = (options) => {
             }
             pending.set(id, call);
             try {
-                connection.post({id, method, args, cancellable: signal !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
+                connection.post({id, method, args, cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
             } catch (error) {
                 pending.delete(id);
                 call.cleanup();
@@ -273,7 +281,9 @@ export const createWorker = (options) => {
                     if (released) {return;}
                     released = true;
                     if (reclaim) {reclaim.unregister(handle);}
-                    await invoke('release', [id], [], new Error());
+                    // If the worker has been terminated there is nothing left to free (so `await using` and
+                    // terminate() can come in either order); any other failure is reported.
+                    try {await invoke('release', [id], [], new Error());} catch (error) {if (error.code !== 'worker-terminated') {throw error;}}
                 },
             };
             // `await using handle = await worker.cluster(image)` releases it at the end of the block.
