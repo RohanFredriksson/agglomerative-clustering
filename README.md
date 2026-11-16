@@ -141,7 +141,7 @@ slider.oninput = async () => {
 };
 ```
 
-A clustering is a `Uint8Array` you can cache or store next to the image: a 22-byte header plus 21 bytes per distinct colour, about 1.3 MB for a 768×512 photo, or 0.45 MB with `precision: 6`. It records the colour space it was made in, and its format is versioned: later releases keep reading it, and older ones say so rather than misreading a newer one. Storage gives plain bytes back, so restore the type with `new Clustering(bytes)` (see [Palette and Clustering](#palette-and-clustering)).
+A clustering is about 1.3 MB for a 768×512 photo (0.45 MB with `precision: 6`). Store it next to the image if you like: its format is versioned, and `new Clustering(bytes)` gives stored bytes their type back (see [Palette and Clustering](#palette-and-clustering)).
 
 ### Swatches, and choosing a palette size
 
@@ -163,7 +163,7 @@ const k = explained.findIndex((share) => share >= 0.99) + 1;
 
 ### GIFs and palette PNGs
 
-`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff get their own transparent entry, and `k` counts that entry, so 256 is the most a GIF holds.
+`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`.
 
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
@@ -192,7 +192,7 @@ const png = encode({
 });
 ```
 
-`indices` is a `Uint8Array` here because there are at most 256 entries; with more, it is a `Uint16Array` and these formats can't hold it (check `indexBits`). Anti-aliased edges snap to transparent or opaque at the `transparent` cutoff, which is all a GIF can say. To map more frames with the same colours, pass the result's `colors` (the palette without the transparent entry) to `quantizeToIndicesWithPalette`.
+With at most 256 entries, `indices` is a `Uint8Array`, as these formats need (`indexBits` says so). To map more frames with the same colours, pass the result's `colors` (the palette without the transparent entry) to `quantizeToIndicesWithPalette`.
 
 ### Off the main thread
 
@@ -216,11 +216,11 @@ slider.oninput = async () => {
 };
 ```
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for. CI tests it bundled with Vite and with webpack 5 (the form Next.js uses), and bundling with esbuild; Parcel 2 works too once its `packageExports` option is on. In Node, an idle worker never keeps the process alive. The [worker reference](#worker-entry) has the details.
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 (as Next.js uses it) and esbuild, and Parcel 2 works with its `packageExports` option on. In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
 
 ### Using the output
 
-Palettes are flat RGB bytes (`[r, g, b, r, g, b, …]`): the neutral, compact form. Encoders and UIs each want their own flavour, and each is a line or two. Given a `palette` from any function (and `weights` and `shares` from `getSwatches`):
+Palettes are flat RGB bytes, the compact form; each format an encoder or UI wants is a line or two away. Given a `palette` (and `weights` and `shares` from `getSwatches`):
 
 ```js
 // [[r, g, b], …]: what gifenc, fast-png, color-thief and libimagequant use
@@ -234,7 +234,7 @@ const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[
 const swatches = Array.from(shares, (share, i) => ({ color: css(i), share }));
 ```
 
-**Heaviest first.** Palettes come in split order, which keeps entries in place as the size changes but doesn't put the biggest colour first. If you want a ranking, sort it yourself; the cost is that palettes of different sizes are then no longer nested.
+**Heaviest first.** Palettes come in split order, so the biggest colour isn't necessarily first. To rank them, sort; sorted palettes of different sizes no longer nest.
 
 ```js
 // A palette and its weights, heaviest first
@@ -257,7 +257,6 @@ const rankedTransparentIndex = transparentIndex === null ? null : rank[transpare
 ## Reference
 
 ### Input and output
-
 Every function that takes an image accepts:
 
 ```ts
@@ -270,11 +269,11 @@ ImageData                                    // from a canvas: always RGBA, widt
 
 `width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`.
 
-> **Common mistake.** A bare `Uint8Array` is always read as RGBA, like canvas `ImageData`. RGB bytes (for example from sharp without an alpha channel) given bare are misread, and when their length happens to be a multiple of 4 there is no error, only a wrong palette. Wrap them as `{ data: rgbBytes, format: 'rgb', width }`, or give sharp's output an alpha channel with `.ensureAlpha()`, as in the quick start.
+> **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
 
-> **Image files are not pixels.** The functions work on decoded pixels, not on the bytes of a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file. A bare `Uint8Array` that starts like one of those files (`fs.readFile`, `fetch().arrayBuffer()`) is rejected with `invalid-argument` naming the format, instead of being read as pixels. Decode it first: in a browser draw it to a canvas (or `createImageBitmap`) and pass `getImageData()`; in Node use [sharp](https://sharp.pixelplumbing.com/) (`.raw()`), pngjs or similar. Only bare arrays are checked, so an `ImageData` or `{ data, format }` is never second-guessed: if raw pixels really do begin like a file header, pass them as `{ data, format: 'rgba' }`. Decoding files for you is planned (see the [roadmap](docs/ROADMAP.md)).
+> **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: a canvas or `createImageBitmap` in a browser, sharp or pngjs in Node. Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`. Decoding is [planned](docs/ROADMAP.md).
 
-The functions that return an image (`quantize`, `quantizeFromClustering`, `quantizeWithPalette`) give back the same type they were given: a `Uint8Array` for a `Uint8Array`, `ImageData` for `ImageData`, and an object with the same `format` (plus `width` and `height` if given) for an object. In TypeScript the result type follows the input (`ImageResult<I>`), so a value typed as the union `ImageLike` gives back the union. Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects.
+The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format` (and `width` and `height`). In TypeScript the result type follows the input (`ImageResult<I>`). Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects.
 
 ### Options
 
@@ -284,12 +283,12 @@ Every function that takes an image also takes an optional last argument of optio
 |---|---|---|---|
 | `precision` | clustering | `1`–`8`, default `8` | Groups colours that share their top `precision` bits per channel before clustering, at their mean colour. **`6` is about 3× faster on photos at practically the same quality** (−0.02 dB), and caps the work on images with huge numbers of colours. `5` is about 8× faster for a small loss. |
 | `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'rgb'` minimises squared error in sRGB (the best PSNR); `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/). Neither wins everywhere: see "Choosing a colour space". |
-| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
-| `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
-| `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. If the image has a width of its own, `width` must equal it (a different value is an error). |
-| `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". On the functions that only map pixels it is checked once, before the call starts. |
-| `onProgress` | clustering | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". Not taken by the functions that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms): they take milliseconds, so there is nothing to report. |
-| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | RGBA pixels with alpha below the cutoff (`true` means 128) don't exist as far as the palette goes: they are left out of clustering and the rest count whole. In `quantizeToIndices*` they also get their own palette entry (counted in `k`), and every other pixel is shown fully opaque. For GIFs and palette PNGs. |
+| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. Each pixel keeps its own alpha in the output. |
+| `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts, at a cost in per-pixel metrics such as PSNR. Fully transparent pixels are left undithered. |
+| `width` | mapping | integer | The image width, for dithering a `Uint8Array` or a `RawImage` without one. If the image has a width of its own, this must equal it. |
+| `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
+| `onProgress` | clustering | `(fraction) => void` | Reports 0 to 1 as the clustering runs; see "Cancelling and progress". |
+| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see "Transparency". |
 
 "Clustering" means any function that builds a clustering (`getClustering`, `getPalette`, `getSwatches`, `quantize` and `quantizeToIndices`), and "mapping" means any that maps pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
@@ -308,7 +307,7 @@ const out = await quantize(rgbaBytes, 32, { dither: 0.8, width: 640 });
 
 #### Choosing a colour space
 
-`'rgb'` is the default and the right choice for most photos. We measured both spaces on the 24 Kodak photos and the synthetic set (palettes of 3 to 256 colours, mapped with the matching space, mean and 99th-percentile ΔE2000, PSNR, and ΔE after a small blur for dithered output):
+`'rgb'` is the default and the right choice for most photos. Measured on the 24 Kodak photos and the synthetic set, at 3 to 256 colours:
 
 | You are making | Colours | Use | What the numbers say |
 |---|---|---|---|
@@ -319,7 +318,7 @@ const out = await quantize(rgbaBytes, 32, { dither: 0.8, width: 640 });
 | Smooth gradients and skies, not dithered | 8–64 | `'oklab'` | Mean ΔE 11.0 against 13.4 at 8 colours on the synthetic gradients (two images, so a hint). |
 | Noisy or very varied images | any | `'oklab'` | Mean ΔE 7.0 against 7.9 at 64 colours (one synthetic image). |
 
-`'oklab'` also takes 10–30% longer. A palette made in one space is mapped in it by default (see `Palette`); to map one in the other, name a `colorSpace`. Pixel values are used as they are, as sRGB numbers, whatever the canvas colour space. A wide-gamut `ImageData` (`display-p3`) comes back as `ImageData` in the same colour space, so its colours are not shifted; `colorSpace: 'oklab'` still assumes sRGB primaries, so for wide-gamut data it is approximate.
+`'oklab'` also takes 10–30% longer. Pixel values are treated as sRGB whatever the canvas colour space; a wide-gamut `ImageData` (`display-p3`) comes back in its own colour space, unshifted, but `'oklab'` is then approximate.
 
 How the options trade speed and quality, measured on the Kodak photos:
 
@@ -338,19 +337,17 @@ Three things in this library are about alpha, and they act at different stages:
 | | What it is | Stage | Effect |
 |---|---|---|---|
 | `'rgba'` input | The format of the pixels (bare `Uint8Array` and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none) | input | RGB images have no alpha, so nothing below applies to them. |
-| `alpha` | `'weight'` (default) or `'ignore'` | clustering | Soft: a pixel counts in proportion to its opacity, so a faint pixel barely moves the palette. `'ignore'` counts every pixel fully (1.x). |
-| `transparent` | `false` (default), `true` or a cutoff `1`–`255` | clustering and indexed output | Hard: a pixel with alpha below the cutoff doesn't exist as far as the palette goes (left out of clustering, the rest count whole); indexed output also gives those pixels one palette entry, which counts towards `k`. |
+| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. Each pixel keeps its own alpha in the output. |
+| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see "Transparency". |
 
-Give one or the other: `transparent` replaces `alpha`, so naming both is an `invalid-argument` error rather than one being silently ignored. Use `alpha` (the default) for swatches and for mapped images that keep each pixel's own alpha. Use `transparent` when the destination has one transparent colour, as GIF and palette PNG do, and use it for the clustering step too (it is accepted everywhere that clusters), so the palette you cut is the one you map with. Soft alpha in the palette itself (several translucent colours) is not supported.
+Give one or the other: `transparent` replaces `alpha`, so naming both is an error. Use `alpha` (the default) for swatches and for images that keep each pixel's alpha, and `transparent` when the destination has one transparent colour, as GIF and palette PNG do, in the clustering step too, so the palette you cut is the one you map with. Translucent palette colours are not supported.
 
 ### Palette and Clustering
+The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy three things:
 
-The palettes and clusterings this library returns are ordinary `Uint8Array`s that carry a hidden tag saying what they are, and for a palette, the colour space its colours were made in. Everything that takes bytes takes them (indexing, `length`, `subarray`, files, encoders), their `constructor` is `Uint8Array` (so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests), and `JSON`, `Buffer.from` and structured clones see plain bytes. What the tags buy:
-
-- **A palette maps in the space it was made in.** `getPalette(image, 8, { colorSpace: 'oklab' })` returns a palette with `colorSpace: 'oklab'`, and `quantizeWithPalette(image, palette)` matches in OKLab without being told. Name a `colorSpace` to override it. Plain bytes (a `slice`, a stored copy, an array you built) carry no space and are matched in RGB; `new Palette(bytes, 'oklab')` makes a tagged one.
-- **A clustering can't be passed where a palette goes.** TypeScript rejects it, and at run time `quantizeWithPalette(image, clustering)` throws `invalid-argument` (and a palette given as a clustering throws `invalid-clustering`), with no guessing about bytes.
-- **`new Palette(source, colorSpace)` checks its source** like any palette you pass to a function (bytes, or integers 0–255, in whole colours): `new Palette([300, 0, 0])` throws instead of wrapping 300 to 44.
-- **Stored clusterings get their type back with `new Clustering(bytes)`,** which checks they are a clustering (`invalid-clustering` otherwise). Plain bytes are still accepted by the functions at run time, so existing JavaScript that stores and reloads clusterings keeps working; TypeScript wants the constructor.
+- **A palette maps in the space it was made in.** `quantizeWithPalette(image, palette)` matches an OKLab palette in OKLab without being told; name a `colorSpace` to override it. Plain bytes are matched in RGB.
+- **A clustering can't be passed as a palette**, or the other way round. TypeScript rejects it, and at run time it throws (`invalid-argument` or `invalid-clustering`), with no guessing about bytes.
+- **`new Palette(bytes, colorSpace)` and `new Clustering(bytes)` give bytes their type back**, and check them: `new Palette([300, 0, 0])` throws rather than wrapping 300 to 44, and `new Clustering(bytes)` throws `invalid-clustering` unless they are one. The functions still accept a clustering as plain bytes, so stored clusterings keep working in JavaScript; TypeScript wants the constructor.
 
 ```js
 import { Clustering, Palette, getPaletteFromClustering } from 'agglomerative-clustering';
@@ -363,11 +360,10 @@ palette.colorSpace;                                               // 'rgb' or 'o
 palette.slice(0, 3) instanceof Palette;                           // false: slice, subarray and clones are plain bytes
 ```
 
-Tags live on the one array: `slice`, `subarray`, `structuredClone`, `postMessage` and storage all produce plain `Uint8Array`s (the worker entry carries them across for you). They are found by a registered symbol, so two copies of the library (ES module and CommonJS, or a bundler's duplicate) recognise each other's.
+`slice`, `subarray`, `structuredClone`, `postMessage` and storage give plain, untagged `Uint8Array`s (the worker entry carries the tags across for you). In Node, `console.log` shows the tag: `Palette(oklab) Uint8Array(6) [ … ]`.
 
 ### Cancelling and progress
-
-Every function that takes an image accepts `signal`, and the ones that cluster (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
+Every function that takes an image accepts `signal`; the ones that cluster (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
 
 ```js
 const controller = new AbortController();
@@ -377,17 +373,17 @@ const clustering = await getClustering(image, {
 });
 ```
 
-- **Slices.** With either option, the clustering runs in slices of about 10 ms and the event loop gets a turn between them. The signal is checked, and progress reported, at each one, so an abort takes effect within a slice, not after the whole clustering, and a page stays responsive while it works. The result is the same as without the options. Slicing costs about 5% more time in total; without them the call runs in one go.
-- **Aborting** rejects with the signal's `reason` (an `AbortError` unless you gave another), like `fetch`. It is the one error that does not carry a `code` from the table below: check `error.name === 'AbortError'` (or `signal.aborted`) for it. A call whose signal is already aborted rejects at once and does no work.
-- **What can't be interrupted:** mapping pixels to the palette, which follows the clustering (a few milliseconds for a typical photo). The functions that only map (`quantizeFromClustering`, `quantizeWithPalette`, and the indexed versions) check the signal before starting, and take no `onProgress` (it is an `invalid-argument` error there: they finish in milliseconds).
-- **Progress** is approximate, rises monotonically, ends at exactly 1, and is not linear in time: the early part of a clustering is quick and the merging is most of the work.
-- **In a worker** the same options work, and the worker itself stops: the cancel message is read between slices, so the next call doesn't wait behind work nobody wants. A call that is still queued behind another is removed and never runs.
+- **Slices.** With either option, clustering runs in slices of about 10 ms, so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
+- **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is the one error without a `code`: check `error.name === 'AbortError'`. An already aborted signal does no work.
+- **Mapping can't be interrupted** (it takes a few milliseconds). The functions that only map check the signal before they start, and don't take `onProgress`.
+- **Progress** is approximate, never goes backwards, and ends at exactly 1.
+- **In a worker** the worker itself stops, and a call still queued is removed without running.
 
 ### Errors
 
-Every error the library throws is an `Error` with a `code`, so you don't have to match on message text. (The one exception is the rejection of an aborted call, which is the signal's own `reason`, an `AbortError`: see "Cancelling and progress".)
+Every error the library throws is an `Error` with a `code`, so you don't have to match on message text (except an abort, which rejects with the signal's own `reason`).
 
-Arguments are checked in the order you pass them (image, then clustering or palette, then `k`, then options), so when several are wrong the error is about the first. When an error is about one argument, `error.argument` names it for your code: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, or `'options.<name>'` for one option (for example `'options.colorSpace'`), so a form can point at the right field without reading the message.
+When an error is about one argument, `error.argument` names it: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, or `'options.<name>'` (for example `'options.colorSpace'`), so a form can point at the right field. Arguments are checked in the order you pass them, so the error is about the first that is wrong.
 
 | `code` | When |
 | --- | --- |
@@ -407,24 +403,20 @@ try {
 }
 ```
 
-Messages are for people and may be reworded. In the worker entry the same input fails with the same `name`, `message` and `code` as the main entry, the stack is that of your call, and the worker's own stack is on `cause`. Failures that aren't the library's own, such as a WebAssembly trap, have no `code`.
+Messages are for people and may change. The worker entry fails the same way as the main entry, with your call's stack (the worker's is on `cause`). A failure that isn't the library's own, such as a WebAssembly trap, has no `code`.
 
 ### Worker entry
+`agglomerative-clustering/worker` exports every function above, run in one shared worker started on first use, plus `terminate()`, which stops it (the next call starts a new one), and `createWorker(options?)`, which starts a worker of your own. A worker has every function as a method, plus:
 
-`agglomerative-clustering/worker` exports every function above, run in one shared worker started on first use, plus `terminate()`, which stops that shared worker (the next call starts a new one), and `createWorker(options?)`, which starts a worker of its own. An instance has every function above as a method, and:
+- **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
+- **`terminate()`** stops the worker and rejects the calls still waiting.
 
-- **`cluster(image, options?)`** clusters `image` and returns a handle that keeps the image and its clustering in the worker. The handle has `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`, the last four taking mapping options. A palette you pass keeps its colour space across the worker (plain bytes are matched in the handle's own), and `quantizeToIndices` uses the `transparent` cutoff the handle was clustered with. `release()` frees the image and clustering, so call it when you are done, or declare the handle with `await using handle = await worker.cluster(image)` (TypeScript 5.2+, or an engine with explicit resource management), which releases it at the end of the block. A handle you drop without either is freed once the garbage collector collects it, but the engine decides when, so don't rely on that for large images in a loop.
-- **`terminate()`** stops the worker. Calls still waiting are rejected.
-
-Calls to a worker run one at a time, in the order they were made. `signal` and `onProgress` work as above and also stop the worker's own work; the callback runs on your side, from the worker's progress messages.
-
-Results are transferred back without copying. Images are copied to the worker, unless you create it with `createWorker({ transfer: true })`. That's faster for large images, but leaves your buffer empty afterwards. The worker entry is an ES module, and `require('agglomerative-clustering/worker')` works too on the Node versions this package supports (it loads the ES module, like the main CommonJS entry). Its types also resolve under TypeScript's older `moduleResolution: "node"`.
+Calls run one at a time, in order. Results are transferred back without copying. Images are copied in, unless you create the worker with `createWorker({ transfer: true })`, which is faster but leaves your buffer empty. The entry is an ES module; `require()` works too on the supported Node versions.
 
 ### TypeScript
+Both entries ship declarations, checked in CI under strict mode with `nodenext` (ES module and CommonJS importers), `bundler`, and a Node-only project without the DOM lib. The worker entry's declarations use `await using` for handles, so they need **TypeScript 5.2 or newer** (or `skipLibCheck: true`); the main entry works on older versions. From a CommonJS file, load the worker entry with `await import('agglomerative-clustering/worker')`, or use TypeScript 5.8+ with `module: nodenext`.
 
-The package ships its own declarations for both entries, checked in CI with strict mode under `nodenext` (ES module and CommonJS importers), `bundler` resolution, and a Node-only project with no DOM lib (`ImageData` and `WebAssembly.Module` are then simply absent from the types, not errors). The worker entry's declarations use TypeScript's `esnext.disposable` lib for `await using` on handles, so they need **TypeScript 5.2 or newer**, or `skipLibCheck: true` (the default in most templates); the main entry works on older versions. `agglomerative-clustering/worker` is an ES module: from a CommonJS file, use `await import('agglomerative-clustering/worker')`, or TypeScript 5.8+ with `module: nodenext`, which understands `require()` of ES modules.
-
-Results narrow where it helps: `IndexedImage` is a union on `indexBits`, so checking `result.indexBits === 8` makes `result.indices` a `Uint8Array` (16 gives `Uint16Array`, 32 `Uint32Array`), and `ClusteringInfo` is a union on `formatVersion`, so checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Functions that map with a palette take a `PaletteLike`: a `Palette`, a plain `Uint8Array`, a `Uint8ClampedArray` or a plain `number[]` of bytes (not a `Clustering`).
+Results narrow: checking `result.indexBits === 8` makes `indices` a `Uint8Array`, and checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`), and errors are `CodedError`s with `code` and `argument`.
 
 ## API
 
@@ -457,11 +449,11 @@ The same from a clustering you already have, well under a millisecond. Needs a c
 ### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
 What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, maxColors, totalWeight, mse, explained }`.
 
-- `formatVersion` is the format of its bytes (compare it with the exported `formatVersion`; the library's own `version` is a different thing).
-- `transparent` is the alpha cutoff it was made with (`false` for none), which `quantizeToIndicesFromClustering` uses by default.
-- `maxColors` is the largest palette it can be cut to.
-- `mse[k - 1]` is the mean squared error per channel of the `k`-colour clustering, meaning each pixel's squared distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (or OKLab units for an OKLab clustering). It is 0 at `maxColors` for the default `precision: 8`. With a lower `precision`, the error that grouping colours discards is recorded and included, so `mse[0]` is still the image's variance and `mse[maxColors - 1]` is that discarded error, not 0. The curve is computed from merge costs on integer-rounded cluster colours, so it is an accurate estimate, not an exact sum. Mapping pixels to their nearest palette colour usually lowers it by another 10–15%, so treat it as a slightly pessimistic estimate of the result.
-- `explained[k - 1]` is `1 - mse[k - 1] / mse[0]`: the share of the image's variance the `k`-colour palette keeps, from 0 at one colour up to 1. It has no units, so one target such as `0.99` suits both colour spaces, while `mse` is in squared 8-bit values for `'rgb'` and squared OKLab units for `'oklab'`.
+- `formatVersion`: the format of its bytes (compare it with the exported `formatVersion`).
+- `transparent`: the alpha cutoff it was made with, or `false`. `quantizeToIndicesFromClustering` uses it by default.
+- `maxColors`: the largest palette it can be cut to.
+- `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
+- `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces.
 
 For a 2.x clustering, `formatVersion` is 2 and `totalWeight`, `mse` and `explained` are `null`; in TypeScript, checking `info.formatVersion === 3` narrows them to present.
 
@@ -476,27 +468,22 @@ Quantizes using a clustering you already have.
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`.
 
 ### `quantizeWithPalette(image, palette, options?): Promise<the type of image>`
-Maps each pixel to its nearest colour in any palette (a `Palette`, or flat RGB bytes: a `Uint8Array`, a `Uint8ClampedArray`, or a plain array of integers from 0 to 255). Pixels are matched in the palette's own colour space when it is a `Palette` (one this library returned), so an OKLab palette maps the way `quantizeFromClustering` does without being told; plain bytes carry no space and are matched in RGB, or in the clustering's space for a worker handle. Pass `colorSpace` to override. A `Clustering` is rejected. A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value.
+Maps each pixel to its nearest colour in any palette: a `Palette`, or flat RGB bytes (a `Uint8Array`, `Uint8ClampedArray`, or plain array of integers 0–255; flatten an array of `[r, g, b]` colours first with `colors.flat()`). A `Palette` is matched in its own colour space and plain bytes in RGB, unless you name a `colorSpace`. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value.
 
 Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`.
 
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
-Like `quantize`, but returns each pixel's palette index rather than its colour. This is what palette PNGs, GIFs, pixel art, and embroidery or paint-by-number patterns need.
+Like `quantize`, but returns each pixel's palette index rather than its colour: what palette PNGs, GIFs, pixel art and pattern generators need.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `dither`, `width`, `signal`, `onProgress`.
 
 The result is `{ palette, colors, indices, indexBits, transparentIndex }`, plus `width` and `height` when the input has them:
-- `palette` is the flat RGB bytes an encoder wants, including the transparent entry if there is one.
-- `colors` is the same without the transparent entry. Give it to `quantizeToIndicesWithPalette` to map more images with these colours (`palette` would add the transparent entry twice). When there is no transparent entry it is the same as `palette`.
-- `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, a `Uint16Array` up to 65536, a `Uint32Array` above. `indexBits` says which (8, 16 or 32), so you can branch on it without `instanceof`.
-- `transparentIndex` is the index of the transparent entry, or `null` if there is none.
+- `palette`: the flat RGB bytes an encoder wants, including the transparent entry if there is one.
+- `colors`: the same without the transparent entry, to pass to `quantizeToIndicesWithPalette` for more images with these colours.
+- `indices`: one per pixel, a `Uint8Array` for up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`; `indexBits` (8, 16 or 32) says which.
+- `transparentIndex`: the transparent entry's index, or `null`.
 
-By default every pixel gets the index of its nearest colour, whatever its alpha. With `transparent`:
-- An RGBA image's pixels with alpha below the cutoff (128 for `true`, or the number you give) get their own entry, appended after the palette. Every other pixel is shown fully opaque in its nearest colour, which is all a GIF (or a palette PNG with one transparent entry) can express, so anti-aliased edges snap to one side or the other. Pixels below the cutoff also take no part in dithering.
-- `k` counts that entry: `k = 256` gives at most 256 entries, 255 colours and the transparent one, with 8-bit indices (at least one colour is always kept).
-- The palette is chosen from the pixels that stay visible, each counted whole: the same as `getPalette(image, k - 1, { transparent: true })`, because `transparent` is a clustering option too.
-
-Soft alpha in the palette itself (several translucent entries) is not supported, and libimagequant is the better tool for it.
+With `transparent`, RGBA pixels below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })`, and at least one colour is always kept. See [Transparency](#transparency).
 
 ```js
 const { palette, colors, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
@@ -513,10 +500,10 @@ The same as `quantizeToIndices`, with a palette you supply. There is no `k`: the
 Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`, `transparent`.
 
 ### `init(options?): Promise<void>`
-Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a load that fails can be retried. Invalid inputs, palette sizes and options (including unknown option names) are rejected with a descriptive error. To say where the module is, see [Loading the WebAssembly module](#loading-the-webassembly-module).
+Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a failed load can be retried. To say where the module is, see [Loading the WebAssembly module](#loading-the-webassembly-module).
 
 ### `version: string` and `formatVersion: number`
-Two numbers, for two questions. `version` is the library's version, as in its `package.json` (`'3.0.0'`): which copy of the code is loaded, for bug reports and runtime checks. `formatVersion` is the version of the data the library stores (today the clusterings from `getClustering`, which carry it in their header): one integer for all of it, which changes only when the stored format does, so a new release that keeps the format keeps the number. Compare it with a stored clustering's `getClusteringInfo(stored).formatVersion`: if they differ, the clustering is from another format (2.x ones still load but have no weights) and the image should be clustered again. The worker entry exports both too, with the same values. The WebAssembly module knows its version as well: if the `.wasm` doesn't match the script, loading fails with `wasm-load-failed`.
+`version` is the library's version (`'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: if a stored clustering's `getClusteringInfo(stored).formatVersion` differs, cluster the image again (2.x clusterings still load, but have no weights). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
 
 ## Running it
 
@@ -527,8 +514,7 @@ Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers with WebAssem
 Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2. Firefox hasn't been tried.
 
 ### Loading the WebAssembly module
-
-By default the module is found next to the package's script (`new URL('clustering.wasm', import.meta.url)`), which Node and bundlers such as Vite handle. When that doesn't work, say where it is with `wasm`, before any other call (the first load that succeeds wins):
+By default the module is found next to the package's script, which Node and bundlers such as Vite handle. Otherwise, say where it is before any other call (the first load that succeeds wins):
 
 ```js
 await init({ wasm: 'https://cdn.example.com/clustering.wasm' });      // a URL or path string, or a URL
@@ -536,13 +522,13 @@ await init({ wasm: await (await fetch(url)).arrayBuffer() });          // the by
 await init({ wasm: wasmModule });                                      // a compiled WebAssembly.Module
 ```
 
-That covers wasm hosted on a CDN, and runtimes that can't fetch or compile it themselves. The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler for Cloudflare Workers does) can give you `wasmModule` with `import wasmModule from 'agglomerative-clustering/clustering.wasm'`. A page with a strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src` to run any WebAssembly. `createWorker({ wasm })` (and `worker.init({ wasm })`) pass the same thing to a worker, which loads its own copy. The worker's own script is still found next to `worker.mjs`.
+The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler, for Cloudflare Workers) can give you `wasmModule`. A strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src`. `createWorker({ wasm })` passes the same option to a worker.
 
 ### Performance and limits
 
 **Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.
 
-**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels. On the machine used here: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`; 36 megapixels of random noise (the worst case, millions of distinct colours) takes about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB, and an image that needs more (for example 100 megapixels of noise, exactly) is rejected with an `out-of-memory` error that says to try `precision: 6` or a smaller image; the module is then replaced, so later calls work normally.
+**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally.
 
 ### Troubleshooting
 
