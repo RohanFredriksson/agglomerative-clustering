@@ -94,6 +94,15 @@ export interface ClusteringOptions extends RunOptions {
      * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
      */
     alpha?: AlphaMode;
+    /**
+     * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for RGBA images: pixels with alpha
+     * below the cutoff don't exist as far as the palette is concerned. They are left out of clustering, and the rest count
+     * whole instead of by opacity (so it replaces `alpha` for this call). That is the model of indexed output (GIF, palette
+     * PNG), and it gives the same palette everywhere: `getPalette(image, k, { transparent })` is the palette
+     * `quantizeToIndices(image, k, { transparent })` uses, apart from that function's extra transparent entry.
+     * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`).
+     */
+    transparent?: boolean | number;
 }
 
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. */
@@ -125,8 +134,11 @@ export interface IndexOptions {
      * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image is RGBA and has pixels with alpha
      * below the cutoff, they get an extra entry appended after the palette (black, taking no part in matching), as
      * GIFs and palette PNGs expect; its index is the result's `transparentIndex`. Every other pixel is shown fully
-     * opaque in its nearest colour. Where this function builds the palette itself (`quantizeToIndices`), pixels below
-     * the cutoff are left out of it and the rest count whole, so it can differ from `getPalette`'s for the same image.
+     * opaque in its nearest colour. `k` counts that entry, so `k = 256` gives at most 256 entries (255 colours and the
+     * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is always kept. Where
+     * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
+     * `ClusteringOptions.transparent`), so its palette is `getPalette(image, k - 1, { transparent })`'s. With a palette
+     * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is.
      */
     transparent?: boolean | number;
 }

@@ -643,10 +643,24 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 // The length-prefixed payload is [entries (u32), transparent index (i32, -1 for none), index bytes (u32)], then
 // the palette (3 bytes per entry), then one little-endian index of `index bytes` (1, 2 or 4) per pixel.
 // With a `cutoff` (1-255) and RGBA input that has pixels with alpha below it, those pixels get an extra black entry
-// appended after the palette, which takes no part in matching; every other pixel maps to its nearest colour,
+// appended after the palette, which takes no part in matching (the callers cut the palette one colour smaller to make room, see
+// colours_for_entries: `k` counts the entries of the result); every other pixel maps to its nearest colour,
 // fully opaque. Without one (0), all pixels map to their nearest colour like any other pixel. An empty palette stays empty unless some pixel needs an entry to point at, in which case it becomes a
 // single black entry, as _quantize maps it: so an empty image has an empty palette, and a fully transparent image
 // with a cutoff has just the transparent entry (index 0).
+// Whether indexed output with this cutoff will have a transparent entry: the image is RGBA and some pixel is below it.
+bool has_transparent_entry(const uint8_t* image_data, int image_length, int image_format, int cutoff) {
+    if (cutoff <= 0 || image_format != 0 || image_length < 4) {return false;}
+    for (size_t p = 0; p + 3 < size_t(image_length); p += 4) {if (image_data[p + 3] < cutoff) {return true;}}
+    return false;
+}
+
+// The palette size to cut to so the indexed result has `k` entries in all: the transparent entry counts towards `k`, so a
+// GIF or palette PNG asking for 256 gets 256, not 257. At least one colour is always kept.
+int colours_for_entries(const uint8_t* image_data, int image_length, int image_format, int cutoff, int k) {
+    return has_transparent_entry(image_data, image_length, image_format, cutoff) ? std::max(1, k - 1) : k;
+}
+
 uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, int cutoff) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
@@ -717,14 +731,14 @@ void clustering_job_free(ClusteringJob* job) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format, int color_space, int precision, int weight_alpha) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
+uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format, int color_space, int precision, int weight_alpha, int transparent) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     return pack_variable_size(clustering);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
+uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, int transparent) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return pack_variable_size(palette);
 }
@@ -744,8 +758,8 @@ uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, in
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width) {
-    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0);
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
+    std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
     return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
 }
@@ -766,14 +780,14 @@ uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), colours_for_entries(image_data, image_length, image_format, transparent, k));
     return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width, transparent);
 }
 
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
 uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width, int transparent) {
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, colours_for_entries(image_data, image_length, image_format, transparent, k));
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
     return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width, transparent);
 }

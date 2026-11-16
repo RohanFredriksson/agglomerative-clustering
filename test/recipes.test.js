@@ -99,7 +99,7 @@ describe('README recipes', () => {
     });
 
     it('a GIF with a transparent background', async () => {
-        const { palette, indices, transparentIndex } = await quantizeToIndices(image, 255, { transparent: true });
+        const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
         const colors = toColors(palette);
         const gif = GIFEncoder();
         gif.writeFrame(indices, image.width, image.height, { palette: colors, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
@@ -114,7 +114,7 @@ describe('README recipes', () => {
     });
 
     it('a palette PNG whose transparent entry has alpha 0', async () => {
-        const { palette, indices, transparentIndex } = await quantizeToIndices(image, 255, { transparent: true });
+        const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
         const colors = toColors(palette);
         expect(indices).toBeInstanceOf(Uint8Array);
         const png = encodePng({

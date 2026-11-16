@@ -128,7 +128,7 @@ Every function that takes an image also takes an optional last argument of optio
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. If the image has a width of its own, `width` must equal it (a different value is an error). |
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
 | `onProgress` | any call with an image | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". |
-| `transparent` | indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Gives RGBA pixels with alpha below the cutoff (`true` means 128) their own palette entry in `quantizeToIndices*` results; every other pixel is shown fully opaque. For GIFs and palette PNGs. |
+| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | RGBA pixels with alpha below the cutoff (`true` means 128) don't exist as far as the palette goes: they are left out of clustering and the rest count whole. In `quantizeToIndices*` they also get their own palette entry (counted in `k`), and every other pixel is shown fully opaque. For GIFs and palette PNGs. |
 
 ### Choosing a colour space
 
@@ -259,8 +259,8 @@ const rankedTransparentIndex = transparentIndex === null ? null : rank[transpare
 import { GIFEncoder } from 'gifenc';   // in plain Node ESM: import gifenc from 'gifenc'; const { GIFEncoder } = gifenc;
 import { quantizeToIndices } from 'agglomerative-clustering';
 
-// 255 colours + the transparent entry = 256, the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
-const { palette, indices, transparentIndex } = await quantizeToIndices(image, 255, { transparent: true });
+// k counts the transparent entry, so 256 is the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
+const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
 const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
 
 const gif = GIFEncoder();
@@ -346,10 +346,10 @@ Maps each pixel to its nearest colour in any palette (flat RGB bytes: a `Uint8Ar
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 Like `quantize`, but returns each pixel's palette index rather than its colour: `{ palette, indices, indexBits, transparentIndex }`, plus `width` and `height` when the input has them. `palette` is flat RGB bytes and `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, `Uint16Array` up to 65536, `Uint32Array` above. `indexBits` says which (8, 16 or 32), so you can branch on it without `instanceof`. This is what palette PNGs, pixel art, and embroidery or paint-by-number patterns need. Options: those of `quantize`, plus `transparent`.
 
-By default every pixel gets the index of its nearest colour, whatever its alpha. With `transparent: true`, an RGBA image's pixels with alpha below 128 get their own entry instead, appended after the palette, and the result's `transparentIndex` says which it is (`null` if no pixel was below the cutoff). Every other pixel is shown fully opaque in its nearest colour, which is all a GIF (or a palette PNG with one transparent entry) can express, so anti-aliased edges snap to one side or the other. A number sets the cutoff: `transparent: 200` makes everything below 200 transparent. The palette is chosen from the pixels that stay visible, each counted whole, so it can differ from `getPalette`'s for the same image; pixels below the cutoff also take no part in dithering. For a palette PNG of at most 256 entries including the transparent one, ask for 255 colours. Soft alpha in the palette itself (several translucent entries) is not supported, and libimagequant is the better tool for it.
+By default every pixel gets the index of its nearest colour, whatever its alpha. With `transparent: true`, an RGBA image's pixels with alpha below 128 get their own entry instead, appended after the palette, and the result's `transparentIndex` says which it is (`null` if no pixel was below the cutoff). Every other pixel is shown fully opaque in its nearest colour, which is all a GIF (or a palette PNG with one transparent entry) can express, so anti-aliased edges snap to one side or the other. A number sets the cutoff: `transparent: 200` makes everything below 200 transparent. `k` counts that entry: `k = 256` gives at most 256 entries, 255 colours and the transparent one, with 8-bit indices (at least one colour is always kept). The palette is chosen from the pixels that stay visible, each counted whole: the same as `getPalette(image, k - 1, { transparent: true })`, because `transparent` is a clustering option too. Pixels below the cutoff also take no part in dithering. With `quantizeToIndicesWithPalette` there is no `k`: the transparent entry is added to the palette you give, so a 256-colour palette gives 257 entries. Soft alpha in the palette itself (several translucent entries) is not supported, and libimagequant is the better tool for it.
 
 ```js
-const { palette, indices, transparentIndex } = await quantizeToIndices(imageData, 255, { transparent: true });
+const { palette, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
 ```
 
 ### `quantizeToIndicesFromClustering(image, clustering, k, options?)`, `quantizeToIndicesWithPalette(image, palette, options?)`

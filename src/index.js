@@ -227,7 +227,8 @@ const check = (k) => {
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
 //   signal, onProgress: an AbortSignal and a progress callback, which make the clustering run in slices (see clusterInSlices)
-//   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255; for indexed output, gives pixels with alpha below it their own entry
+//   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255: pixels with alpha below it are left out of clustering (and the rest count whole);
+//               indexed output also gives them their own entry, which counts towards k
 // An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
 // `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
 // (an iframe, a test sandbox) are fine.
@@ -311,10 +312,10 @@ const parseOptions = (options, allowed, image) => {
 };
 
 const controlOptions = ['signal', 'onProgress'];
-const clusterOptions = ['colorSpace', 'precision', 'alpha', ...controlOptions];
-const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width', ...controlOptions];
+const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
+const quantizeOptions = [...clusterOptions, 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
-const quantizeIndexOptions = [...quantizeOptions, 'transparent'];
+const quantizeIndexOptions = quantizeOptions;
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
 // Reads a clustering's header, or throws if it isn't a clustering this version can read. Clusterings start with the
@@ -494,7 +495,7 @@ export const getClustering = async (image, options) => {
         return clustering;
     }
 
-    return call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha));
+    return call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent));
 
 };
 
@@ -514,7 +515,7 @@ export const getPalette = async (image, k, options) => {
         return palette;
     }
 
-    return call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
+    return call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent));
 
 };
 
@@ -615,7 +616,7 @@ export const quantize = async (image, k, options) => {
         return mapped;
     }
 
-    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
+    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)));
 
 };
 

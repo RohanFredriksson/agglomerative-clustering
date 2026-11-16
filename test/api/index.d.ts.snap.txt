@@ -34,6 +34,7 @@ export interface ClusteringOptions extends RunOptions {
     colorSpace?: ColorSpace;
     precision?: number;
     alpha?: AlphaMode;
+    transparent?: boolean | number;
 }
 export interface MappingOptions extends RunOptions {
     colorSpace?: ColorSpace;
