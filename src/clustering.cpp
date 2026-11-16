@@ -50,9 +50,11 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
 // weight unit; the cost is the merge's increase in squared error, in weight units times squared 8-bit RGB values
 // (RGB) or squared OKLab units (OKLab). Readers find records by the stored lengths and ignore fields past the
 // ones they know, so fields can be added without a new version.
-// Version 1 (1.x) had no header and 9-byte records, so its length is 0 or 3 more than a multiple of 9. Every
-// later version pads its end so its length is 4 (empty) or 7 more, and is identified by its version byte.
 // Version 2 (2.x) had a 4-byte header [magic, 2, colour space, precision] and 9-byte records of colours only.
+// Versions 2 and 3 are identified by their version byte and pad their end so the length is 4 (empty) or 7 more than a
+// multiple of 9. That padding dates from when version 1 (1.x: no header, 9-byte records, a length of 0 or 3 more than a
+// multiple of 9) had to be told apart by length alone; 1.x clusterings are no longer read, and the padding stays so that
+// version 3 bytes stay stable.
 constexpr uint8_t clustering_magic = 0xAC;
 constexpr uint8_t clustering_version = 3;
 constexpr size_t clustering_header = 22;
@@ -372,11 +374,10 @@ std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int 
     return job.take();
 }
 
-// A clustering of any format version, located: `body` is the root colour followed by `merges` records of
-// `record` bytes each.
+// A clustering (version 2 or 3), located: `body` is the root colour followed by `merges` records of `record` bytes each.
 struct ClusteringView {
     bool valid = false;
-    int version = 1;
+    int version = 0;
     ColorSpace color_space = ColorSpace::rgb;
     bool empty = true;
     const uint8_t* body = nullptr;
@@ -384,17 +385,11 @@ struct ClusteringView {
     size_t merges = 0;
 };
 
-// Version 1 is told apart by its length (0 or 3 more than a multiple of 9), which no later version has; later
-// versions by their version byte. The JS wrapper rejects anything this doesn't accept before calling in.
+// Versions are told apart by their version byte. (Clusterings from 1.x had no header and were recognised only by their
+// length, which many other byte strings share, so they are no longer read.) The JS wrapper rejects anything this
+// doesn't accept before calling in.
 ClusteringView read_clustering(const uint8_t* data, size_t length) {
     ClusteringView view;
-    if (length % 9 == 0 || length % 9 == 3) {
-        view.valid = true;
-        view.empty = length == 0;
-        view.body = data;
-        view.merges = length == 0 ? 0 : (length - 3) / 9;
-        return view;
-    }
     if (length < 4 || data[0] != clustering_magic) {return view;}
     if (data[1] == 2 && data[2] <= 1 && (length == 4 || length % 9 == 7)) {
         view.valid = true;
@@ -421,9 +416,8 @@ ClusteringView read_clustering(const uint8_t* data, size_t length) {
 
 // Cuts a clustering to at most k colours, in split order: the root colour first, and each split keeps the
 // parent's position for its heavier half and appends the lighter half, so the palette for k + 1 is the palette
-// for k with one entry refined and one appended, and index 0 follows the dominant colour. Version 2 records list
-// the heavier child first; for version 1 the heavier child is the one nearer the parent, which is their
-// count-weighted mean. As a set, the result is the same as replaying the records into an unordered set.
+// for k with one entry refined and one appended, and index 0 follows the dominant colour. Records list
+// the heavier child first. As a set, the result is the same as replaying the records into an unordered set.
 std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
 
     std::vector<uint8_t> palette;
@@ -433,10 +427,6 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     typedef std::array<uint8_t, 3> Color;
     auto key = [](const Color& c) {return (uint32_t(c[0]) << 16) | (uint32_t(c[1]) << 8) | uint32_t(c[2]);};
     auto read = [&](size_t offset) {return Color{view.body[offset], view.body[offset + 1], view.body[offset + 2]};};
-    auto distance = [](const Color& x, const Color& y) {
-        int d0 = int(x[0]) - int(y[0]), d1 = int(x[1]) - int(y[1]), d2 = int(x[2]) - int(y[2]);
-        return d0 * d0 + d1 * d1 + d2 * d2;
-    };
 
     std::vector<Color> order = {read(0)};
     std::unordered_map<uint32_t, size_t> where = {{key(order[0]), 0}};
@@ -446,7 +436,6 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
         const size_t at = 3 + view.record * i;
         const Color parent = read(at);
         Color heavy = read(at + 3), light = read(at + 6);
-        if (view.version == 1 && distance(light, parent) < distance(heavy, parent)) {std::swap(heavy, light);}
 
         size_t slot = order.size();
         auto found = where.find(key(parent));

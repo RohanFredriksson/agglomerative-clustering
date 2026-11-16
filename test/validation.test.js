@@ -106,6 +106,22 @@ describe('typed array views', () => {
 
 });
 
+describe('a palette passed where a clustering is expected', () => {
+
+    it('is rejected for every palette size, instead of being mistaken for a clustering', async () => {
+        // 1.x clusterings were recognised by their length alone, so palettes of 1, 3, 4, 6, 7, 9 ... colours used to be
+        // accepted as clusterings and returned nonsense.
+        for (let colours = 1; colours <= 70; colours++) {
+            const palette = await getPalette(validImage, 4);
+            const sized = new Uint8Array(colours * 3).map((_, i) => palette[i % palette.length]);
+            await expect(getPaletteFromClustering(sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
+            await expect(quantizeWithClustering(validImage, sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
+        }
+        await expect(getPaletteFromClustering(new Uint8Array(0), 2)).rejects.toMatchObject({ code: 'invalid-clustering' });
+    });
+
+});
+
 describe('bare typed arrays', () => {
 
     it('explains what to do with a Uint8ClampedArray such as imageData.data', async () => {

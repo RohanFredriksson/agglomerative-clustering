@@ -16,6 +16,7 @@
     "main.mts",
     "worker.mts",
     "disposable.mts",
-    "union.mts"
+    "union.mts",
+    "shapes.mts"
   ]
 }

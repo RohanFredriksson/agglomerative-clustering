@@ -45,6 +45,9 @@ export type ImageLike = Uint8Array | PlatformImageData | RawImage;
 export type WasmModule = typeof globalThis extends { WebAssembly: { Module: { prototype: infer M } } } ? M : never;
 
 /** The space colours are clustered and matched in. */
+/** A palette to map with: flat RGB bytes, as a `Uint8Array` (what every function here returns), a `Uint8ClampedArray`, or a plain array of integers from 0 to 255. */
+export type PaletteLike = Uint8Array | Uint8ClampedArray | readonly number[];
+
 export type ColorSpace = 'rgb' | 'oklab';
 
 /** How pixel opacity affects clustering. */
@@ -119,24 +122,29 @@ export interface IndexOptions {
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 
-export interface IndexedImage {
+interface IndexedImageFields {
     /**
      * Flat RGB bytes, one entry per index, including the transparent entry if there is one. Empty for an image with no
      * pixels. An image with pixels but no visible colour has a single black entry, or with `transparent`, just
      * the transparent entry.
      */
     palette: Uint8Array;
-    /** One palette index per pixel: `Uint8Array` up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`. */
-    indices: Uint8Array | Uint16Array | Uint32Array;
     /** The index of the entry for fully transparent pixels, or `null` if there is none. */
     transparentIndex: number | null;
-    /** The size of one index in bits: 8, 16 or 32, matching the type of `indices`. */
-    indexBits: 8 | 16 | 32;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
     width?: number;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `height`. */
     height?: number;
 }
+
+/**
+ * One palette index per pixel in `indices`: a `Uint8Array` up to 256 palette entries, a `Uint16Array` up to 65536, else a
+ * `Uint32Array`. `indexBits` says which (8, 16 or 32), and checking it narrows `indices` to that array type.
+ */
+export type IndexedImage =
+    | (IndexedImageFields & { indexBits: 8; indices: Uint8Array })
+    | (IndexedImageFields & { indexBits: 16; indices: Uint16Array })
+    | (IndexedImageFields & { indexBits: 32; indices: Uint32Array });
 
 export interface InitOptions {
     /**
@@ -174,32 +182,45 @@ export function getPaletteFromClustering(clustering: Uint8Array, k: number): Pro
  */
 export function getPaletteWeights(clustering: Uint8Array, k: number): Promise<Float64Array>;
 
-export interface ClusteringInfo {
-    /** The clustering's format version: 1 (1.x), 2 (2.x) or 3 (3.x). */
-    version: number;
+interface ClusteringInfoFields {
     colorSpace: ColorSpace;
-    /** Bits per channel it was clustered with, or `null` for 1.x clusterings, which don't record it. */
-    precision: number | null;
+    /** Bits per channel it was clustered with. */
+    precision: number;
     /** The largest palette it can be cut to: its number of distinct clustered colours. */
     colors: number;
-    /** Total weight in pixels (opacity-weighted), or `null` before 3.x. */
-    totalWeight: number | null;
+}
+
+/** What a 3.x clustering holds. A clustering you just made with `getClustering` is this one: check `version === 3` to narrow to it. */
+export interface ClusteringInfoV3 extends ClusteringInfoFields {
+    version: 3;
+    /** Total weight in pixels (opacity-weighted). */
+    totalWeight: number;
     /**
      * `mse[k - 1]` is the mean squared error per channel of the k-colour clustering: each pixel's squared
      * distance to its cluster's colour, weighted as in clustering, in 8-bit RGB values (`'rgb'`) or OKLab units
      * (`'oklab'`). `mse[0]` is the image's variance. At `precision: 8`, `mse[colors - 1]` is 0; with a lower
      * precision it is the error that grouping colours discarded, which is recorded and included. It is an estimate,
      * computed from merge costs on integer-rounded colours. Mapping pixels to their nearest palette colour usually
-     * lowers it by 10-15%. `null` before 3.x.
+     * lowers it by 10-15%.
      */
-    mse: Float64Array | null;
+    mse: Float64Array;
     /**
      * `explained[k - 1]` is the share of the image's variance the k-colour clustering keeps, `1 - mse[k - 1] /
      * mse[0]`: 0 for one colour, rising to 1 at `colors`, and 1 throughout for an image of a single colour. It has no
-     * units, so a target such as `0.99` means the same in `'rgb'` and `'oklab'`. `null` before 3.x.
+     * units, so a target such as `0.99` means the same in `'rgb'` and `'oklab'`.
      */
-    explained: Float64Array | null;
+    explained: Float64Array;
 }
+
+/** What a 2.x clustering holds: no weights, so no error curve. */
+export interface ClusteringInfoV2 extends ClusteringInfoFields {
+    version: 2;
+    totalWeight: null;
+    mse: null;
+    explained: null;
+}
+
+export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 
 /** Reads what a clustering holds, including its error curve for choosing a palette size. */
 export function getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
@@ -210,7 +231,7 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
 
 export function quantizeWithClustering<I extends ImageLike>(image: I, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
-export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Uint8Array, options?: MappingOptions): Promise<ImageResult<I>>;
+export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 
 /**
  * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette
@@ -222,4 +243,4 @@ export function quantizeToIndices(image: ImageLike, k: number, options?: Quantiz
 export function quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */
-export function quantizeToIndicesWithPalette(image: ImageLike, palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;
+export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;

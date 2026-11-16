@@ -11,6 +11,15 @@ const handle = (id) => {
     return entry;
 };
 
+// A palette doesn't say which colour space it was made in. A handle's palette almost always came from the handle itself,
+// so mapping with it should match in the space the handle was clustered in, as handle.quantize does, unless the caller
+// names one. Options that aren't an ordinary object are passed on as they are for the main entry to reject.
+const inClusteringSpace = async (id, options) => {
+    if (options !== undefined && Object.prototype.toString.call(options) !== '[object Object]') {return options;}
+    const {colorSpace} = await ac.getClusteringInfo(handle(id).clustering);
+    return {...options, colorSpace: options && options.colorSpace !== undefined ? options.colorSpace : colorSpace};
+};
+
 const methods = {
     ...ac,
     cluster: async (id, image, options) => {
@@ -23,8 +32,8 @@ const methods = {
     handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
     handleQuantize: async (id, k, options) => ac.quantizeWithClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesWithClustering(handle(id).image, handle(id).clustering, k, options),
-    handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, options),
-    handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, options),
+    handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
+    handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options)),
 };
 
 // The buffers in a result, to transfer rather than copy. Results are freshly allocated, so nothing here uses them.

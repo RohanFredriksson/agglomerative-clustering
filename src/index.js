@@ -275,9 +275,10 @@ const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
 const quantizeIndexOptions = [...quantizeOptions, 'transparent'];
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
-// Reads a clustering's header, or throws if it isn't a clustering this version can read. Version 1 (1.x) has no
-// header and is told apart by its length, 0 or 3 more than a multiple of 9, which no later version has (they pad
-// to 4 or 7 more). Later versions start with the magic byte 0xAC and their version number.
+// Reads a clustering's header, or throws if it isn't a clustering this version can read. Clusterings start with the
+// magic byte 0xAC and their version number (2 or 3). Clusterings from 1.x had no header and could only be recognised by
+// their length, which many other byte strings share (a palette of the right size passed as a clustering was accepted
+// and gave nonsense), so they are no longer read.
 //   version 2: [0xAC, 2, colour space, precision], then 9-byte records of colours
 //   version 3: [0xAC, 3, header length, record length, colour space, precision, weight unit, weight shift,
 //              total weight (u32 LE), 0, grouped error (f32 LE, from header length 17), ...], then records of
@@ -288,9 +289,6 @@ const readHeader = (clustering) => {
         throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.");
     }
     const length = clustering.length;
-    if (length % 9 === 0 || length % 9 === 3) {
-        return {version: 1, colorSpace: 0, precision: null, headerLength: 0, recordLength: 9, merges: length === 0 ? 0 : (length - 3) / 9};
-    }
     if (length >= 4 && clustering[0] === 0xAC) {
         const version = clustering[1];
         if (version === 2 && clustering[2] <= 1 && (length === 4 || length % 9 === 7)) {
@@ -313,7 +311,7 @@ const readHeader = (clustering) => {
             throw fail('unsupported-version', `Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`);
         }
     }
-    throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering.");
+    throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering. (Clusterings from agglomerative-clustering 1.x are no longer read: cluster the image again.)");
 };
 
 // Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent

@@ -2,7 +2,8 @@
 // It clusters fixtureImage() with that build and stores the clustering (v<N>.bin) and that build's own palettes
 // for each size (v<N>.json), plus weights and the error curve from builds that have them. `release` labels an
 // unreleased build; it defaults to the build's package.json version. Fixtures are made once per format version, with the release that introduced it, and
-// never regenerated: test/formats.test.js checks the current reader still gives the same palettes.
+// never regenerated: test/formats.test.js checks the current reader still gives the same palettes. (v1.bin, from the
+// published 1.1.4, is kept as a negative case: 3.0 stopped reading 1.x clusterings.)
 import { writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';

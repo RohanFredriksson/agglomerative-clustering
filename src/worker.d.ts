@@ -4,12 +4,12 @@
 
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
-    IndexedImage, ClusteringInfo, InitOptions, ImageResult,
+    IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike,
 } from './index.js';
 
 export type {
-    ImageFormat, RawImage, ImageLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo,
+    ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
+    ErrorCode, CodedError, InitOptions, RunOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, ClusteringInfoV2, ClusteringInfoV3,
 } from './index.js';
 
 export interface WorkerOptions {
@@ -32,8 +32,8 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Maps the kept image to a palette of your own (an edited swatch, a brand palette) without sending the pixels again. */
-    quantizeWithPalette(palette: Uint8Array, options?: MappingOptions): Promise<Image>;
-    quantizeToIndicesWithPalette(palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeWithPalette(palette: PaletteLike, options?: MappingOptions): Promise<Image>;
+    quantizeToIndicesWithPalette(palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /**
      * Frees the image and clustering in the worker. Later calls on the handle fail. Call it when you are done, or
      * declare the handle with `await using`, which does. A handle that is dropped without either is freed once it is
@@ -55,10 +55,10 @@ export interface AgglomerativeWorker {
     getClusteringInfo(clustering: Uint8Array): Promise<ClusteringInfo>;
     quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
     quantizeWithClustering<Image extends ImageLike>(image: Image, clustering: Uint8Array, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
-    quantizeWithPalette<Image extends ImageLike>(image: Image, palette: Uint8Array, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeWithPalette<Image extends ImageLike>(image: Image, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithClustering(image: ImageLike, clustering: Uint8Array, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
-    quantizeToIndicesWithPalette(image: ImageLike, palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
     /** Stops the worker. Calls still waiting are rejected, and later calls fail. */

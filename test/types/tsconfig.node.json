@@ -4,10 +4,17 @@
     "strict": true,
     "skipLibCheck": false,
     "target": "es2022",
-    "lib": ["es2022"],
-    "types": ["node"],
+    "lib": [
+      "es2022"
+    ],
+    "types": [
+      "node"
+    ],
     "module": "nodenext",
     "moduleResolution": "nodenext"
   },
-  "files": ["node-only.mts"]
+  "files": [
+    "node-only.mts",
+    "shapes.mts"
+  ]
 }

@@ -106,6 +106,34 @@ describe('handles', () => {
         await handle.release();
     });
 
+    it('map with their own palette in the space they were clustered in, unless told otherwise', async () => {
+        // A smooth, photo-like image: nearest-colour matching differs between RGB and OKLab here (it would not for a few
+        // well-separated colours, which would make this test pass for the wrong reason).
+        const w = 80, h = 60, photo = new Uint8Array(w * h * 4);
+        let seed = 3; const rnd = () => {seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296;};
+        for (let p = 0; p < w * h; p++) {const x = p % w, y = Math.floor(p / w); photo.set([x * 3 + rnd() * 8, y * 4 + rnd() * 8, 128 + 100 * Math.sin(x / 9 + y / 13) + rnd() * 8, 255], p * 4);}
+
+        const handle = await worker.cluster(photo, { colorSpace: 'oklab' });
+        const palette = await handle.getPalette(12);
+        const inOklab = await ac.quantizeWithPalette(photo, palette, { colorSpace: 'oklab' });
+        const inRgb = await ac.quantizeWithPalette(photo, palette, { colorSpace: 'rgb' });
+        expect(inOklab).not.toEqual(inRgb);                                                 // the test can tell the spaces apart
+        // The handle's own palette maps to the same image as handle.quantize, and to OKLab matching.
+        expect(await handle.quantizeWithPalette(palette)).toEqual(await handle.quantize(12));
+        expect(await handle.quantizeWithPalette(palette)).toEqual(inOklab);
+        expect((await handle.quantizeToIndicesWithPalette(palette)).indices).toEqual((await ac.quantizeToIndicesWithPalette(photo, palette, { colorSpace: 'oklab' })).indices);
+        // Naming a space wins; invalid options are still rejected, not replaced by the default.
+        expect(await handle.quantizeWithPalette(palette, { colorSpace: 'rgb' })).toEqual(inRgb);
+        expect(await handle.quantizeWithPalette(palette, { colorSpace: undefined })).toEqual(inOklab);
+        await expect(handle.quantizeWithPalette(palette, new Map())).rejects.toMatchObject({ code: 'invalid-argument' });
+        await handle.release();
+
+        // An RGB handle is unchanged.
+        const rgbHandle = await worker.cluster(photo);
+        expect(await rgbHandle.quantizeWithPalette(palette)).toEqual(inRgb);
+        await rgbHandle.release();
+    });
+
     it('give results in the type of the image they were made from', async () => {
         const imageData = new ImageData(new Uint8ClampedArray(image), width, height);
         const handle = await worker.cluster(imageData);

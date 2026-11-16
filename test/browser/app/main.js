@@ -54,8 +54,10 @@ async function run() {
     }
     checks.handleCutsMatchMain = cuts;
     const custom = await ac.getPalette(image, 5);
-    checks.handlePaletteMatchesMain = equal((await handle.quantizeWithPalette(custom, { dither: true })).data, (await ac.quantizeWithPalette(image, custom, { dither: true })).data)
-        && equal((await handle.quantizeToIndicesWithPalette(custom)).indices, (await ac.quantizeToIndicesWithPalette(image, custom)).indices);
+    // The handle was clustered in OKLab, and maps with a palette of your own in the space it was clustered in.
+    checks.handlePaletteMatchesMain = equal((await handle.quantizeWithPalette(custom, { dither: true })).data, (await ac.quantizeWithPalette(image, custom, { dither: true, colorSpace: 'oklab' })).data)
+        && equal((await handle.quantizeToIndicesWithPalette(custom)).indices, (await ac.quantizeToIndicesWithPalette(image, custom, { colorSpace: 'oklab' })).indices)
+        && equal((await handle.quantizeWithPalette(await handle.getPalette(5))).data, (await handle.quantize(5)).data);
     const indexed = await handle.quantizeToIndices(16);
     checks.indexedOutput = indexed.indices.length === width * height && indexed.palette.length <= 48;
     checks.weightsSumToPixels = (await handle.getPaletteWeights(16)).reduce((a, b) => a + b, 0) === width * height;
