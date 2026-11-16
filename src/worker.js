@@ -101,7 +101,7 @@ const takeControls = (options) => {
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {return {options, signal: undefined, onProgress: undefined};}
     const {signal, onProgress} = options;
     if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
-    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");}
     if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.");}
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
     return {options: rest, signal, onProgress};

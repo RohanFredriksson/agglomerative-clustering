@@ -146,6 +146,7 @@ describe('a worker call with a signal or onProgress', () => {
 
     it('validates signal and onProgress on this side', async () => {
         await expect(worker.getClustering(small, { signal: {} })).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(worker.getClustering(small, { signal: { aborted: false } })).rejects.toMatchObject({ code: 'invalid-argument' });
         await expect(worker.getPalette(small, 4, { onProgress: 3 })).rejects.toMatchObject({ code: 'invalid-argument' });
         const handle = await worker.cluster(small);
         await expect(handle.quantize(4, { signal: 'no' })).rejects.toMatchObject({ code: 'invalid-argument' });

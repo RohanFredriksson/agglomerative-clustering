@@ -144,7 +144,7 @@ describe('aborting', () => {
     });
 
     it('validates its options', async () => {
-        for (const signal of [null, 5, {}, 'abort']) {
+        for (const signal of [null, 5, {}, 'abort', { aborted: false }]) {
             await expect(getClustering(image, { signal })).rejects.toMatchObject({ code: 'invalid-argument' });
         }
         for (const onProgress of [null, 5, 'x']) {

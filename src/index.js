@@ -34,10 +34,9 @@ const wasmSettings = (wasm, onError) => {
 // The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
 let loading = null;
 
-// Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, except to
-// say where the .wasm file is (`wasm`), which must come before anything else. The first load that succeeds wins:
-// later calls, with or without options, get the same module.
-export const init = async (options) => {
+// Calls get the instance they run on from `acquire` and keep using it, so replacing the current instance (see `discard`)
+// never changes the module under a call already in flight.
+const acquire = async (options) => {
 
     if (options === undefined) {options = {};}
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {
@@ -51,24 +50,40 @@ export const init = async (options) => {
     const failed = new Promise((_, r) => {reject = r;});
     failed.catch(() => {});
     const settings = wasmSettings(options.wasm, reject);
-    if (Module) {return;}
+    if (Module) {return Module;}
 
     if (!loading) {
         loading = (async () => {
-            Module = await Promise.race([createWasmModule(settings), failed]);
+            const instance = await Promise.race([createWasmModule(settings), failed]);
+            Module = instance;
+            return instance;
         })().catch((error) => {
             loading = null;
             throw error;
         });
     }
-    await loading;
+    return loading;
 
 };
 
-const unpack = (pointer) => {
-    const lengthBuffer = new Uint8Array(Module.HEAPU8.subarray(pointer, pointer + 4));
+// Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, except to
+// say where the .wasm file is (`wasm`), which must come before anything else. The first load that succeeds wins:
+// later calls, with or without options, get the same module.
+export const init = async (options) => {await acquire(options);};
+
+// A WebAssembly abort, which is what running out of memory looks like, leaves the instance's heap full of whatever the
+// failed call had allocated and never freed (the abort skips destructors), so every later large call on it would fail
+// too. The instance is therefore discarded: the next call loads a fresh one, and calls already running keep theirs.
+const isAbort = (error) => error instanceof Error && error.name === 'RuntimeError' && /^Aborted\(/.test(error.message);
+const discard = (instance) => {
+    if (Module === instance) {Module = null; loading = null;}
+};
+const outOfMemory = () => fail('out-of-memory', "The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Try `precision: 6`, which bounds the memory an image with very many colours needs, or a smaller image.");
+
+const unpack = (wasm, pointer) => {
+    const lengthBuffer = new Uint8Array(wasm.HEAPU8.subarray(pointer, pointer + 4));
     const length = lengthBuffer[0] | (lengthBuffer[1] << 8) | (lengthBuffer[2] << 16) | (lengthBuffer[3] << 24);
-    const outputBuffer = new Uint8Array(Module.HEAPU8.subarray(pointer + 4, pointer + 4 + length));
+    const outputBuffer = new Uint8Array(wasm.HEAPU8.subarray(pointer + 4, pointer + 4 + length));
     return outputBuffer;
 };
 
@@ -208,7 +223,7 @@ const parseOptions = (options, allowed, image) => {
     }
 
     const signal = options.signal;
-    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean')) {
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {
         throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.");
     }
     const onProgress = options.onProgress;
@@ -283,21 +298,30 @@ const checkPalette = (palette) => {
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards.
-const call = (buffers, fn) => {
+const call = (wasm, buffers, fn) => {
     const pointers = [];
     let outputPointer = 0;
+    let aborted = false;
     try {
         for (const buffer of buffers) {
-            const pointer = Module._malloc(buffer.length);
+            const pointer = wasm._malloc(buffer.length);
             if (!pointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
             pointers.push(pointer);
-            Module.HEAPU8.set(buffer, pointer);
+            wasm.HEAPU8.set(buffer, pointer);
         }
         outputPointer = fn(...pointers);
-        return unpack(outputPointer);
+        return unpack(wasm, outputPointer);
+    } catch (error) {
+        if (!isAbort(error)) {throw error;}
+        aborted = true;
+        discard(wasm);
+        throw outOfMemory();
     } finally {
-        for (const pointer of pointers) {Module._free(pointer);}
-        if (outputPointer) {Module._free(outputPointer);}
+        // After an abort the instance is being thrown away, and its allocator can't be trusted.
+        if (!aborted) {
+            for (const pointer of pointers) {wasm._free(pointer);}
+            if (outputPointer) {wasm._free(outputPointer);}
+        }
     }
 };
 
@@ -341,74 +365,82 @@ const reporter = (o) => {
 const isControlled = (o) => o.signal !== undefined || o.onProgress !== undefined;
 
 // Clusters in slices and returns the clustering. `share` is the part of the whole call's progress this takes.
-const clusterInSlices = async (image, o, report, share) => {
+const clusterInSlices = async (wasm, image, o, report, share) => {
     checkAborted(o.signal);
-    const imagePointer = Module._malloc(image.data.length);
+    const imagePointer = wasm._malloc(image.data.length);
     if (!imagePointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
     let job = 0;
+    let aborted = false;
     try {
-        Module.HEAPU8.set(image.data, imagePointer);
-        job = Module._clustering_job_start(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent);
+        wasm.HEAPU8.set(image.data, imagePointer);
+        job = wasm._clustering_job_start(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent);
         report(0);
         while (true) {
-            const progress = Module._clustering_job_step(job, sliceMs);
+            const progress = wasm._clustering_job_step(job, sliceMs);
             if (progress >= 1000) {break;}
             report(share * progress / 1000);
             await yieldNow();
             checkAborted(o.signal);
         }
-        const pointer = Module._clustering_job_result(job);
-        try {return unpack(pointer);} finally {Module._free(pointer);}
+        const pointer = wasm._clustering_job_result(job);
+        try {return unpack(wasm, pointer);} finally {wasm._free(pointer);}
+    } catch (error) {
+        if (!isAbort(error)) {throw error;}
+        aborted = true;
+        discard(wasm);
+        throw outOfMemory();
     } finally {
-        if (job) {Module._clustering_job_free(job);}
-        Module._free(imagePointer);
+        if (!aborted) {
+            if (job) {wasm._clustering_job_free(job);}
+            wasm._free(imagePointer);
+        }
     }
 };
 
 export const getClustering = async (image, options) => {
 
-    await init();
+    const wasm = await acquire();
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(image, o, report, 1);
+        const clustering = await clusterInSlices(wasm, image, o, report, 1);
         report(1);
         return clustering;
     }
 
-    return call([image.data], (imagePointer) => Module._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha));
+    return call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha));
 
 };
 
 export const getPalette = async (image, k, options) => {
 
-    await init();
+    const wasm = await acquire();
     image = load(image);
     k = check(k);
     const o = parseOptions(options, clusterOptions, image);
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(image, o, report, 0.99);
+        const clustering = await clusterInSlices(wasm, image, o, report, 0.99);
         checkAborted(o.signal);
-        const palette = call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+        const palette = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
         report(1);
         return palette;
     }
 
-    return call([image.data], (imagePointer) => Module._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
+    return call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha));
 
 };
 
 export const getPaletteFromClustering = async (clustering, k) => {
 
-    await init();
+    const wasm = await acquire();
     readHeader(clustering);
     k = check(k);
 
-    return call([clustering], (clusteringPointer) => Module._get_palette_from_clustering(clusteringPointer, clustering.length, k));
+    return call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k));
 
 };
 
@@ -416,14 +448,14 @@ export const getPaletteFromClustering = async (clustering, k) => {
 // 0 and partly transparent ones in proportion to their opacity, as they did in clustering.
 export const getPaletteWeights = async (clustering, k) => {
 
-    await init();
+    const wasm = await acquire();
     const header = readHeader(clustering);
     k = check(k);
     if (header.version < 3) {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`);
     }
 
-    const bytes = call([clustering], (clusteringPointer) => Module._get_palette_weights(clusteringPointer, clustering.length, k));
+    const bytes = call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_weights(clusteringPointer, clustering.length, k));
     if (header.merges > 0 && bytes.length === 0) {throw fail('invalid-clustering', "Invalid clustering: its weights are inconsistent.");}
     return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
 
@@ -462,7 +494,7 @@ export const getClusteringInfo = async (clustering) => {
 
 export const quantize = async (image, k, options) => {
 
-    await init();
+    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     k = check(k);
@@ -470,20 +502,20 @@ export const quantize = async (image, k, options) => {
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(image, o, report, 0.9);
+        const clustering = await clusterInSlices(wasm, image, o, report, 0.9);
         checkAborted(o.signal);
-        const mapped = wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width)));
+        const mapped = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width)));
         report(1);
         return mapped;
     }
 
-    return wrap(call([image.data], (imagePointer) => Module._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
+    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width)));
 
 };
 
 export const quantizeWithClustering = async (image, clustering, k, options) => {
 
-    await init();
+    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     readHeader(clustering);
@@ -492,7 +524,7 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    const result = wrap(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
+    const result = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width)));
     reporter(o)(1);
 
     return result;
@@ -501,14 +533,14 @@ export const quantizeWithClustering = async (image, clustering, k, options) => {
 
 export const quantizeWithPalette = async (image, palette, options) => {
 
-    await init();
+    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapOptions, image);
     checkAborted(o.signal);
 
-    const result = wrap(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
+    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width)));
     reporter(o)(1);
 
     return result;
@@ -517,7 +549,7 @@ export const quantizeWithPalette = async (image, palette, options) => {
 
 export const quantizeToIndices = async (image, k, options) => {
 
-    await init();
+    const wasm = await acquire();
     const original = image;
     image = load(image);
     k = check(k);
@@ -525,20 +557,20 @@ export const quantizeToIndices = async (image, k, options) => {
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(image, o, report, 0.9);
+        const clustering = await clusterInSlices(wasm, image, o, report, 0.9);
         checkAborted(o.signal);
-        const indexed = unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width, o.transparent)), original);
+        const indexed = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.width, o.transparent)), original);
         report(1);
         return indexed;
     }
 
-    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original);
+    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original);
 
 };
 
 export const quantizeToIndicesWithClustering = async (image, clustering, k, options) => {
 
-    await init();
+    const wasm = await acquire();
     const original = image;
     image = load(image);
     readHeader(clustering);
@@ -547,7 +579,7 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    const result = unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
     reporter(o)(1);
 
     return result;
@@ -556,14 +588,14 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
 
 export const quantizeToIndicesWithPalette = async (image, palette, options) => {
 
-    await init();
+    const wasm = await acquire();
     const original = image;
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
     checkAborted(o.signal);
 
-    const result = unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
+    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
     reporter(o)(1);
 
     return result;
