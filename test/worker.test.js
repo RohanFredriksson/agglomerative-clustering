@@ -94,6 +94,18 @@ describe('handles', () => {
         await handle.release();
     });
 
+    it('map the kept image with a palette of your own', async () => {
+        const handle = await worker.cluster(image);
+        const palette = await ac.getPalette(image, 6);
+        expect(await handle.quantizeWithPalette(palette, { dither: true, width })).toEqual(await ac.quantizeWithPalette(image, palette, { dither: true, width }));
+        expect(await handle.quantizeToIndicesWithPalette(palette, { transparent: true })).toEqual(await ac.quantizeToIndicesWithPalette(image, palette, { transparent: true }));
+        await expect(handle.quantizeWithPalette(new Uint8Array(4))).rejects.toMatchObject({ code: 'invalid-argument' });
+        const aborted = new AbortController();
+        aborted.abort();
+        await expect(handle.quantizeWithPalette(palette, { signal: aborted.signal })).rejects.toMatchObject({ name: 'AbortError' });
+        await handle.release();
+    });
+
     it('give results in the type of the image they were made from', async () => {
         const imageData = new ImageData(new Uint8ClampedArray(image), width, height);
         const handle = await worker.cluster(imageData);

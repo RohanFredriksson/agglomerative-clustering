@@ -265,18 +265,20 @@ export const createWorker = (options) => {
                 return invoke(method, [id, ...args], [], new Error(), controls);
             };
             // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
-            const withControls = (method, k, mapOptions) => {
+            const withControls = (method, leading, mapOptions) => {
                 let taken;
                 try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
-                return use(method, [k, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
+                return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
             };
             const handle = {
                 getClustering: () => use('handleGetClustering', []),
                 getPalette: (k) => use('handleGetPalette', [k]),
                 getPaletteWeights: (k) => use('handleGetPaletteWeights', [k]),
                 getClusteringInfo: () => use('handleGetClusteringInfo', []),
-                quantize: async (k, mapOptions) => output(await withControls('handleQuantize', k, mapOptions)),
-                quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', k, mapOptions),
+                quantize: async (k, mapOptions) => output(await withControls('handleQuantize', [k], mapOptions)),
+                quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', [k], mapOptions),
+                quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),
+                quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions),
                 release: async () => {
                     if (released) {return;}
                     released = true;

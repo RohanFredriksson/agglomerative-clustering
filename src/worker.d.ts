@@ -31,6 +31,9 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     /** Maps the kept image to the k-colour palette. Returns the same type as the image given to `cluster`. */
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    /** Maps the kept image to a palette of your own (an edited swatch, a brand palette) without sending the pixels again. */
+    quantizeWithPalette(palette: Uint8Array, options?: MappingOptions): Promise<Image>;
+    quantizeToIndicesWithPalette(palette: Uint8Array, options?: MappingIndexOptions): Promise<IndexedImage>;
     /**
      * Frees the image and clustering in the worker. Later calls on the handle fail. Call it when you are done, or
      * declare the handle with `await using`, which does. A handle that is dropped without either is freed once it is

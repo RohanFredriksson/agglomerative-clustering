@@ -15,6 +15,9 @@ async function main() {
     const info = await handle.getClusteringInfo();
     const mse: Float64Array | null = info.mse;
     const indexed = await handle.quantizeToIndices(16, { transparent: 128 });
+    const edited: ImageData = await handle.quantizeWithPalette(palette, { dither: true, signal: controller.signal });
+    const editedIndexed = await handle.quantizeToIndicesWithPalette(palette, { transparent: true });
+    void [edited, editedIndexed];
     await handle.release();
     await terminate();
 

@@ -23,6 +23,8 @@ const methods = {
     handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
     handleQuantize: async (id, k, options) => ac.quantizeWithClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesWithClustering(handle(id).image, handle(id).clustering, k, options),
+    handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, options),
+    handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, options),
 };
 
 // The buffers in a result, to transfer rather than copy. Results are freshly allocated, so nothing here uses them.
@@ -36,7 +38,7 @@ const buffers = (value) => {
 const optionsIndex = {
     getClustering: 1, getPalette: 2, quantize: 2, quantizeWithClustering: 3, quantizeWithPalette: 2,
     quantizeToIndices: 2, quantizeToIndicesWithClustering: 3, quantizeToIndicesWithPalette: 2,
-    cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2,
+    cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2, handleQuantizeWithPalette: 2, handleQuantizeToIndicesWithPalette: 2,
 };
 
 // One AbortController per call that can be cancelled, by call id. It exists from the moment the call arrives, so a call
