@@ -39,7 +39,7 @@ let loading = null;
 const acquire = async (options) => {
 
     if (options === undefined) {options = {};}
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+    if (!isOptionsObject(options)) {
         throw fail('invalid-argument', "Invalid options: expected an object.");
     }
     for (const key of Object.keys(options)) {
@@ -118,6 +118,18 @@ const load = (image) => {
         throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`);
     }
 
+    // width and height are copied to results and used for dithering, so they must make sense: whole numbers that, when
+    // both are given, account for exactly the pixels in the data.
+    for (const key of ['width', 'height']) {
+        const value = image[key];
+        if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+            throw fail('invalid-argument', `Invalid image ${key}: must be a whole number of pixels.`);
+        }
+    }
+    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== image.data.length / channels) {
+        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${image.data.length / channels} pixels.`);
+    }
+
     return {data: bytes(image.data), format: image.format, width: image.width};
 
 };
@@ -181,10 +193,15 @@ const check = (k) => {
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
 //   signal, onProgress: an AbortSignal and a progress callback, which make the clustering run in slices (see clusterInSlices)
 //   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255; for indexed output, gives pixels with alpha below it their own entry
+// An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
+// `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
+// (an iframe, a test sandbox) are fine.
+const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
+
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+    if (!isOptionsObject(options)) {
         throw fail('invalid-argument', "Invalid options: expected an object.");
     }
     for (const key of Object.keys(options)) {

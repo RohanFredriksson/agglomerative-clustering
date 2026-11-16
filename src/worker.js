@@ -6,6 +6,9 @@
 
 const fail = (code, message) => Object.assign(new Error(message), {code});
 
+// An options object is an ordinary object (see isOptionsObject in index.js).
+const isOptionsObject = (value) => value !== null && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]';
+
 const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
 
 // Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
@@ -90,7 +93,7 @@ const wasmOption = (wasm) => {
 // Options for init: only `wasm`, or none.
 const initOptions = (options) => {
     if (options === undefined) {return undefined;}
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
     for (const key of Object.keys(options)) {
         if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`);}
     }
@@ -122,7 +125,7 @@ const otherFunctions = ['getPaletteFromClustering', 'getPaletteWeights', 'getClu
 export const createWorker = (options) => {
 
     if (options === undefined) {options = {};}
-    if (options === null || typeof options !== 'object' || Array.isArray(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
+    if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.");}
     for (const key of Object.keys(options)) {
         if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`);}
     }

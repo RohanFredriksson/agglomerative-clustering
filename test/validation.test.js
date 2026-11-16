@@ -106,6 +106,39 @@ describe('typed array views', () => {
 
 });
 
+describe('options and image dimensions', () => {
+
+    it('rejects options that are not an ordinary object, instead of ignoring them', async () => {
+        for (const options of [new Map([['dither', true]]), new Date(0), new ArrayBuffer(8), new Uint8Array(4), new DataView(new ArrayBuffer(8)), /re/, () => ({}), 'dither', 5, true, null, [], new Set(['dither'])]) {
+            await expect(getPalette(validImage, 4, options), String(options)).rejects.toMatchObject({ code: 'invalid-argument' });
+            await expect(quantize(validImage, 4, options)).rejects.toMatchObject({ code: 'invalid-argument' });
+        }
+    });
+
+    it('accepts class instances and objects without a prototype as options', async () => {
+        class Settings {constructor() {this.precision = 6;}}
+        const bare = Object.assign(Object.create(null), { precision: 6 });
+        const expected = await getPalette(validImage, 4, { precision: 6 });
+        expect(await getPalette(validImage, 4, new Settings())).toEqual(expected);
+        expect(await getPalette(validImage, 4, bare)).toEqual(expected);
+    });
+
+    it('validates the width and height of a RawImage', async () => {
+        const data = new Uint8Array(4 * 6);    // 6 pixels
+        for (const bad of [{ width: -3 }, { width: 1.5 }, { width: NaN }, { width: '3' }, { height: -1 }, { height: 2.5 }, { width: 4, height: 3 }, { width: 2, height: 2 }]) {
+            await expect(getPalette({ data, format: 'rgba', ...bad }, 2), JSON.stringify(bad)).rejects.toMatchObject({ code: 'invalid-argument' });
+        }
+        for (const good of [{}, { width: 3 }, { height: 2 }, { width: 3, height: 2 }, { width: 6, height: 1 }, { width: 0 }]) {
+            await expect(getPalette({ data, format: 'rgba', ...good }, 2), JSON.stringify(good)).resolves.toBeInstanceOf(Uint8Array);
+        }
+        const mapped = await quantize({ data, format: 'rgba', width: 3, height: 2 }, 2);
+        expect([mapped.width, mapped.height]).toEqual([3, 2]);
+        // An empty image may be 0 x 0.
+        await expect(getPalette({ data: new Uint8Array(0), format: 'rgba', width: 0, height: 0 }, 2)).resolves.toBeInstanceOf(Uint8Array);
+    });
+
+});
+
 describe('palette validation', () => {
 
     it('throws when the palette is not bytes', async () => {
