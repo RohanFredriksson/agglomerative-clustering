@@ -39,8 +39,10 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
 // Clustering format version 3: a header, then the root colour, then one record per merge in split order, then
 // zero padding. Multi-byte values are little-endian.
 //   header (22 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
-//                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), 0,
+//                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), transparent cutoff,
 //                       grouped error (f32), 5 zero bytes]
+// The transparent cutoff is the alpha cutoff (1-255) the clustering was made with, which left RGBA pixels below it out and
+// counted the rest whole; 0 when there was none. Indexed output reads it as its default cutoff, so clustering and mapping agree.
 // The grouped error is the squared error that `precision` below 8 discards before clustering (colours are grouped
 // and replaced by their mean), in the same units as the costs; 0 at precision 8. Readers add it to the costs for the
 // error of the leaf clusters. Headers of 13 bytes (before this field) are read as having 0. The header is 22 bytes
@@ -101,6 +103,7 @@ public:
         // indexed-output model, where a pixel is either transparent or fully shown.
         this->binary = cutoff > 0 && image_format == 0;
         this->weight_alpha = weight_alpha && image_format == 0 && !this->binary;
+        this->clustering[12] = this->binary ? uint8_t(cutoff) : 0;
     }
 
     // Runs until the clustering is finished or `budget_ms` milliseconds have passed (checked between small units

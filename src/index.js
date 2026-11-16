@@ -35,7 +35,15 @@ const markClustering = (bytes) => Object.defineProperty(bytes, clusteringBrand, 
 // checks would trip over.
 export function Palette(source, colorSpace = 'rgb') {
     if (!Object.keys(colorSpaces).includes(colorSpace)) {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
-    return markPalette(new Uint8Array(source === undefined ? 0 : source), colorSpace);
+    if (source === undefined) {source = 0;}
+    // The same rules as for a palette passed to a function, so a Palette can't hold what they would reject: a number coerced to a
+    // byte (300 would become 44), a string turned into 0, or a length that isn't whole colours.
+    if (typeof source === 'number') {
+        if (!Number.isInteger(source) || source < 0 || source % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: a length must be a whole number of bytes, a multiple of 3 (flat RGB bytes).");}
+    } else {
+        checkPalette(source);
+    }
+    return markPalette(new Uint8Array(source), colorSpace);
 }
 Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 
@@ -205,6 +213,21 @@ const sniffImageFormat = (bytes) => {
     return null;
 };
 
+// What to say about something that isn't an image, when it is a common thing to pass by mistake: each has a one-line fix.
+const imageHint = (image) => {
+    const decode = " Decode it to pixels first, then pass them.";
+    if (image === undefined || image === null) {return ` Got ${image}.`;}
+    if (typeof image === 'string') {return ` Got a string (a file name, URL or data URL?): load and decode it to pixels first.`;}
+    if (typeof image !== 'object') {return ` Got a ${typeof image}.`;}
+    if (Array.isArray(image)) {return " Got a plain array: use new Uint8Array(array) for RGBA bytes, or { data: new Uint8Array(array), format: 'rgb' }.";}
+    if (image instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && image instanceof SharedArrayBuffer)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
+    if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
+    if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
+    if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
+    if (image.data && !image.format) {return " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage.";}
+    return '';
+};
+
 const load = (image) => {
 
     if (image instanceof Uint8Array) {
@@ -225,8 +248,7 @@ const load = (image) => {
     }
 
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
-        const hint = image && typeof image === 'object' && image.data && !image.format ? " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage." : '';
-        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${hint}`);
+        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`);
     }
 
     if (!(image.data instanceof Uint8Array) && !(image.data instanceof Uint8ClampedArray)) {
@@ -290,7 +312,9 @@ const unpackIndices = (output, image, colorSpace) => {
     const indices = new Indices(count);
     // Little-endian, like the WASM heap, which Emscripten's own typed-array views already assume of the host.
     new Uint8Array(indices.buffer).set(output.subarray(start));
-    const result = {palette, indices, indexBits: 8 * indexBytes, transparentIndex: transparent < 0 ? null : transparent};
+    // `colors` is the palette without the transparent entry, ready to map with again (the entry is black and takes no part in matching)
+    const colors = transparent < 0 ? palette : markPalette(palette.slice(0, 3 * transparent), colorSpace);
+    const result = {palette, colors, indices, indexBits: 8 * indexBytes, transparentIndex: transparent < 0 ? null : transparent};
     if (!(image instanceof Uint8Array)) {
         if (image.width !== undefined) {result.width = image.width;}
         if (image.height !== undefined) {result.height = image.height;}
@@ -397,7 +421,7 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.");
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent, signal, onProgress};
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
 
 };
 
@@ -434,7 +458,7 @@ const readHeader = (clustering) => {
     if (length >= 4 && clustering[0] === 0xAC) {
         const version = clustering[1];
         if (version === 2 && clustering[2] <= 1 && (length === 4 || length % 9 === 7)) {
-            return {version, colorSpace: clustering[2], precision: clustering[3], headerLength: 4, recordLength: 9, merges: length === 4 ? 0 : (length - 7) / 9};
+            return {version, colorSpace: clustering[2], precision: clustering[3], transparent: 0, headerLength: 4, recordLength: 9, merges: length === 4 ? 0 : (length - 7) / 9};
         }
         if (version === 3 && length >= 13) {
             const headerLength = clustering[2], recordLength = clustering[3];
@@ -446,7 +470,7 @@ const readHeader = (clustering) => {
                 }
                 const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
                 const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
-                if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], headerLength, recordLength, merges};}
+                if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], transparent: clustering[12], headerLength, recordLength, merges};}
             }
         }
         if (version > latestVersion) {
@@ -676,7 +700,7 @@ export const getClusteringInfo = async (clustering) => {
 
     const header = readHeader(clustering);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, maxColors: colors, totalWeight: null, mse: null, explained: null};
+    const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, transparent: header.transparent === 0 ? false : header.transparent, maxColors: colors, totalWeight: null, mse: null, explained: null};
     if (header.version < 3) {return info;}
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
@@ -783,7 +807,10 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original, colorSpaceName(header.colorSpace));
+    // The cutoff the clustering was made with is the default, so clustering and mapping agree unless a cutoff is named.
+    const cutoff = o.transparentGiven ? o.transparent : header.transparent;
+
+    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, cutoff)), original, colorSpaceName(header.colorSpace));
     return result;
 
 };

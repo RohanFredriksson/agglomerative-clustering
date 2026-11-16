@@ -179,3 +179,117 @@ describe('across entries and copies of the library', () => {
     });
 
 });
+
+describe('Palette sources are checked like any palette', () => {
+
+    it('refuses what would be coerced into a byte, and what is not whole colours', () => {
+        for (const bad of [[300, 0, 0], [-1, 0, 0], [1.5, 2, 3], ['a', 'b', 'c'], [[1, 2, 3]], [1, 2], 4, -3, 1.5, NaN, 'abc', null, {}, new Float32Array(3), new Int16Array(3), new Uint8Array(4), new ArrayBuffer(3)]) {
+            expect(() => new Palette(bad), String(bad)).toThrow(expect.objectContaining({ code: 'invalid-argument' }));
+            expect(() => new workerEntry.Palette(bad), 'worker entry: ' + String(bad)).toThrow(expect.objectContaining({ code: 'invalid-argument' }));
+        }
+    });
+
+    it('takes bytes, clamped bytes, byte arrays and whole-colour lengths, in both entries', () => {
+        for (const make of [Palette, workerEntry.Palette]) {
+            expect(Array.from(make(new Uint8Array([1, 2, 3])))).toEqual([1, 2, 3]);
+            expect(Array.from(make(new Uint8ClampedArray([1, 2, 3, 4, 5, 6]), 'oklab'))).toEqual([1, 2, 3, 4, 5, 6]);
+            expect(Array.from(new make([255, 0, 7]))).toEqual([255, 0, 7]);
+            expect(new make(9).length).toBe(9);
+            expect(new make().length).toBe(0);
+            expect(new make([]).length).toBe(0);
+        }
+    });
+
+    it('does not take a clustering', async () => {
+        await expect(async () => new Palette(await ac.getClustering(photo))).rejects.toMatchObject({ code: 'invalid-argument' });
+    });
+});
+
+describe('colors of an indexed result', () => {
+    const sprite = new Uint8Array(400 * 4);
+    for (let i = 0; i < 400; i++) {sprite.set([(i * 7) & 255, (i * 13) & 255, (i * 29) & 255, i % 4 === 0 ? 0 : 255], i * 4);}
+
+    it('is the palette without the transparent entry, and maps again to the same result', async () => {
+        const indexed = await ac.quantizeToIndices(sprite, 8, { transparent: true });
+        expect(indexed.transparentIndex).toBe(7);
+        expect(indexed.palette.length).toBe(24);
+        expect(indexed.colors.length).toBe(21);
+        expect(indexed.colors).toBeInstanceOf(Palette);
+        expect(indexed.colors).toEqual(indexed.palette.slice(0, 21));
+        // the whole point: it can be given back, where `palette` would add the transparent entry twice
+        const again = await ac.quantizeToIndicesWithPalette(sprite, indexed.colors, { transparent: true });
+        expect(again.palette).toEqual(indexed.palette);
+        expect(again.indices).toEqual(indexed.indices);
+        expect((await ac.quantizeToIndicesWithPalette(sprite, indexed.palette, { transparent: true })).palette.length).toBe(27);   // the trap
+    });
+
+    it('is the palette itself when there is no transparent entry, and keeps its colour space', async () => {
+        const opaque = await ac.quantizeToIndices(photo, 8, { colorSpace: 'oklab' });
+        expect(opaque.transparentIndex).toBeNull();
+        expect(opaque.colors).toEqual(opaque.palette);
+        expect(opaque.colors.colorSpace).toBe('oklab');
+        const clustering = await ac.getClustering(sprite, { transparent: true, colorSpace: 'oklab' });
+        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8)).colors.colorSpace).toBe('oklab');
+        expect((await ac.quantizeToIndicesWithPalette(sprite, opaque.colors)).colors.colorSpace).toBe('oklab');
+    });
+
+    it('crosses the worker boundary typed', async () => {
+        const worker = workerEntry.createWorker();
+        try {
+            const indexed = await worker.quantizeToIndices(sprite, 8, { transparent: true, colorSpace: 'oklab' });
+            expect(indexed.colors).toBeInstanceOf(Palette);
+            expect(indexed.colors.colorSpace).toBe('oklab');
+            expect(indexed.colors).toEqual((await ac.quantizeToIndices(sprite, 8, { transparent: true, colorSpace: 'oklab' })).colors);
+            const handle = await worker.cluster(sprite, { transparent: true });
+            expect((await handle.quantizeToIndices(8)).colors.length).toBe(21);
+            await handle.release();
+        } finally {
+            await worker.terminate();
+        }
+    });
+});
+
+describe('the transparent cutoff a clustering was made with', () => {
+    const sprite = new Uint8Array(400 * 4);
+    for (let i = 0; i < 400; i++) {sprite.set([(i * 7) & 255, (i * 13) & 255, (i * 29) & 255, [0, 90, 150, 255][i % 4]], i * 4);}
+
+    it('is recorded, and reported by getClusteringInfo', async () => {
+        expect((await ac.getClusteringInfo(await ac.getClustering(sprite))).transparent).toBe(false);
+        expect((await ac.getClusteringInfo(await ac.getClustering(sprite, { transparent: true }))).transparent).toBe(128);
+        expect((await ac.getClusteringInfo(await ac.getClustering(sprite, { transparent: 200 }))).transparent).toBe(200);
+        expect((await ac.getClusteringInfo(await ac.getClustering(sprite, { transparent: false }))).transparent).toBe(false);
+        // an RGB image has no alpha for a cutoff to apply to, so none is recorded
+        expect((await ac.getClusteringInfo(await ac.getClustering({ data: new Uint8Array(30), format: 'rgb' }, { transparent: true }))).transparent).toBe(false);
+        // clusterings from 2.x had no such option
+        expect((await ac.getClusteringInfo(new Uint8Array([0xAC, 2, 0, 8]))).transparent).toBe(false);
+    });
+
+    it('is the default cutoff when mapping to indices, so clustering and mapping agree', async () => {
+        for (const cutoff of [true, 128, 200]) {
+            const clustering = await ac.getClustering(sprite, { transparent: cutoff });
+            const viaClustering = await ac.quantizeToIndicesFromClustering(sprite, clustering, 8);
+            expect(viaClustering).toEqual(await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: cutoff }));
+            expect(viaClustering).toEqual(await ac.quantizeToIndices(sprite, 8, { transparent: cutoff }));
+        }
+        const clustering = await ac.getClustering(sprite, { transparent: 200 });
+        const defaulted = await ac.quantizeToIndicesFromClustering(sprite, clustering, 8);
+        // a cutoff named at mapping wins over the recorded one, and false turns it off
+        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: 100 })).indices.filter((i) => i === 7).length)
+            .toBeLessThan(defaulted.indices.filter((i) => i === 7).length);
+        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: false })).transparentIndex).toBeNull();
+        // a clustering made without a cutoff keeps today's behaviour: no transparent entry unless asked for
+        expect((await ac.quantizeToIndicesFromClustering(sprite, await ac.getClustering(sprite), 8)).transparentIndex).toBeNull();
+    });
+
+    it('is carried through a worker handle', async () => {
+        const worker = workerEntry.createWorker();
+        try {
+            const handle = await worker.cluster(sprite, { transparent: 200 });
+            expect(await handle.quantizeToIndices(8)).toEqual(await ac.quantizeToIndices(sprite, 8, { transparent: 200 }));
+            expect((await handle.getClusteringInfo()).transparent).toBe(200);
+            await handle.release();
+        } finally {
+            await worker.terminate();
+        }
+    });
+});

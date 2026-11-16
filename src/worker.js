@@ -30,7 +30,17 @@ const isClustering = (value) => value instanceof Uint8Array && value[clusteringB
 
 export function Palette(source, colorSpace = 'rgb') {
     if (colorSpace !== 'rgb' && colorSpace !== 'oklab') {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.");}
-    return markPalette(new Uint8Array(source === undefined ? 0 : source), colorSpace);
+    if (source === undefined) {source = 0;}
+    // The same rules as the main entry's Palette (and as for a palette passed to a function): nothing is coerced into a byte.
+    if (typeof source === 'number') {
+        if (!Number.isInteger(source) || source < 0 || source % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: a length must be a whole number of bytes, a multiple of 3 (flat RGB bytes).");}
+    } else {
+        if (isClustering(source)) {throw fail('invalid-argument', "Invalid palette: this is a clustering (from getClustering), not a palette.");}
+        if (!(source instanceof Uint8Array) && !(source instanceof Uint8ClampedArray) && !Array.isArray(source)) {throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.");}
+        if (source.length % 3 !== 0) {throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).");}
+        if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {throw fail('invalid-argument', "Invalid palette: a plain array must be flat RGB bytes, integers from 0 to 255 (not an array of [r, g, b] colours).");}
+    }
+    return markPalette(new Uint8Array(source), colorSpace);
 }
 Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 

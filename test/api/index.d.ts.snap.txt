@@ -64,6 +64,7 @@ export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 interface IndexedImageFields {
     palette: Palette;
+    colors: Palette;
     transparentIndex: number | null;
     width?: number;
     height?: number;
@@ -97,6 +98,7 @@ export function getSwatchesFromClustering(clustering: Clustering, k: number): Pr
 interface ClusteringInfoFields {
     colorSpace: ColorSpace;
     precision: number;
+    transparent: false | number;
     maxColors: number;
 }
 export interface ClusteringInfoV3 extends ClusteringInfoFields {

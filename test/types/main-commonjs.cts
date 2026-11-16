@@ -56,6 +56,11 @@ async function main() {
 
     // A palette knows its colour space and is a Uint8Array; stored bytes become a Clustering by construction
     const space: ColorSpace = palette.colorSpace;
+    const withEntry = await quantizeToIndices(bytes, 8, { transparent: true });
+    const reusable: Palette = withEntry.colors;
+    await quantizeToIndicesWithPalette(bytes, reusable, { transparent: true });
+    const recorded: false | number = (await getClusteringInfo(clustering)).transparent;
+    void [reusable, recorded];
     const asBytes: Uint8Array = palette;
     const typed: Clustering = new Clustering(plainBytes);
     const slice: Uint8Array = palette.slice(0, 3);

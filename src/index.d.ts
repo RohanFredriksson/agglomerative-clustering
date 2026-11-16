@@ -62,7 +62,11 @@ declare const clusteringBrand: unique symbol;
  * `new Palette(bytes, 'oklab')` makes one by hand, and `value instanceof Palette` tells.
  */
 export class Palette extends Uint8Array {
-    /** `source` is bytes (copied), a length, or an array of byte values. */
+    /**
+     * `source` is bytes (a `Uint8Array`, `Uint8ClampedArray` or plain array of integers 0-255, copied) or a length, whole colours
+     * either way (a multiple of 3). It is checked like any palette passed to a function: nothing is coerced into a byte, so
+     * `invalid-argument` for `[300, 0, 0]`, a string, or a length that isn't a multiple of 3.
+     */
     constructor(source?: ArrayLike<number> | number, colorSpace?: ColorSpace);
     /** The space the colours were made in: how they should be matched. `'rgb'` for a palette built from plain bytes. */
     readonly colorSpace: ColorSpace;
@@ -149,7 +153,9 @@ export interface ClusteringOptions extends RunOptions {
      * whole instead of by opacity (so it replaces `alpha` for this call). That is the model of indexed output (GIF, palette
      * PNG), and it gives the same palette everywhere: `getPalette(image, k, { transparent })` is the palette
      * `quantizeToIndices(image, k, { transparent })` uses, apart from that function's extra transparent entry.
-     * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`).
+     * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`). The cutoff is recorded in the
+     * clustering (see `ClusteringInfo.transparent`), and `quantizeToIndicesFromClustering` uses it unless you name one.
+     * It replaces `alpha`: with a cutoff, pixels count whole or not at all.
      */
     transparent?: boolean | number;
 }
@@ -187,7 +193,8 @@ export interface IndexOptions {
      * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is always kept. Where
      * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
      * `ClusteringOptions.transparent`), so its palette is `getPalette(image, k - 1, { transparent })`'s. With a palette
-     * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is.
+     * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
+     * `quantizeToIndicesFromClustering` the default is the cutoff the clustering was made with.
      */
     transparent?: boolean | number;
 }
@@ -201,9 +208,16 @@ interface IndexedImageFields {
     /**
      * Flat RGB bytes, one entry per index, including the transparent entry if there is one. Empty for an image with no
      * pixels. An image with pixels but no visible colour has a single black entry, or with `transparent`, just
-     * the transparent entry. A `Palette`, so it carries the colour space it was matched in.
+     * the transparent entry. A `Palette`, so it carries the colour space it was matched in. This is what an encoder wants
+     * (a GIF or palette PNG has the transparent entry in its palette); to map with these colours again, use `colors`.
      */
     palette: Palette;
+    /**
+     * The colours without the transparent entry: `palette` when there is none (`transparentIndex` is `null`), else
+     * `palette` up to that entry. Pass it to `quantizeToIndicesWithPalette` to map another image with the same colours, so the
+     * transparent entry isn't mistaken for a black colour and added twice.
+     */
+    colors: Palette;
     /** The index of the entry for fully transparent pixels, or `null` if there is none. */
     transparentIndex: number | null;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
@@ -304,6 +318,11 @@ interface ClusteringInfoFields {
     colorSpace: ColorSpace;
     /** Bits per channel it was clustered with. */
     precision: number;
+    /**
+     * The alpha cutoff (1-255) the clustering was made with (`transparent` in `ClusteringOptions`), or `false` for none. It is
+     * the default `transparent` of `quantizeToIndicesFromClustering`, so clustering and mapping agree unless you name another.
+     */
+    transparent: false | number;
     /** The largest palette it can be cut to: its number of distinct clustered colours (fewer than the image's own when `precision` is below 8). */
     maxColors: number;
 }

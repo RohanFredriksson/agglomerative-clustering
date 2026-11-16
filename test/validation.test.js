@@ -387,3 +387,28 @@ describe('real encoded files', () => {
         }
     });
 });
+
+describe('what is said about the usual wrong things to pass as an image', () => {
+    const say = async (value) => (await ac.getPalette(value, 4).catch((e) => e));
+    const cases = [
+        ['a string', 'photo.png', 'Got a string'],
+        ['a data URL', 'data:image/png;base64,AAAA', 'Got a string'],
+        ['a plain array', [1, 2, 3, 255], 'plain array'],
+        ['an ArrayBuffer', new ArrayBuffer(16), 'ArrayBuffer'],
+        ['a canvas', { width: 2, height: 2, getContext() {} }, "getImageData(0, 0, canvas.width, canvas.height)"],
+        ['an ImageBitmap', { width: 2, height: 2, close() {} }, 'ImageBitmap'],
+        ['an image element', { width: 2, nodeName: 'IMG' }, 'image element'],
+        ['a Blob', { size: 3, type: 'image/png', arrayBuffer() {} }, 'Blob or File'],
+        ['undefined', undefined, 'Got undefined'],
+        ['null', null, 'Got null'],
+        ['a number', 7, 'Got a number'],
+    ];
+    for (const [name, value, expected] of cases) {
+        it(`names ${name} and what to do`, async () => {
+            const error = await say(value);
+            expect(error.code).toBe('invalid-argument');
+            expect(error.message).toContain('Invalid image');
+            expect(error.message).toContain(expected);
+        });
+    }
+});
