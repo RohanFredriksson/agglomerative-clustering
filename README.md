@@ -122,13 +122,28 @@ Every function that takes an image also takes an optional last argument of optio
 | Option | Applies to | Values | What it does |
 |---|---|---|---|
 | `precision` | clustering | `1`–`8`, default `8` | Groups colours that share their top `precision` bits per channel before clustering, at their mean colour. **`6` is about 3× faster on photos at practically the same quality** (−0.02 dB), and caps the work on images with huge numbers of colours. `5` is about 8× faster for a small loss. |
-| `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/), where distance tracks perceived difference. It gives lower ΔE2000 at 64+ colours and on smooth gradients, at the cost of PSNR. Use it when the result is for human eyes and you want 64 or more colours. At 16 colours, RGB is better. |
+| `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'rgb'` minimises squared error in sRGB (the best PSNR); `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/). Neither wins everywhere: see "Choosing a colour space". |
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity: fully transparent pixels are ignored, and semi-transparent ones count partially. For opaque images, and images whose pixels are only fully opaque or fully transparent, this is exact pixel counting. `'ignore'` counts every pixel fully, as 1.x did. Alpha is always preserved in the output. |
 | `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts. It scores worse on per-pixel metrics such as PSNR, because the noise is the point. Error is diffused in the chosen `colorSpace`, and fully transparent pixels are left undithered. |
 | `width` | mapping | integer | Needed for dithering when the image is a `Uint8Array`, or a `RawImage` without `width`. `ImageData` provides it. |
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
 | `onProgress` | any call with an image | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". |
 | `transparent` | indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Gives RGBA pixels with alpha below the cutoff (`true` means 128) their own palette entry in `quantizeToIndices*` results; every other pixel is shown fully opaque. For GIFs and palette PNGs. |
+
+### Choosing a colour space
+
+`'rgb'` is the default and the right choice for most photos. We measured both spaces on the 24 Kodak photos and the synthetic set (palettes of 3 to 256 colours, mapped with the matching space, mean and 99th-percentile ΔE2000, PSNR, and ΔE after a small blur for dithered output):
+
+| You are making | Colours | Use | What the numbers say |
+|---|---|---|---|
+| Swatches, dominant colours | 3–8 | `'rgb'` | Keeps more of the image's colourfulness (chroma retention 0.88–0.91 against 0.85–0.88 on photos); mean ΔE is tied. |
+| PNG-8 and web compression | 64–256 | `'rgb'` for PSNR, `'oklab'` for ΔE | RGB has about 0.7–1.1 dB more PSNR on every photo; OKLab has about 4% lower ΔE at 256 colours (better on 22 of 24 photos). |
+| Dithered GIF, retro look | 8–64 | `'rgb'` | Looks closer from a distance: blurred ΔE 2.59 against 2.86 at 16 colours. |
+| Flat graphics, logos, pixel art | 8–32 | either | About equal. |
+| Smooth gradients and skies, not dithered | 8–64 | `'oklab'` | Mean ΔE 11.0 against 13.4 at 8 colours on the synthetic gradients (two images, so a hint). |
+| Noisy or very varied images | any | `'oklab'` | Mean ΔE 7.0 against 7.9 at 64 colours (one synthetic image). |
+
+`'oklab'` also takes 10–30% longer. If you pass a palette to `quantizeWithPalette`, give it the `colorSpace` the palette was made in.
 
 **Colour spaces.** Pixel values are used as they are, as sRGB numbers, whatever the canvas colour space. A wide-gamut `ImageData` (`display-p3`) comes back as `ImageData` in the same colour space, so its colours are not shifted; `colorSpace: 'oklab'` still assumes sRGB primaries, so for wide-gamut data it is approximate.
 
