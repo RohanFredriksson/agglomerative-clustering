@@ -247,3 +247,35 @@ describe('edge cases and options', () => {
     });
 
 });
+
+describe('what k means', () => {
+    // One rule in every function: k is the most palette entries in what you get back.
+    const sprite = new Uint8Array(500 * 4);
+    for (let p = 0; p < 500; p++) {sprite.set([(p * 7) & 255, (p * 13) & 255, (p * 29) & 255, p % 5 === 0 ? 0 : 255], p * 4);}
+
+    it('is the most entries returned, by every function that takes it, with and without transparent', async () => {
+        const clustering = await getClustering(sprite, { transparent: true });
+        for (const k of [1, 2, 8, 64, 256]) {
+            for (const options of [{}, { transparent: true }]) {
+                const entries = [
+                    (await getPalette(sprite, k, options)).length / 3,
+                    (await getSwatches(sprite, k, options)).palette.length / 3,
+                    (await quantizeToIndices(sprite, k, options)).palette.length / 3,
+                ];
+                // k = 1 with a transparent entry keeps one colour, so it is the one case of k + 1
+                const limit = k === 1 && options.transparent ? 2 : k;
+                for (const n of entries) {expect(n, `k=${k} ${JSON.stringify(options)}`).toBeLessThanOrEqual(limit);}
+            }
+            expect((await getPaletteFromClustering(clustering, k)).length / 3).toBeLessThanOrEqual(k);
+            expect((await quantizeToIndicesFromClustering(sprite, clustering, k)).palette.length / 3).toBeLessThanOrEqual(k === 1 ? 2 : k);
+        }
+    });
+
+    it('counts the transparent entry in indexed output, so the colours there are one fewer than a flat palette of the same k', async () => {
+        const flat = await getPalette(sprite, 8, { transparent: true });
+        const indexed = await quantizeToIndices(sprite, 8, { transparent: true });
+        expect(flat.length / 3).toBe(8);                      // a flat palette's entries are all colours
+        expect(indexed.palette.length / 3).toBe(8);           // 7 colours + the transparent entry
+        expect(indexed.colors).toEqual(await getPalette(sprite, 7, { transparent: true }));
+    });
+});

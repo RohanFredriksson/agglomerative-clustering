@@ -294,6 +294,9 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
  * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `getClustering`
  * once and cut it.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
 
@@ -301,6 +304,9 @@ export function getPalette(image: ImageLike, k: number, options?: ClusteringOpti
  * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour at two colours and keeps its
  * place as the palette grows (it is not always the heaviest entry of a larger one), and the palette for
  * `k + 1` is the palette for `k` with one entry refined and one colour appended.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 
@@ -323,12 +329,18 @@ export interface Swatches {
 /**
  * The palette for `image` at `k` colours with each colour's weight and share: one call for swatches with percentages.
  * It clusters the image each time; if you already have a clustering, use `getSwatchesFromClustering`.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 
 /**
  * The same as `getSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
  * Needs a clustering from 3.x; a 2.x clustering has no weights and is rejected.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 
@@ -387,6 +399,9 @@ export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInf
  * Reduces `image` to at most `k` colours and returns the mapped image as the same kind of thing you gave: a `Uint8Array`
  * for a `Uint8Array`, `ImageData` for `ImageData`, an object with the same `format` for a `RawImage` (`ImageResult`; a
  * value typed as the union `ImageLike` gives the union). Each pixel keeps its own alpha.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
 
@@ -394,6 +409,9 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
  * Maps `image` to the `k`-colour cut of a clustering you already have, so trying another `k` or another image mapping
  * costs milliseconds. Matches in the clustering's colour space unless `colorSpace` is given. Returns the same kind of
  * thing as `quantize`.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
+ *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
@@ -409,10 +427,18 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette
  * PNGs, pixel art and pattern generators). The palette is the one `getPalette` gives, except that with `transparent`
  * pixels below the cutoff are left out of it.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
+ *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
-/** Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s. */
+/**
+ * Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s.
+ *
+ * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
+ *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
+ */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */

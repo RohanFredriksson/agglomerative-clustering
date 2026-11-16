@@ -88,10 +88,11 @@ The one-shot functions (`getPalette`, `quantize`, …) do the first steps for yo
 
 The names follow one rule: **`…FromClustering`** derives the colours from a clustering you already hold, and **`…WithPalette`** takes colours you supply. With neither, the image is clustered for you. `getClustering` builds the clustering to hold, `getClusteringInfo` reads one, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
 
-Four words are used throughout:
+Five words are used throughout:
 
 - **clustering**: the tree of an image's colours. It is opaque bytes (a `Clustering`) that you can store next to the image.
-- **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`, with at most **k** colours. A `Palette` knows the colour space it was made in.
+- **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`. A `Palette` knows the colour space it was made in.
+- **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
 - **precision**: an option that groups similar colours before clustering, about 3× faster at practically the same quality.
 
