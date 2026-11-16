@@ -47,6 +47,21 @@ describe('clustering header', () => {
         expect(newer.length % 9).toBe(7);
     });
 
+    it('asks for an upgrade when a header field holds a value this version does not know', async () => {
+        // A later release adds a colour space or weight unit by using a new value in an existing field.
+        for (const index of [4, 6]) {
+            const future = new Uint8Array(await getClustering(gradient));
+            future[index] = 2;
+            await expect(getPaletteFromClustering(future, 4), `byte ${index}`).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(getClusteringInfo(future)).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(getPaletteWeights(future, 4)).rejects.toMatchObject({ code: 'unsupported-version' });
+        }
+        // A damaged length is still just an invalid clustering.
+        const damaged = new Uint8Array(await getClustering(gradient));
+        damaged[3] = 5;
+        await expect(getPaletteFromClustering(damaged, 4)).rejects.toMatchObject({ code: 'invalid-clustering' });
+    });
+
     it('reads records longer than it knows, ignoring the extra fields', async () => {
         const clustering = await getClustering(gradient);
         const merges = (await getClusteringInfo(clustering)).colors - 1;

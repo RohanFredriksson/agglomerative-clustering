@@ -3,10 +3,12 @@ export type ImageFormat = 'rgb' | 'rgba';
 /**
  * What went wrong, on the `code` of every error this library throws (the message is for people and may change):
  * `invalid-argument` (image, k, options or palette), `invalid-clustering`, `unsupported-version` (a clustering from a
- * newer format version, or an older one that lacks what was asked for), `out-of-memory`, and in the worker entry
+ * newer format version or one using a colour space it doesn't know, or an older one that lacks what was asked for),
+ * `out-of-memory`, `wasm-load-failed` (the WebAssembly module could not be loaded or compiled: a missing or blocked file, a
+ * browser without SIMD), and in the worker entry
  * `worker-terminated`, `worker-failed` and `invalid-handle`.
  */
-export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory'
+export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed'
     | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
 
 /** An `Error` thrown by this library. There is no class to test with `instanceof`: check `code`. */

@@ -21,7 +21,7 @@ Since 2.0 every clustering starts with `[0xAC, version, …]`. What was luck in 
 1. **Readers decide by the version byte, never by shape.** The length test exists only to recognise 1.x clusterings, and every version from 2 on is identified by its header.
 2. **Every new version keeps out of 1.x's lengths:** writers pad the end with zero bytes so the length is 4 (empty) or 7 more than a multiple of 9. No reader, including 2.0.x, can then mistake it for a 1.x clustering, and readers ignore the padding (it is shorter than a record).
 3. **From v3 the header describes its own layout:** `[0xAC, version, header length, record length, colour space, precision, …]`. A reader finds the records from the stored lengths and ignores fields it doesn't know, so fields can be added at the end of the header or of each record without a new version. The version is bumped only when an existing field changes meaning.
-4. **Readers reject versions newer than they know** with an error asking for an upgrade, and never guess.
+4. **Readers reject versions newer than they know** with an error asking for an upgrade, and never guess. The same goes for a header field with a fixed set of meanings (the colour space, the weight unit) that holds a value they don't know: that is how a later release adds one, so it is `unsupported-version`, not "damaged".
 5. **Every version stays readable.** `fixtures/clusterings/` holds a stored clustering of each format version with the palettes (and from v3 the weights and mean squared errors) its release gave, and `test/formats.test.js` checks them. Each new version adds a fixture; existing ones are never regenerated.
 
 ## 3.0: worker, indexed output, weights and error curve (done, unreleased)

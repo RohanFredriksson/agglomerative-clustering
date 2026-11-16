@@ -6,7 +6,7 @@ let Module = null;
 
 // Every error this library throws is an Error with a `code` saying what went wrong, so callers needn't match on
 // message text: 'invalid-argument' (image, k, options, palette), 'invalid-clustering', 'unsupported-version' (a
-// clustering from a newer format, or an older one without what was asked for), 'out-of-memory'. The worker entry adds
+// clustering from a newer format, or an older one without what was asked for), 'out-of-memory', 'wasm-load-failed'. The worker entry adds
 // 'worker-terminated', 'worker-failed' and 'invalid-handle'.
 const fail = (code, message) => Object.assign(new Error(message), {code});
 
@@ -31,6 +31,10 @@ const wasmSettings = (wasm, onError) => {
     throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.");
 };
 
+// A module that cannot be loaded is the commonest first-run failure: a 404, a Content-Security-Policy that blocks it, a
+// browser without WebAssembly SIMD. The engine's own error (a CompileError, a failed fetch) says little about which.
+const wasmLoadFailed = (cause) => Object.assign(fail('wasm-load-failed', `Could not load the WebAssembly module (${String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0].slice(0, 140)}). It needs WebAssembly with SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4 or newer). If the file is missing or blocked, check that the .wasm is served and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).`), {cause});
+
 // The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
 let loading = null;
 
@@ -54,7 +58,7 @@ const acquire = async (options) => {
 
     if (!loading) {
         loading = (async () => {
-            const instance = await Promise.race([createWasmModule(settings), failed]);
+            const instance = await Promise.race([createWasmModule(settings), failed]).catch((error) => {throw wasmLoadFailed(error);});
             Module = instance;
             return instance;
         })().catch((error) => {
@@ -101,6 +105,10 @@ const load = (image) => {
         return {data: bytes(image.data), format: 'rgba', width: image.width};
     }
 
+    if (ArrayBuffer.isView(image)) {
+        throw fail('invalid-argument', "Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.");
+    }
+
     if (typeof image !== 'object' || !image || !image.data || !image.format) {
         throw fail('invalid-argument', "Invalid image: expected object with `data` and `format`.");
     }
@@ -136,8 +144,9 @@ const load = (image) => {
 
 const getWrapper = (image) => {
     if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
-        const {width, height} = image;
-        return (output) => new ImageData(new Uint8ClampedArray(output.buffer), width, height);
+        // The pixels stay in the colour space they came in ('display-p3' canvases), so the result must say so.
+        const {width, height, colorSpace} = image;
+        return (output) => new ImageData(new Uint8ClampedArray(output.buffer), width, height, colorSpace ? {colorSpace} : undefined);
     }
     if (!(image instanceof Uint8Array) && typeof image === 'object' && image && image.data && image.format) {
         const {format, width, height} = image;
@@ -289,7 +298,12 @@ const readHeader = (clustering) => {
         }
         if (version === 3 && length >= 13) {
             const headerLength = clustering[2], recordLength = clustering[3];
-            if (headerLength >= 13 && recordLength >= 21 && headerLength <= length && clustering[4] <= 1) {
+            if (headerLength >= 13 && recordLength >= 21 && headerLength <= length) {
+                // A header field with a fixed set of meanings (colour space, weight unit) that holds a value this version
+                // doesn't know is how a later release would add one, so it asks for an upgrade rather than misreading it.
+                if (clustering[4] > 1 || clustering[6] > 1) {
+                    throw fail('unsupported-version', "Invalid clustering: it uses a colour space or weight unit that this version of agglomerative-clustering does not know. If it came from a newer version, upgrade the package; otherwise it is damaged.");
+                }
                 const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
                 const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
                 if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], headerLength, recordLength, merges};}

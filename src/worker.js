@@ -52,8 +52,8 @@ const send = (image) => {
 // RawImage, and a RawImage for ImageData, which is turned back into ImageData here.
 const rebuild = (image) => {
     if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
-        const {width, height} = image;
-        return (result) => new ImageData(new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.byteLength), width, height);
+        const {width, height, colorSpace} = image;
+        return (result) => new ImageData(new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.byteLength), width, height, colorSpace ? {colorSpace} : undefined);
     }
     return (result) => result;
 };

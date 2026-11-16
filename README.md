@@ -28,7 +28,7 @@ npm install agglomerative-clustering
 ```
 
 ## Where it runs
-Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers (CI runs it bundled with Vite and webpack 5 in Chromium; also checked in WebKit by hand). Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2. Firefox hasn't been tried.
+Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI runs the browser build bundled with Vite and webpack 5 in Chromium; it is also checked in WebKit by hand. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error. Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2. Firefox hasn't been tried.
 
 ## Quick start
 
@@ -126,6 +126,10 @@ Every function that takes an image also takes an optional last argument of optio
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see "Cancelling and progress". |
 | `onProgress` | any call with an image | `(fraction) => void` | Called with 0 to 1 as the call runs; see "Cancelling and progress". |
 | `transparent` | indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Gives RGBA pixels with alpha below the cutoff (`true` means 128) their own palette entry in `quantizeToIndices*` results; every other pixel is shown fully opaque. For GIFs and palette PNGs. |
+
+**Colour spaces.** Pixel values are used as they are, as sRGB numbers, whatever the canvas colour space. A wide-gamut `ImageData` (`display-p3`) comes back as `ImageData` in the same colour space, so its colours are not shifted; `colorSpace: 'oklab'` still assumes sRGB primaries, so for wide-gamut data it is approximate.
+
+**Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.
 
 **Large images.** Time and memory grow with the number of *distinct colours*, not just pixels. On the machine used here: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`; 36 megapixels of random noise (the worst case, millions of distinct colours) takes about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB, and an image that needs more (for example 100 megapixels of noise, exactly) is rejected with an `out-of-memory` error that says to try `precision: 6` or a smaller image; the module is then replaced, so later calls work normally.
 
@@ -351,8 +355,9 @@ Every error the library throws is an `Error` with a `code`, so you don't have to
 | --- | --- |
 | `invalid-argument` | A bad image, `k`, option or palette. |
 | `invalid-clustering` | Bytes that aren't a clustering this version can read. |
-| `unsupported-version` | A clustering from a newer format (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getPaletteWeights`). |
+| `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getPaletteWeights`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate. |
+| `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, or a browser without SIMD. The message says what to check, and `cause` is the engine's own error. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped or failed to start, or a handle was released. |
 
 ```js
@@ -377,6 +382,14 @@ Results are transferred back without copying. Images are copied to the worker, u
 
 ### TypeScript
 The package ships its own declarations for both entries, checked in CI with strict mode under `nodenext` (ES module and CommonJS importers), `bundler` resolution, and a Node-only project with no DOM lib (`ImageData` and `WebAssembly.Module` are then simply absent from the types, not errors). The worker entry's declarations use TypeScript's `esnext.disposable` lib for `await using` on handles, so they need **TypeScript 5.2 or newer**, or `skipLibCheck: true` (the default in most templates); the main entry works on older versions. `agglomerative-clustering/worker` is an ES module: from a CommonJS file, use `await import('agglomerative-clustering/worker')`, or TypeScript 5.8+ with `module: nodenext`, which understands `require()` of ES modules.
+
+## Compatibility and versioning
+Within a major version these don't change:
+- the functions, their options and defaults;
+- the palettes, weights and mapped images you get for the same input and options (the golden tests pin them, and they are byte-identical from 2.0 to 3.0);
+- the ability to read every clustering an earlier release wrote. The format is versioned: an older release that meets a newer clustering rejects it with an `unsupported-version` error asking you to upgrade, rather than misreading it.
+
+Releases may get faster, add functions, options, error codes and clustering formats; anything that would change what an existing call returns waits for a new major version. Switch over error `code`s with a default branch, since new codes can appear in a minor release.
 
 ## Migrating from 2.x
 

@@ -105,6 +105,22 @@ async function run() {
     checks.transferDetachesInputAndKeepsResult = movable.data.length === 0 && moved instanceof ImageData && equal(moved.data, reference.data);
     await mover.terminate();
 
+    // A wide-gamut canvas's pixels are in display-p3, so the result has to say so or its colours shift when drawn.
+    let wideGamut = null;
+    try {wideGamut = new ImageData(8, 8, { colorSpace: 'display-p3' });} catch (unsupported) {/* an engine without wide-gamut ImageData */}
+    // Some engines accept the setting but have no colorSpace on ImageData at all; there is nothing to keep there.
+    if (wideGamut && wideGamut.colorSpace === 'display-p3') {
+        for (let i = 0; i < wideGamut.data.length; i += 4) {wideGamut.data.set([(i * 7) & 255, (i * 3) & 255, 40, 255], i);}
+        const gamut = createWorker();
+        const viaMain = await ac.quantize(wideGamut, 4);
+        const viaWorker = await gamut.quantize(wideGamut, 4);
+        const viaHandle = await (await gamut.cluster(wideGamut)).quantize(4);
+        await gamut.terminate();
+        checks.imageDataKeepsItsColorSpace = [viaMain, viaWorker, viaHandle].every((result) => result.colorSpace === 'display-p3');
+    } else {
+        checks.imageDataKeepsItsColorSpace = true;
+    }
+
     // Disposal: where the browser has Symbol.asyncDispose, a handle disposes through it and then refuses calls.
     const disposer = createWorker();
     const disposable = await disposer.cluster(image);

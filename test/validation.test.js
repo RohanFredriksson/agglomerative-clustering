@@ -106,6 +106,20 @@ describe('typed array views', () => {
 
 });
 
+describe('bare typed arrays', () => {
+
+    it('explains what to do with a Uint8ClampedArray such as imageData.data', async () => {
+        for (const bare of [new Uint8ClampedArray(16), new Float32Array(4), new Int8Array(8), new DataView(new ArrayBuffer(8))]) {
+            const error = await getPalette(bare, 2).catch((e) => e);
+            expect(error.code).toBe('invalid-argument');
+            expect(error.message).toContain('ImageData');
+            expect(error.message).toContain("format: 'rgba'");
+        }
+        await expect(getPalette(Buffer.alloc(16, 7), 2)).resolves.toBeInstanceOf(Uint8Array);        // a Node Buffer is a Uint8Array
+    });
+
+});
+
 describe('options and image dimensions', () => {
 
     it('rejects options that are not an ordinary object, instead of ignoring them', async () => {

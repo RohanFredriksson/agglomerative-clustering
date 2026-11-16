@@ -38,14 +38,18 @@ describe('init({ wasm })', () => {
 
     it('reports a wrong location, and a failed init can be retried', async () => {
         const ac = await fresh();
-        await expect(ac.init({ wasm: resolve(dist, 'missing.wasm') })).rejects.toThrow();
+        await expect(ac.init({ wasm: resolve(dist, 'missing.wasm') })).rejects.toMatchObject({ code: 'wasm-load-failed' });
         await ac.init({ wasm: wasmPath });
         expect(await ac.getPalette(image, 6)).toEqual(expected);
     });
 
     it('rejects garbage bytes', async () => {
         const ac = await fresh();
-        await expect(ac.init({ wasm: new Uint8Array([1, 2, 3, 4]) })).rejects.toThrow();
+        const error = await ac.init({ wasm: new Uint8Array([1, 2, 3, 4]) }).catch((e) => e);
+        expect(error.code).toBe('wasm-load-failed');
+        expect(error.message).toContain('SIMD');                 // says what the module needs and what to do about it
+        expect(error.message).toContain('init({ wasm })');
+        expect(error.cause).toBeInstanceOf(Error);               // the engine's own error is kept
         expect(await ac.getPalette(image, 6)).toEqual(expected);
     });
 
@@ -92,8 +96,8 @@ describe('createWorker({ wasm })', () => {
     it('reports a wrong location on the first call and on later ones, without falling back to the default', async () => {
         const worker = createWorker({ wasm: resolve(dist, 'missing.wasm') });
         try {
-            await expect(worker.getPalette(image, 6)).rejects.toThrow();
-            await expect(worker.getPalette(image, 6)).rejects.toThrow();
+            await expect(worker.getPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
+            await expect(worker.getPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
         } finally {
             await worker.terminate();
         }
