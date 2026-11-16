@@ -89,45 +89,73 @@ describe('index types', () => {
 
 });
 
-describe('reserveTransparent', () => {
+describe('transparent', () => {
 
-    it('maps fully transparent pixels to their nearest colour by default', async () => {
+    // The colours quantizeToIndices picked (without the transparent entry).
+    const colours = (result) => result.palette.subarray(0, result.transparentIndex === null ? result.palette.length : result.transparentIndex * 3);
+
+    it('maps every pixel to its nearest colour by default, whatever its alpha', async () => {
         const result = await quantizeToIndices(image, 8);
         expect(result.transparentIndex).toBeNull();
         expect(result.palette.length).toBe(24);
     });
 
-    it('gives fully transparent pixels an extra entry after the palette', async () => {
-        const plain = await quantizeToIndices(image, 8);
-        const result = await quantizeToIndices(image, 8, { reserveTransparent: true });
+    it('gives pixels with alpha below 128 an extra entry after the palette when true', async () => {
+        const result = await quantizeToIndices(image, 8, { transparent: true });
         expect(result.transparentIndex).toBe(8);
-        expect(Array.from(result.palette)).toEqual([...plain.palette, 0, 0, 0]);
+        expect(Array.from(result.palette.subarray(24))).toEqual([0, 0, 0]);
+        const mapped = await quantizeToIndicesWithPalette(image, colours(result));
         for (let p = 0; p < width * height; p++) {
-            expect(result.indices[p]).toBe(image[p * 4 + 3] === 0 ? 8 : plain.indices[p]);
+            expect(result.indices[p]).toBe(image[p * 4 + 3] < 128 ? 8 : mapped.indices[p]);
+        }
+    });
+
+    it('takes the cutoff from a number: pixels below it are transparent, the rest opaque', async () => {
+        const countTransparent = async (transparent) => {
+            const result = await quantizeToIndices(image, 8, { transparent });
+            return Array.from(result.indices).filter((index) => index === result.transparentIndex).length;
+        };
+        const expected = (below) => { let n = 0; for (let p = 0; p < width * height; p++) {n += image[p * 4 + 3] < below;} return n; };
+        expect(await countTransparent(1)).toBe(expected(1));
+        expect(await countTransparent(128)).toBe(expected(128));
+        expect(await countTransparent(129)).toBe(expected(129));
+        expect(expected(129)).toBeGreaterThan(expected(128));
+        expect(await countTransparent(true)).toBe(expected(128));
+    });
+
+    it('leaves pixels below the cutoff out of the palette, and counts the rest whole', async () => {
+        const result = await quantizeToIndices(image, 8, { transparent: true });
+        const visible = [];
+        for (let p = 0; p < width * height; p++) {
+            if (image[p * 4 + 3] >= 128) {visible.push(image[p * 4], image[p * 4 + 1], image[p * 4 + 2], 255);}
+        }
+        expect(colours(result)).toEqual(await getPalette(Uint8Array.from(visible), 8));
+    });
+
+    it('does not depend on the colours of pixels below the cutoff, with or without dithering', async () => {
+        const scrambled = image.slice();
+        for (let p = 0; p < width * height; p++) {
+            if (image[p * 4 + 3] < 128) {scrambled.set([(p * 37) & 255, (p * 91) & 255, (p * 13) & 255], p * 4);}
+        }
+        for (const options of [{}, { dither: true, width }, { colorSpace: 'oklab', dither: 0.5, width }]) {
+            expect(await quantizeToIndices(scrambled, 8, { transparent: true, ...options })).toEqual(await quantizeToIndices(image, 8, { transparent: true, ...options }));
         }
     });
 
     it('needs a wider index type when the extra entry makes 257', async () => {
-        const result = await quantizeToIndicesWithPalette(image, (await getPalette(opaque, 256)), { reserveTransparent: true });
+        const result = await quantizeToIndicesWithPalette(image, (await getPalette(opaque, 256)), { transparent: true });
         expect(result.palette.length).toBe(257 * 3);
         expect(result.indices).toBeInstanceOf(Uint16Array);
         expect(result.transparentIndex).toBe(256);
     });
 
-    it('adds no entry when no pixel is fully transparent, or for rgb data', async () => {
-        const result = await quantizeToIndices(opaque, 8, { reserveTransparent: true });
+    it('adds no entry when no pixel is below the cutoff, or for rgb data', async () => {
+        const result = await quantizeToIndices(opaque, 8, { transparent: true });
         expect(result.transparentIndex).toBeNull();
         expect(result.palette).toEqual(await getPalette(opaque, 8));
         const rgb = { data: new Uint8Array(12).fill(9), format: 'rgb' };
-        expect((await quantizeToIndices(rgb, 4, { reserveTransparent: true })).transparentIndex).toBeNull();
-    });
-
-    it('also leaves transparent pixels out of dithering', async () => {
-        const plain = await quantizeToIndices(image, 8, { dither: true, width });
-        const result = await quantizeToIndices(image, 8, { dither: true, width, reserveTransparent: true });
-        for (let p = 0; p < width * height; p++) {
-            expect(result.indices[p]).toBe(image[p * 4 + 3] === 0 ? 8 : plain.indices[p]);
-        }
+        expect((await quantizeToIndices(rgb, 4, { transparent: true })).transparentIndex).toBeNull();
+        expect((await quantizeToIndices(image, 8, { transparent: 1 })).transparentIndex).toBe(8);
     });
 
 });
@@ -135,7 +163,7 @@ describe('reserveTransparent', () => {
 describe('edge cases and options', () => {
 
     it('an empty image gives an empty palette and no indices', async () => {
-        for (const options of [{}, { reserveTransparent: true }, { dither: true, width: 1 }]) {
+        for (const options of [{}, { transparent: true }, { dither: true, width: 1 }]) {
             const result = await quantizeToIndices(new Uint8Array(0), 4, options);
             expect(result.palette.length).toBe(0);
             expect(result.indices.length).toBe(0);
@@ -150,21 +178,21 @@ describe('edge cases and options', () => {
         expect(Array.from(result.indices)).toEqual([0, 0, 0, 0]);
     });
 
-    it('with reserveTransparent, an image with no visible pixels has just the transparent entry', async () => {
+    it('with transparent, an image with no visible pixels has just the transparent entry', async () => {
         const hidden = new Uint8Array(16);
         for (const options of [{}, { dither: true, width: 2 }, { colorSpace: 'oklab' }]) {
-            const slotted = await quantizeToIndices(hidden, 4, { reserveTransparent: true, ...options });
+            const slotted = await quantizeToIndices(hidden, 4, { transparent: true, ...options });
             expect(Array.from(slotted.palette)).toEqual([0, 0, 0]);
             expect(slotted.transparentIndex).toBe(0);
             expect(Array.from(slotted.indices)).toEqual([0, 0, 0, 0]);
         }
-        const withClustering = await quantizeToIndicesWithClustering(hidden, await getClustering(hidden), 4, { reserveTransparent: true });
+        const withClustering = await quantizeToIndicesWithClustering(hidden, await getClustering(hidden), 4, { transparent: true });
         expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
     });
 
     it('a user palette that is empty still gets a placeholder for visible pixels', async () => {
         const visible = new Uint8Array([10, 20, 30, 255, 0, 0, 0, 0]);
-        const result = await quantizeToIndicesWithPalette(visible, new Uint8Array(0), { reserveTransparent: true });
+        const result = await quantizeToIndicesWithPalette(visible, new Uint8Array(0), { transparent: true });
         expect(Array.from(result.palette)).toEqual([0, 0, 0, 0, 0, 0]);
         expect(result.transparentIndex).toBe(1);
         expect(Array.from(result.indices)).toEqual([0, 1]);
@@ -180,9 +208,11 @@ describe('edge cases and options', () => {
         expect('width' in fromBytes).toBe(false);
     });
 
-    it('validates transparentIndex, and only the indexed functions accept it', async () => {
-        await expect(quantizeToIndices(image, 4, { reserveTransparent: 1 })).rejects.toThrow('Invalid reserveTransparent');
-        await expect(quantize(image, 4, { reserveTransparent: true })).rejects.toThrow("Invalid option 'reserveTransparent'");
+    it('validates transparent, and only the indexed functions accept it', async () => {
+        for (const bad of [0, 256, -1, 1.5, '128', null, NaN]) {
+            await expect(quantizeToIndices(image, 4, { transparent: bad })).rejects.toThrow('Invalid transparent');
+        }
+        await expect(quantize(image, 4, { transparent: true })).rejects.toThrow("Invalid option 'transparent'");
         await expect(quantizeToIndicesWithPalette(image, new Uint8Array([0, 0]))).rejects.toThrow('Invalid palette');
         await expect(quantizeToIndicesWithClustering(image, new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
     });

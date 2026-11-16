@@ -69,11 +69,14 @@ export type QuantizeOptions = ClusteringOptions & MappingOptions;
 
 export interface IndexOptions {
     /**
-     * `false` (default): fully transparent pixels get the index of their nearest colour, like any other pixel.
-     * `true`: if the image is RGBA and has fully transparent pixels, they get an extra entry appended after the
-     * palette (black, taking no part in matching), as palette PNGs expect. Its index is the result's `transparentIndex`.
+     * `false` (default): every pixel gets the index of its nearest colour, whatever its alpha.
+     * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image is RGBA and has pixels with alpha
+     * below the cutoff, they get an extra entry appended after the palette (black, taking no part in matching), as
+     * GIFs and palette PNGs expect; its index is the result's `transparentIndex`. Every other pixel is shown fully
+     * opaque in its nearest colour. Where this function builds the palette itself (`quantizeToIndices`), pixels below
+     * the cutoff are left out of it and the rest count whole, so it can differ from `getPalette`'s for the same image.
      */
-    reserveTransparent?: boolean;
+    transparent?: boolean | number;
 }
 
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
@@ -82,7 +85,7 @@ export type MappingIndexOptions = MappingOptions & IndexOptions;
 export interface IndexedImage {
     /**
      * Flat RGB bytes, one entry per index, including the transparent entry if there is one. Empty for an image with no
-     * pixels. An image with pixels but no visible colour has a single black entry, or with `reserveTransparent`, just
+     * pixels. An image with pixels but no visible colour has a single black entry, or with `transparent`, just
      * the transparent entry.
      */
     palette: Uint8Array;

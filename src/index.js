@@ -164,7 +164,7 @@ const check = (k) => {
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true, or a strength in [0, 1]; error diffusion when mapping pixels
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
-//   reserveTransparent: false (default) or true; for indexed output, gives fully transparent pixels their own entry
+//   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255; for indexed output, gives pixels with alpha below it their own entry
 const parseOptions = (options, allowed, image) => {
 
     if (options === undefined) {options = {};}
@@ -206,20 +206,22 @@ const parseOptions = (options, allowed, image) => {
         }
     }
 
-    const reserveTransparent = options.reserveTransparent === undefined ? false : options.reserveTransparent;
-    if (typeof reserveTransparent !== 'boolean') {
-        throw fail('invalid-argument', "Invalid reserveTransparent: must be a boolean.");
+    // The alpha cutoff for indexed output: 0 for none, else the pixels with alpha below it are transparent.
+    const transparentOption = options.transparent === undefined ? false : options.transparent;
+    const transparent = transparentOption === false ? 0 : transparentOption === true ? 128 : transparentOption;
+    if (!Number.isInteger(transparent) || transparent < 0 || transparent > 255 || (transparent === 0 && transparentOption !== false)) {
+        throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.");
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, reserveTransparent};
+    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, width: dither > 0 ? width : 0, transparent};
 
 };
 
 const clusterOptions = ['colorSpace', 'precision', 'alpha'];
 const quantizeOptions = ['colorSpace', 'precision', 'alpha', 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width'];
-const quantizeIndexOptions = [...quantizeOptions, 'reserveTransparent'];
-const mapIndexOptions = [...mapOptions, 'reserveTransparent'];
+const quantizeIndexOptions = [...quantizeOptions, 'transparent'];
+const mapIndexOptions = [...mapOptions, 'transparent'];
 
 // Reads a clustering's header, or throws if it isn't a clustering this version can read. Version 1 (1.x) has no
 // header and is told apart by its length, 0 or 3 more than a multiple of 9, which no later version has (they pad
@@ -413,7 +415,7 @@ export const quantizeToIndices = async (image, k, options) => {
     k = check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
 
-    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
+    return unpackIndices(call([image.data], (imagePointer) => Module._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original);
 
 };
 
@@ -427,7 +429,7 @@ export const quantizeToIndicesWithClustering = async (image, clustering, k, opti
     const o = parseOptions(options, mapIndexOptions, image);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
-    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
+    return unpackIndices(call([image.data, clustering], (imagePointer, clusteringPointer) => Module._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.width, o.transparent)), original);
 
 };
 
@@ -439,6 +441,6 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
 
-    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.reserveTransparent ? 1 : 0)), original);
+    return unpackIndices(call([image.data, palette], (imagePointer, palettePointer) => Module._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, o.colorSpace, o.dither, o.width, o.transparent)), original);
 
 };

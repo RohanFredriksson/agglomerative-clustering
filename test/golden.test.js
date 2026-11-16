@@ -100,7 +100,7 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));
         check(`${name}/map/oklab/400`, await quantizeWithPalette(rgba, large, { colorSpace: 'oklab' }));
         const indexed = (result) => new Uint8Array([...result.palette, ...new Uint8Array(result.indices.buffer), (result.transparentIndex ?? -1) & 255]);
-        check(`${name}/indices/rgb/16/dither/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: true, width, reserveTransparent: true })));
+        check(`${name}/indices/rgb/16/dither/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: true, width, transparent: true })));
         check(`${name}/indices/oklab/400`, indexed(await quantizeToIndicesWithPalette(rgba, large, { colorSpace: 'oklab' })));
     }, 60_000);
 

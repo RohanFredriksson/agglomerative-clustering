@@ -48,7 +48,7 @@ describe('a worker gives the same results as the main entry', () => {
     it('for indexed output', async () => {
         const clustering = await ac.getClustering(image);
         const palette = await ac.getPalette(image, 5);
-        expect(await worker.quantizeToIndices(raw, 300, { reserveTransparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { reserveTransparent: true }));
+        expect(await worker.quantizeToIndices(raw, 300, { transparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { transparent: true }));
         expect(await worker.quantizeToIndicesWithClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 6));
         expect(await worker.quantizeToIndicesWithPalette(image, palette)).toEqual(await ac.quantizeToIndicesWithPalette(image, palette));
     });
@@ -79,7 +79,7 @@ describe('handles', () => {
         expect(await handle.getPaletteWeights(9)).toEqual(await ac.getPaletteWeights(clustering, 9));
         expect(await handle.getClusteringInfo()).toEqual(await ac.getClusteringInfo(clustering));
         expect(await handle.quantize(9, { dither: true, width })).toEqual(await ac.quantizeWithClustering(image, clustering, 9, { dither: true, width }));
-        expect(await handle.quantizeToIndices(9, { reserveTransparent: true })).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 9, { reserveTransparent: true }));
+        expect(await handle.quantizeToIndices(9, { transparent: true })).toEqual(await ac.quantizeToIndicesWithClustering(image, clustering, 9, { transparent: true }));
         await handle.release();
         await expect(handle.getPalette(2)).rejects.toThrow('released');
     });
