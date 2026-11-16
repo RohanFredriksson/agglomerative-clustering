@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 
 // A minimal valid 2x2 solid red RGBA image.
 const validImage = new Uint8Array([
@@ -115,6 +115,15 @@ describe('palette validation', () => {
 
     it('throws when the palette is not whole RGB triples', async () => {
         await expect(quantizeWithPalette(validImage, new Uint8Array([255, 0, 0, 0]))).rejects.toThrow('multiple of 3');
+    });
+
+    it('rejects a plain array that is not flat bytes, instead of silently turning it into zeros or wrapping it', async () => {
+        const threeColours = [[255, 0, 0], [0, 255, 0], [0, 0, 255]];     // length 3: the shape gifenc and fast-png use
+        for (const palette of [threeColours, ['255', '0', '0'], [1.5, 2, 3], [NaN, 0, 0], [300, 0, 0], [-5, 0, 0], [null, 0, 0], [undefined, 0, 0]]) {
+            await expect(quantizeWithPalette(validImage, palette)).rejects.toMatchObject({ code: 'invalid-argument' });
+            await expect(quantizeToIndicesWithPalette(validImage, palette)).rejects.toMatchObject({ code: 'invalid-argument' });
+        }
+        await expect(quantizeWithPalette(validImage, threeColours)).rejects.toThrow('not an array of [r, g, b] colours');
     });
 
     it('accepts Uint8ClampedArray and plain array palettes', async () => {

@@ -294,6 +294,15 @@ const checkPalette = (palette) => {
     if (palette.length % 3 !== 0) {
         throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).");
     }
+    // Typed arrays are bytes already. A plain array is copied into bytes, which would turn an array of [r, g, b] colours
+    // into zeros, strings into numbers and 300 into 44 without a word, so it must hold byte values.
+    if (Array.isArray(palette)) {
+        for (const value of palette) {
+            if (!Number.isInteger(value) || value < 0 || value > 255) {
+                throw fail('invalid-argument', "Invalid palette: a plain array must be flat RGB bytes, integers from 0 to 255 (not an array of [r, g, b] colours).");
+            }
+        }
+    }
 };
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,

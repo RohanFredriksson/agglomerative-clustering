@@ -278,7 +278,7 @@ Reduces the image to at most `k` colours. Options: `colorSpace`, `precision`, `a
 Quantizes using a clustering you already have. Options: `colorSpace` (defaults to the clustering's), `dither`, `width`.
 
 ### `quantizeWithPalette(image, palette, options?)`
-Maps each pixel to its nearest colour in any palette (flat RGB bytes). The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
+Maps each pixel to its nearest colour in any palette (flat RGB bytes: a `Uint8Array`, or a plain array of integers from 0 to 255). A palette from elsewhere that is an array of `[r, g, b]` colours must be flattened first (`colors.flat()`); it is rejected rather than misread. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value. Options: `colorSpace`, `dither`, `width`.
 
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 Like `quantize`, but returns each pixel's palette index rather than its colour: `{ palette, indices, indexBits, transparentIndex }`, plus `width` and `height` when the input has them. `palette` is flat RGB bytes and `indices` has one entry per pixel: a `Uint8Array` for up to 256 palette entries, `Uint16Array` up to 65536, `Uint32Array` above. `indexBits` says which (8, 16 or 32), so you can branch on it without `instanceof`. This is what palette PNGs, pixel art, and embroidery or paint-by-number patterns need. Options: those of `quantize`, plus `transparent`.
