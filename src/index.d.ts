@@ -108,7 +108,10 @@ export interface MappingOptions extends RunOptions {
      * Needs the image width: taken from `ImageData` or `RawImage.width`, or given as `width`.
      */
     dither?: boolean | number;
-    /** Image width in pixels, for dithering a `Uint8Array` or a `RawImage` without `width`. */
+    /**
+     * Image width in pixels, for dithering a `Uint8Array` or a `RawImage` without `width`. An image that has its own
+     * `width` (`ImageData`, or a `RawImage` with one) must agree with it: a different value is an `invalid-argument` error.
+     */
     width?: number;
 }
 

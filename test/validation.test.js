@@ -241,3 +241,28 @@ describe('the order arguments are checked in', () => {
         }
     });
 });
+
+describe('width given twice', () => {
+    const data = new Uint8Array(100 * 50 * 4).map((_, i) => (i * 7) & 255);
+    const raw = { data, format: 'rgba', width: 100, height: 50 };
+    const functions = {
+        quantize: (image, options) => ac.quantize(image, 4, options),
+        quantizeToIndices: (image, options) => ac.quantizeToIndices(image, 4, options),
+        quantizeWithPalette: (image, options) => ac.quantizeWithPalette(image, new Uint8Array([0, 0, 0, 255, 255, 255]), options),
+    };
+
+    it('rejects an options.width that disagrees with the image, even one that divides the pixel count', async () => {
+        for (const [name, run] of Object.entries(functions)) {
+            const error = await run(raw, { dither: true, width: 50 }).catch((e) => e);
+            expect(error.code, name).toBe('invalid-argument');
+            expect(error.message, name).toContain("does not match the image's width (100)");
+        }
+    });
+
+    it('accepts the same width twice, and a width for an image that has none', async () => {
+        const same = await ac.quantize(raw, 4, { dither: true, width: 100 });
+        expect(same.data).toEqual((await ac.quantize(raw, 4, { dither: true })).data);
+        const bare = await ac.quantize(data, 4, { dither: true, width: 100 });
+        expect(bare).toEqual(same.data);
+    });
+});

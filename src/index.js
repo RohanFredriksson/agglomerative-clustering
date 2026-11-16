@@ -238,6 +238,11 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid dither: must be a boolean or a number from 0 to 1.");
     }
 
+    // The image's own width and options.width are two sources for one fact: they may repeat each other, but not disagree
+    // (a wrong row length would dither without an error, as long as it divides the pixel count).
+    if (options.width !== undefined && image && image.width !== undefined && options.width !== image.width) {
+        throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`);
+    }
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
         const channels = image.format === 'rgb' ? 3 : 4;
