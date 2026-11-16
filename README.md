@@ -188,6 +188,51 @@ const { data: output } = await quantize(image, 32, { precision: 6, dither: true 
 await sharp(Buffer.from(output), { raw: { width: info.width, height: info.height, channels: 4 } }).toFile('photo-32.png');
 ```
 
+## Using the output
+
+Palettes are flat RGB bytes (`[r, g, b, r, g, b, …]`): the neutral, compact form. Encoders and UIs each want their own flavour, and each is a line or two. Given a `palette` from any function above (and `weights` from `getPaletteWeights`):
+
+```js
+// [[r, g, b], …]: what gifenc, fast-png, color-thief and libimagequant use
+const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
+
+// A CSS colour, and a 0xRRGGBB number
+const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
+const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
+
+// Swatches with their share of the image (the palette is in split order: the dominant colour first)
+const total = weights.reduce((a, b) => a + b, 0);
+const swatches = Array.from(weights, (w, i) => ({ color: css(i), share: w / total }));
+```
+
+**A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
+
+```js
+import { GIFEncoder } from 'gifenc';   // in plain Node ESM: import gifenc from 'gifenc'; const { GIFEncoder } = gifenc;
+import { quantizeToIndices } from 'agglomerative-clustering';
+
+// 255 colours + the transparent entry = 256, the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
+const { palette, indices, transparentIndex } = await quantizeToIndices(image, 255, { transparent: true });
+const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
+
+const gif = GIFEncoder();
+gif.writeFrame(indices, image.width, image.height, { palette: colors, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
+gif.finish();
+const bytes = gif.bytes();
+```
+
+**A palette PNG** with [fast-png](https://github.com/image-js/fast-png): the same call, then give the transparent entry alpha 0:
+
+```js
+import { encode } from 'fast-png';
+
+const png = encode({
+  width: image.width, height: image.height, data: indices, depth: 8, channels: 1,
+  palette: colors.map((color, i) => [...color, i === transparentIndex ? 0 : 255]),
+});
+```
+`indices` is a `Uint8Array` here because there are at most 256 entries; with more, it is a `Uint16Array` and these formats can't hold it (check `indexBits`). Anti-aliased edges snap to transparent or opaque at the `transparent` cutoff (see above), which is all a GIF can say; a PNG can hold several translucent palette entries, but this library doesn't make them.
+
 ## Input types
 
 Every function that takes an image accepts:
