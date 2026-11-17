@@ -8,8 +8,8 @@ export interface CodedError extends Error {
 export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;
     format: ImageFormat;
-    width?: number;
-    height?: number;
+    width?: number | undefined;
+    height?: number | undefined;
 }
 export type PlatformImageData = typeof globalThis extends {
     ImageData: {
@@ -42,25 +42,25 @@ export type PaletteLike = (Palette | Uint8Array | Uint8ClampedArray | readonly n
 export type ColorSpace = 'rgb' | 'oklab';
 export type AlphaMode = 'weight' | 'ignore';
 export interface CancelOptions {
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
 }
 export interface RunOptions extends CancelOptions {
-    onProgress?(progress: number): void;
+    onProgress?: ((progress: number) => void) | undefined;
 }
 export interface ClusteringOptions extends RunOptions {
-    colorSpace?: ColorSpace;
-    precision?: number;
-    alpha?: AlphaMode;
-    transparent?: boolean | number;
+    colorSpace?: ColorSpace | undefined;
+    precision?: number | undefined;
+    alpha?: AlphaMode | undefined;
+    transparent?: boolean | number | undefined;
 }
 export interface MappingOptions extends CancelOptions {
-    colorSpace?: ColorSpace;
-    dither?: boolean | number;
-    width?: number;
+    colorSpace?: ColorSpace | undefined;
+    dither?: boolean | number | undefined;
+    width?: number | undefined;
 }
 export type QuantizeOptions = ClusteringOptions & MappingOptions;
 export interface IndexOptions {
-    transparent?: boolean | number;
+    transparent?: boolean | number | undefined;
 }
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
 export type MappingIndexOptions = MappingOptions & IndexOptions;
@@ -82,7 +82,7 @@ export type IndexedImage = (IndexedImageFields & {
     indices: Uint32Array;
 });
 export interface InitOptions {
-    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
+    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule | undefined;
 }
 export const version: string;
 export const formatVersion: 3;

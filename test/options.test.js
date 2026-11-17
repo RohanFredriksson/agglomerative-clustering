@@ -64,7 +64,7 @@ describe('options validation', () => {
     });
 
     it('throws when the width does not divide the pixel count', async () => {
-        await expect(quantize(gradient, 8, { dither: true, width: 60 })).rejects.toThrow('not a multiple');
+        await expect(quantize(gradient, 8, { dither: true, width: 60 })).rejects.toThrow('does not divide');
     });
 
 });

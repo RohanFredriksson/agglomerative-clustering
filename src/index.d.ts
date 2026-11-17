@@ -38,9 +38,9 @@ export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;
     format: ImageFormat;
     /** Width in pixels. Optional; used for dithering, and copied to `quantize*` results. */
-    width?: number;
+    width?: number | undefined;
     /** Height in pixels. Optional; copied to `quantize*` results. */
-    height?: number;
+    height?: number | undefined;
 }
 
 /**
@@ -132,7 +132,7 @@ export interface CancelOptions {
      * interrupted. The call's result is the same as without a signal. In the worker entry the worker itself stops
      * working on the call, and a call still waiting its turn never starts.
      */
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
 }
 
 /** Cancelling a long call and watching it, for the functions that cluster. Both are optional and can be used apart. */
@@ -142,7 +142,7 @@ export interface RunOptions extends CancelOptions {
      * backwards, ending with 1. It is approximate and not linear in time. Giving it also makes the call run in
      * slices, so other tasks (such as painting) get a turn while it works.
      */
-    onProgress?(progress: number): void;
+    onProgress?: ((progress: number) => void) | undefined;
 }
 
 /** Options for building the colour hierarchy: `getClustering`, `getPalette`, and the clustering half of `quantize` and `quantizeToIndices`. */
@@ -151,18 +151,18 @@ export interface ClusteringOptions extends RunOptions {
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
      * `'oklab'` clusters in OKLab. Neither is better everywhere: see "Choosing a colour space" in the README.
      */
-    colorSpace?: ColorSpace;
+    colorSpace?: ColorSpace | undefined;
     /**
      * Bits per channel, 1-8 (default 8: every distinct colour is clustered exactly). Lower values group colours
      * that share their top bits before clustering, at their mean colour, which bounds the time spent on images
      * with very many distinct colours. 6 is a good choice for large photos.
      */
-    precision?: number;
+    precision?: number | undefined;
     /**
      * How RGBA pixels count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
      * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
      */
-    alpha?: AlphaMode;
+    alpha?: AlphaMode | undefined;
     /**
      * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for RGBA images: pixels with alpha
      * below the cutoff don't exist as far as the palette is concerned. They are left out of clustering, and the rest count
@@ -173,7 +173,7 @@ export interface ClusteringOptions extends RunOptions {
      * clustering (see `ClusteringInfo.transparent`), and `quantizeToIndicesFromClustering` uses it unless you name one.
      * It replaces `alpha` (with a cutoff, pixels count whole or not at all), so giving both is an `invalid-argument` error.
      */
-    transparent?: boolean | number;
+    transparent?: boolean | number | undefined;
 }
 
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
@@ -184,17 +184,17 @@ export interface MappingOptions extends CancelOptions {
      * `quantizeToIndicesWithPalette`; `'rgb'` for plain bytes, and in `quantize` and `quantizeToIndices`, which match in the
      * space they cluster in.
      */
-    colorSpace?: ColorSpace;
+    colorSpace?: ColorSpace | undefined;
     /**
      * Error-diffusion dithering (serpentine Floyd-Steinberg): `false` (default), `true`, or a strength from 0 to 1.
      * Needs the image width: taken from `ImageData` or `RawImage.width`, or given as `width`.
      */
-    dither?: boolean | number;
+    dither?: boolean | number | undefined;
     /**
      * Image width in pixels, for dithering a `Uint8Array` or a `RawImage` without `width`. An image that has its own
      * `width` (`ImageData`, or a `RawImage` with one) must agree with it: a different value is an `invalid-argument` error.
      */
-    width?: number;
+    width?: number | undefined;
 }
 
 /** Clustering and mapping options together, for `quantize`, which does both. */
@@ -214,7 +214,7 @@ export interface IndexOptions {
      * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
      * `quantizeToIndicesFromClustering` the default is the cutoff the clustering was made with.
      */
-    transparent?: boolean | number;
+    transparent?: boolean | number | undefined;
 }
 
 /** The options of `quantizeToIndices`: clustering, mapping and indexed-output options. */
@@ -262,7 +262,7 @@ export interface InitOptions {
      * - its bytes, as an `ArrayBuffer` or a typed array;
      * - an already compiled `WebAssembly.Module`.
      */
-    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule;
+    wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule | undefined;
 }
 
 /** The version of this library, as in its `package.json` (for example `'3.0.0'`). The WebAssembly module checks it matches its own when it loads. */

@@ -12,6 +12,27 @@ export const formatVersion = latestVersion;
 
 const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
 
+// The worker thread's script in Node: the one next to this file, which imports the main entry (index.mjs) next to it. A
+// server bundle (Next.js with webpack or Turbopack) copies the script elsewhere without what it imports, and may hand
+// over its URL as another realm's URL object, which Node's Worker rejects. Then the package's own copy is used, found the
+// way Node resolves packages from the working directory. Built from strings so Node's own URL class makes it.
+const nodeWorkerScript = async () => {
+    const load = (name) => import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', name].join(':'));
+    let script = null;
+    try {
+        const made = new URL('./worker-thread.mjs', import.meta.url);
+        script = new URL(typeof made.href === 'string' ? made.href : String(made));
+    } catch (error) {/* a URL Node can't read: use the package's copy */}
+    try {
+        const [{existsSync}, {fileURLToPath, pathToFileURL}] = await Promise.all([load('fs'), load('url')]);
+        if (script && script.protocol === 'file:' && existsSync(fileURLToPath(script)) && existsSync(fileURLToPath(new URL('./index.mjs', script)))) {return script;}
+        const {createRequire} = await load('module');
+        const packaged = new URL('./dist/worker-thread.mjs', pathToFileURL(createRequire(`${process.cwd()}/`).resolve('agglomerative-clustering/package.json')));
+        if (existsSync(fileURLToPath(packaged))) {return packaged;}
+    } catch (error) {/* not found: start the script as it is, and report what happens */}
+    return script || new URL('./worker-thread.mjs', import.meta.url);
+};
+
 // Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
 const start = async (receive) => {
     if (!isNode) {
@@ -24,7 +45,7 @@ const start = async (receive) => {
     // The specifier is built at run time so no bundler tries to resolve it (esbuild ignores comment hints on a literal).
     const {Worker: NodeWorker} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'worker_threads'].join(':'));
     // The worker script needs none of the parent's flags, and some (like --input-type) are invalid in a worker.
-    const worker = new NodeWorker(new URL('./worker-thread.mjs', import.meta.url), {execArgv: []});
+    const worker = new NodeWorker(await nodeWorkerScript(), {execArgv: []});
     worker.on('message', receive);
     worker.on('error', (error) => receive({failure: error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
@@ -32,11 +53,34 @@ const start = async (receive) => {
     return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => worker.ref(), unref: () => worker.unref()};
 };
 
+// Checked by tag as well as `instanceof`, so an ImageData from another realm (an iframe's canvas) or a module compiled by a
+// bundler's runtime is recognised (see index.js).
+const tagOf = (value) => Object.prototype.toString.call(value);
+const isImageData = (value) => typeof value === 'object' && value !== null
+    && ((typeof ImageData !== 'undefined' && value instanceof ImageData) || tagOf(value) === '[object ImageData]');
+const isWasmModule = (value) => typeof value === 'object' && value !== null
+    && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
+
+// A copy of the bytes in an argument (a typed array, or an image's `data`), for a call made before the worker is ready to
+// take it: the caller may change or reuse its arrays as soon as the call returns, as with the main entry. Once the worker
+// is running, a call posts (and so copies or transfers) its arguments before it returns.
+const own = (value) => {
+    if (ArrayBuffer.isView(value)) {
+        const copy = value.slice();
+        // A Palette or Clustering keeps its tags (slice gives a plain array).
+        for (const key of Object.getOwnPropertySymbols(value)) {Object.defineProperty(copy, key, {value: value[key]});}
+        if (Object.prototype.hasOwnProperty.call(value, 'colorSpace')) {Object.defineProperty(copy, 'colorSpace', {value: value.colorSpace});}
+        return copy;
+    }
+    if (isOptionsObject(value) && ArrayBuffer.isView(value.data)) {return {...value, data: value.data.slice()};}
+    return value;
+};
+
 // Images cross to the worker as plain {data, format, width?, height?} objects (ImageData can't cross into Node
 // worker threads, and its clamped array needn't), and mapped images are rebuilt in the caller's type on return.
 // Anything else is sent as it is, so the worker's validation gives the usual errors.
 const send = (image) => {
-    if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
+    if (isImageData(image)) {
         const data = image.data;
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
     }
@@ -52,7 +96,7 @@ const send = (image) => {
 // The worker returns what the main entry gives for the image it was sent: the same type for a Uint8Array or a
 // RawImage, and a RawImage for ImageData, which is turned back into ImageData here.
 const rebuild = (image) => {
-    if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
+    if (isImageData(image)) {
         const {width, height, colorSpace} = image;
         return (result) => new ImageData(new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.byteLength), width, height, colorSpace ? {colorSpace} : undefined);
     }
@@ -89,9 +133,9 @@ const remoteError = (info, origin) => {
 // string, and bytes and compiled modules are cloned across.
 const wasmOption = (wasm) => {
     if (typeof wasm === 'string') {return wasm;}
-    if (typeof URL !== 'undefined' && wasm instanceof URL) {return wasm.href;}
-    if (wasm instanceof ArrayBuffer || ArrayBuffer.isView(wasm)) {return wasm;}
-    if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {return wasm;}
+    if (typeof wasm === 'object' && wasm !== null && ((typeof URL !== 'undefined' && wasm instanceof URL) || tagOf(wasm) === '[object URL]')) {return wasm.href;}
+    if (wasm instanceof ArrayBuffer || tagOf(wasm) === '[object ArrayBuffer]' || ArrayBuffer.isView(wasm)) {return wasm;}
+    if (isWasmModule(wasm)) {return wasm;}
     throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
@@ -158,6 +202,18 @@ export const createWorker = (options) => {
     let nextId = 1;
     let nextHandle = 1;
     const pending = new Map();
+    // Whether a call made now is posted before it returns (see `own`).
+    const ready = () => connection !== null && !initial;
+    // The image of a call made before the worker is ready: with `transfer: true` its buffer is moved out of the caller's
+    // hands at once (a structured clone that transfers it, so the caller's array empties now, as it would on posting),
+    // otherwise copied.
+    const take = (sent) => {
+        const buffers = transfer ? pixelBuffers(sent) : [];
+        if (buffers.length > 0 && typeof structuredClone === 'function') {
+            try {return structuredClone(sent, {transfer: buffers});} catch (error) {/* untransferable: copy it */}
+        }
+        return own(sent);
+    };
 
     // Safety net for handles dropped without release(): when a handle is garbage-collected, the worker frees what it
     // kept for it. Best-effort, since collection time is up to the engine; release() or `await using` is the contract.
@@ -287,16 +343,17 @@ export const createWorker = (options) => {
                 const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name));
                 // Checked before the image is copied or transferred away, so an aborted call leaves it with the caller.
                 if (signal && signal.aborted) {throw abortReason(signal);}
-                const args = rest.slice();
+                let args = rest.slice();
                 if (position < args.length) {args[position] = options;}
-                const sent = send(image);
+                let sent = send(image);
+                if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
                 return mapped ? rebuild(image)(result) : result;
             })();
         };
     }
     for (const name of otherFunctions) {
-        instance[name] = (...args) => invoke(name, args, [], new Error());
+        instance[name] = (...args) => invoke(name, ready() ? args : args.map(own), [], new Error());
     }
 
     instance.init = (initArgs) => {
@@ -313,7 +370,7 @@ export const createWorker = (options) => {
             const {options, signal, onProgress} = takeControls(clusterOptions);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
-            const sent = send(image);
+            const sent = ready() ? send(image) : take(send(image));
             try {
                 await invoke('cluster', [id, sent, options], pixelBuffers(sent), origin, {signal, onProgress});
             } catch (error) {

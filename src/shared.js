@@ -68,6 +68,8 @@ export const markPalette = (bytes, colorSpace) => {
     return bytes;
 };
 export const markClustering = (bytes) => {
+    // Made by this library (or checked by `Clustering`), so its checksum needn't be checked again (see readHeader).
+    checked.add(bytes);
     Object.defineProperty(bytes, clusteringBrand, {value: true});
     Object.defineProperty(bytes, inspect, {value: clusteringView});
     return bytes;
@@ -118,12 +120,53 @@ Object.defineProperty(Clustering, Symbol.hasInstance, {value: isClustering});
 //   version 2: [0xAC, 2, colour space, precision], then 9-byte records of colours
 //   version 3: [0xAC, 3, header length, record length, colour space, precision, weight unit, weight shift,
 //              total weight (u32 LE), 0, grouped error (f32 LE, from header length 17), ...], then records of
-//              colours, parent index, lighter weight and cost
+//              colours, parent index, lighter weight and cost; from 3.0.0-beta.2 the header holds a checksum (bytes 17-20)
 export const latestVersion = 3;
 
 // The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
 // `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
 export const formatVersion = latestVersion;
+
+// ----- Checksums -----------------------------------------------------------------------------------------------------
+// From 3.0.0-beta.2, a version 3 header holds the CRC-32 of the whole clustering (bytes 17-20, read as zeros while it is
+// computed; see src/clustering.cpp). 0 means none: beta.1 wrote zeros there. A clustering is checked the first time it
+// is used, and the arrays that passed (and the ones this library made) are remembered, so cutting one clustering
+// again and again checks it once. Changing a clustering's bytes after that is not detected here, but the records are
+// also checked as they are replayed, so it still can't give a palette of the wrong size.
+const checksumAt = 17;
+let crcTable = null;
+const crc32 = (bytes) => {
+    if (!crcTable) {
+        crcTable = new Uint32Array(256);
+        for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let b = 0; b < 8; b++) {c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;}
+            crcTable[n] = c >>> 0;
+        }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) {
+        const byte = i >= checksumAt && i < checksumAt + 4 ? 0 : bytes[i];
+        crc = crcTable[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+};
+const checked = new WeakSet();
+const damaged = () => fail('invalid-clustering', "Invalid clustering: its bytes are damaged (the checksum doesn't match): it was truncated, changed or mixed up with other data after getClustering made it. Cluster the image again.", 'clustering');
+
+// The message for bytes that aren't a clustering: 1.x clusterings are mentioned only for bytes that could be one (no header,
+// and a length of 0 or 3 more than a multiple of 9).
+const notAClustering = (clustering) => {
+    const length = clustering.length;
+    if (clustering[0] !== 0xAC && (length % 9 === 0 || length % 9 === 3)) {
+        return fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering. If it was stored by agglomerative-clustering 1.x, that format is no longer read: cluster the image again.", 'clustering');
+    }
+    if (clustering[0] === 0xAC && length >= 2 && (clustering[1] === 2 || clustering[1] === 3)) {
+        return fail('invalid-clustering', `Invalid clustering: it starts like a format ${clustering[1]} clustering, but its length or header doesn't fit one (${length} bytes): it was probably truncated or damaged. Cluster the image again.`, 'clustering');
+    }
+    return fail('invalid-clustering', `Invalid clustering: not a clustering from getClustering (${length} bytes that don't start with a clustering header).`, 'clustering');
+};
+
 export const readHeader = (clustering) => {
     if (isPalette(clustering)) {
         throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from getPalette and getPaletteFromClustering; a clustering comes from getClustering.", 'clustering');
@@ -147,14 +190,23 @@ export const readHeader = (clustering) => {
                 }
                 const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
                 const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
-                if (padding < 9) {return {version, colorSpace: clustering[4], precision: clustering[5], transparent: clustering[12], headerLength, recordLength, merges};}
+                if (padding < 9) {
+                    // Headers shorter than 21 bytes (from before 3.0.0-beta.1) have no checksum field. A damaged header length that
+                    // makes one look that short skips this check, but then the records don't line up, which the replay reports.
+                    if (!checked.has(clustering) && headerLength >= checksumAt + 4) {
+                        const stored = (clustering[checksumAt] | (clustering[checksumAt + 1] << 8) | (clustering[checksumAt + 2] << 16) | (clustering[checksumAt + 3] << 24)) >>> 0;
+                        if (stored !== 0 && stored !== crc32(clustering)) {throw damaged();}
+                        checked.add(clustering);
+                    }
+                    return {version, colorSpace: clustering[4], precision: clustering[5], transparent: clustering[12], headerLength, recordLength, merges};
+                }
             }
         }
         if (version > latestVersion) {
             throw fail('unsupported-version', `Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`, 'clustering');
         }
     }
-    throw fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering. (Clusterings from agglomerative-clustering 1.x are no longer read: cluster the image again.)", 'clustering');
+    throw notAClustering(clustering);
 };
 
 // Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent

@@ -2,7 +2,7 @@
 // same way instead of waiting forever on a thread that will never answer, and the instance recovers once the problem is
 // gone. (A blocked or missing worker script, such as under a strict CSP or a misconfigured bundler, looks like this.)
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, copyFileSync, rmSync } from 'fs';
+import { mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -13,8 +13,10 @@ const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
 
 const folder = mkdtempSync(join(tmpdir(), 'ac-broken-'));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
-// The package without its worker thread script.
+// The package with a worker thread script that fails as it starts. (A missing script isn't this case in Node: the worker
+// entry then starts the package's own copy, as it does in a server bundle that moved it.)
 for (const file of ['index.mjs', 'shared.mjs', 'clustering.js', 'clustering.wasm', 'worker.mjs']) {copyFileSync(join(dist, file), join(folder, file));}
+writeFileSync(join(folder, 'worker-thread.mjs'), "throw new Error('this worker script is broken');\n");
 
 const settle = (promise, ms = 8000) => Promise.race([
     promise.then(() => 'resolved', (error) => error),

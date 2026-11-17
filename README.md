@@ -23,8 +23,10 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 ## Install
 
 ```sh
-npm install agglomerative-clustering
+npm install agglomerative-clustering@next
 ```
+
+**3.0 is in beta.** This page describes 3.0, which is published under the `next` tag until its release; a plain `npm install agglomerative-clustering` still gives 2.0 (see [its README](https://www.npmjs.com/package/agglomerative-clustering/v/2.0.0) and [what changed](docs/migrating.md)).
 
 It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (see [Where it runs](#where-it-runs)).
 
@@ -181,14 +183,18 @@ gif.finish();
 const bytes = gif.bytes();
 ```
 
-**A palette PNG** with [fast-png](https://github.com/image-js/fast-png): the same call, then give the transparent entry alpha 0:
+**A palette PNG** with [fast-png](https://github.com/image-js/fast-png): the same call, then move the transparent entry to the front and give it alpha 0. A PNG lists alpha for the first palette entries, in order, and fast-png writes only the alphas below 255, so the transparent entry has to come first or the alpha lands on the wrong colour:
 
 ```js
 import { encode } from 'fast-png';
 
+// Swap the transparent entry with entry 0 (when there is one), in the palette and in the indices.
+const t = transparentIndex ?? 0;
+const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
 const png = encode({
-  width: image.width, height: image.height, data: indices, depth: 8, channels: 1,
-  palette: colors.map((color, i) => [...color, i === transparentIndex ? 0 : 255]),
+  width: image.width, height: image.height, depth: 8, channels: 1,
+  data: indices.map(swap),
+  palette: colors.map((_, i) => [...colors[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
 });
 ```
 
@@ -211,12 +217,21 @@ import { createWorker } from 'agglomerative-clustering/worker';
 const worker = createWorker();
 const handle = await worker.cluster(imageData, { precision: 6 });
 
+let controller = null;
 slider.oninput = async () => {
-  ctx.putImageData(await handle.quantize(Number(slider.value), { dither: true }), 0, 0);
+  controller?.abort();                  // a size the slider has already moved past isn't worth finishing
+  controller = new AbortController();
+  try {
+    ctx.putImageData(await handle.quantize(Number(slider.value), { dither: true, signal: controller.signal }), 0, 0);
+  } catch (error) {
+    if (error.name !== 'AbortError') {throw error;}
+  }
 };
 ```
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 (as Next.js uses it) and esbuild, and Parcel 2 works with its `packageExports` option on. In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
+Calls to one worker run in order, and re-mapping a large image takes a while (about 0.3 s at 10 megapixels), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Aborting the previous call drops it from the queue. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
+
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 and esbuild, Parcel 2 works with its `packageExports` option on, and for Next.js see [Next.js](#nextjs). In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
 
 ### Using the output
 
@@ -337,10 +352,12 @@ Three things in this library are about alpha, and they act at different stages:
 | | What it is | Stage | Effect |
 |---|---|---|---|
 | `'rgba'` input | The format of the pixels (bare `Uint8Array` and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none) | input | RGB images have no alpha, so nothing below applies to them. |
-| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. Each pixel keeps its own alpha in the output. |
-| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see "Transparency". |
+| `alpha` | An option: `'weight'` (default) or `'ignore'` | clustering | `'weight'` counts each RGBA pixel in proportion to its opacity, so transparent pixels don't count; `'ignore'` counts every pixel fully, as 1.x did. Each pixel keeps its own alpha in the output. |
+| `transparent` | An option: `false` (default), `true`, or an alpha cutoff `1`–`255` | clustering; indexed output | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them one transparent entry, counted in `k`. |
 
 Give one or the other: `transparent` replaces `alpha`, so naming both is an error. Use `alpha` (the default) for swatches and for images that keep each pixel's alpha, and `transparent` when the destination has one transparent colour, as GIF and palette PNG do, in the clustering step too, so the palette you cut is the one you map with. Translucent palette colours are not supported.
+
+The cutoff decides which side a half-transparent pixel falls on. With the default (128), a soft drop shadow under 50% opacity disappears, and the darker part of it becomes solid; raise the cutoff (`transparent: 200`) to drop more of it, or lower it to keep more.
 
 ### Palette and Clustering
 The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy three things:
@@ -348,6 +365,7 @@ The palettes and clusterings this library returns are ordinary `Uint8Array`s wit
 - **A palette maps in the space it was made in.** `quantizeWithPalette(image, palette)` matches an OKLab palette in OKLab without being told; name a `colorSpace` to override it. Plain bytes are matched in RGB.
 - **A clustering can't be passed as a palette**, or the other way round. TypeScript rejects it, and at run time it throws (`invalid-argument` or `invalid-clustering`), with no guessing about bytes.
 - **`new Palette(bytes, colorSpace)` and `new Clustering(bytes)` give bytes their type back**, and check them: `new Palette([300, 0, 0])` throws rather than wrapping 300 to 44, and `new Clustering(bytes)` throws `invalid-clustering` unless they are one. The functions still accept a clustering as plain bytes, so stored clusterings keep working in JavaScript; TypeScript wants the constructor.
+- **A clustering is checked before it is used.** Clusterings carry a checksum, so stored bytes that came back damaged (truncated, a changed byte, a lossy base64 round trip) are reported as `invalid-clustering` rather than cut into a wrong palette.
 
 ```js
 import { Clustering, Palette, getPaletteFromClustering } from 'agglomerative-clustering';
@@ -362,6 +380,16 @@ palette.slice(0, 3) instanceof Palette;                           // false: slic
 
 `slice`, `subarray`, `structuredClone`, `postMessage` and storage give plain, untagged `Uint8Array`s (the worker entry carries the tags across for you). In Node, `console.log` shows the tag: `Palette(oklab) Uint8Array(6) [ … ]`.
 
+**Storing a palette.** Storage keeps a palette's bytes but not its colour space, and plain bytes are matched in RGB. So an OKLab palette that you store and read back maps differently from the one you stored, without an error. Store the colour space with it and give it back:
+
+```js
+await db.put('palette', { bytes: Array.from(palette), colorSpace: palette.colorSpace });
+const { bytes, colorSpace } = await db.get('palette');
+const restored = new Palette(bytes, colorSpace);   // maps exactly as the palette you stored
+```
+
+A clustering needs none of this: its colour space is in its bytes.
+
 ### Cancelling and progress
 Every function that takes an image accepts `signal`; the ones that cluster (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
 
@@ -374,10 +402,10 @@ const clustering = await getClustering(image, {
 ```
 
 - **Slices.** With either option, clustering runs in slices of about 10 ms, so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
-- **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is the one error without a `code`: check `error.name === 'AbortError'`. An already aborted signal does no work.
+- **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes: check `error.name === 'AbortError'`. An already aborted signal does no work.
 - **Mapping can't be interrupted** (it takes a few milliseconds). The functions that only map check the signal before they start, and don't take `onProgress`.
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.
-- **In a worker** the worker itself stops, and a call still queued is removed without running.
+- **In a worker** the work in the worker stops too, and a call still queued is removed without running. The worker keeps running for later calls.
 
 ### Errors
 
@@ -388,17 +416,18 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | `code` | When |
 | --- | --- |
 | `invalid-argument` | A bad image, `k`, option or palette. |
-| `invalid-clustering` | Bytes that aren't a clustering this version can read. |
+| `invalid-clustering` | Bytes that aren't a clustering this version can read, or a stored clustering that came back damaged (its checksum or its records don't fit). |
 | `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getSwatchesFromClustering`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate. |
-| `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message says what to check, and `cause` is the engine's own error. |
+| `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped or failed to start, or a handle was released. |
 
 ```js
 try {
   await getPaletteFromClustering(stored, 16);
 } catch (error) {
-  if (error.code === 'unsupported-version' || error.code === 'invalid-clustering') { /* cluster the image again */ }
+  const code = error instanceof Error && 'code' in error ? error.code : undefined;   // also compiles in strict TypeScript
+  if (code === 'unsupported-version' || code === 'invalid-clustering') { /* cluster the image again */ }
   else { throw error; }
 }
 ```
@@ -417,6 +446,8 @@ Calls run one at a time, in order. Results are transferred back without copying.
 Both entries ship declarations, checked in CI under strict mode with `nodenext` (ES module and CommonJS importers), `bundler`, and a Node-only project without the DOM lib. The worker entry's declarations use `await using` for handles, so they need **TypeScript 5.2 or newer** (or `skipLibCheck: true`); the main entry works on older versions. From a CommonJS file, load the worker entry with `await import('agglomerative-clustering/worker')`, or use TypeScript 5.8+ with `module: nodenext`.
 
 Results narrow: checking `result.indexBits === 8` makes `indices` a `Uint8Array`, and checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`), and errors are `CodedError`s with `code` and `argument`.
+
+An image object assigned to a variable before it is passed widens `format: 'rgba'` to `string`, which no longer matches `RawImage`: write `format: 'rgba' as const`, or declare the variable as `RawImage`.
 
 ## API
 
@@ -503,7 +534,7 @@ Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signa
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a failed load can be retried. To say where the module is, see [Loading the WebAssembly module](#loading-the-webassembly-module).
 
 ### `version: string` and `formatVersion: number`
-`version` is the library's version (`'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: if a stored clustering's `getClusteringInfo(stored).formatVersion` differs, cluster the image again (2.x clusterings still load, but have no weights). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
+`version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: if a stored clustering's `getClusteringInfo(stored).formatVersion` differs, cluster the image again (2.x clusterings still load, but have no weights). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
 
 ## Running it
 
@@ -524,6 +555,32 @@ await init({ wasm: wasmModule });                                      // a comp
 
 The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler, for Cloudflare Workers) can give you `wasmModule`. A strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src`. `createWorker({ wasm })` passes the same option to a worker.
 
+### Next.js
+
+Checked with Next.js 16, under Turbopack and webpack, in production builds:
+
+- **Client components** need nothing: the main entry and the worker entry both work as they are.
+- **Route handlers and Server Components** (the Node runtime) work as they are too. A server bundle moves the package's files away from each other, so the library then loads `clustering.wasm` and the worker script from the package in `node_modules`, found from the directory the server runs in. If your deployment doesn't ship `node_modules` with the server (a `standalone` output copied elsewhere, say), leave the package out of the bundle instead, which keeps its files together:
+
+  ```js
+  // next.config.js
+  export default { serverExternalPackages: ['agglomerative-clustering'] };
+  ```
+- **The Edge runtime** can't fetch or compile a `.wasm` file itself, so import the module and pass it to `init`. The import has to be a relative path to the file (the bundler drops the `?module` query from a package path):
+
+  ```ts
+  import { init, getSwatches } from 'agglomerative-clustering';
+  // @ts-expect-error -- `?module` gives a compiled WebAssembly.Module
+  import wasm from '../../../node_modules/agglomerative-clustering/dist/clustering.wasm?module';
+
+  export const runtime = 'edge';
+
+  export async function POST(request: Request) {
+    await init({ wasm });   // loads once; later calls return at once
+    // … decode the upload to pixels, then getSwatches(pixels, 8)
+  }
+  ```
+
 ### Performance and limits
 
 **Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.
@@ -534,12 +591,14 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 
 | What you see | Why | What to do |
 |---|---|---|
-| `wasm-load-failed` | The `.wasm` is missing, blocked, served from another version, or the browser has no WebAssembly SIMD. | Check the file is served and the Content-Security-Policy allows `'wasm-unsafe-eval'`; say where it is with `init({ wasm })`. |
+| `wasm-load-failed` | The `.wasm` is missing, blocked, served from another version, moved by a server bundle, or the browser has no WebAssembly SIMD. | Check the file is served and the Content-Security-Policy allows `'wasm-unsafe-eval'`; say where it is with `init({ wasm })`. In Next.js, see "Next.js". |
 | `invalid-argument` naming a PNG, JPEG, … | You passed an image file's bytes, not pixels. | Decode it first (canvas or `createImageBitmap` in a browser, sharp in Node). |
 | A palette of nonsense, no error | RGB bytes were passed bare, so they were read as RGBA. | Pass `{ data, format: 'rgb', width }`, or add an alpha channel (`sharp(...).ensureAlpha()`). |
 | `invalid-argument` for a canvas, `Blob` or `ImageBitmap` | Those aren't pixels. | Draw to a canvas and pass `getImageData()`. |
 | The palette isn't sorted by how much of the image each colour covers | Palettes come in split order, so they nest. | Sort by `shares` (see "Using the output"), or accept the order. |
 | `quantizeWithPalette` maps differently from a plain-bytes palette | A `Palette` is matched in the space it was made in, unless you name one. | Pass `colorSpace` explicitly if you want a specific space. |
+| A stored OKLab palette maps differently from when it was made | Storage dropped its colour space, so it is matched in RGB. | Store `palette.colorSpace` too and restore it with `new Palette(bytes, colorSpace)` (see "Palette and Clustering"). |
+| `invalid-clustering` for a clustering you stored | Its bytes changed in storage (truncated, re-encoded, mixed up). | Cluster the image again, and check how it is stored: as a binary blob, or base64 that is decoded in full. |
 | `out-of-memory` | An image with very many distinct colours. | Use `precision: 6`, or a smaller image. |
 | The worker doesn't start under a bundler | The bundler didn't see the `new Worker(new URL(...))` form. | See "Off the main thread" for the bundlers that are tested. |
 | TypeScript says a `Uint8Array` isn't a `Clustering` | Stored bytes lost their type. | `new Clustering(bytes)` (see "Palette and Clustering"). |

@@ -73,6 +73,7 @@ describe('clustering header', () => {
         const extended = new Uint8Array(header + 3 + 30 * merges + (7 - (header + 3 + 30 * merges) % 9 + 9) % 9);
         extended.set(clustering.subarray(0, header + 3));
         extended[3] = 30;
+        extended.fill(0, 17, 21);   // no checksum: these bytes aren't the ones it was computed over (read unchecked, like 3.0.0-beta.1's)
         for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(header + 3 + 21 * i, header + 24 + 21 * i), header + 3 + 30 * i);}
         for (const k of [1, 5, 40]) {
             expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));

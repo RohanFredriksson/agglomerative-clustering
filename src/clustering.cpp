@@ -40,7 +40,11 @@ void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb
 // zero padding. Multi-byte values are little-endian.
 //   header (22 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
 //                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), transparent cutoff,
-//                       grouped error (f32), 5 zero bytes]
+//                       grouped error (f32), checksum (u32), 1 zero byte]
+// The checksum is the CRC-32 (the one zlib and PNG use) of the whole clustering with the checksum's own 4 bytes read as
+// zeros, so a stored clustering that was damaged (truncated, a flipped bit, other bytes) is reported, not cut into a wrong
+// palette. 0 means none: 3.0.0-beta.1 wrote zeros there, and its clusterings are read unchecked (a real checksum of 0 is
+// written as 0 too, and goes unchecked: one clustering in four billion).
 // The transparent cutoff is the alpha cutoff (1-255) the clustering was made with, which left RGBA pixels below it out and
 // counted the rest whole; 0 when there was none. Indexed output reads it as its default cutoff, so clustering and mapping agree.
 // The grouped error is the squared error that `precision` below 8 discards before clustering (colours are grouped
@@ -63,6 +67,7 @@ constexpr uint8_t clustering_version = 3;
 constexpr size_t clustering_header = 22;
 constexpr size_t clustering_min_header = 13;
 constexpr size_t clustering_record = 21;
+constexpr size_t clustering_checksum = 17;
 
 void write_u32(uint8_t* at, uint32_t value) {
     for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}
@@ -70,6 +75,27 @@ void write_u32(uint8_t* at, uint32_t value) {
 
 uint32_t read_u32(const uint8_t* at) {
     return uint32_t(at[0]) | (uint32_t(at[1]) << 8) | (uint32_t(at[2]) << 16) | (uint32_t(at[3]) << 24);
+}
+
+// CRC-32 (reflected, polynomial 0xEDB88320) of a clustering, reading the checksum field as zeros. The JavaScript
+// (shared.js) computes the same to check a clustering before it is used.
+uint32_t clustering_crc(const uint8_t* data, size_t length) {
+    static uint32_t table[256];
+    static bool ready = false;
+    if (!ready) {
+        for (uint32_t n = 0; n < 256; n++) {
+            uint32_t c = n;
+            for (int b = 0; b < 8; b++) {c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;}
+            table[n] = c;
+        }
+        ready = true;
+    }
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < length; i++) {
+        const uint8_t byte = i >= clustering_checksum && i < clustering_checksum + 4 ? 0 : data[i];
+        crc = table[(crc ^ byte) & 0xFF] ^ (crc >> 8);
+    }
+    return crc ^ 0xFFFFFFFFu;
 }
 
 // Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA pixel counts in proportion to its
@@ -130,7 +156,11 @@ public:
         }
     }
 
-    std::vector<uint8_t> take() {return std::move(this->clustering);}
+    // The finished clustering, sealed with its checksum.
+    std::vector<uint8_t> take() {
+        write_u32(&this->clustering[clustering_checksum], clustering_crc(this->clustering.data(), this->clustering.size()));
+        return std::move(this->clustering);
+    }
 
 private:
 
@@ -403,6 +433,7 @@ ClusteringView read_clustering(const uint8_t* data, size_t length) {
         view.body = data + 4;
         view.merges = length == 4 ? 0 : (length - 4 - 3) / 9;
     }
+    // The checksum is checked by the JavaScript before calling in.
     if (data[1] == 3 && length >= clustering_min_header) {
         const size_t header = data[2], record = data[3];
         if (header < clustering_min_header || record < clustering_record || header > length || data[4] > 1) {return view;}
@@ -422,10 +453,15 @@ ClusteringView read_clustering(const uint8_t* data, size_t length) {
 // parent's position for its heavier half and appends the lighter half, so the palette for k + 1 is the palette
 // for k with one entry refined and one appended, and index 0 follows the dominant colour. Records list
 // the heavier child first. As a set, the result is the same as replaying the records into an unordered set.
-std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
+// Clusterings are untrusted bytes, so the records are checked as they are replayed: each must split a colour that is in
+// the palette at that point (and, from version 3, the cluster its parent index names, which has that colour). A
+// clustering whose records don't fit together sets `valid` to false (the exports then return a null pointer, which the
+// JavaScript reports as an invalid clustering) rather than giving a palette of the wrong size or colours.
+std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k, bool& valid) {
 
     std::vector<uint8_t> palette;
     ClusteringView view = read_clustering(clustering, clustering_length);
+    valid = view.valid;
     if (!view.valid || view.empty || k < 1) {return palette;}
 
     typedef std::array<uint8_t, 3> Color;
@@ -435,25 +471,31 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     std::vector<Color> order = {read(0)};
     std::unordered_map<uint32_t, size_t> where = {{key(order[0]), 0}};
     const size_t splits = std::min(size_t(k - 1), view.merges);
+    // From version 3, each cluster's colour by split-order index, to check the records' parent indices against.
+    std::vector<uint32_t> cluster_colour;
+    if (view.version >= 3) {cluster_colour.push_back(key(order[0]));}
 
     for (size_t i = 0; i < splits; i++) {
         const size_t at = 3 + view.record * i;
         const Color parent = read(at);
         Color heavy = read(at + 3), light = read(at + 6);
 
-        size_t slot = order.size();
+        if (view.version >= 3) {
+            const uint32_t index = read_u32(view.body + at + 9);
+            if (index > i || cluster_colour[index] != key(parent)) {valid = false; return {};}
+            cluster_colour[index] = key(heavy);
+            cluster_colour.push_back(key(light));
+        }
+
         auto found = where.find(key(parent));
-        if (found != where.end()) {slot = found->second; where.erase(found);}
+        if (found == where.end()) {valid = false; return {};}
+        const size_t slot = found->second;
+        where.erase(found);
 
         if (!where.count(key(heavy))) {
-            if (slot < order.size()) {
-                order[slot] = heavy;
-                where[key(heavy)] = slot;
-            } else {
-                where[key(heavy)] = order.size();
-                order.push_back(heavy);
-            }
-        } else if (slot < order.size()) {
+            order[slot] = heavy;
+            where[key(heavy)] = slot;
+        } else {
             // The heavier half's colour is already listed (clusters can share a colour), so the parent's place
             // empties: close the gap. Rare, so re-indexing everything is fine.
             order.erase(order.begin() + slot);
@@ -472,6 +514,12 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
 
 }
 
+// The same for a clustering just made here, which is valid by construction.
+std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
+    bool valid = false;
+    return _get_palette_from_clustering(clustering, clustering_length, k, valid);
+}
+
 // The weight, in pixels, of each colour in the k-colour palette (in the palette's order), from a version 3
 // clustering. Clusters are followed by their split-order index, since different clusters can share a colour;
 // each palette colour's weight is the total of the clusters with that colour. Returns nothing for clusterings
@@ -483,8 +531,9 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
     std::vector<double> weights;
     ClusteringView view = read_clustering(clustering, clustering_length);
     if (!view.valid || view.version < 3 || k < 1) {return weights;}
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, clustering_length, k);
-    if (view.empty) {return weights;}
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering, clustering_length, k, valid);
+    if (!valid || view.empty) {return weights;}
 
     const double pixels = std::ldexp(1.0, clustering[7]) / (clustering[6] == 1 ? 255.0 : 1.0);
     const size_t splits = std::min(size_t(k - 1), view.merges);
@@ -754,7 +803,9 @@ uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, in
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette_from_clustering(uint8_t* clustering_data, int clustering_length, int k) {
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k, valid);
+    if (!valid) {return nullptr;}
     return pack_variable_size(palette);
 }
 
@@ -776,7 +827,9 @@ uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
 uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width) {
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k);
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k, valid);
+    if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
     return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width);
 }
@@ -796,7 +849,9 @@ uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_forma
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
 uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width, int transparent) {
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, colours_for_entries(image_data, image_length, image_format, transparent, k));
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
+    if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
     return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width, transparent);
 }
