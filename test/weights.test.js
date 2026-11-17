@@ -76,6 +76,36 @@ describe('the weights of getSwatchesFromClustering', () => {
         await expect(weightsOf(clustering, 4)).rejects.toThrow('weights are inconsistent');
     });
 
+    // An earlier parent passes the order check, but if it is a different cluster from the one the record splits, its
+    // colour isn't the record's merged colour. That once aborted the module (reported as out-of-memory).
+    it('rejects a clustering whose records name the wrong earlier cluster as parent', async () => {
+        const clustering = new Uint8Array(await getClustering(gradient));
+        const [header, record] = [clustering[2], clustering[3]];
+        const at = (i) => header + 3 + record * i;
+        const parent = (i) => clustering[at(i) + 9] | (clustering[at(i) + 10] << 8) | (clustering[at(i) + 11] << 16) | (clustering[at(i) + 12] << 24);
+        const merged = (i) => Array.from(clustering.subarray(at(i), at(i) + 3)).join();
+        const root = Array.from(clustering.subarray(header, header + 3)).join();
+        let i = 1;
+        while (parent(i) === 0 || merged(i) === root) {i++;}
+        clustering.fill(0, at(i) + 9, at(i) + 13); // point record i at the root instead of its real parent
+        await expect(weightsOf(clustering, i + 2)).rejects.toMatchObject({ code: 'invalid-clustering', message: expect.stringContaining('weights are inconsistent') });
+    });
+
+    it('reports corrupted parent indices as invalid clusterings, never as an abort', async () => {
+        const original = new Uint8Array(await getClustering(gradient));
+        const [header, record] = [original[2], original[3]];
+        const codes = new Set();
+        for (let i = 1; i < 150; i++) {
+            for (const value of [0, 1, i - 1]) {
+                const clustering = original.slice();
+                clustering.fill(0, header + 3 + record * i + 9, header + 3 + record * i + 13);
+                clustering[header + 3 + record * i + 9] = value;
+                try {await weightsOf(clustering, 200);} catch (error) {codes.add(error.code);}
+            }
+        }
+        expect([...codes]).toEqual(['invalid-clustering']);
+    });
+
 });
 
 describe('getClusteringInfo', () => {

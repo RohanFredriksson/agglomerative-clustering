@@ -475,7 +475,9 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
 // The weight, in pixels, of each colour in the k-colour palette (in the palette's order), from a version 3
 // clustering. Clusters are followed by their split-order index, since different clusters can share a colour;
 // each palette colour's weight is the total of the clusters with that colour. Returns nothing for clusterings
-// without weights (versions 1 and 2) or with a parent index that isn't an earlier cluster.
+// without weights (versions 1 and 2), or whose records don't fit together: a parent that isn't an earlier cluster
+// with the record's merged colour, a lighter half heavier than its parent, or a cluster colour not in the palette.
+// Clusterings are untrusted bytes, and an exception here would abort the module (it is built without them).
 std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clustering_length, int k) {
 
     std::vector<double> weights;
@@ -492,7 +494,7 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
     for (size_t i = 0; i < splits; i++) {
         const size_t at = 3 + view.record * i;
         const uint32_t parent = read_u32(view.body + at + 9), light = read_u32(view.body + at + 13);
-        if (parent > i || light > weight[parent]) {return weights;}
+        if (parent > i || colour[parent] != key(at) || light > weight[parent]) {return weights;}
         weight[parent] -= light;
         colour[parent] = key(at + 3);
         weight.push_back(light);
@@ -501,9 +503,13 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 
     std::unordered_map<uint32_t, size_t> slot;
     for (size_t j = 0; j < palette.size() / 3; j++) {slot[(uint32_t(palette[3 * j]) << 16) | (uint32_t(palette[3 * j + 1]) << 8) | uint32_t(palette[3 * j + 2])] = j;}
-    weights.assign(palette.size() / 3, 0.0);
-    for (size_t id = 0; id < colour.size(); id++) {weights[slot.at(colour[id])] += weight[id] * pixels;}
-    return weights;
+    std::vector<double> totals(palette.size() / 3, 0.0);
+    for (size_t id = 0; id < colour.size(); id++) {
+        auto found = slot.find(colour[id]);
+        if (found == slot.end()) {return weights;}
+        totals[found->second] += weight[id] * pixels;
+    }
+    return totals;
 
 }
 
