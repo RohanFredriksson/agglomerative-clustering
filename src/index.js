@@ -63,7 +63,10 @@ const simdProbe = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1,
 const hasSimd = () => {
     try {return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array(simdProbe));} catch (error) {return false;}
 };
-const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
+// Node itself (or Bun), not a runtime that imitates it: Cloudflare Workers with nodejs_compat and Deno also define
+// process.versions.node, but their navigator.userAgent says what they are (Node 20 has no navigator at all).
+const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node)
+    && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
 const wasmLoadFailed = (cause, given) => {
     const text = String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0];
     // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.

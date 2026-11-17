@@ -6,7 +6,8 @@
 // BROWSERS=chromium,firefox,webkit adds Playwright's Firefox (FIREFOX_PATH if set) and WebKit (WEBKIT_PATH, Playwright's
 // pw_run.sh, if set). BROWSERS=safari runs the real Safari on macOS through safaridriver (Apple's WebDriver, enabled once
 // with `sudo safaridriver --enable`); Playwright's WebKit is close to Safari but is not Safari.
-// BUNDLERS=vite or BUNDLERS=webpack runs one of them. PACKAGE=agglomerative-clustering@next (any npm install spec)
+// BUNDLERS=vite or BUNDLERS=webpack runs one of them; BUNDLERS=cdn skips bundling and loads the package's dist/ from a second
+// server on another origin, as a page that imports it from a CDN does (the worker then has to start across origins). PACKAGE=agglomerative-clustering@next (any npm install spec)
 // installs that from the registry instead of linking this checkout, to check what was published.
 import { build } from 'vite';
 import webpack from 'webpack';
@@ -19,7 +20,7 @@ import { join, extname, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const bundlers = (process.env.BUNDLERS || 'vite,webpack').split(',');
+const bundlers = (process.env.BUNDLERS || 'vite,webpack,cdn').split(',');
 const browsers = (process.env.BROWSERS || 'chromium').split(',');
 
 // How each bundler is run, and how the app gets the URL of the package's .wasm (each bundler spells it differently).
@@ -28,6 +29,37 @@ const bundle = {
         wasmUrl: "import url from 'agglomerative-clustering/clustering.wasm?url';\nexport default url;\n",
         run: async (project) => {
             await build({ root: join(project, 'app'), logLevel: 'warn', build: { outDir: join(project, 'out'), emptyOutDir: true } });
+        },
+    },
+    cdn: {
+        wasmUrl: '',
+        // A page that imports the package from another origin (?cdn=...), with no bundler, and reports checks like the app.
+        run: async (project) => {
+            await mkdir(join(project, 'out'), { recursive: true });
+            await writeFile(join(project, 'out', 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><title>cdn</title></head><body><script type="module">
+const cdn = new URLSearchParams(location.search).get('cdn');
+const checks = {}, details = {};
+const check = async (name, run) => {try {checks[name] = await run();} catch (error) {checks[name] = false; details[name] = String(error && error.message);}};
+try {
+    const ac = await import(cdn + '/index.mjs');
+    const w = await import(cdn + '/worker.mjs');
+    const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
+    const expected = Array.from(await ac.getPalette(image, 4)).join();
+    await check('cdnMainEntry', async () => expected.split(',').length === 12);
+    await check('cdnWorkerAcrossOrigins', async () => Array.from(await w.getPalette(image, 4)).join() === expected);
+    await check('cdnWorkerHandle', async () => {
+        const worker = w.createWorker();
+        const handle = await worker.cluster(image);
+        const same = Array.from(await handle.getPalette(4)).join() === expected;
+        await worker.terminate();
+        return same;
+    });
+    window.result = { checks, details };
+} catch (error) {
+    window.result = { error: String(error && error.stack || error) };
+}
+</script></body></html>
+`);
         },
     },
     webpack: {
@@ -98,7 +130,7 @@ for (const bundler of bundlers) {
     // The real path: on macOS the temp directory is behind a symlink (/var -> /private/var), and Vite then sees the
     // project's files outside its root and emits them under ../../ paths, which it refuses.
     const project = await realpath(await mkdtemp(join(tmpdir(), `ac-browser-${bundler}-`)));
-    let server, browser;
+    let server, browser, cdnServer;
     try {
         await writeFile(join(project, 'package.json'), '{ "type": "module" }\n');
         if (process.env.PACKAGE) {
@@ -112,6 +144,25 @@ for (const bundler of bundlers) {
         await cp(join(root, 'test/browser/app'), join(project, 'app'), { recursive: true });
         await writeFile(join(project, 'app', 'wasm-url.js'), bundle[bundler].wasmUrl);
         await bundle[bundler].run(project);
+
+        // For the CDN case, the package's dist/ is served from a second origin (another port), with CORS headers as CDNs send.
+        let query = '';
+        if (bundler === 'cdn') {
+            const dist = join(project, 'node_modules', 'agglomerative-clustering', 'dist');
+            cdnServer = createServer(async (request, response) => {
+                try {
+                    const file = join(dist, decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
+                    const body = await readFile(file);
+                    response.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Access-Control-Allow-Origin': '*' });
+                    response.end(body);
+                } catch {
+                    response.writeHead(404);
+                    response.end();
+                }
+            });
+            await new Promise((done) => cdnServer.listen(0, '127.0.0.1', done));
+            query = `?cdn=${encodeURIComponent(`http://127.0.0.1:${cdnServer.address().port}`)}`;
+        }
 
         server = createServer(async (request, response) => {
             const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
@@ -129,7 +180,7 @@ for (const bundler of bundlers) {
 
         for (const name of browsers) {
             if (name === 'safari') {
-                const { result, version } = await runInSafari(`http://127.0.0.1:${server.address().port}/`);
+                const { result, version } = await runInSafari(`http://127.0.0.1:${server.address().port}/${query}`);
                 if (result.error) {throw new Error(`The page failed (${bundler}, Safari ${version}): ${result.error}`);}
                 console.log(`${bundler} in Safari ${version}:`);
                 for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}${!passed && result.details && result.details[check] ? ` (${result.details[check]})` : ''}`);}
@@ -143,7 +194,7 @@ for (const bundler of bundlers) {
             // Browsers ask for /favicon.ico on their own; any other failed request is an error.
             page.on('requestfailed', (request) => errors.push(`Request failed: ${request.url()}`));
             page.on('response', (response) => {if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) {errors.push(`HTTP ${response.status()}: ${response.url()}`);}});
-            await page.goto(`http://127.0.0.1:${server.address().port}/`);
+            await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
             const result = await page.waitForFunction(() => window.result, null, { timeout: 30_000 }).then((handle) => handle.jsonValue());
 
             if (result.error) {throw new Error(`The page failed (${bundler}, ${name}): ${result.error}`);}
@@ -161,6 +212,7 @@ for (const bundler of bundlers) {
     } finally {
         await browser?.close();
         server?.close();
+        cdnServer?.close();
         await rm(project, { recursive: true, force: true });
     }
 }

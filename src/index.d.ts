@@ -318,8 +318,9 @@ export interface Swatches {
     /** The colours in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
     palette: Palette;
     /**
-     * Pixels per colour: fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as
-     * in clustering. They sum to the image's visible weight.
+     * Pixels per colour, counted as in clustering: by default fully transparent pixels count 0 and partly transparent ones
+     * in proportion to their opacity; with `alpha: 'ignore'` every pixel counts 1; with `transparent`, pixels below the
+     * cutoff count 0 and the rest 1. They sum to the image's visible weight.
      */
     weights: Float64Array;
     /** Each colour's share of the visible weight, from 0 to 1. They sum to 1 (they are empty for an image with no visible pixels). */

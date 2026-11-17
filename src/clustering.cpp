@@ -453,10 +453,14 @@ ClusteringView read_clustering(const uint8_t* data, size_t length) {
 // parent's position for its heavier half and appends the lighter half, so the palette for k + 1 is the palette
 // for k with one entry refined and one appended, and index 0 follows the dominant colour. Records list
 // the heavier child first. As a set, the result is the same as replaying the records into an unordered set.
-// Clusterings are untrusted bytes, so the records are checked as they are replayed: each must split a colour that is in
-// the palette at that point (and, from version 3, the cluster its parent index names, which has that colour). A
-// clustering whose records don't fit together sets `valid` to false (the exports then return a null pointer, which the
-// JavaScript reports as an invalid clustering) rather than giving a palette of the wrong size or colours.
+// Different clusters can share an 8-bit colour (their 16-bit centroids round to the same value), so the palette is the set
+// of colours of the current clusters, kept with a count of the clusters that have each colour: a colour leaves the palette
+// only when its last cluster is split. (Keeping a plain set, as 2.x did and 3.0.0-beta.2 checked against, loses a colour
+// while another cluster still has it: palettes at very large k came out one short, and beta.2 rejected such clusterings.)
+// Clusterings are untrusted bytes, so the records are checked as they are replayed: each must split a colour some
+// current cluster has (and, from version 3, the cluster its parent index names, which has that colour). A clustering whose
+// records don't fit together sets `valid` to false (the exports then return a null pointer, which the JavaScript reports
+// as an invalid clustering) rather than giving a palette of the wrong size or colours.
 std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k, bool& valid) {
 
     std::vector<uint8_t> palette;
@@ -468,8 +472,10 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     auto key = [](const Color& c) {return (uint32_t(c[0]) << 16) | (uint32_t(c[1]) << 8) | uint32_t(c[2]);};
     auto read = [&](size_t offset) {return Color{view.body[offset], view.body[offset + 1], view.body[offset + 2]};};
 
+    // Each listed colour's place in `order` and how many current clusters have it.
+    struct Entry {size_t slot; uint32_t clusters;};
     std::vector<Color> order = {read(0)};
-    std::unordered_map<uint32_t, size_t> where = {{key(order[0]), 0}};
+    std::unordered_map<uint32_t, Entry> listed = {{key(order[0]), {0, 1}}};
     const size_t splits = std::min(size_t(k - 1), view.merges);
     // From version 3, each cluster's colour by split-order index, to check the records' parent indices against.
     std::vector<uint32_t> cluster_colour;
@@ -478,7 +484,7 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     for (size_t i = 0; i < splits; i++) {
         const size_t at = 3 + view.record * i;
         const Color parent = read(at);
-        Color heavy = read(at + 3), light = read(at + 6);
+        const Color heavy = read(at + 3), light = read(at + 6);
 
         if (view.version >= 3) {
             const uint32_t index = read_u32(view.body + at + 9);
@@ -487,23 +493,34 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
             cluster_colour.push_back(key(light));
         }
 
-        auto found = where.find(key(parent));
-        if (found == where.end()) {valid = false; return {};}
-        const size_t slot = found->second;
-        where.erase(found);
+        auto found = listed.find(key(parent));
+        if (found == listed.end()) {valid = false; return {};}
+        // Whether the parent's colour leaves the palette with this split (no other current cluster has it).
+        const size_t slot = found->second.slot;
+        const bool freed = --found->second.clusters == 0;
+        if (freed) {listed.erase(found);}
 
-        if (!where.count(key(heavy))) {
+        auto heavier = listed.find(key(heavy));
+        if (heavier != listed.end()) {
+            heavier->second.clusters++;
+            if (freed) {
+                // The parent's place empties and the heavier half's colour is listed elsewhere: close the gap. Rare, so
+                // re-indexing everything is fine.
+                order.erase(order.begin() + slot);
+                for (auto& entry : listed) {if (entry.second.slot > slot) {entry.second.slot--;}}
+            }
+        } else if (freed) {
             order[slot] = heavy;
-            where[key(heavy)] = slot;
+            listed[key(heavy)] = {slot, 1};
         } else {
-            // The heavier half's colour is already listed (clusters can share a colour), so the parent's place
-            // empties: close the gap. Rare, so re-indexing everything is fine.
-            order.erase(order.begin() + slot);
-            where.clear();
-            for (size_t j = 0; j < order.size(); j++) {where[key(order[j])] = j;}
+            listed[key(heavy)] = {order.size(), 1};
+            order.push_back(heavy);
         }
-        if (!where.count(key(light))) {
-            where[key(light)] = order.size();
+        auto lighter = listed.find(key(light));
+        if (lighter != listed.end()) {
+            lighter->second.clusters++;
+        } else {
+            listed[key(light)] = {order.size(), 1};
             order.push_back(light);
         }
     }
@@ -512,12 +529,6 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     for (const Color& color : order) {palette.insert(palette.end(), color.begin(), color.end());}
     return palette;
 
-}
-
-// The same for a clustering just made here, which is valid by construction.
-std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, size_t clustering_length, int k) {
-    bool valid = false;
-    return _get_palette_from_clustering(clustering, clustering_length, k, valid);
 }
 
 // The weight, in pixels, of each colour in the k-colour palette (in the palette's order), from a version 3
@@ -797,7 +808,10 @@ uint8_t* get_clustering(uint8_t* image_data, int image_length, int image_format,
 EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k, valid);
+    // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
+    if (!valid) {return nullptr;}
     return pack_variable_size(palette);
 }
 
@@ -820,7 +834,10 @@ uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, in
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k);
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k, valid);
+    // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
+    if (!valid) {return nullptr;}
     return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
 }
 
@@ -842,7 +859,10 @@ uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_
 EMSCRIPTEN_KEEPALIVE
 uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
-    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), colours_for_entries(image_data, image_length, image_format, transparent, k));
+    bool valid = false;
+    std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
+    // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
+    if (!valid) {return nullptr;}
     return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width, transparent);
 }
 
