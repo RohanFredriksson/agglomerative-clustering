@@ -4,7 +4,7 @@
 
 // The library's version: package.json is the source, and scripts/sync-version.mjs keeps this line (and the copy the .wasm
 // is built from, src/version.hpp) in step with it. Do not edit it by hand.
-export const version = '3.0.0-beta.2';
+export const version = '3.0.0-beta.3';
 
 export const colorSpaces = {'rgb': 0, 'oklab': 1};
 export const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
