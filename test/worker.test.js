@@ -166,6 +166,27 @@ describe('createWorker', () => {
         await moving.terminate();
     });
 
+    it('with transfer: true, copies images that are only part of their buffer, or whose buffer cannot be transferred', async () => {
+        const moving = createWorker({ transfer: true });
+        // A view into a larger buffer: transferring the buffer would empty the caller's other views of it.
+        const shared = new Uint8Array(image.length * 2);
+        shared.set(image);
+        shared.set(image, image.length);
+        const [first, second] = [shared.subarray(0, image.length), shared.subarray(image.length)];
+        expect(await moving.getPalette(first, 4)).toEqual(await ac.getPalette(image, 4));
+        expect([first.length, second.length]).toEqual([image.length, image.length]);
+        expect(second).toEqual(image);
+        // Small Node Buffers share a pool that can never be transferred.
+        const pooled = Buffer.from(image.subarray(0, 64));
+        expect(await moving.getPalette(pooled, 2)).toEqual(await ac.getPalette(new Uint8Array(pooled), 2));
+        expect(pooled.length).toBe(64);
+        // A buffer of its own is still transferred, also when kept by a handle.
+        const own = image.slice();
+        await (await moving.cluster(own)).release();
+        expect(own.length).toBe(0);
+        await moving.terminate();
+    });
+
     it('stops and restarts the shared worker', async () => {
         const first = await dropIn.getPalette(image, 4);
         await dropIn.terminate();

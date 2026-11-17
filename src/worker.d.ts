@@ -29,7 +29,9 @@ export type {
 export interface WorkerOptions {
     /**
      * `false` (default): images are copied to the worker. `true`: their pixel buffers are transferred instead,
-     * which is faster for large images but leaves the caller's buffer detached (empty) afterwards.
+     * which is faster for large images but leaves the caller's buffer detached (empty) afterwards. Only pixels that
+     * are a whole buffer of their own are transferred: a view into part of a larger buffer (a subarray, a small Node
+     * Buffer) is copied, so the caller's other data in that buffer is never detached.
      */
     transfer?: boolean;
     /** Where the worker gets its WebAssembly module; see `InitOptions`. It is sent as the worker's first call. */

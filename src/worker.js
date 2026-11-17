@@ -59,10 +59,13 @@ const rebuild = (image) => {
     return (result) => result;
 };
 
-// The buffer behind an image's pixels, to transfer when the worker was created with `transfer: true`.
+// The buffer behind an image's pixels, to transfer when the worker was created with `transfer: true`: only when the
+// pixels are the whole of an ordinary ArrayBuffer. Transferring empties every view of the buffer, so a view into part
+// of a larger one (a subarray, a small Node Buffer from Node's shared pool) is copied instead, as is shared memory.
 const pixelBuffers = (sent) => {
     const data = ArrayBuffer.isView(sent) ? sent : sent && ArrayBuffer.isView(sent.data) ? sent.data : null;
-    return data ? [data.buffer] : [];
+    if (!data || !(data.buffer instanceof ArrayBuffer) || data.byteOffset !== 0 || data.byteLength !== data.buffer.byteLength) {return [];}
+    return [data.buffer];
 };
 
 // Rebuilds an error that happened in the worker: same name, message and code as the main entry gives for the same
@@ -253,7 +256,15 @@ export const createWorker = (options) => {
             }
             pending.set(id, call);
             try {
-                connection.post({id, method, args: args.map(mark), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined}, transfer ? transferable : []);
+                const message = {id, method, args: args.map(mark), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined};
+                try {
+                    connection.post(message, transfer ? transferable : []);
+                } catch (error) {
+                    // Some whole buffers still can't be transferred (Node marks some untransferable): copy them instead.
+                    // A message that can't be copied either fails the same way again, and is reported below.
+                    if (!(transfer && transferable.length > 0 && error && error.name === 'DataCloneError')) {throw error;}
+                    connection.post(message, []);
+                }
             } catch (error) {
                 pending.delete(id);
                 call.cleanup();
