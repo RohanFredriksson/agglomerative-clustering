@@ -6,6 +6,9 @@ on:
   workflow_run:
     workflows: [Publish]
     types: [completed]
+  # A change to the smoke test itself is checked against the version in package.json, which is already published.
+  pull_request:
+    paths: [test/published/**, .github/workflows/published.yml]
   workflow_dispatch:
     inputs:
       version:
@@ -18,7 +21,7 @@ permissions:
 
 jobs:
   smoke:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:

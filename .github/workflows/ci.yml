@@ -41,6 +41,14 @@ jobs:
       - run: npm run build
       - run: npm test
 
+      # The build for the Windows job, which has no Emscripten.
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == 24
+        with:
+          name: dist
+          path: dist
+          retention-days: 3
+
       # Compiles consumer code against the built declarations under nodenext (ESM and CommonJS) and bundler resolution.
       - run: npm run test:types
 
@@ -62,6 +70,39 @@ jobs:
         if: matrix.node == 24
         env:
           BROWSERS: chromium,firefox,webkit
+
+  # The test suite on Windows (paths, line endings, spawning Node), against the Linux job's build: the .wasm and the
+  # transpiled JS are the same files on every platform, so only the tests' own platform assumptions are new here.
+  windows:
+    needs: test
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    steps:
+      # Keep LF line endings, as on every other platform (the README and fixture checks read files as text).
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Cache Kodak images
+        uses: actions/cache@v4
+        with:
+          path: fixtures/images
+          key: kodak-windows-${{ hashFiles('fixtures/kodak.js') }}
+
+      - run: npm ci
+      - run: npm test
 
   # The same browser checks in the real Safari, which only runs on macOS (Playwright's WebKit is close to it, not it).
   safari:

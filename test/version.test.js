@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, cpSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
 import * as ac from '../dist/index.mjs';
 import * as worker from '../dist/worker.mjs';
 
@@ -24,14 +25,14 @@ describe('version and formatVersion', () => {
     it('are in step with the .wasm and its source: the build checks it, and so does the module', () => {
         const wasm = readFileSync(new URL('../dist/clustering.wasm', import.meta.url));
         expect(wasm.includes(Buffer.from(`agglomerative-clustering@${pkg.version}`))).toBe(true);
-        const check = spawnSync(process.execPath, ['scripts/sync-version.mjs', '--check'], { cwd: new URL('..', import.meta.url).pathname, encoding: 'utf8' });
+        const check = spawnSync(process.execPath, ['scripts/sync-version.mjs', '--check'], { cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8' });
         expect(check.status, check.stderr).toBe(0);
     });
 
     it('--check fails, and the plain run repairs it, when a copy has drifted', () => {
         const copy = mkdtempSync(join(tmpdir(), 'ac-version-'));
         mkdirSync(join(copy, 'src')); mkdirSync(join(copy, 'scripts'));
-        const here = new URL('..', import.meta.url).pathname;
+        const here = fileURLToPath(new URL('..', import.meta.url));
         for (const file of ['package.json', 'src/shared.js', 'src/version.hpp', 'scripts/sync-version.mjs']) {cpSync(join(here, file), join(copy, file));}
         const stale = readFileSync(join(copy, 'src/shared.js'), 'utf8').replace(/export const version = '[^']*';/, "export const version = '0.0.1';");
         writeFileSync(join(copy, 'src/shared.js'), stale);
