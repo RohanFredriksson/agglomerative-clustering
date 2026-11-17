@@ -8,7 +8,7 @@ on:
     types: [completed]
   # A change to the smoke test itself is checked against the version in package.json, which is already published.
   pull_request:
-    paths: [test/published/**, .github/workflows/published.yml]
+    paths: [test/published/**, test/browser/**, .github/workflows/published.yml]
   workflow_dispatch:
     inputs:
       version:
@@ -42,3 +42,28 @@ jobs:
         shell: bash
         run: for i in $(seq 1 30); do npm view "agglomerative-clustering@$VERSION" version && exit 0; sleep 20; done; exit 1
       - run: node test/published/smoke.mjs ${{ env.VERSION }}
+
+  # The published package bundled with Vite and webpack and run in Chromium, Firefox and WebKit (test/browser/run.mjs with
+  # PACKAGE): the files a bundler takes from the tarball, rather than from this checkout.
+  browsers:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Which version
+        run: echo "VERSION=${{ inputs.version || '' }}" >> "$GITHUB_ENV"; if [ -z "${{ inputs.version }}" ]; then echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"; fi
+      - name: Wait for the registry
+        run: for i in $(seq 1 30); do npm view "agglomerative-clustering@$VERSION" version && exit 0; sleep 20; done; exit 1
+      - run: npm ci
+      - name: Install Firefox and WebKit
+        run: npx -y playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps firefox webkit
+      - run: npm run test:browser
+        env:
+          BROWSERS: chromium,firefox,webkit
+          PACKAGE: agglomerative-clustering@${{ env.VERSION }}
