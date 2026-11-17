@@ -6,11 +6,12 @@
 // BROWSERS=chromium,firefox,webkit adds Playwright's Firefox (FIREFOX_PATH if set) and WebKit (WEBKIT_PATH, Playwright's
 // pw_run.sh, if set). BROWSERS=safari runs the real Safari on macOS through safaridriver (Apple's WebDriver, enabled once
 // with `sudo safaridriver --enable`); Playwright's WebKit is close to Safari but is not Safari.
-// BUNDLERS=vite or BUNDLERS=webpack runs one of them.
+// BUNDLERS=vite or BUNDLERS=webpack runs one of them. PACKAGE=agglomerative-clustering@next (any npm install spec)
+// installs that from the registry instead of linking this checkout, to check what was published.
 import { build } from 'vite';
 import webpack from 'webpack';
 import { chromium, firefox, webkit } from 'playwright-core';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { createServer } from 'http';
 import { mkdtemp, mkdir, symlink, cp, readFile, writeFile, rm, realpath } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -99,9 +100,15 @@ for (const bundler of bundlers) {
     const project = await realpath(await mkdtemp(join(tmpdir(), `ac-browser-${bundler}-`)));
     let server, browser;
     try {
-        await mkdir(join(project, 'node_modules'));
-        await symlink(root, join(project, 'node_modules', 'agglomerative-clustering'), 'dir');
         await writeFile(join(project, 'package.json'), '{ "type": "module" }\n');
+        if (process.env.PACKAGE) {
+            execFileSync('npm', ['install', '--no-save', '--no-audit', '--no-fund', process.env.PACKAGE], { cwd: project, stdio: 'inherit', shell: process.platform === 'win32' });
+            const { version } = JSON.parse(await readFile(join(project, 'node_modules/agglomerative-clustering/package.json'), 'utf8'));
+            console.log(`${bundler}: agglomerative-clustering@${version} from npm`);
+        } else {
+            await mkdir(join(project, 'node_modules'));
+            await symlink(root, join(project, 'node_modules', 'agglomerative-clustering'), 'dir');
+        }
         await cp(join(root, 'test/browser/app'), join(project, 'app'), { recursive: true });
         await writeFile(join(project, 'app', 'wasm-url.js'), bundle[bundler].wasmUrl);
         await bundle[bundler].run(project);

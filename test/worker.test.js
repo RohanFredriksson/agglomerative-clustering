@@ -1,7 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { fileURLToPath } from 'url';
 import * as ac from '../dist/index.mjs';
 import * as dropIn from '../dist/worker.mjs';
 import { createWorker } from '../dist/worker.mjs';
@@ -235,7 +234,7 @@ describe('the drop-in module', () => {
     });
 
     it('never keeps a Node process alive while idle', async () => {
-        const script = `import { getPalette } from ${JSON.stringify(fileURLToPath(new URL('../dist/worker.mjs', import.meta.url)))};
+        const script = `import { getPalette } from ${JSON.stringify(new URL('../dist/worker.mjs', import.meta.url).href)};
             console.log((await getPalette(new Uint8Array([1, 2, 3, 255, 200, 100, 0, 255]), 2)).length);`;
         const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { timeout: 20_000 });
         expect(stdout.trim()).toBe('6');
