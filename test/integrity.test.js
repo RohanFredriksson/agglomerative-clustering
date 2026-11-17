@@ -28,15 +28,16 @@ const crc32 = (bytes) => {
 const storedChecksum = (bytes) => (bytes[17] | (bytes[18] << 8) | (bytes[19] << 16) | (bytes[20] << 24)) >>> 0;
 
 // Every way of using a clustering, each expected to either work within its contract or reject with invalid-clustering.
+// Functions, so a caller can start only some of them (a started call that nobody awaits is an unhandled rejection).
 const uses = (bytes, k) => [
-    getPaletteFromClustering(bytes, k).then((palette) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
-    getSwatchesFromClustering(bytes, k).then(({ palette, shares }) => {
+    () => getPaletteFromClustering(bytes, k).then((palette) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
+    () => getSwatchesFromClustering(bytes, k).then(({ palette, shares }) => {
         expect(palette.length / 3).toBeLessThanOrEqual(k);
         for (const share of shares) {expect(Number.isFinite(share)).toBe(true);}
     }),
-    getClusteringInfo(bytes).then(({ mse }) => {for (const value of mse || []) {expect(Number.isFinite(value)).toBe(true);}}),
-    quantizeFromClustering(image, bytes, k),
-    quantizeToIndicesFromClustering(image, bytes, k).then(({ palette }) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
+    () => getClusteringInfo(bytes).then(({ mse }) => {for (const value of mse || []) {expect(Number.isFinite(value)).toBe(true);}}),
+    () => quantizeFromClustering(image, bytes, k),
+    () => quantizeToIndicesFromClustering(image, bytes, k).then(({ palette }) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
 ];
 
 describe('checksums', () => {
@@ -114,7 +115,7 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
                 // The cuts only: quantizing cuts the palette the same way (the other tests here quantize), and leaving it
                 // out keeps this sweep light enough not to slow the rest of the suite on a small CI runner.
                 for (const k of [2, colors]) {
-                    for (const result of await Promise.allSettled(uses(damaged, k).slice(0, 3))) {
+                    for (const result of await Promise.allSettled(uses(damaged, k).slice(0, 3).map((use) => use()))) {
                         if (result.status === 'rejected') {codes.add(result.reason.code);}
                     }
                 }
@@ -133,7 +134,7 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
         let seed = 7;
         const random = unchecked.slice();
         for (let i = 25; i < random.length; i++) {random[i] = (seed = (seed * 1103515245 + 12345) >>> 0) >>> 24;}
-        const results = await Promise.allSettled(uses(random, colors));
+        const results = await Promise.allSettled(uses(random, colors).map((use) => use()));
         expect(results.some((result) => result.status === 'rejected')).toBe(true);
         for (const result of results) {if (result.status === 'rejected') {expect(result.reason.code).toBe('invalid-clustering');}}
     });
