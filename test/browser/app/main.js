@@ -26,6 +26,9 @@ const time = async (promise) => {
     return { ...outcome, ms: performance.now() - start };
 };
 
+// Measurements behind the timing checks, reported with a failure so it says why.
+const details = {};
+
 async function run() {
     // A diagonal gradient through three colours, computed rather than drawn on a canvas: reading pixels back from a
     // canvas (getImageData) threw in CI's Safari under safaridriver, and the library only needs the ImageData.
@@ -107,6 +110,7 @@ async function run() {
     const blocking = await gaps(() => ac.getClustering(big));
     const sliced2 = await gaps(() => ac.getClustering(big, { onProgress: () => {} }));
     checks.slicingKeepsThePageResponsive = sliced2.ticks > 10 && sliced2.worst < Math.max(150, blocking.worst * 0.5);
+    details.slicingKeepsThePageResponsive = `ticks ${sliced2.ticks}, longest gap ${sliced2.worst.toFixed(1)} ms sliced against ${blocking.worst.toFixed(1)} ms blocking`;
 
     // transfer: true hands the pixel buffer to the worker (the caller's copy is emptied) and the result is still right.
     const movable = new ImageData(new Uint8ClampedArray(image.data), width, height);
@@ -155,4 +159,4 @@ async function run() {
 }
 
 // The name and message first: Safari's stack traces leave them out.
-run().then((checks) => {window.result = {checks};}, (error) => {window.result = {error: error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error)};});
+run().then((checks) => {window.result = {checks, details};}, (error) => {window.result = {error: error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error)};});

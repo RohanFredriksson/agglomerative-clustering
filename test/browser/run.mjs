@@ -84,8 +84,11 @@ const runInSafari = async (url) => {
 const launchBrowser = (name) => {
     if (name === 'webkit') {return webkit.launch(process.env.WEBKIT_PATH ? { executablePath: process.env.WEBKIT_PATH } : {});}
     if (name === 'firefox') {return firefox.launch(process.env.FIREFOX_PATH ? { executablePath: process.env.FIREFOX_PATH } : {});}
-    const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chrome' };
-    return chromium.launch(launch).catch(() => chromium.launch());
+    // Chromium throttles timers on pages it treats as in the background, which a headless page on a busy CI runner can be;
+    // the responsiveness check measures timer gaps, so throttling would measure Chromium's power saving, not our slicing.
+    const args = ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'];
+    const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH, args } : { channel: 'chrome', args };
+    return chromium.launch(launch).catch(() => chromium.launch({ args }));
 };
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
@@ -122,7 +125,7 @@ for (const bundler of bundlers) {
                 const { result, version } = await runInSafari(`http://127.0.0.1:${server.address().port}/`);
                 if (result.error) {throw new Error(`The page failed (${bundler}, Safari ${version}): ${result.error}`);}
                 console.log(`${bundler} in Safari ${version}:`);
-                for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}`);}
+                for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}${!passed && result.details && result.details[check] ? ` (${result.details[check]})` : ''}`);}
                 if (Object.values(result.checks).some((passed) => !passed)) {process.exitCode = 1;}
                 continue;
             }
@@ -139,7 +142,7 @@ for (const bundler of bundlers) {
             if (result.error) {throw new Error(`The page failed (${bundler}, ${name}): ${result.error}`);}
             const failed = Object.entries(result.checks).filter(([, passed]) => !passed).map(([check]) => check);
             console.log(`${bundler} in ${name}:`);
-            for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}`);}
+            for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}${!passed && result.details && result.details[check] ? ` (${result.details[check]})` : ''}`);}
             if (errors.length) {console.log(`  Browser errors:\n${errors.join('\n')}`);}
             if (failed.length || errors.length) {process.exitCode = 1;}
             await browser.close();
