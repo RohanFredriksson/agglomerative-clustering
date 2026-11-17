@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion} from './shared.js';
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering} from './shared.js';
@@ -18,9 +18,13 @@ const isNode = typeof process !== 'undefined' && !!(process.versions && process.
 // way Node resolves packages from the working directory. Built from strings so Node's own URL class makes it.
 const nodeWorkerScript = async () => {
     const load = (name) => import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', name].join(':'));
+    // The base is a variable so bundlers don't take this Node-only URL for an asset to emit (Vite would copy the script a
+    // second time for it): they look for `new URL('…', import.meta.url)` written out, which the browser branch of `start` keeps.
+    const here = import.meta.url;
+    const file = './worker-thread.mjs';
     let script = null;
     try {
-        const made = new URL('./worker-thread.mjs', import.meta.url);
+        const made = new URL(file, here);
         script = new URL(typeof made.href === 'string' ? made.href : String(made));
     } catch (error) {/* a URL Node can't read: use the package's copy */}
     try {
@@ -30,7 +34,7 @@ const nodeWorkerScript = async () => {
         const packaged = new URL('./dist/worker-thread.mjs', pathToFileURL(createRequire(`${process.cwd()}/`).resolve('agglomerative-clustering/package.json')));
         if (existsSync(fileURLToPath(packaged))) {return packaged;}
     } catch (error) {/* not found: start the script as it is, and report what happens */}
-    return script || new URL('./worker-thread.mjs', import.meta.url);
+    return script || new URL(file, here);
 };
 
 // Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
@@ -79,7 +83,14 @@ const own = (value) => {
 // Images cross to the worker as plain {data, format, width?, height?} objects (ImageData can't cross into Node
 // worker threads, and its clamped array needn't), and mapped images are rebuilt in the caller's type on return.
 // Anything else is sent as it is, so the worker's validation gives the usual errors.
+// Things that aren't pixels and can't be posted (a canvas, an image element, an ImageBitmap, a Blob) are reported here with
+// the main entry's hint, rather than as the structured clone's own error, which says nothing about what to pass instead.
+const notPixels = (image) => image !== null && typeof image === 'object' && !ArrayBuffer.isView(image) && !isImageData(image)
+    && (typeof image.getContext === 'function' || typeof image.close === 'function' || typeof image.nodeName === 'string'
+        || (typeof image.arrayBuffer === 'function' && typeof image.type === 'string'));
+
 const send = (image) => {
+    if (notPixels(image)) {throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');}
     if (isImageData(image)) {
         const data = image.data;
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
@@ -394,11 +405,16 @@ export const createWorker = (options) => {
                 try {taken = takeControls(mapOptions, false);} catch (error) {return Promise.reject(error);}
                 return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
             };
+            // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,
+            // as in the main entry, rather than silently ignored.
+            const plain = (method, name, args, extra) => extra.some((value) => value !== undefined)
+                ? Promise.reject(fail('invalid-argument', `Invalid arguments: handle.${name} takes no options. To map pixels with options, use handle.quantize.`, 'options'))
+                : use(method, args);
             const handle = {
-                getClustering: () => use('handleGetClustering', []),
-                getPalette: (k) => use('handleGetPalette', [k]),
-                getSwatches: (k) => use('handleGetSwatches', [k]),
-                getClusteringInfo: () => use('handleGetClusteringInfo', []),
+                getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
+                getPalette: (k, ...extra) => plain('handleGetPalette', 'getPalette', [k], extra),
+                getSwatches: (k, ...extra) => plain('handleGetSwatches', 'getSwatches', [k], extra),
+                getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
                 quantize: async (k, mapOptions) => output(await withControls('handleQuantize', [k], mapOptions)),
                 quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', [k], mapOptions),
                 quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),

@@ -94,7 +94,7 @@ Five words are used throughout:
 
 - **clustering**: the tree of an image's colours. It is opaque bytes (a `Clustering`) that you can store next to the image.
 - **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`. A `Palette` knows the colour space it was made in.
-- **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours.
+- **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours. The one exception: indexed output always keeps a colour for the visible pixels, so `k = 1` with a transparent entry gives 2.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
 - **precision**: an option that groups similar colours before clustering, about 3× faster at practically the same quality.
 
@@ -170,7 +170,9 @@ const k = explained.findIndex((share) => share >= 0.99) + 1;
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
 ```js
-import { GIFEncoder } from 'gifenc';   // in plain Node ESM: import gifenc from 'gifenc'; const { GIFEncoder } = gifenc;
+import * as gifenc from 'gifenc';
+// Bundlers read gifenc's ES module, which has the named export; plain Node reads its CommonJS build, which has it on the default.
+const GIFEncoder = gifenc.GIFEncoder ?? gifenc.default.GIFEncoder;
 import { quantizeToIndices } from 'agglomerative-clustering';
 
 // k counts the transparent entry, so 256 is the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
@@ -307,7 +309,7 @@ Every function that takes an image also takes an optional last argument of optio
 
 "Clustering" means any function that builds a clustering (`getClustering`, `getPalette`, `getSwatches`, `quantize` and `quantizeToIndices`), and "mapping" means any that maps pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
-Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error.
+Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `getClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions` (extra properties of a variable are allowed), so give each call the options it takes, or keep one object per stage.
 
 ```js
 // Perceptual palettes for a photo, quickly
@@ -585,7 +587,7 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 
 **Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.
 
-**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally.
+**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library replaces the instance (the next call loads a fresh one, in milliseconds): a server's memory comes back down after a huge image instead of staying at its peak.
 
 ### Troubleshooting
 

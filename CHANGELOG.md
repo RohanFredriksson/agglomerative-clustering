@@ -4,6 +4,16 @@
 
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below). Palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options, with one exception: `quantizeWithPalette` with a palette made in OKLab now matches in OKLab (below; pass `colorSpace: 'rgb'` for the 2.x result). The golden tests pin this, and 2.0 clusterings still load and cut to the same palettes. New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
+### Since 3.0.0-beta.2
+- **Memory comes back after a huge image.** WebAssembly memory only grows, so one large clustering left the process holding its peak (about 850 MB after a 4-megapixel noise image) for good. After a call that leaves the module's memory above 256 MB, the instance is now replaced, and the memory is freed (back to about 80 MB in the same test).
+- **Smaller bundles.** The JavaScript is compiled for the engines the package already needs (WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4, Node 20.19), not ES5: the worker entry is 29 KB instead of 52 KB, and `dist/` JavaScript 158 KB instead of 247 KB. Vite no longer emits an unused second copy of the worker script.
+- **The worker entry names a canvas, image element, `ImageBitmap` or `Blob`** passed as the image with the main entry's hint, instead of the structured clone's own error.
+- **Options passed to `getPaletteFromClustering`, `getSwatchesFromClustering`, `getClusteringInfo` or a handle's cuts are an error** rather than silently ignored (a clustering already records how it was made).
+- **A `k` given as a string** (an input's `value`) says so and how to convert it.
+- **The WebAssembly glue no longer writes to the console** when the module fails to load or runs out of memory; the error is the report.
+- **Checksums are computed 8 bytes at a time.**
+- **Docs:** the gifenc import now works in Node and in bundlers, `k = 1` with a transparent entry gives 2 entries (documented), sharing one options object between stages, and exhaustive `switch`es over error codes.
+
 ### Since 3.0.0-beta.1
 From exploratory testing of the beta (six projects built from the npm package and its README alone: a Vite and React app, a Node GIF and palette-PNG exporter, a Next.js app, a strict TypeScript service storing clusterings, a 2.x app upgraded with the migration guide, and a set of hostile inputs).
 - **Damaged clusterings are reported.** A stored clustering that came back changed (a flipped bit, truncated, a lossy base64 round trip) was often accepted, and could cut to more than `k` colours (257 at `k = 256`, breaking GIF output) or give an error curve of `NaN`. Clusterings now carry a CRC-32 in their header (in bytes beta.1 left zero, so the format is still version 3 and beta.1's clusterings still load), and the records are checked as they are replayed, so a damaged clustering is an `invalid-clustering` error. The message says the bytes are damaged or truncated, and mentions 1.x only for bytes that could be a 1.x clustering.
