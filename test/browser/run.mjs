@@ -12,7 +12,7 @@ import webpack from 'webpack';
 import { chromium, firefox, webkit } from 'playwright-core';
 import { spawn } from 'child_process';
 import { createServer } from 'http';
-import { mkdtemp, mkdir, symlink, cp, readFile, writeFile, rm } from 'fs/promises';
+import { mkdtemp, mkdir, symlink, cp, readFile, writeFile, rm, realpath } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, extname, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -91,7 +91,9 @@ const launchBrowser = (name) => {
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
 
 for (const bundler of bundlers) {
-    const project = await mkdtemp(join(tmpdir(), `ac-browser-${bundler}-`));
+    // The real path: on macOS the temp directory is behind a symlink (/var -> /private/var), and Vite then sees the
+    // project's files outside its root and emits them under ../../ paths, which it refuses.
+    const project = await realpath(await mkdtemp(join(tmpdir(), `ac-browser-${bundler}-`)));
     let server, browser;
     try {
         await mkdir(join(project, 'node_modules'));

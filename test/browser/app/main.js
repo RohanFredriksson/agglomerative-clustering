@@ -27,16 +27,19 @@ const time = async (promise) => {
 };
 
 async function run() {
+    // A diagonal gradient through three colours, computed rather than drawn on a canvas: reading pixels back from a
+    // canvas (getImageData) threw in CI's Safari under safaridriver, and the library only needs the ImageData.
     const width = 64, height = 48;
-    const canvas = new OffscreenCanvas(width, height);
-    const context = canvas.getContext('2d');
-    const gradient = context.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, '#d0342c');
-    gradient.addColorStop(0.5, '#2c8ad0');
-    gradient.addColorStop(1, '#f2c14e');
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, width, height);
-    const image = context.getImageData(0, 0, width, height);
+    const stops = [[0xd0, 0x34, 0x2c], [0x2c, 0x8a, 0xd0], [0xf2, 0xc1, 0x4e]];
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const t = 2 * (x + y) / (width + height - 2), i = Math.min(Math.floor(t), 1), f = t - i;
+            const colour = stops[i].map((value, c) => Math.round(value + (stops[i + 1][c] - value) * f));
+            pixels.set([...colour, 255], (y * width + x) * 4);
+        }
+    }
+    const image = new ImageData(pixels, width, height);
     const checks = {};
 
     const mainResult = await ac.quantize(image, 8, { dither: true });
@@ -151,4 +154,5 @@ async function run() {
     return checks;
 }
 
-run().then((checks) => {window.result = {checks};}, (error) => {window.result = {error: String(error && error.stack || error)};});
+// The name and message first: Safari's stack traces leave them out.
+run().then((checks) => {window.result = {checks};}, (error) => {window.result = {error: error instanceof Error ? `${error.name}: ${error.message}\n${error.stack}` : String(error)};});

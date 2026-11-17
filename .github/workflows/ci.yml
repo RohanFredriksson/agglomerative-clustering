@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that moved to Ubuntu 26.04, for which the pinned Playwright (playwright-core in package.json) has
+    # no Firefox or WebKit. Move on together with a Playwright upgrade.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
