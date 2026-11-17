@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.0.0 (unreleased)
+## 3.0.0 (in beta: 3.0.0-beta.1)
 
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below), and palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options (the golden tests pin this, and 2.0 clusterings still load and cut to the same palettes). New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
