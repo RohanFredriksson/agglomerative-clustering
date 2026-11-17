@@ -509,9 +509,9 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 
 ### Where it runs
 
-Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI runs the browser build bundled with Vite and webpack 5 in Chromium; it is also checked in WebKit by hand. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
+Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite and webpack 5 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
 
-Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2. Firefox hasn't been tried.
+Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2.
 
 ### Loading the WebAssembly module
 By default the module is found next to the package's script, which Node and bundlers such as Vite handle. Otherwise, say where it is before any other call (the first load that succeeds wins):

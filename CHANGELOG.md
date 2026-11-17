@@ -5,6 +5,7 @@
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below), and palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options (the golden tests pin this, and 2.0 clusterings still load and cut to the same palettes). New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
 ### Added
+- **Tested in every major browser engine.** CI runs the bundled browser checks (Vite and webpack, the worker, the `.wasm`, cancelling, transfer) in Chromium, Firefox and WebKit on Linux, and in the real Safari on macOS.
 - **`error.argument`:** errors about one argument name it for programs (`'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'` or `'options.<name>'`), in both entries and from the constructors, so a UI can point at the right field without parsing the message. Typed as `ErrorArgument`.
 - **`IndexedImage.colors`:** the palette without the transparent entry (the same as `palette` when there is none), tagged with its colour space, so an indexed result's colours can be passed back to `quantizeToIndicesWithPalette` without the entry being added twice.
 - **A clustering records its `transparent` cutoff** (`getClusteringInfo(c).transparent`, `false` for none), and `quantizeToIndicesFromClustering` uses it as the default cutoff, so clustering and mapping agree. Handles (`worker.cluster(image, { transparent })`) get the same.
