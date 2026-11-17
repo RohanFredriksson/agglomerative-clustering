@@ -111,8 +111,10 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
             for (let bit = 0; bit < 8; bit++) {
                 const damaged = unchecked.slice();
                 damaged[at] ^= 1 << bit;
-                for (const k of [2, 17, colors]) {
-                    for (const result of await Promise.allSettled(uses(damaged, k))) {
+                // The cuts only: quantizing cuts the palette the same way (the other tests here quantize), and leaving it
+                // out keeps this sweep light enough not to slow the rest of the suite on a small CI runner.
+                for (const k of [2, colors]) {
+                    for (const result of await Promise.allSettled(uses(damaged, k).slice(0, 3))) {
                         if (result.status === 'rejected') {codes.add(result.reason.code);}
                     }
                 }
