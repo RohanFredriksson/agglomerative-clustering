@@ -1,0 +1,41 @@
+name: Published package
+
+# Installs a version from the npm registry into fresh projects and checks it loads everywhere people load it
+# (test/published/smoke.mjs), on Linux, Windows and macOS. Runs after each publish, and on demand for any version or tag.
+on:
+  workflow_run:
+    workflows: [Publish]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version or dist-tag to test
+        required: true
+        default: next
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+        node: [20, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Which version
+        shell: bash
+        run: echo "VERSION=${{ inputs.version || '' }}" >> "$GITHUB_ENV"; if [ -z "${{ inputs.version }}" ]; then echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"; fi
+      - name: Wait for the registry
+        shell: bash
+        run: for i in $(seq 1 30); do npm view "agglomerative-clustering@$VERSION" version && exit 0; sleep 20; done; exit 1
+      - run: node test/published/smoke.mjs ${{ env.VERSION }}
