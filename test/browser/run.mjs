@@ -3,11 +3,14 @@
 // webpack 5), serves the bundle, and runs it in a headless browser. This checks what Node tests can't: that a bundler
 // follows the package's exports, emits the worker script and the .wasm, and that the worker runs in a browser.
 // Browsers: Chromium (CHROMIUM_PATH if set, else the installed Chrome, as on GitHub's Ubuntu runners, else Playwright's).
-// BROWSERS=chromium,webkit adds WebKit, whose launcher is WEBKIT_PATH (Playwright's pw_run.sh) if set.
+// BROWSERS=chromium,firefox,webkit adds Playwright's Firefox (FIREFOX_PATH if set) and WebKit (WEBKIT_PATH, Playwright's
+// pw_run.sh, if set). BROWSERS=safari runs the real Safari on macOS through safaridriver (Apple's WebDriver, enabled once
+// with `sudo safaridriver --enable`); Playwright's WebKit is close to Safari but is not Safari.
 // BUNDLERS=vite or BUNDLERS=webpack runs one of them.
 import { build } from 'vite';
 import webpack from 'webpack';
-import { chromium, webkit } from 'playwright-core';
+import { chromium, firefox, webkit } from 'playwright-core';
+import { spawn } from 'child_process';
 import { createServer } from 'http';
 import { mkdtemp, mkdir, symlink, cp, readFile, writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -43,8 +46,44 @@ const bundle = {
     },
 };
 
+// Safari has no Playwright driver, so it is driven over WebDriver: a session, a page load, and polling for window.result.
+// It returns the same shape the Playwright path reads, with page errors as the app reports them in result.error.
+const runInSafari = async (url) => {
+    const port = 4444 + Math.floor(Math.random() * 1000);
+    const driver = spawn('safaridriver', ['--port', String(port)], { stdio: 'ignore' });
+    const base = `http://127.0.0.1:${port}`;
+    const request = async (method, path, body) => {
+        const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
+        const json = await response.json();
+        if (!response.ok) {throw new Error(`safaridriver ${method} ${path}: ${JSON.stringify(json.value)}`);}
+        return json.value;
+    };
+    let session;
+    try {
+        for (let tries = 0; ; tries++) {
+            try {session = await request('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'safari' } } }); break;} catch (error) {
+                if (tries > 40) {throw error;}
+                await new Promise((done) => setTimeout(done, 250));
+            }
+        }
+        const id = session.sessionId;
+        await request('POST', `/session/${id}/url`, { url });
+        const deadline = Date.now() + 60_000;
+        while (Date.now() < deadline) {
+            const value = await request('POST', `/session/${id}/execute/sync`, { script: 'return window.result ? JSON.stringify(window.result) : null;', args: [] });
+            if (value) {return { result: JSON.parse(value), version: session.capabilities && session.capabilities.browserVersion };}
+            await new Promise((done) => setTimeout(done, 250));
+        }
+        throw new Error('Safari: the page did not finish within 60 s');
+    } finally {
+        if (session) {await request('DELETE', `/session/${session.sessionId}`).catch(() => {});}
+        driver.kill();
+    }
+};
+
 const launchBrowser = (name) => {
     if (name === 'webkit') {return webkit.launch(process.env.WEBKIT_PATH ? { executablePath: process.env.WEBKIT_PATH } : {});}
+    if (name === 'firefox') {return firefox.launch(process.env.FIREFOX_PATH ? { executablePath: process.env.FIREFOX_PATH } : {});}
     const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chrome' };
     return chromium.launch(launch).catch(() => chromium.launch());
 };
@@ -77,6 +116,14 @@ for (const bundler of bundlers) {
         await new Promise((done) => server.listen(0, '127.0.0.1', done));
 
         for (const name of browsers) {
+            if (name === 'safari') {
+                const { result, version } = await runInSafari(`http://127.0.0.1:${server.address().port}/`);
+                if (result.error) {throw new Error(`The page failed (${bundler}, Safari ${version}): ${result.error}`);}
+                console.log(`${bundler} in Safari ${version}:`);
+                for (const [check, passed] of Object.entries(result.checks)) {console.log(`${passed ? '  ok  ' : '  FAIL'} ${check}`);}
+                if (Object.values(result.checks).some((passed) => !passed)) {process.exitCode = 1;}
+                continue;
+            }
             browser = await launchBrowser(name);
             const page = await browser.newPage();
             const errors = [];
