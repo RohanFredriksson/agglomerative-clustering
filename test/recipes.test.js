@@ -113,19 +113,33 @@ describe('README recipes', () => {
         for (let i = 3; i < decoded.length; i += 4) {expect([0, 255]).toContain(decoded[i]);}
     });
 
-    it('a palette PNG whose transparent entry has alpha 0', async () => {
+    // Decoded pixel by pixel: 3.0.0-beta.1's recipe passed a check that the PNG had a tRNS chunk, but fast-png writes only
+    // the alphas below 255 and PNG applies them from entry 0, so its transparency landed on the wrong entry.
+    it('a palette PNG whose transparent pixels decode as transparent, and the rest as their colours', async () => {
         const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
         const colors = toColors(palette);
         expect(indices).toBeInstanceOf(Uint8Array);
+        expect(transparentIndex).toBeGreaterThan(0);   // the case the old recipe got wrong
+        const t = transparentIndex ?? 0;
+        const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
         const png = encodePng({
-            width: image.width, height: image.height, data: indices, depth: 8, channels: 1,
-            palette: colors.map((color, i) => [...color, i === transparentIndex ? 0 : 255]),
+            width: image.width, height: image.height, depth: 8, channels: 1,
+            data: indices.map(swap),
+            palette: colors.map((_, i) => [...colors[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
         });
-        expect(Buffer.from(png).includes(Buffer.from('tRNS'))).toBe(true);
         const back = decodePng(png);
         expect(back.channels).toBe(1);
-        expect(back.palette.length).toBe(colors.length);
-        expect(Array.from(back.data)).toEqual(Array.from(indices));
+        for (let p = 0; p < indices.length; p++) {
+            const [r, g, b, a] = back.palette[back.data[p]];
+            if (indices[p] === transparentIndex) {
+                expect(a, `pixel ${p}`).toBe(0);
+            } else {
+                expect([r, g, b, a ?? 255], `pixel ${p}`).toEqual([...colors[indices[p]], 255]);
+            }
+        }
+        // And the source's transparent background stays transparent, its opaque disc centre opaque.
+        expect(back.palette[back.data[2 * width + 2]][3]).toBe(0);
+        expect(back.palette[back.data[30 * width + 30]][3] ?? 255).toBe(255);
     });
 
 });

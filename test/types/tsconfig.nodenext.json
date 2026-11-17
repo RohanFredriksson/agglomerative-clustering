@@ -2,6 +2,8 @@
   "compilerOptions": {
     "noEmit": true,
     "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "skipLibCheck": false,
     "target": "es2022",
     "lib": [

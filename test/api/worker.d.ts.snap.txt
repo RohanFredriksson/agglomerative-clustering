@@ -7,8 +7,8 @@ export const version: string;
 export const formatVersion: 3;
 export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, RunOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, ClusteringInfoV2, ClusteringInfoV3, Swatches, } from './index.js';
 export interface WorkerOptions {
-    transfer?: boolean;
-    wasm?: InitOptions['wasm'];
+    transfer?: boolean | undefined;
+    wasm?: InitOptions['wasm'] | undefined;
 }
 export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getClustering(): Promise<Clustering>;

@@ -157,10 +157,10 @@ describe('options and image dimensions', () => {
 
     it('validates the width and height of a RawImage', async () => {
         const data = new Uint8Array(4 * 6);    // 6 pixels
-        for (const bad of [{ width: -3 }, { width: 1.5 }, { width: NaN }, { width: '3' }, { height: -1 }, { height: 2.5 }, { width: 4, height: 3 }, { width: 2, height: 2 }]) {
+        for (const bad of [{ width: -3 }, { width: 1.5 }, { width: NaN }, { width: '3' }, { height: -1 }, { height: 2.5 }, { width: 4, height: 3 }, { width: 2, height: 2 }, { width: 0 }, { width: 4 }, { height: 4 }, { height: 0 }]) {
             await expect(getPalette({ data, format: 'rgba', ...bad }, 2), JSON.stringify(bad)).rejects.toMatchObject({ code: 'invalid-argument' });
         }
-        for (const good of [{}, { width: 3 }, { height: 2 }, { width: 3, height: 2 }, { width: 6, height: 1 }, { width: 0 }]) {
+        for (const good of [{}, { width: 3 }, { height: 2 }, { width: 3, height: 2 }, { width: 6, height: 1 }]) {
             await expect(getPalette({ data, format: 'rgba', ...good }, 2), JSON.stringify(good)).resolves.toBeInstanceOf(Uint8Array);
         }
         const mapped = await quantize({ data, format: 'rgba', width: 3, height: 2 }, 2);

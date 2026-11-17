@@ -73,7 +73,9 @@ describe('the weights of getSwatchesFromClustering', () => {
     it('rejects a clustering whose records name an impossible parent', async () => {
         const clustering = new Uint8Array(await getClustering(gradient));
         clustering[clustering[2] + 3 + 9] = 200; // record 0's parent index, which must be 0
-        await expect(weightsOf(clustering, 4)).rejects.toThrow('weights are inconsistent');
+        await expect(weightsOf(clustering, 4)).rejects.toMatchObject({ code: 'invalid-clustering', message: expect.stringContaining('checksum') });
+        clustering.fill(0, 17, 21); // without the checksum (as 3.0.0-beta.1 wrote), the records are checked as they are replayed
+        await expect(weightsOf(clustering, 4)).rejects.toMatchObject({ code: 'invalid-clustering', message: expect.stringContaining("records don't fit together") });
     });
 
     // An earlier parent passes the order check, but if it is a different cluster from the one the record splits, its
@@ -88,7 +90,8 @@ describe('the weights of getSwatchesFromClustering', () => {
         let i = 1;
         while (parent(i) === 0 || merged(i) === root) {i++;}
         clustering.fill(0, at(i) + 9, at(i) + 13); // point record i at the root instead of its real parent
-        await expect(weightsOf(clustering, i + 2)).rejects.toMatchObject({ code: 'invalid-clustering', message: expect.stringContaining('weights are inconsistent') });
+        clustering.fill(0, 17, 21); // no checksum, so the records themselves are what is checked
+        await expect(weightsOf(clustering, i + 2)).rejects.toMatchObject({ code: 'invalid-clustering', message: expect.stringContaining("records don't fit together") });
     });
 
     it('reports corrupted parent indices as invalid clusterings, never as an abort', async () => {
@@ -100,6 +103,7 @@ describe('the weights of getSwatchesFromClustering', () => {
                 const clustering = original.slice();
                 clustering.fill(0, header + 3 + record * i + 9, header + 3 + record * i + 13);
                 clustering[header + 3 + record * i + 9] = value;
+                clustering.fill(0, 17, 21); // no checksum, so the replay's own checks are what is tested
                 try {await weightsOf(clustering, 200);} catch (error) {codes.add(error.code);}
             }
         }

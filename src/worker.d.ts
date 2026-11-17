@@ -33,9 +33,9 @@ export interface WorkerOptions {
      * are a whole buffer of their own are transferred: a view into part of a larger buffer (a subarray, a small Node
      * Buffer) is copied, so the caller's other data in that buffer is never detached.
      */
-    transfer?: boolean;
+    transfer?: boolean | undefined;
     /** Where the worker gets its WebAssembly module; see `InitOptions`. It is sent as the worker's first call. */
-    wasm?: InitOptions['wasm'];
+    wasm?: InitOptions['wasm'] | undefined;
 }
 
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */

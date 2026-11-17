@@ -47,9 +47,33 @@ describe('init({ wasm })', () => {
         const ac = await fresh();
         const error = await ac.init({ wasm: new Uint8Array([1, 2, 3, 4]) }).catch((e) => e);
         expect(error.code).toBe('wasm-load-failed');
-        expect(error.message).toContain('SIMD');                 // says what the module needs and what to do about it
+        expect(error.message).toContain('expected magic word');  // leads with what went wrong (the engine's reason)
+        expect(error.message).not.toContain('SIMD');             // and doesn't blame SIMD, which this engine has
         expect(error.message).toContain('init({ wasm })');
         expect(error.cause).toBeInstanceOf(Error);               // the engine's own error is kept
+        expect(await ac.getPalette(image, 6)).toEqual(expected);
+    });
+
+    // A valid module that isn't this library's once threw inside the glue, where nothing caught it: the load never settled
+    // and Node reported an unhandled rejection.
+    it.each([
+        ['bytes', () => new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])],
+        ['a compiled module', () => new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]))],
+    ])('rejects a valid module that is not this library\'s, given as %s', async (_, make) => {
+        const ac = await fresh();
+        const error = await ac.init({ wasm: make() }).catch((e) => e);
+        expect(error).toMatchObject({ code: 'wasm-load-failed' });
+        await ac.init({ wasm: bytes });
+        expect(await ac.getPalette(image, 6)).toEqual(expected);
+    });
+
+    // Next.js Edge's `import wasm from '….wasm?module'` gives a module made by another realm's WebAssembly.Module.
+    it('accepts a WebAssembly.Module from another realm', async () => {
+        const { runInNewContext } = await import('vm');
+        const foreign = runInNewContext('new WebAssembly.Module(bytes)', { bytes });
+        expect(foreign instanceof WebAssembly.Module).toBe(false);
+        const ac = await fresh();
+        await ac.init({ wasm: foreign });
         expect(await ac.getPalette(image, 6)).toEqual(expected);
     });
 

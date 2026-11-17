@@ -106,4 +106,10 @@ getClustering(bytes, { signal: 'abort' });
 quantizeToIndices(bytes, 4, { transparent: 'yes' });
 // @ts-expect-error k must be a number
 getPalette(bytes, '4');
+// Under exactOptionalPropertyTypes (on in this config), an option that may be undefined can still be passed through, as
+// the runtime treats undefined as not given.
+declare const maybeDither: boolean | undefined, maybeWidth: number | undefined, maybeSignal: AbortSignal | undefined;
+quantize(bytes, 4, { dither: maybeDither, width: maybeWidth, signal: maybeSignal, colorSpace: undefined, precision: undefined });
+getPalette(bytes, 4, { onProgress: undefined, alpha: undefined, transparent: undefined });
+getPalette({ data: bytes, format: 'rgba', width: maybeWidth, height: undefined }, 4);
 void main;

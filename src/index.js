@@ -1,6 +1,6 @@
 import createWasmModule from './clustering.js';
 import {
-    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, markPalette, markClustering,
+    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering,
     latestVersion, readHeader, checkPalette,
 } from './shared.js';
 
@@ -9,6 +9,17 @@ export {version, Palette, Clustering} from './shared.js';
 // The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
 // `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
 export const formatVersion = latestVersion;
+
+// Checked by tag rather than `instanceof`, so values from another realm are recognised: an ImageData from an iframe's
+// canvas, a WebAssembly.Module compiled by a bundler's runtime (Next.js Edge's `import wasm from '…wasm?module'`), a URL
+// from a vm context. A tag can be faked, but only on purpose, and the value is then used as what it claims to be.
+const tagOf = (value) => Object.prototype.toString.call(value);
+// (`instanceof` is kept too, for implementations without the tag, such as node-canvas's ImageData.)
+const isImageData = (value) => typeof value === 'object' && value !== null
+    && ((typeof ImageData !== 'undefined' && value instanceof ImageData) || tagOf(value) === '[object ImageData]');
+const isWasmModule = (value) => typeof value === 'object' && value !== null
+    && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
+const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
 const codes = {'rgba': 0, 'rgb': 1};
 const alphaModes = {'ignore': 0, 'weight': 1};
@@ -22,42 +33,96 @@ let Module = null;
 // cannot fetch or compile it that way. `onError` receives instantiation errors, which the glue would otherwise swallow.
 const wasmSettings = (wasm, onError) => {
     if (wasm === undefined) {return {};}
-    if (typeof wasm === 'string' || wasm instanceof URL) {
+    if (typeof wasm === 'string' || isURL(wasm)) {
         const location = String(wasm);
         return {locateFile: (path, directory) => path.endsWith('.wasm') ? location : directory + path};
     }
-    // Bytes and compiled modules go through `instantiateWasm`: this build of the glue reads no `wasmBinary` setting.
+    // Bytes and compiled modules go through `instantiateWasm`: this build of the glue reads no `wasmBinary` setting. The glue
+    // sets itself up on the instance inside `receive`, which throws for a module that isn't this one (it has other exports);
+    // that is reported as a failed load rather than left to escape, which would leave the load waiting forever.
+    const accept = (receive) => (instance) => {
+        try {receive(instance);} catch (error) {
+            onError(Object.assign(new Error("it is not agglomerative-clustering's module (it lacks the memory and functions this script uses)"), {cause: error}));
+        }
+    };
     if (isArrayBufferLike(wasm) || ArrayBuffer.isView(wasm)) {
         const source = isArrayBufferLike(wasm) ? wasm : new Uint8Array(wasm.buffer, wasm.byteOffset, wasm.byteLength);
-        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(source, imports).then(({instance}) => receive(instance), onError);}};
+        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(source, imports).then(({instance}) => accept(receive)(instance), onError);}};
     }
-    if (typeof WebAssembly !== 'undefined' && wasm instanceof WebAssembly.Module) {
-        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(wasm, imports).then(receive, onError);}};
+    if (isWasmModule(wasm)) {
+        return {instantiateWasm: (imports, receive) => {WebAssembly.instantiate(wasm, imports).then(accept(receive), onError);}};
     }
     throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
 // A module that cannot be loaded is the commonest first-run failure: a 404, a Content-Security-Policy that blocks it, a
-// browser without WebAssembly SIMD. The engine's own error (a CompileError, a failed fetch) says little about which.
-const wasmLoadFailed = (cause) => Object.assign(fail('wasm-load-failed', `Could not load the WebAssembly module (${String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0].slice(0, 140)}). It needs WebAssembly with SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4 or newer). If the file is missing or blocked, check that the .wasm is served and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).`), {cause});
+// bundler that moved the file, an engine without WebAssembly SIMD. The engine's own error (a CompileError, a failed fetch)
+// says little about which, so the message leads with what happened and then gives the likely fix for where it ran.
+// The smallest module that uses a SIMD instruction (from wasm-feature-detect), to tell an old engine from a missing file.
+const simdProbe = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11];
+const hasSimd = () => {
+    try {return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array(simdProbe));} catch (error) {return false;}
+};
+const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
+const wasmLoadFailed = (cause, given) => {
+    const text = String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0];
+    // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
+    // and wraps a failed compile in Aborted(...), which is how it stops itself, not part of the reason.
+    let reason = text.replace(/\s*\(?Build with -sASSERTIONS for more info\.?\)?/, '').trim().replace(/\.+$/, '');
+    const aborted = /^Aborted\((.*)\)$/.exec(reason);
+    if (aborted) {reason = aborted[1].replace(/\.+$/, '');}
+    let advice;
+    if (!hasSimd()) {
+        advice = "This engine has no WebAssembly SIMD, which the module needs (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 16.4 or newer).";
+    } else if (given) {
+        advice = "Check what init({ wasm }) was given: it must be this package's clustering.wasm (its URL or path, its bytes, or the module compiled from it).";
+    } else if (isNodeLike) {
+        advice = "If the package was bundled into a server build (Next.js and others), the bundler may have moved or renamed clustering.wasm: leave the package out of the bundle (in Next.js, serverExternalPackages: ['agglomerative-clustering']) or give the module with init({ wasm }).";
+    } else {
+        advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
+    }
+    return Object.assign(fail('wasm-load-failed', `Could not load the WebAssembly module: ${reason || 'unknown error'}. ${advice}`), {cause});
+};
 
 // The .wasm and the script that drives it are built together, and the byte layouts and entry points between them are
 // not a public interface. One left over from another version (a stale cache, a CDN serving an old file, an `init({ wasm })`
 // pointing at the wrong one) would misbehave in ways nothing explains, so the module says which version it is and a
 // mismatch is reported when it loads.
 const checkWasmVersion = (instance) => {
-    let found = 'an unknown version (from before 3.0)';
-    if (typeof instance._library_version === 'function') {
+    // A module from before 3.0 has no version export (the glue's wrapper then throws or returns nothing), and one that isn't
+    // this library's at all may have none either: both are reported as a version mismatch, never as a stray TypeError.
+    let found = '';
+    try {
+        const pointer = instance._library_version();
         const heap = instance.HEAPU8;
-        let end = instance._library_version();
-        const start = end;
-        while (heap[end] !== 0 && end - start < 64) {end++;}
-        found = String.fromCharCode(...heap.subarray(start, end));
-    }
+        if (typeof pointer === 'number' && pointer > 0 && heap) {
+            let end = pointer;
+            while (heap[end] !== 0 && end - pointer < 64) {end++;}
+            found = String.fromCharCode(...heap.subarray(pointer, end));
+        }
+    } catch (error) {/* no version export */}
     const expected = `agglomerative-clustering@${version}`;
     if (found !== expected) {
-        throw fail('wasm-load-failed', `The WebAssembly module is ${found}, but this script is ${expected}: a stale or mixed-up clustering.wasm (a cache or CDN serving another version, or init({ wasm }) pointing at one). Serve the .wasm that came with this version of the package.`);
+        const what = found ? found : 'from another version (one from before 3.0, which does not say which, or not this library\'s module at all)';
+        throw fail('wasm-load-failed', `The WebAssembly module is ${what}, but this script is ${expected}: a stale or mixed-up clustering.wasm (a cache or CDN serving another version, or init({ wasm }) pointing at one). Serve the .wasm that came with this version of the package.`);
     }
+};
+
+// Instantiates the module from init's `wasm` option (undefined: the glue finds the .wasm next to itself).
+const instantiate = (wasm) => {
+    let reject;
+    const failed = new Promise((_, r) => {reject = r;});
+    failed.catch(() => {});
+    return Promise.race([createWasmModule(wasmSettings(wasm, reject)), failed]);
+};
+
+// The bytes of this package's clustering.wasm as Node resolves it from the working directory, for when the copy next to
+// the script is missing (see acquire). The specifiers are built at run time so bundlers leave them alone (see worker.js).
+const packagedWasm = async () => {
+    const {createRequire} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'module'].join(':'));
+    const {readFile} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'fs/promises'].join(':'));
+    const file = createRequire(`${process.cwd()}/`).resolve('agglomerative-clustering/clustering.wasm');
+    return readFile(file);
 };
 
 // The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
@@ -76,15 +141,23 @@ const acquire = async (options) => {
         if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`, `options.${key}`);}
     }
     // Checked on every call, so a bad value is reported even when the module is already loaded.
-    let reject;
-    const failed = new Promise((_, r) => {reject = r;});
-    failed.catch(() => {});
-    const settings = wasmSettings(options.wasm, reject);
+    wasmSettings(options.wasm, () => {});
     if (Module) {return Module;}
 
     if (!loading) {
+        const wasm = options.wasm;
         loading = (async () => {
-            const instance = await Promise.race([createWasmModule(settings), failed]).catch((error) => {throw wasmLoadFailed(error);});
+            let instance;
+            try {
+                instance = await instantiate(wasm);
+            } catch (error) {
+                // In Node, a bundler that rewrote the glue's `new URL('clustering.wasm', import.meta.url)` (a Next.js server
+                // build, say) leaves it pointing at a file that isn't there. The package's own copy is then looked for the
+                // way Node resolves packages, from the working directory; if that fails too, the first error is reported.
+                const fallback = wasm === undefined && isNodeLike ? await packagedWasm().catch(() => null) : null;
+                if (!fallback) {throw wasmLoadFailed(error, wasm !== undefined);}
+                instance = await instantiate(fallback).catch(() => {throw wasmLoadFailed(error, false);});
+            }
             checkWasmVersion(instance);
             Module = instance;
             return instance;
@@ -182,7 +255,41 @@ const imageHint = (image) => {
     return '';
 };
 
+// A typed array whose buffer was transferred away (to a worker, say) is empty and can't be read or viewed.
+const isDetached = (view) => {
+    const buffer = view.buffer;
+    if (typeof buffer.detached === 'boolean') {return buffer.detached;}
+    try {new Uint8Array(buffer, 0, 0); return false;} catch (error) {return true;}
+};
+
+// The bytes a call works on are read when it is made, as with any function that takes an array: the caller may reuse
+// or change the array as soon as the call returns. Once the module is loaded the bytes go into its memory before the
+// call returns; until then (the first call) a copy is kept for when it has loaded.
+const held = (data) => Module ? data : data.slice();
+
+// width and height are copied to results and used for dithering, so each must make sense on its own: a whole number of
+// pixels that divides the pixel count (and, when both are given, account for exactly the pixels in the data).
+const checkSize = (pixels, size, name, argument) => {
+    if (size === undefined) {return;}
+    if (!Number.isInteger(size) || size < 0) {
+        throw fail('invalid-argument', `Invalid ${name}: must be a whole number of pixels.`, argument);
+    }
+    if (pixels > 0 && (size === 0 || pixels % size !== 0)) {
+        throw fail('invalid-argument', `Invalid ${name}: ${size} does not divide the image's ${pixels} pixels into whole rows.`, argument);
+    }
+};
+
 const load = (image) => {
+
+    if (isClustering(image) || isPalette(image)) {
+        const what = isClustering(image) ? 'a clustering (from getClustering)' : 'a palette';
+        const fix = isClustering(image) ? 'To cut a palette from it, use getPaletteFromClustering (or quantizeFromClustering to map an image with it).' : 'To map an image to it, use quantizeWithPalette(image, palette).';
+        throw fail('invalid-argument', `Invalid image: this is ${what}, not pixels. ${fix}`, 'image');
+    }
+
+    if (ArrayBuffer.isView(image) && isDetached(image)) {
+        throw fail('invalid-argument', "Invalid image: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+    }
 
     if (isUint8Array(image)) {
         const encoded = sniffImageFormat(image);
@@ -190,11 +297,14 @@ const load = (image) => {
             throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode it first (in a browser, draw it to a canvas or use createImageBitmap, then pass getImageData(); in Node use sharp, pngjs or similar) and pass the raw pixels. If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
         }
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
-        return {data: image, format: 'rgba'};
+        return {data: held(image), format: 'rgba'};
     }
 
-    if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
-        return {data: bytes(image.data), format: 'rgba', width: image.width};
+    if (isImageData(image)) {
+        if (isDetached(image.data)) {
+            throw fail('invalid-argument', "Invalid image: the ImageData's pixels were transferred away (detached), for example to a worker created with transfer: true.", 'image');
+        }
+        return {data: held(bytes(image.data)), format: 'rgba', width: image.width};
     }
 
     if (ArrayBuffer.isView(image)) {
@@ -208,6 +318,9 @@ const load = (image) => {
     if (!isUint8Array(image.data) && !isUint8ClampedArray(image.data)) {
         throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
     }
+    if (isDetached(image.data)) {
+        throw fail('invalid-argument', "Invalid image data: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+    }
 
     if (!Object.keys(codes).includes(image.format)) {
         throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.", 'image');
@@ -218,24 +331,19 @@ const load = (image) => {
         throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`, 'image');
     }
 
-    // width and height are copied to results and used for dithering, so they must make sense: whole numbers that, when
-    // both are given, account for exactly the pixels in the data.
-    for (const key of ['width', 'height']) {
-        const value = image[key];
-        if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
-            throw fail('invalid-argument', `Invalid image ${key}: must be a whole number of pixels.`, 'image');
-        }
-    }
-    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== image.data.length / channels) {
-        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${image.data.length / channels} pixels.`, 'image');
+    const pixels = image.data.length / channels;
+    checkSize(pixels, image.width, 'image width', 'image');
+    checkSize(pixels, image.height, 'image height', 'image');
+    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
+        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${pixels} pixels.`, 'image');
     }
 
-    return {data: bytes(image.data), format: image.format, width: image.width};
+    return {data: held(bytes(image.data)), format: image.format, width: image.width};
 
 };
 
 const getWrapper = (image) => {
-    if (typeof ImageData !== 'undefined' && image instanceof ImageData) {
+    if (isImageData(image)) {
         // The pixels stay in the colour space they came in ('display-p3' canvases), so the result must say so.
         const {width, height, colorSpace} = image;
         return (output) => new ImageData(new Uint8ClampedArray(output.buffer), width, height, colorSpace ? {colorSpace} : undefined);
@@ -334,6 +442,9 @@ const parseOptions = (options, allowed, image) => {
     if (options.width !== undefined && image && image.width !== undefined && options.width !== image.width) {
         throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`, 'options.width');
     }
+    if (options.width !== undefined && image) {
+        checkSize(image.data.length / (image.format === 'rgb' ? 3 : 4), options.width, 'width', 'options.width');
+    }
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
         const channels = image.format === 'rgb' ? 3 : 4;
@@ -381,6 +492,17 @@ const mapIndexOptions = [...mapOptions, 'transparent'];
 
 
 
+// An empty palette is what getPalette gives for an image with no visible pixels, and mapping such an image with it is
+// fine. Mapping visible pixels to it has no answer (they would all come out black), so that is an error. `cutoff` is the
+// alpha from which an RGBA pixel needs a colour.
+const checkNotEmpty = (palette, image, cutoff) => {
+    if (palette.length > 0) {return;}
+    const data = image.data;
+    let visible = image.format === 'rgb' ? data.length > 0 : false;
+    for (let i = 3; !visible && i < data.length; i += 4) {visible = data[i] >= cutoff;}
+    if (visible) {throw fail('invalid-argument', "Invalid palette: it is empty, but the image has visible pixels to map to it.", 'palette');}
+};
+
 // The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
 const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
 
@@ -398,6 +520,9 @@ const call = (wasm, buffers, fn) => {
             wasm.HEAPU8.set(buffer, pointer);
         }
         outputPointer = fn(...pointers);
+        // Only the functions that read a clustering return nothing: when its records don't fit together (see
+        // _get_palette_from_clustering), which a clustering whose checksum matches never does.
+        if (!outputPointer) {throw fail('invalid-clustering', "Invalid clustering: its records don't fit together, so it is damaged or isn't a clustering. Cluster the image again.", 'clustering');}
         return unpack(wasm, outputPointer);
     } catch (error) {
         if (!isAbort(error)) {throw error;}
@@ -485,11 +610,15 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
     }
 };
 
+// Every function checks its arguments and takes its bytes (see `held`) before it waits for anything: when the module is
+// already loaded, `Module || await acquire()` doesn't wait, and the work up to the first slice of a long clustering
+// happens before the call returns.
+
 export const getClustering = async (image, options) => {
 
-    const wasm = await acquire();
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
+    const wasm = Module || await acquire();
 
     if (isControlled(o)) {
         const report = reporter(o);
@@ -504,10 +633,10 @@ export const getClustering = async (image, options) => {
 
 export const getPalette = async (image, k, options) => {
 
-    const wasm = await acquire();
     image = load(image);
     k = check(k);
     const o = parseOptions(options, clusterOptions, image);
+    const wasm = Module || await acquire();
 
     if (isControlled(o)) {
         const report = reporter(o);
@@ -524,9 +653,10 @@ export const getPalette = async (image, k, options) => {
 
 export const getPaletteFromClustering = async (clustering, k) => {
 
-    const wasm = await acquire();
     const header = readHeader(clustering);
     k = check(k);
+    clustering = held(clustering);
+    const wasm = Module || await acquire();
 
     return markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
 
@@ -544,12 +674,13 @@ const weightsOf = (wasm, clustering, header, k) => {
 // proportion to their opacity, as in clustering. Shares are the weights divided by their total, so they sum to 1.
 export const getSwatchesFromClustering = async (clustering, k) => {
 
-    const wasm = await acquire();
     const header = readHeader(clustering);
     k = check(k);
     if (header.version < 3) {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
     }
+    clustering = held(clustering);
+    const wasm = Module || await acquire();
 
     const palette = markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
     const weights = weightsOf(wasm, clustering, header, k);
@@ -594,6 +725,11 @@ export const getClusteringInfo = async (clustering) => {
         remaining += view.getFloat32(header.headerLength + 3 + i * header.recordLength + 17, true);
         info.mse[i] = remaining / total / 3;
     }
+    // Errors are sums of squares, so a cost that is negative or not a number can only come from damaged bytes (a clustering
+    // from 3.0.0-beta.1 has no checksum to catch them first).
+    for (let i = 0; i < colors; i++) {
+        if (!(info.mse[i] >= 0) || !Number.isFinite(info.mse[i])) {throw fail('invalid-clustering', "Invalid clustering: its recorded errors are not valid numbers, so it is damaged. Cluster the image again.", 'clustering');}
+    }
     // The share of the image's variance each palette size keeps; 1 throughout for an image of one colour.
     for (let i = 0; i < colors; i++) {
         info.explained[i] = info.mse[0] > 0 ? Math.max(0, Math.min(1, 1 - info.mse[i] / info.mse[0])) : 1;
@@ -604,11 +740,11 @@ export const getClusteringInfo = async (clustering) => {
 
 export const quantize = async (image, k, options) => {
 
-    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     k = check(k);
     const o = parseOptions(options, quantizeOptions, image);
+    const wasm = Module || await acquire();
 
     if (isControlled(o)) {
         const report = reporter(o);
@@ -625,12 +761,13 @@ export const quantize = async (image, k, options) => {
 
 export const quantizeFromClustering = async (image, clustering, k, options) => {
 
-    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapOptions, image);
+    clustering = held(clustering);
+    const wasm = Module || await acquire();
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
@@ -641,25 +778,28 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
 
 export const quantizeWithPalette = async (image, palette, options) => {
 
-    const wasm = await acquire();
     const wrap = getWrapper(image);
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapOptions, image);
+    checkNotEmpty(palette, image, 1);
+    const space = matchingSpace(o, palette);
+    palette = held(palette);
+    const wasm = Module || await acquire();
     checkAborted(o.signal);
 
-    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, matchingSpace(o, palette), o.dither, o.width)));
+    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.width)));
     return result;
 
 };
 
 export const quantizeToIndices = async (image, k, options) => {
 
-    const wasm = await acquire();
     const original = image;
     image = load(image);
     k = check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
+    const wasm = Module || await acquire();
 
     if (isControlled(o)) {
         const report = reporter(o);
@@ -676,12 +816,13 @@ export const quantizeToIndices = async (image, k, options) => {
 
 export const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
 
-    const wasm = await acquire();
     const original = image;
     image = load(image);
     const header = readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapIndexOptions, image);
+    clustering = held(clustering);
+    const wasm = Module || await acquire();
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
@@ -695,15 +836,18 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
 
 export const quantizeToIndicesWithPalette = async (image, palette, options) => {
 
-    const wasm = await acquire();
     const original = image;
     image = load(image);
     checkPalette(palette);
     const o = parseOptions(options, mapIndexOptions, image);
-    checkAborted(o.signal);
+    checkNotEmpty(palette, image, o.transparent > 0 ? o.transparent : 1);
     const space = matchingSpace(o, palette);
+    const paletteSpace = isPalette(palette) ? palette.colorSpace : colorSpaceName(space);
+    palette = held(palette);
+    const wasm = Module || await acquire();
+    checkAborted(o.signal);
 
-    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.width, o.transparent)), original, isPalette(palette) ? palette.colorSpace : colorSpaceName(space));
+    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.width, o.transparent)), original, paletteSpace);
     return result;
 
 };

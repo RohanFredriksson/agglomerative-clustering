@@ -213,12 +213,14 @@ describe('edge cases and options', () => {
         expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
     });
 
-    it('a user palette that is empty still gets a placeholder for visible pixels', async () => {
+    it('rejects an empty user palette when there are visible pixels to map', async () => {
         const visible = new Uint8Array([10, 20, 30, 255, 0, 0, 0, 0]);
-        const result = await quantizeToIndicesWithPalette(visible, new Uint8Array(0), { transparent: true });
-        expect(Array.from(result.palette)).toEqual([0, 0, 0, 0, 0, 0]);
-        expect(result.transparentIndex).toBe(1);
-        expect(Array.from(result.indices)).toEqual([0, 1]);
+        await expect(quantizeToIndicesWithPalette(visible, new Uint8Array(0), { transparent: true })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'palette' });
+        // Pixels below the cutoff need no colour, so an image of only those maps to an empty palette.
+        const hidden = new Uint8Array([10, 20, 30, 100, 0, 0, 0, 0]);
+        const result = await quantizeToIndicesWithPalette(hidden, new Uint8Array(0), { transparent: true });
+        expect(result.transparentIndex).toBe(0);
+        expect(Array.from(result.indices)).toEqual([0, 0]);
     });
 
     it('copies width and height from ImageData and RawImage, not from a bare Uint8Array', async () => {
