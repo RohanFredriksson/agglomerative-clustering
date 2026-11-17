@@ -1,6 +1,6 @@
 import createWasmModule from './clustering.js';
 import {
-    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering,
+    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
     latestVersion, readHeader, checkPalette,
 } from './shared.js';
 
@@ -63,7 +63,10 @@ const simdProbe = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1,
 const hasSimd = () => {
     try {return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array(simdProbe));} catch (error) {return false;}
 };
-const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
+// Node itself (or Bun), not a runtime that imitates it: Cloudflare Workers with nodejs_compat and Deno also define
+// process.versions.node, but their navigator.userAgent says what they are (Node 20 has no navigator at all).
+const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node)
+    && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
 const wasmLoadFailed = (cause, given) => {
     const text = String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0];
     // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
@@ -113,7 +116,9 @@ const instantiate = (wasm) => {
     let reject;
     const failed = new Promise((_, r) => {reject = r;});
     failed.catch(() => {});
-    return Promise.race([createWasmModule(wasmSettings(wasm, reject)), failed]);
+    // The glue's own console output (failed fetches, "Aborted()") is turned off: every failure reaches the caller as an error.
+    const quiet = {print: () => {}, printErr: () => {}};
+    return Promise.race([createWasmModule({...quiet, ...wasmSettings(wasm, reject)}), failed]);
 };
 
 // The bytes of this package's clustering.wasm as Node resolves it from the working directory, for when the copy next to
@@ -182,6 +187,14 @@ const isAbort = (error) => error instanceof Error && error.name === 'RuntimeErro
 const discard = (instance) => {
     if (Module === instance) {Module = null; loading = null;}
 };
+// WebAssembly memory only grows: an instance that once held a huge image keeps all that memory for the life of the process.
+// So when a call leaves the heap larger than this, the instance is retired like an aborted one: calls already running keep
+// it, the next call loads a fresh one (a few milliseconds, next to the seconds such an image took), and the old memory is
+// freed when nothing uses it any more.
+const retireAbove = 256 * 1024 * 1024;
+const retireIfLarge = (instance) => {
+    if (instance.HEAPU8 && instance.HEAPU8.length > retireAbove) {discard(instance);}
+};
 const outOfMemory = () => fail('out-of-memory', "The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Try `precision: 6`, which bounds the memory an image with very many colours needs, or a smaller image.");
 
 const unpack = (wasm, pointer) => {
@@ -240,20 +253,6 @@ const sniffImageFormat = (bytes) => {
     return null;
 };
 
-// What to say about something that isn't an image, when it is a common thing to pass by mistake: each has a one-line fix.
-const imageHint = (image) => {
-    const decode = " Decode it to pixels first, then pass them.";
-    if (image === undefined || image === null) {return ` Got ${image}.`;}
-    if (typeof image === 'string') {return ` Got a string (a file name, URL or data URL?): load and decode it to pixels first.`;}
-    if (typeof image !== 'object') {return ` Got a ${typeof image}.`;}
-    if (Array.isArray(image)) {return " Got a plain array: use new Uint8Array(array) for RGBA bytes, or { data: new Uint8Array(array), format: 'rgb' }.";}
-    if (isArrayBufferLike(image)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
-    if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
-    if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
-    if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
-    if (image.data && !image.format) {return " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage.";}
-    return '';
-};
 
 // A typed array whose buffer was transferred away (to a worker, say) is empty and can't be read or viewed.
 const isDetached = (view) => {
@@ -389,7 +388,10 @@ const unpackIndices = (output, image, colorSpace) => {
 const check = (k) => {
 
     if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
-        throw fail('invalid-argument', "Invalid k: must be a strictly positive integer.", 'k')
+        // A string is the usual slip (an input's `value`), so it gets its own fix.
+        const got = typeof k === 'string' ? ` Got the string ${JSON.stringify(k.length > 20 ? `${k.slice(0, 20)}…` : k)}: convert it first, e.g. Number(input.value).`
+            : typeof k === 'number' ? ` Got ${k}.` : ` Got ${k === null ? 'null' : typeof k}.`;
+        throw fail('invalid-argument', `Invalid k: must be a whole number of colours, 1 or more.${got}`, 'k');
     }
     return Math.min(k, 0x7FFFFFFF);
 
@@ -534,6 +536,7 @@ const call = (wasm, buffers, fn) => {
         if (!aborted) {
             for (const pointer of pointers) {wasm._free(pointer);}
             if (outputPointer) {wasm._free(outputPointer);}
+            retireIfLarge(wasm);
         }
     }
 };
@@ -606,7 +609,16 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
         if (!aborted) {
             if (job) {wasm._clustering_job_free(job);}
             wasm._free(imagePointer);
+            retireIfLarge(wasm);
         }
+    }
+};
+
+// The functions that read a clustering take no options: a clustering already says how it was made. An options object passed
+// anyway (say { colorSpace: 'oklab' }, expecting it to apply) would be silently ignored, so it is an error. undefined is fine.
+const noOptions = (name, extra) => {
+    if (extra.some((value) => value !== undefined)) {
+        throw fail('invalid-argument', `Invalid arguments: ${name} takes no options (a clustering already records its colour space, precision and cutoff). To map pixels with other options, use quantizeFromClustering.`, 'options');
     }
 };
 
@@ -651,10 +663,11 @@ export const getPalette = async (image, k, options) => {
 
 };
 
-export const getPaletteFromClustering = async (clustering, k) => {
+export const getPaletteFromClustering = async (clustering, k, ...extra) => {
 
     const header = readHeader(clustering);
     k = check(k);
+    noOptions('getPaletteFromClustering', extra);
     clustering = held(clustering);
     const wasm = Module || await acquire();
 
@@ -672,10 +685,11 @@ const weightsOf = (wasm, clustering, header, k) => {
 // A palette with the weight and share of the image of each of its colours, from one cut of one clustering, so the three
 // arrays line up by construction. Weights are pixels: fully transparent pixels count 0 and partly transparent ones in
 // proportion to their opacity, as in clustering. Shares are the weights divided by their total, so they sum to 1.
-export const getSwatchesFromClustering = async (clustering, k) => {
+export const getSwatchesFromClustering = async (clustering, k, ...extra) => {
 
     const header = readHeader(clustering);
     k = check(k);
+    noOptions('getSwatchesFromClustering', extra);
     if (header.version < 3) {
         throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
     }
@@ -705,9 +719,10 @@ export const getSwatches = async (image, k, options) => {
 // What a clustering holds, read from its header and records without the WASM module. `mse[k - 1]` is the mean
 // squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,
 // weighted as in clustering, in 8-bit RGB values (RGB) or OKLab units (OKLab).
-export const getClusteringInfo = async (clustering) => {
+export const getClusteringInfo = async (clustering, ...extra) => {
 
     const header = readHeader(clustering);
+    noOptions('getClusteringInfo', extra);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
     const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, transparent: header.transparent === 0 ? false : header.transparent, maxColors: colors, totalWeight: null, mse: null, explained: null};
     if (header.version < 3) {return info;}

@@ -159,3 +159,62 @@ describe('width and height', () => {
     });
 
 });
+
+describe('small things from the beta.1 testing', () => {
+
+    // The worker entry once let these reach the structured clone, whose error says nothing about what to pass instead.
+    it('the worker entry names a canvas, image element or Blob with the main entry\'s hint', async () => {
+        const worker = createWorker();
+        try {
+            const canvas = { getContext: () => null, width: 4, height: 4 };
+            for (const entry of [ac, worker]) {
+                await expect(entry.getPalette(canvas, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('getImageData') });
+            }
+            await expect(worker.quantize({ nodeName: 'IMG', src: 'x.png' }, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('canvas') });
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+    it('rejects options passed to the functions that read a clustering, in both entries and on handles', async () => {
+        const clustering = await ac.getClustering(solid(red));
+        for (const call of [
+            () => ac.getPaletteFromClustering(clustering, 4, { colorSpace: 'oklab' }),
+            () => ac.getSwatchesFromClustering(clustering, 4, {}),
+            () => ac.getClusteringInfo(clustering, { precision: 6 }),
+        ]) {
+            await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
+        }
+        expect(await ac.getPaletteFromClustering(clustering, 4, undefined)).toEqual(await ac.getPaletteFromClustering(clustering, 4));
+        const worker = createWorker();
+        try {
+            await expect(worker.getPaletteFromClustering(clustering, 4, { dither: true })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
+            const handle = await worker.cluster(solid(red));
+            await expect(handle.getPalette(4, { colorSpace: 'oklab' })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
+            await expect(handle.getSwatches(4, {})).rejects.toMatchObject({ code: 'invalid-argument' });
+            expect(Array.from(await handle.getPalette(4))).toEqual(red);
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+    it('says when k is a string, and how to convert it', async () => {
+        await expect(ac.getPalette(solid(red), '16')).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k', message: expect.stringContaining('Got the string "16"') });
+        await expect(ac.getPalette(solid(red), 2.5)).rejects.toThrow('Got 2.5');
+        await expect(ac.getPalette(solid(red), null)).rejects.toThrow('Got null');
+    });
+
+    it('keeps the WebAssembly glue quiet when the module fails to load', async () => {
+        const lib = await fresh();
+        const logged = [];
+        const original = [console.error, console.warn, console.log];
+        console.error = console.warn = console.log = (...args) => logged.push(args.join(' '));
+        try {
+            await expect(lib.init({ wasm: resolve(dist, 'no-such-file.wasm') })).rejects.toMatchObject({ code: 'wasm-load-failed' });
+        } finally {
+            [console.error, console.warn, console.log] = original;
+        }
+        expect(logged).toEqual([]);
+    });
+
+});

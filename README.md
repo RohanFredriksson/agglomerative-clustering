@@ -16,7 +16,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread.
 - **Accurate and fast.** The lowest average error of the six JavaScript quantizers we benchmarked, at about the speed of libimagequant ([numbers](#how-it-compares)).
-- **Small and portable.** 88 KB of WebAssembly, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
+- **Small and portable.** 91 KB of WebAssembly, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
 
 [Install](#install) · [Quick start](#quick-start) · [The idea](#the-idea-in-one-minute) · [Guides](#guides) · [Reference](#reference) · [API](#api) · [Troubleshooting](#troubleshooting)
 
@@ -94,7 +94,7 @@ Five words are used throughout:
 
 - **clustering**: the tree of an image's colours. It is opaque bytes (a `Clustering`) that you can store next to the image.
 - **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`. A `Palette` knows the colour space it was made in.
-- **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours.
+- **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours. The one exception: indexed output always keeps a colour for the visible pixels, so `k = 1` with a transparent entry gives 2.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
 - **precision**: an option that groups similar colours before clustering, about 3× faster at practically the same quality.
 
@@ -143,7 +143,7 @@ slider.oninput = async () => {
 };
 ```
 
-A clustering is about 1.3 MB for a 768×512 photo (0.45 MB with `precision: 6`). Store it next to the image if you like: its format is versioned, and `new Clustering(bytes)` gives stored bytes their type back (see [Palette and Clustering](#palette-and-clustering)).
+A clustering of a 768×512 photo is 0.3 to 1.5 MB, typically 0.7 MB (0.2 MB with `precision: 6`). Store it next to the image if you like: its format is versioned, and `new Clustering(bytes)` gives stored bytes their type back (see [Palette and Clustering](#palette-and-clustering)).
 
 ### Swatches, and choosing a palette size
 
@@ -159,8 +159,8 @@ const clustering = await getClustering(image);
 const eight = await getSwatchesFromClustering(clustering, 8);
 
 // The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
-const { explained } = await getClusteringInfo(clustering);
-const k = explained.findIndex((share) => share >= 0.99) + 1;
+const { explained } = await getClusteringInfo(clustering);   // null only for a clustering from 2.x
+const k = (explained ?? []).findIndex((share) => share >= 0.99) + 1;
 ```
 
 ### GIFs and palette PNGs
@@ -170,11 +170,14 @@ const k = explained.findIndex((share) => share >= 0.99) + 1;
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
 ```js
-import { GIFEncoder } from 'gifenc';   // in plain Node ESM: import gifenc from 'gifenc'; const { GIFEncoder } = gifenc;
+import * as gifenc from 'gifenc';
+// Bundlers read gifenc's ES module, which has the named export; plain Node reads its CommonJS build, which has it on the default.
+const GIFEncoder = gifenc.GIFEncoder ?? gifenc.default.GIFEncoder;
 import { quantizeToIndices } from 'agglomerative-clustering';
 
 // k counts the transparent entry, so 256 is the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
-const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
+const { palette, indices, indexBits, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
+if (indexBits !== 8) {throw new Error('unreachable: 256 entries or fewer have 8-bit indices');}   // tells TypeScript `indices` is a Uint8Array
 const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
 
 const gif = GIFEncoder();
@@ -198,7 +201,30 @@ const png = encode({
 });
 ```
 
-With at most 256 entries, `indices` is a `Uint8Array`, as these formats need (`indexBits` says so). To map more frames with the same colours, pass the result's `colors` (the palette without the transparent entry) to `quantizeToIndicesWithPalette`.
+With at most 256 entries, `indices` is a `Uint8Array`, as these formats need (`indexBits` says so).
+
+### Animated GIFs and sets of images
+
+One palette for a whole animation (or a set of images that should share colours) keeps colours from flickering between frames. Cluster a sample of the frames as one image, by putting their pixels end to end, then map every frame with that clustering:
+
+```js
+import { getClustering, quantizeToIndicesFromClustering } from 'agglomerative-clustering';
+
+// `frames` are { data, format: 'rgba', width, height }. Every 5th one, end to end, is one image to cluster.
+const sample = frames.filter((_, i) => i % 5 === 0);
+const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length, 0));
+let offset = 0;
+for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
+const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
+
+for (const frame of frames) {
+  // The same 256 entries for every frame (transparent one included), dithered lightly to limit shimmer between frames.
+  const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
+  // … gif.writeFrame(indices, width, height, { palette: …, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
+}
+```
+
+Cutting the clustering keeps `k` counting the transparent entry, so the palette fits a GIF. (A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added to it, so 256 colours become 257 entries: cut 255.) A frame with no transparent pixels has no transparent entry, so its palette can be one entry shorter than another frame's; a GIF with one global palette should reserve a slot for it. With the worker entry, a few `createWorker()`s map frames in parallel; on small frames (320×240) the cost of sending them across outweighs the gain.
 
 ### Off the main thread
 
@@ -229,9 +255,9 @@ slider.oninput = async () => {
 };
 ```
 
-Calls to one worker run in order, and re-mapping a large image takes a while (about 0.3 s at 10 megapixels), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Aborting the previous call drops it from the queue. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
+Calls to one worker run in order, and re-mapping a large image takes a while (0.2 to 0.3 s at 12 megapixels, about 1 s dithered), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Aborting the previous call drops it from the queue. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 and esbuild, Parcel 2 works with its `packageExports` option on, and for Next.js see [Next.js](#nextjs). In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 and esbuild, Parcel 2 works with its `packageExports` option on, and for Next.js see [Next.js](#nextjs). Loaded from a CDN (another origin than the page), it starts the worker through a small `blob:` script, as browsers don't start workers from other origins' scripts. In TypeScript a handle keeps the image type it was made from: a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`, whose `quantize` returns the general image type. In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
 
 ### Using the output
 
@@ -307,7 +333,7 @@ Every function that takes an image also takes an optional last argument of optio
 
 "Clustering" means any function that builds a clustering (`getClustering`, `getPalette`, `getSwatches`, `quantize` and `quantizeToIndices`), and "mapping" means any that maps pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
-Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error.
+Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `getClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions` (extra properties of a variable are allowed), so give each call the options it takes, or keep one object per stage.
 
 ```js
 // Perceptual palettes for a photo, quickly
@@ -403,7 +429,7 @@ const clustering = await getClustering(image, {
 
 - **Slices.** With either option, clustering runs in slices of about 10 ms, so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes: check `error.name === 'AbortError'`. An already aborted signal does no work.
-- **Mapping can't be interrupted** (it takes a few milliseconds). The functions that only map check the signal before they start, and don't take `onProgress`.
+- **Mapping can't be interrupted** (it takes milliseconds: 6 ms at 768×512, 27 ms dithered). The functions that only map check the signal before they start, and don't take `onProgress`.
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.
 - **In a worker** the work in the worker stops too, and a call still queued is removed without running. The worker keeps running for later calls.
 
@@ -411,7 +437,7 @@ const clustering = await getClustering(image, {
 
 Every error the library throws is an `Error` with a `code`, so you don't have to match on message text (except an abort, which rejects with the signal's own `reason`).
 
-When an error is about one argument, `error.argument` names it: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, or `'options.<name>'` (for example `'options.colorSpace'`), so a form can point at the right field. Arguments are checked in the order you pass them, so the error is about the first that is wrong.
+When an error is about one argument, `error.argument` names it: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, `'colorSpace'` (from `new Palette`), or `'options.<name>'` (for example `'options.colorSpace'`), so a form can point at the right field. Arguments are checked in the order you pass them, so the error is about the first that is wrong.
 
 | `code` | When |
 | --- | --- |
@@ -514,7 +540,7 @@ The result is `{ palette, colors, indices, indexBits, transparentIndex }`, plus 
 - `indices`: one per pixel, a `Uint8Array` for up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`; `indexBits` (8, 16 or 32) says which.
 - `transparentIndex`: the transparent entry's index, or `null`.
 
-With `transparent`, RGBA pixels below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })`, and at least one colour is always kept. See [Transparency](#transparency).
+With `transparent`, RGBA pixels below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })` when the image has pixels below the cutoff; when it has none there is no transparent entry, and all `k` entries are colours. At least one colour is always kept. See [Transparency](#transparency).
 
 ```js
 const { palette, colors, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
@@ -542,7 +568,37 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 
 Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite and webpack 5 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
 
-Checked by hand, not in CI: Deno 2.9, Bun 1.4 (both including the worker entry), Cloudflare Workers (a Worker bundled with esbuild, run in Miniflare) and Parcel 2.
+CI also loads `dist/` from another origin, as a page using a CDN does, in the same browsers. Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, SvelteKit and Nuxt, Next.js and Parcel 2 (see below).
+
+### From a CDN, without a build step
+
+```html
+<script type="module">
+  import { getSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@next/dist/index.mjs';
+  import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@next/dist/worker.mjs';
+</script>
+```
+
+Import `dist/index.mjs` and `dist/worker.mjs` by their paths (jsDelivr and unpkg don't follow the package's `exports` for subpaths such as `/worker`); `https://esm.sh/agglomerative-clustering@next` works too. The `.wasm` is found next to the script, so `init` needs no `wasm` option, and the worker entry starts its worker through a `blob:` script (browsers don't start workers from another origin's script). A Content-Security-Policy needs the CDN in `script-src` and `connect-src` (the `.wasm` is fetched), `'wasm-unsafe-eval'`, and `worker-src blob:` for the worker. Pin an exact version in production, as `@3.0.0` rather than `@next`.
+
+### Deno, Bun and Cloudflare Workers
+
+- **Bun** needs nothing: `bun add agglomerative-clustering`, then both entries work as in Node.
+- **Deno**: `import { getPalette } from 'npm:agglomerative-clustering@next'`, run with `--allow-read` (the `.wasm` is read from the package). Importing from a CDN URL works too, without it. The worker entry runs on Deno's `worker_threads`, which is about 3 times slower per call than the main entry; for a few calls, use the main entry. Deno doesn't install npm versions less than a day old by default, so on the day of a release it may quietly install the previous one (`"minimumDependencyAge": 0` in `deno.json` turns that off; the exported `version` says what you got).
+- **Cloudflare Workers**: Wrangler imports a `.wasm` file as a compiled module, so give it to `init` before the first call. There are no threads, so use the main entry.
+
+  ```js
+  import { init, getSwatches } from 'agglomerative-clustering';
+  import wasm from 'agglomerative-clustering/clustering.wasm';
+
+  const ready = init({ wasm });
+  export default {
+    async fetch(request) {
+      await ready;
+      // … decode the upload to pixels (fast-png works here), then getSwatches(pixels, 8)
+    },
+  };
+  ```
 
 ### Loading the WebAssembly module
 By default the module is found next to the package's script, which Node and bundlers such as Vite handle. Otherwise, say where it is before any other call (the first load that succeeds wins):
@@ -554,6 +610,10 @@ await init({ wasm: wasmModule });                                      // a comp
 ```
 
 The package exports the file as `agglomerative-clustering/clustering.wasm`, so a bundler that imports `.wasm` files as compiled modules (Wrangler, for Cloudflare Workers) can give you `wasmModule`. A strict Content-Security-Policy needs `'wasm-unsafe-eval'` in `script-src`. `createWorker({ wasm })` passes the same option to a worker.
+
+### SvelteKit, Nuxt and other frameworks
+
+SvelteKit (adapter-node) and Nuxt (Nitro's node-server) need no configuration, in development and production builds: the worker entry for pages, the main entry in server routes. Importing either entry during server rendering is safe, and `createWorker()` starts no thread until its first call. On Nitro's Cloudflare preset, turn on `nitro: { experimental: { wasm: true } }` and pass the module from `import wasm from 'agglomerative-clustering/clustering.wasm?module'` to `init`, as for the Edge runtime below.
 
 ### Next.js
 
@@ -583,9 +643,33 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 
 ### Performance and limits
 
-**Servers.** Cap the pixel count of uploads, use `precision: 6` (it bounds the memory an image with very many colours needs), and use the worker entry so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few with `createWorker()` for concurrency. Running out of memory is a catchable `out-of-memory` error.
+**Servers.** Cap the pixel count of uploads (check the header's dimensions before decoding, as sharp's `limitInputPixels` does), use `precision: 6` (it bounds the memory an image with very many colours needs), and run the work in workers so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few:
 
-**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes about 4 s exact and 0.9 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally.
+```js
+import { createWorker } from 'agglomerative-clustering/worker';
+
+// Four workers; each call goes to the one with the least work waiting.
+const pool = Array.from({ length: 4 }, () => ({ worker: createWorker(), waiting: 0 }));
+const run = async (method, ...args) => {
+  const slot = pool.reduce((best, next) => (next.waiting < best.waiting ? next : best));
+  slot.waiting++;
+  const call = slot.worker[method];
+  try {return await call(...args);} finally {slot.waiting--;}
+};
+
+// In a request handler (Fastify shown): stop the work if the client goes away. In Node, listen on the response's
+// 'close' (reply.raw, or res in Express), not the request's.
+const controller = new AbortController();
+reply.raw.on('close', () => {if (!reply.raw.writableFinished) {controller.abort();}});
+const swatches = await run('getSwatches', image, 8, { precision: 6, signal: controller.signal });
+```
+
+- **Small images wait behind large ones** in a shared pool. If you serve both, give large uploads a pool of their own.
+- **Memory:** one image can need up to 2 GB in a worker, so a pool of four can peak near 8 GB on hostile input; a pixel cap and `precision: 6` keep it to a fraction of that. Memory comes back after a large image (below).
+- **Stored clusterings:** make them with `precision: 6`. An exact clustering of a noisy 4-megapixel image is 78 MB, against 5.5 MB at `precision: 6`. Read back, wrap the bytes once with `new Clustering(bytes)` and keep that object while you use it: its checksum is checked the first time an object is used (2 to 3 ms for a photo's clustering).
+- Running out of memory is a catchable `out-of-memory` error, and `terminate()` on each worker shuts the pool down.
+
+**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library replaces the instance (the next call loads a fresh one, in milliseconds): a server's memory comes back down after a huge image instead of staying at its peak.
 
 ### Troubleshooting
 

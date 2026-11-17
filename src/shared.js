@@ -24,6 +24,21 @@ export const isUint8Array = (value) => ArrayBuffer.isView(value) && tag(value) =
 export const isUint8ClampedArray = (value) => ArrayBuffer.isView(value) && tag(value) === '[object Uint8ClampedArray]';
 export const isArrayBufferLike = (value) => tag(value) === '[object ArrayBuffer]' || tag(value) === '[object SharedArrayBuffer]';
 
+// What to say about something that isn't an image, when it is a common thing to pass by mistake: each has a one-line fix.
+export const imageHint = (image) => {
+    const decode = " Decode it to pixels first, then pass them.";
+    if (image === undefined || image === null) {return ` Got ${image}.`;}
+    if (typeof image === 'string') {return ` Got a string (a file name, URL or data URL?): load and decode it to pixels first.`;}
+    if (typeof image !== 'object') {return ` Got a ${typeof image}.`;}
+    if (Array.isArray(image)) {return " Got a plain array: use new Uint8Array(array) for RGBA bytes, or { data: new Uint8Array(array), format: 'rgb' }.";}
+    if (isArrayBufferLike(image)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
+    if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
+    if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
+    if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
+    if (image.data && !image.format) {return " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage.";}
+    return '';
+};
+
 // An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
 // `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
 // (an iframe, a test sandbox) are fine.
@@ -134,21 +149,34 @@ export const formatVersion = latestVersion;
 // again and again checks it once. Changing a clustering's bytes after that is not detected here, but the records are
 // also checked as they are replayed, so it still can't give a palette of the wrong size.
 const checksumAt = 17;
-let crcTable = null;
+// Computed 8 bytes at a time with eight tables (slicing-by-8), about 4 times faster than byte by byte: a clustering of a
+// photo is 1-2 MB, and is checked the first time it is used.
+let crcTables = null;
 const crc32 = (bytes) => {
-    if (!crcTable) {
-        crcTable = new Uint32Array(256);
+    if (!crcTables) {
+        crcTables = Array.from({length: 8}, () => new Uint32Array(256));
         for (let n = 0; n < 256; n++) {
             let c = n;
             for (let b = 0; b < 8; b++) {c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;}
-            crcTable[n] = c >>> 0;
+            crcTables[0][n] = c >>> 0;
+        }
+        for (let n = 0; n < 256; n++) {
+            for (let t = 1; t < 8; t++) {crcTables[t][n] = (crcTables[t - 1][n] >>> 8) ^ crcTables[0][crcTables[t - 1][n] & 0xFF];}
         }
     }
+    const [t0, t1, t2, t3, t4, t5, t6, t7] = crcTables;
     let crc = 0xFFFFFFFF;
-    for (let i = 0; i < bytes.length; i++) {
-        const byte = i >= checksumAt && i < checksumAt + 4 ? 0 : bytes[i];
-        crc = crcTable[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+    const byte = (i) => (i >= checksumAt && i < checksumAt + 4 ? 0 : bytes[i]);
+    let i = 0;
+    // The checksum field lies in the first 24 bytes, which go byte by byte; the rest 8 at a time.
+    for (; i < Math.min(24, bytes.length); i++) {crc = t0[(crc ^ byte(i)) & 0xFF] ^ (crc >>> 8);}
+    const end = bytes.length - 7;
+    for (; i < end; i += 8) {
+        const a = (crc ^ (bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24))) >>> 0;
+        crc = t7[a & 0xFF] ^ t6[(a >>> 8) & 0xFF] ^ t5[(a >>> 16) & 0xFF] ^ t4[a >>> 24]
+            ^ t3[bytes[i + 4]] ^ t2[bytes[i + 5]] ^ t1[bytes[i + 6]] ^ t0[bytes[i + 7]];
     }
+    for (; i < bytes.length; i++) {crc = t0[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);}
     return (crc ^ 0xFFFFFFFF) >>> 0;
 };
 const checked = new WeakSet();

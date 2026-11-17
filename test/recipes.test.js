@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices } from '../dist/index.mjs';
+import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering } from '../dist/index.mjs';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -140,6 +140,38 @@ describe('README recipes', () => {
         // And the source's transparent background stays transparent, its opaque disc centre opaque.
         expect(back.palette[back.data[2 * width + 2]][3]).toBe(0);
         expect(back.palette[back.data[30 * width + 30]][3] ?? 255).toBe(255);
+    });
+
+
+    it('an animated GIF with one palette for every frame, from a sample of the frames', async () => {
+        const [w, h] = [64, 48];
+        const frames = Array.from({ length: 12 }, (_, f) => {
+            const data = new Uint8Array(w * h * 4);
+            for (let p = 0; p < w * h; p++) {
+                const x = p % w, y = Math.floor(p / w);
+                data.set([(x * 4 + f * 9) & 255, (y * 5) & 255, (x * y + f * 20) & 255, f === 3 && x < 8 ? 0 : 255], p * 4);
+            }
+            return { data, format: 'rgba', width: w, height: h };
+        });
+        const sample = frames.filter((_, i) => i % 5 === 0);
+        const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length, 0));
+        let offset = 0;
+        for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
+        const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
+        const gif = GIFEncoder();
+        for (const frame of frames) {
+            const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
+            expect(palette.length / 3).toBeLessThanOrEqual(256);
+            expect(indices).toBeInstanceOf(Uint8Array);
+            gif.writeFrame(indices, w, h, { palette: toColors(palette), transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
+        }
+        gif.finish();
+        const reader = new GifReader(Buffer.from(gif.bytes()));
+        expect(reader.numFrames()).toBe(12);
+        const decoded = new Uint8Array(w * h * 4);
+        reader.decodeAndBlitFrameRGBA(3, decoded);
+        expect(decoded[3]).toBe(0);                              // frame 3's transparent strip
+        expect(decoded[(20 * w + 20) * 4 + 3]).toBe(255);
     });
 
 });

@@ -6,6 +6,9 @@
   "author": "Rohan Fredriksson",
   "type": "module",
   "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "jsdelivr": "./dist/index.mjs",
+  "unpkg": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
