@@ -10,7 +10,7 @@
 
 Most colour quantizers answer one question: *give me k colours*. Ask for a different k and they start over. This library clusters an image's colours once, into a complete tree, and every palette size is then a cheap cut of that tree. A colour-count slider, or a set of 8, 16, 32 and 64 colour versions, costs one clustering instead of one per size.
 
-- **Every palette size from one pass.** Clustering a photo takes about 100 ms. After that, a palette of any size takes about 0.4 ms.
+- **Every palette size from one pass.** Clustering a photo takes about 70 ms. After that, a palette of any size takes about 0.4 ms.
 - **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged, so swatches don't jump around as the count changes.
 - **It knows each colour's share of the image,** so you can show swatches with percentages, or pick the smallest palette that meets an error target.
 - **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
@@ -73,7 +73,7 @@ Those three are all you need to get started. The rest of this page is organised 
 
 ```
  image ──▶ getClustering ──▶ a clustering ──▶ cut to k colours ──▶ a palette ──▶ map the pixels ──▶ reduced image
-           once, ~100 ms     bytes you can     under 1 ms,          flat RGB       a few ms,
+           once, ~70 ms      bytes you can     under 1 ms,          flat RGB       a few ms,
                              store             any k                bytes          any palette
 ```
 
@@ -110,19 +110,19 @@ Five words are used throughout:
 
 ### How it compares
 
-The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared error relative to this library, so 1.08× means 8% more error. Every palette is mapped to pixels the same way, so palettes are compared like for like. Times are medians per image, in WASM on Node 22.
+The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared error relative to this library, so 1.08× means 8% more error. Every palette is mapped to pixels the same way, so palettes are compared like for like. Times are medians per image, in WASM on Node 24 on a laptop (Intel Core i7-1185G7).
 
 | Library | PSNR | Error vs ours | One palette | Palettes at 16/64/128/256 |
 |---|---|---|---|---|
-| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 97 ms | **99 ms** |
-| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 31 ms | 31 ms |
-| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 134 ms | 552 ms |
-| image-q Wu | 35.51 dB | 1.05× | 740 ms | 3387 ms |
-| image-q NeuQuant | 34.41 dB | 1.35× | 609 ms | 3461 ms |
-| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 24 ms | 120 ms |
-| image-q RgbQuant | 31.95 dB | 2.38× | 385 ms | 1535 ms |
+| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 70 ms | **69 ms** |
+| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 24 ms | 23 ms |
+| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 79 ms | 323 ms |
+| image-q Wu | 35.51 dB | 1.05× | 532 ms | 2404 ms |
+| image-q NeuQuant | 34.41 dB | 1.35× | 428 ms | 2562 ms |
+| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 19 ms | 98 ms |
+| image-q RgbQuant | 31.95 dB | 2.38× | 242 ms | 1006 ms |
 
-The `precision: 6` row comes from a separate run on the same machine. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](bench/COMPARISON.md); reproduce them with `node bench/run.js`. These numbers are a snapshot, so expect them to move with the hardware and the versions.
+All rows are from one run. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](bench/COMPARISON.md); reproduce them with `node bench/run.js`. These numbers are a snapshot, so expect them to move with the hardware and the versions.
 
 ## Guides
 
@@ -196,7 +196,7 @@ With at most 256 entries, `indices` is a `Uint8Array`, as these formats need (`i
 
 ### Off the main thread
 
-Clustering a photo takes about 100 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node):
+Clustering a photo takes about 70 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node):
 
 ```js
 import { quantize } from 'agglomerative-clustering/worker';   // same API, one shared worker
@@ -318,17 +318,17 @@ const out = await quantize(rgbaBytes, 32, { dither: 0.8, width: 640 });
 | Smooth gradients and skies, not dithered | 8–64 | `'oklab'` | Mean ΔE 11.0 against 13.4 at 8 colours on the synthetic gradients (two images, so a hint). |
 | Noisy or very varied images | any | `'oklab'` | Mean ΔE 7.0 against 7.9 at 64 colours (one synthetic image). |
 
-`'oklab'` also takes 10–30% longer. Pixel values are treated as sRGB whatever the canvas colour space; a wide-gamut `ImageData` (`display-p3`) comes back in its own colour space, unshifted, but `'oklab'` is then approximate.
+`'oklab'` also takes 10–25% longer. Pixel values are treated as sRGB whatever the canvas colour space; a wide-gamut `ImageData` (`display-p3`) comes back in its own colour space, unshifted, but `'oklab'` is then approximate.
 
 How the options trade speed and quality, measured on the Kodak photos:
 
 | Setting | 16 colours ΔE2000 | 256 colours ΔE2000 | One 64-colour palette |
 |---|---|---|---|
-| default (`rgb`, exact) | **4.31** | 1.67 | 102 ms |
-| `precision: 6` | **4.29** | 1.68 | 31 ms |
-| `colorSpace: 'oklab'` | 4.46 | **1.60** | 104 ms |
-| `colorSpace: 'oklab', precision: 6` | 4.44 | 1.61 | 39 ms |
-| libimagequant, for reference | 4.38 | 1.61 | 147 ms |
+| default (`rgb`, exact) | **4.31** | 1.67 | 70 ms |
+| `precision: 6` | **4.29** | 1.68 | 24 ms |
+| `colorSpace: 'oklab'` | 4.46 | **1.60** | 78 ms |
+| `colorSpace: 'oklab', precision: 6` | 4.44 | 1.61 | 30 ms |
+| libimagequant, for reference | 4.38 | 1.61 | 79 ms |
 
 #### Transparency
 
