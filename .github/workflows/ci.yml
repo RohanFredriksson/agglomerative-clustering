@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that moved to Ubuntu 26.04, for which the pinned Playwright (playwright-core in package.json) has
+    # no Firefox or WebKit. Move on together with a Playwright upgrade.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -38,3 +40,49 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+      # Compiles consumer code against the built declarations under nodenext (ESM and CommonJS) and bundler resolution.
+      - run: npm run test:types
+
+      # The same consumer code on the oldest TypeScript the declarations support (5.2, the first with `await using`), so an
+      # accidental use of a newer type feature fails here; and on the newest, as an early warning (it may fail first for
+      # reasons outside this repo, so it doesn't block).
+      - name: Types on TypeScript 5.2
+        run: for config in nodenext bundler node; do npx -y -p typescript@5.2.2 tsc -p test/types/tsconfig.$config.json; done
+      - name: Types on the latest TypeScript
+        continue-on-error: true
+        run: for config in nodenext bundler node; do npx -y -p typescript@latest tsc -p test/types/tsconfig.$config.json; done
+
+      # Bundles a page with Vite and webpack and runs it in the runner's Chrome, and in Playwright's Firefox and WebKit:
+      # the worker and the .wasm as browsers get them. Playwright's browsers match the playwright-core version in package.json.
+      - name: Install Firefox and WebKit
+        if: matrix.node == 24
+        run: npx -y playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps firefox webkit
+      - run: npm run test:browser
+        if: matrix.node == 24
+        env:
+          BROWSERS: chromium,firefox,webkit
+
+  # The same browser checks in the real Safari, which only runs on macOS (Playwright's WebKit is close to it, not it).
+  safari:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.12
+          actions-cache-folder: emsdk-cache
+
+      - run: npm ci
+      - run: npm run build
+      - name: Enable safaridriver
+        run: sudo safaridriver --enable
+      - run: npm run test:browser
+        env:
+          BROWSERS: safari

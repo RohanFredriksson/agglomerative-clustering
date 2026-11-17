@@ -25,15 +25,29 @@ describe('getClustering', () => {
         expect(result.length).toBeGreaterThan(0);
     });
 
-    // Clustering format: 3 + 9 * (uniqueColors - 1) bytes.
-    it('returns 7 bytes for a solid image (1 unique color): 4-byte header + root colour', async () => {
+    // Clustering format: 22 + 3 + 21 * (uniqueColors - 1) bytes, padded to 7 more than a multiple of 9.
+    it('returns 25 bytes for a solid image (1 unique color): 22-byte header + root colour', async () => {
         const result = await getClustering(solidRed2x2);
-        expect(result.length).toBe(7);
+        expect(result.length).toBe(25);
     });
 
-    it('returns 16 bytes for a 2-color image: header + root + one 9-byte merge', async () => {
+    it('returns 52 bytes for a 2-color image: header + root + one 21-byte merge, padded to 7 more than a multiple of 9', async () => {
         const result = await getClustering(twoColor2x2);
-        expect(result.length).toBe(16);
+        expect(result.length).toBe(52);
+    });
+
+});
+
+describe('k larger than the colour count', () => {
+
+    it('means all colours, even beyond the 32-bit range', async () => {
+        const all = await getPalette(twoColor2x2, 2);
+        for (const k of [3, 2 ** 31 - 1, 2 ** 31, 2 ** 32, Number.MAX_SAFE_INTEGER]) {
+            expect(await getPalette(twoColor2x2, k)).toEqual(all);
+        }
+        const clustering = await getClustering(twoColor2x2);
+        expect((await getPaletteFromClustering(clustering, 2 ** 40)).length).toBe(all.length);
+        expect(await quantize(twoColor2x2, 2 ** 40)).toEqual(await quantize(twoColor2x2, 2));
     });
 
 });

@@ -1,0 +1,56 @@
+/// <reference lib="esnext.disposable" />
+import type { ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, } from './index.js';
+import type { Palette, Clustering } from './index.js';
+export { Palette } from './index.js';
+export { Clustering } from './index.js';
+export const version: string;
+export const formatVersion: 3;
+export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, RunOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, ClusteringInfoV2, ClusteringInfoV3, Swatches, } from './index.js';
+export interface WorkerOptions {
+    transfer?: boolean;
+    wasm?: InitOptions['wasm'];
+}
+export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
+    getClustering(): Promise<Clustering>;
+    getPalette(k: number): Promise<Palette>;
+    getSwatches(k: number): Promise<Swatches>;
+    getClusteringInfo(): Promise<ClusteringInfo>;
+    quantize(k: number, options?: MappingOptions): Promise<Image>;
+    quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeWithPalette(palette: PaletteLike, options?: MappingOptions): Promise<Image>;
+    quantizeToIndicesWithPalette(palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
+    release(): Promise<void>;
+    [Symbol.asyncDispose](): Promise<void>;
+}
+export interface AgglomerativeWorker {
+    init(options?: InitOptions): Promise<void>;
+    getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+    getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
+    getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
+    getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+    getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
+    getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
+    quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
+    quantizeFromClustering<Image extends ImageLike>(image: Image, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeWithPalette<Image extends ImageLike>(image: Image, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
+    quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
+    cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
+    terminate(): Promise<void>;
+}
+export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
+export function terminate(): Promise<void>;
+export const init: AgglomerativeWorker['init'];
+export const getClustering: AgglomerativeWorker['getClustering'];
+export const getPalette: AgglomerativeWorker['getPalette'];
+export const getPaletteFromClustering: AgglomerativeWorker['getPaletteFromClustering'];
+export const getSwatches: AgglomerativeWorker['getSwatches'];
+export const getSwatchesFromClustering: AgglomerativeWorker['getSwatchesFromClustering'];
+export const getClusteringInfo: AgglomerativeWorker['getClusteringInfo'];
+export const quantize: AgglomerativeWorker['quantize'];
+export const quantizeFromClustering: AgglomerativeWorker['quantizeFromClustering'];
+export const quantizeWithPalette: AgglomerativeWorker['quantizeWithPalette'];
+export const quantizeToIndices: AgglomerativeWorker['quantizeToIndices'];
+export const quantizeToIndicesFromClustering: AgglomerativeWorker['quantizeToIndicesFromClustering'];
+export const quantizeToIndicesWithPalette: AgglomerativeWorker['quantizeToIndicesWithPalette'];

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, quantize, quantizeWithClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { getClustering, getPalette, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 // A 2x2 solid red RGBA image — each unique color appears at least twice so it
 // reaches the histogram threshold and is included in clustering.
@@ -40,18 +40,18 @@ describe('quantize output type mirrors input type', () => {
 
 });
 
-describe('quantizeWithClustering output type mirrors input type', () => {
+describe('quantizeFromClustering output type mirrors input type', () => {
 
     it('Uint8Array in → Uint8Array out', async () => {
         const clustering = await getClustering(solidRed2x2);
-        const result = await quantizeWithClustering(solidRed2x2, clustering, 1);
+        const result = await quantizeFromClustering(solidRed2x2, clustering, 1);
         expect(result).toBeInstanceOf(Uint8Array);
     });
 
     it('RawImage in → RawImage out', async () => {
         const input = { data: solidRed2x2, format: 'rgba' };
         const clustering = await getClustering(solidRed2x2);
-        const result = await quantizeWithClustering(input, clustering, 1);
+        const result = await quantizeFromClustering(input, clustering, 1);
         expect(result).toHaveProperty('data');
         expect(result).toHaveProperty('format', 'rgba');
     });

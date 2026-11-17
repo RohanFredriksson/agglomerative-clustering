@@ -21,4 +21,14 @@ describe('CommonJS entry', () => {
         expect(await cjs.quantize(gradient, 8)).toEqual(await esm.quantize(gradient, 8));
     });
 
+    it('can require the worker entry through the exports map', async () => {
+        const worker = require('agglomerative-clustering/worker');
+        expect(typeof worker.createWorker).toBe('function');
+        try {
+            expect(await worker.getPalette(gradient, 4)).toEqual(await esm.getPalette(gradient, 4));
+        } finally {
+            await worker.terminate();
+        }
+    });
+
 });

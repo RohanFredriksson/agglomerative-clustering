@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeWithClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+
+// The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
+const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
 
 // A 48x48 RGBA gradient with many distinct colours.
 const width = 48, height = 48;
@@ -25,28 +28,57 @@ const pixels = (count, r, g, b, a) => Array.from({ length: count }, () => [r, g,
 
 describe('clustering header', () => {
 
-    it('starts with the magic byte, version, colour space and precision', async () => {
-        expect(Array.from((await getClustering(gradient)).subarray(0, 4))).toEqual([0xAC, 2, 0, 8]);
-        expect(Array.from((await getClustering(gradient, { colorSpace: 'oklab', precision: 6 })).subarray(0, 4))).toEqual([0xAC, 2, 1, 6]);
+    // Reading 1.x and 2.x clusterings is covered by test/formats.test.js, with stored clusterings of each version.
+    it('starts with the magic byte, version, header and record lengths, colour space and precision', async () => {
+        expect(Array.from((await getClustering(gradient)).subarray(0, 6))).toEqual([0xAC, 3, 22, 21, 0, 8]);
+        expect(Array.from((await getClustering(gradient, { colorSpace: 'oklab', precision: 6 })).subarray(0, 6))).toEqual([0xAC, 3, 22, 21, 1, 6]);
     });
 
-    it('still reads 1.x clusterings, which have no header', async () => {
-        const clustering = await getClustering(gradient);
-        const legacy = clustering.slice(4);
-        for (const k of [1, 2, 7, 32, 200]) {
-            const current = colours(await getPaletteFromClustering(clustering, k)).sort();
-            const old = colours(await getPaletteFromClustering(legacy, k)).sort();
-            expect(old).toEqual(current);
+    it('is always 4 or 7 more than a multiple of 9 bytes long, which no 1.x clustering is', async () => {
+        for (let n = 1; n <= 12; n++) {
+            const image = new Uint8Array(gradient.subarray(0, n * 4 * 7));
+            expect([4, 7]).toContain((await getClustering(image)).length % 9);
         }
-        expect(await quantizeWithClustering(gradient, legacy, 12)).toEqual(await quantizeWithClustering(gradient, clustering, 12));
+        expect((await getClustering(new Uint8Array(0))).length % 9).toBe(4);
     });
 
     it('reports clusterings from a newer format version as such', async () => {
         const newer = new Uint8Array(await getClustering(gradient));
-        newer[1] = 3;
-        await expect(getPaletteFromClustering(newer, 4)).rejects.toThrow('format version 3 is newer');
-        await expect(quantizeWithClustering(gradient, newer, 4)).rejects.toThrow('format version 3 is newer');
+        newer[1] = 4;
+        await expect(getPaletteFromClustering(newer, 4)).rejects.toThrow('format version 4 is newer');
+        await expect(quantizeFromClustering(gradient, newer, 4)).rejects.toThrow('format version 4 is newer');
         expect(newer.length % 9).toBe(7);
+    });
+
+    it('asks for an upgrade when a header field holds a value this version does not know', async () => {
+        // A later release adds a colour space or weight unit by using a new value in an existing field.
+        for (const index of [4, 6]) {
+            const future = new Uint8Array(await getClustering(gradient));
+            future[index] = 2;
+            await expect(getPaletteFromClustering(future, 4), `byte ${index}`).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(getClusteringInfo(future)).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(weightsOf(future, 4)).rejects.toMatchObject({ code: 'unsupported-version' });
+        }
+        // A damaged length is still just an invalid clustering.
+        const damaged = new Uint8Array(await getClustering(gradient));
+        damaged[3] = 5;
+        await expect(getPaletteFromClustering(damaged, 4)).rejects.toMatchObject({ code: 'invalid-clustering' });
+    });
+
+    it('reads records longer than it knows, ignoring the extra fields', async () => {
+        const clustering = await getClustering(gradient);
+        const merges = (await getClusteringInfo(clustering)).maxColors - 1;
+        // The same clustering with 9 unknown bytes after each record (keeping the length 7 more than a multiple of 9).
+        const header = clustering[2];
+        const extended = new Uint8Array(header + 3 + 30 * merges + (7 - (header + 3 + 30 * merges) % 9 + 9) % 9);
+        extended.set(clustering.subarray(0, header + 3));
+        extended[3] = 30;
+        for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(header + 3 + 21 * i, header + 24 + 21 * i), header + 3 + 30 * i);}
+        for (const k of [1, 5, 40]) {
+            expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));
+            expect(await weightsOf(extended, k)).toEqual(await weightsOf(clustering, k));
+        }
+        expect((await getClusteringInfo(extended)).mse).toEqual((await getClusteringInfo(clustering)).mse);
     });
 
     it('rejects things that are not clusterings', async () => {
@@ -55,7 +87,7 @@ describe('clustering header', () => {
         wrongMagic[0] = 0;
         await expect(getPaletteFromClustering(wrongMagic, 4)).rejects.toThrow('Invalid clustering');
         await expect(getPaletteFromClustering([0xAC, 2, 0, 8], 4)).rejects.toThrow('Invalid clustering');
-        await expect(quantizeWithClustering(gradient, new Uint8Array(8), 4)).rejects.toThrow('Invalid clustering');
+        await expect(quantizeFromClustering(gradient, new Uint8Array(8), 4)).rejects.toThrow('Invalid clustering');
     });
 
 });
@@ -94,18 +126,18 @@ describe('split-order palettes', () => {
 
 });
 
-describe('quantizeWithClustering colour space', () => {
+describe('quantizeFromClustering colour space', () => {
 
     it('defaults to the space the clustering was made in', async () => {
         const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
-        const inherited = await quantizeWithClustering(gradient, clustering, 16);
-        expect(inherited).toEqual(await quantizeWithClustering(gradient, clustering, 16, { colorSpace: 'oklab' }));
+        const inherited = await quantizeFromClustering(gradient, clustering, 16);
+        expect(inherited).toEqual(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'oklab' }));
     });
 
     it('can be overridden', async () => {
         const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
         const palette = await getPaletteFromClustering(clustering, 16);
-        expect(await quantizeWithClustering(gradient, clustering, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
+        expect(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
     });
 
 });
@@ -124,12 +156,12 @@ describe('alpha weighting', () => {
         for (let i = 0; i < holes.length; i += 4) {
             if ((i >> 2) % 5 === 0) {holes[i + 3] = 0;} else {visible.push(...holes.subarray(i, i + 4));}
         }
-        expect(Array.from((await getClustering(holes)).subarray(4))).toEqual(Array.from((await getClustering(new Uint8Array(visible))).subarray(4)));
+        expect(await getClustering(holes)).toEqual(await getClustering(new Uint8Array(visible)));
     });
 
     it('gives an empty palette for a fully transparent image', async () => {
         const image = new Uint8Array(pixels(16, 10, 20, 30, 0));
-        expect((await getClustering(image)).length).toBe(4);
+        expect((await getClustering(image)).length).toBe(22);
         expect((await getPalette(image, 4)).length).toBe(0);
         const result = await quantize(image, 4);
         expect(result.length).toBe(image.length);
