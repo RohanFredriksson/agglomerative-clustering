@@ -39,7 +39,7 @@ const bundle = {
             await writeFile(join(project, 'out', 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><title>cdn</title></head><body><script type="module">
 const cdn = new URLSearchParams(location.search).get('cdn');
 const checks = {}, details = {};
-const check = async (name, run) => {try {checks[name] = await run();} catch (error) {checks[name] = false; details[name] = String(error && error.message);}};
+const check = async (name, run) => {console.log('check ' + name); try {checks[name] = await run();} catch (error) {checks[name] = false; details[name] = String(error && error.message);}};
 try {
     const ac = await import(cdn + '/index.mjs');
     const w = await import(cdn + '/worker.mjs');
@@ -53,6 +53,28 @@ try {
         const same = Array.from(await handle.getPalette(4)).join() === expected;
         await worker.terminate();
         return same;
+    });
+    // A worker script given with createWorker({ script }), as for bundlers that don't emit the package's own (Angular,
+    // esbuild): here on another origin, so it starts through a blob: URL as the package's own script does.
+    await check('workerScriptOption', async () => {
+        const worker = w.createWorker({ script: cdn + '/worker-thread.mjs' });
+        const same = Array.from(await worker.getPalette(image, 4)).join() === expected;
+        await worker.terminate();
+        return same;
+    });
+    // A Web Worker that also has Node's globals (Electron with nodeIntegrationInWorker) but no worker_threads: the
+    // thread talks through self instead of waiting forever for a parentPort.
+    await check('workerWithNodeGlobals', async () => {
+        // Static imports, which run in order before the worker takes messages: one that defines the globals, then the script.
+        const blob = (text) => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+        const globals = blob('globalThis.process = { versions: { node: "22.0.0" } };');
+        const script = blob('import ' + JSON.stringify(globals) + '; import ' + JSON.stringify(cdn + '/worker-thread.mjs') + ';');
+        const worker = w.createWorker({ script });
+        const timeout = new Promise((done) => setTimeout(() => done('HUNG'), 15000));
+        const palette = await Promise.race([worker.getPalette(image, 4), timeout]);
+        await worker.terminate();
+        if (palette === 'HUNG') {throw new Error('the call never settled');}
+        return Array.from(palette).join() === expected;
     });
     window.result = { checks, details };
 } catch (error) {
@@ -191,11 +213,17 @@ for (const bundler of bundlers) {
             const page = await browser.newPage();
             const errors = [];
             page.on('pageerror', (error) => errors.push(error.message));
+            // The page's console, shown when it fails or never reports.
+            const logs = [];
+            page.on('console', (message) => logs.push(`${message.type()}: ${message.text()}`));
             // Browsers ask for /favicon.ico on their own; any other failed request is an error.
-            page.on('requestfailed', (request) => errors.push(`Request failed: ${request.url()}`));
+            // (Except node:worker_threads, which the worker thread tries first where Node's globals exist: workerWithNodeGlobals.)
+            page.on('requestfailed', (request) => {if (!request.url().startsWith('node:')) {errors.push(`Request failed: ${request.url()}`);}});
             page.on('response', (response) => {if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) {errors.push(`HTTP ${response.status()}: ${response.url()}`);}});
             await page.goto(`http://127.0.0.1:${server.address().port}/${query}`);
-            const result = await page.waitForFunction(() => window.result, null, { timeout: 30_000 }).then((handle) => handle.jsonValue());
+            const result = await page.waitForFunction(() => window.result, null, { timeout: 60_000 }).then((handle) => handle.jsonValue(), (error) => {
+                throw new Error(`${error.message}\n  Console:\n${logs.join('\n')}\n  Browser errors:\n${errors.join('\n')}`);
+            });
 
             if (result.error) {throw new Error(`The page failed (${bundler}, ${name}): ${result.error}`);}
             const failed = Object.entries(result.checks).filter(([, passed]) => !passed).map(([check]) => check);

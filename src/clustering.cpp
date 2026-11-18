@@ -594,10 +594,11 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         keys.push_back((uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]));
     }
 
-    // Up to 256 colours a lazily built cell index answers lookups fastest. Each cell it builds costs a pass over
-    // the palette, so larger palettes (rare, and only through a custom palette) use the k-d tree. Both give
-    // the same answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
-    const bool small = points.size() <= 256;
+    // Up to 1024 colours a lazily built cell index answers lookups fastest (2.5 to 3 times faster than the k-d tree
+    // from 257 to 1024 colours, on photos and random palettes). Each cell it builds costs a pass over the palette, so
+    // larger palettes (only through a custom palette) use the k-d tree, which wins from about 4096. Both give the same
+    // answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
+    const bool small = points.size() <= 1024;
     AgglomerativeClustering::PaletteIndex cells;
     AgglomerativeClustering::KDTree tree;
     if (small) {cells.build(points, keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {tree.build(points, keys);}
@@ -634,6 +635,33 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
     std::vector<float> current(3 * (size_t(width) + 2), 0.0f), next(3 * (size_t(width) + 2), 0.0f);
     const float strength = float(std::min(dither, 1.0));
     const float limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
+    // The colour a pixel should take (its own plus the error it was given) can lie outside the cube. Close to it (dark areas
+    // next to the palette's darkest colour) it is clamped to the cube, as most dithering does, and matched through the
+    // index. Further out, the palette can't reach the image's colours (saturated cyan with a 7-colour e-ink palette):
+    // clamping there would throw away the error that should move the next pixels to other entries, so the same entry
+    // (blue, for cyan) would be picked every time. There the target is kept as it is and matched exactly, by a pass over
+    // the palette: rare with palettes extracted from the image, and cheap with the small ones that can't cover it. The
+    // error a pixel receives is limited in length (not per channel, which would push it into a corner where several
+    // entries tie), so out-of-reach colours don't build it up without end and smear it across the image.
+    const float near = limit / 8.0f;
+    const float most = limit;
+    auto nearest_outside = [&](const float* wanted) {
+        int32_t best = 0;
+        double best_distance = std::numeric_limits<double>::infinity();
+        for (size_t i = 0; i < points.size(); i++) {
+            double distance = 0.0;
+            for (int c = 0; c < 3; c++) {
+                const double d = double(wanted[c]) - double(points[i][c]);
+                distance += d * d;
+            }
+            // Exact ties go to the smaller packed RGB key, as in the indexes (and the first of equal entries).
+            if (distance < best_distance || (distance == best_distance && keys[i] < keys[best])) {
+                best = int32_t(i);
+                best_distance = distance;
+            }
+        }
+        return best;
+    };
 
     // OKLab conversion costs three cube roots, so dithering in OKLab memoises each pixel's coordinates the same
     // way as the lookups above.
@@ -666,14 +694,26 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
             // is the one that best cancels it; mixing spaces lets error pile up into streaks.
             const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
+            const float length = std::sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+            const float scale = length > most ? most / length : 1.0f;
             float wanted[3];
-            AgglomerativeClustering::KDTree::Point target;
+            bool outside = false;
             for (int c = 0; c < 3; c++) {
-                wanted[c] = std::clamp(float(base[c]) + e[c], 0.0f, limit);
-                target[c] = uint16_t(std::lround(wanted[c]));
+                wanted[c] = float(base[c]) + e[c] * scale;
+                if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
                 e[c] = 0.0f;
             }
-            const int32_t index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
+            int32_t index;
+            if (outside) {
+                index = nearest_outside(wanted);
+            } else {
+                AgglomerativeClustering::KDTree::Point target;
+                for (int c = 0; c < 3; c++) {
+                    wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+                    target[c] = uint16_t(std::lround(wanted[c]));
+                }
+                index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
+            }
             emit(p, index);
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];

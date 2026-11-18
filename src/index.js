@@ -1,7 +1,7 @@
 import createWasmModule from './clustering.js';
 import {
     version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette,
+    latestVersion, readHeader, checkPalette, isDetached, imageDataLike,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -65,20 +65,35 @@ const hasSimd = () => {
 };
 // Node itself (or Bun), not a runtime that imitates it: Cloudflare Workers with nodejs_compat and Deno also define
 // process.versions.node, but their navigator.userAgent says what they are (Node 20 has no navigator at all).
-const isNodeLike = typeof process !== 'undefined' && !!(process.versions && process.versions.node)
+const isNodeLike = !!(globalThis.process && globalThis.process.versions && globalThis.process.versions.node)
     && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
+// Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
+const assertionsAdvice = /\s*\(?Build with -sASSERTIONS for more info\.?\)?/;
 const wasmLoadFailed = (cause, given) => {
     const text = String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0];
-    // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
-    // and wraps a failed compile in Aborted(...), which is how it stops itself, not part of the reason.
-    let reason = text.replace(/\s*\(?Build with -sASSERTIONS for more info\.?\)?/, '').trim().replace(/\.+$/, '');
+    // Emscripten wraps a failed compile in Aborted(...), which is how it stops itself, not part of the reason.
+    let reason = text.replace(assertionsAdvice, '').trim().replace(/\.+$/, '');
     const aborted = /^Aborted\((.*)\)$/.exec(reason);
     if (aborted) {reason = aborted[1].replace(/\.+$/, '');}
+    // The cause keeps Emscripten's own message, without that advice.
+    if (cause && typeof cause.message === 'string' && assertionsAdvice.test(cause.message)) {
+        try {cause.message = cause.message.replace(assertionsAdvice, '');} catch (error) {/* read-only: leave it */}
+    }
+    // Where an explicit init({ wasm }) URL or path pointed, to name in the message.
+    const where = typeof given === 'string' ? ` (${given})` : '';
     let advice;
-    if (!hasSimd()) {
+    if (/Content.Security.Policy|wasm-eval|unsafe-eval|CompileError: .*(disallowed|refused)/i.test(text)) {
+        // Chrome's message names 'wasm-eval', which Chrome rejects in an extension's manifest; 'wasm-unsafe-eval' is the one.
+        advice = "A Content-Security-Policy blocks compiling WebAssembly: add 'wasm-unsafe-eval' to its script-src (in a browser extension, to content_security_policy.extension_pages in the manifest).";
+    } else if (!hasSimd()) {
         advice = "This engine has no WebAssembly SIMD, which the module needs (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 16.4 or newer).";
+    } else if (/XMLHttpRequest is not defined|both async and sync fetching|failed to fetch|NetworkError|404|ENOENT/i.test(text)) {
+        reason = given ? `the .wasm file could not be fetched${where}` : 'the .wasm file could not be fetched (the package looks for clustering.wasm next to its script)';
+        advice = given
+            ? "Check that URL or path: it must be this package's clustering.wasm, served (not a 404) with the application/wasm type."
+            : "Check that clustering.wasm is served next to the script or emitted by your bundler, or say where it is with init({ wasm }).";
     } else if (given) {
-        advice = "Check what init({ wasm }) was given: it must be this package's clustering.wasm (its URL or path, its bytes, or the module compiled from it).";
+        advice = `Check what init({ wasm }) was given${where}: it must be this package's clustering.wasm (its URL or path, its bytes, or the module compiled from it).`;
     } else if (isNodeLike) {
         advice = "If the package was bundled into a server build (Next.js and others), the bundler may have moved or renamed clustering.wasm: leave the package out of the bundle (in Next.js, serverExternalPackages: ['agglomerative-clustering']) or give the module with init({ wasm }).";
     } else {
@@ -126,7 +141,7 @@ const instantiate = (wasm) => {
 const packagedWasm = async () => {
     const {createRequire} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'module'].join(':'));
     const {readFile} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'fs/promises'].join(':'));
-    const file = createRequire(`${process.cwd()}/`).resolve('agglomerative-clustering/clustering.wasm');
+    const file = createRequire(`${globalThis.process.cwd()}/`).resolve('agglomerative-clustering/clustering.wasm');
     return readFile(file);
 };
 
@@ -160,7 +175,7 @@ const acquire = async (options) => {
                 // build, say) leaves it pointing at a file that isn't there. The package's own copy is then looked for the
                 // way Node resolves packages, from the working directory; if that fails too, the first error is reported.
                 const fallback = wasm === undefined && isNodeLike ? await packagedWasm().catch(() => null) : null;
-                if (!fallback) {throw wasmLoadFailed(error, wasm !== undefined);}
+                if (!fallback) {throw wasmLoadFailed(error, typeof wasm === 'string' ? wasm : isURL(wasm) ? wasm.href : wasm !== undefined);}
                 instance = await instantiate(fallback).catch(() => {throw wasmLoadFailed(error, false);});
             }
             checkWasmVersion(instance);
@@ -254,12 +269,6 @@ const sniffImageFormat = (bytes) => {
 };
 
 
-// A typed array whose buffer was transferred away (to a worker, say) is empty and can't be read or viewed.
-const isDetached = (view) => {
-    const buffer = view.buffer;
-    if (typeof buffer.detached === 'boolean') {return buffer.detached;}
-    try {new Uint8Array(buffer, 0, 0); return false;} catch (error) {return true;}
-};
 
 // The bytes a call works on are read when it is made, as with any function that takes an array: the caller may reuse
 // or change the array as soon as the call returns. Once the module is loaded the bytes go into its memory before the
@@ -343,9 +352,8 @@ const load = (image) => {
 
 const getWrapper = (image) => {
     if (isImageData(image)) {
-        // The pixels stay in the colour space they came in ('display-p3' canvases), so the result must say so.
-        const {width, height, colorSpace} = image;
-        return (output) => new ImageData(new Uint8ClampedArray(output.buffer), width, height, colorSpace ? {colorSpace} : undefined);
+        // In the input's own class and colour space (see imageDataLike).
+        return (output) => imageDataLike(image, new Uint8ClampedArray(output.buffer));
     }
     if (!isUint8Array(image) && typeof image === 'object' && image && image.data && image.format) {
         const {format, width, height} = image;
@@ -691,7 +699,7 @@ export const getSwatchesFromClustering = async (clustering, k, ...extra) => {
     k = check(k);
     noOptions('getSwatchesFromClustering', extra);
     if (header.version < 3) {
-        throw fail('unsupported-version', `Invalid clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
+        throw fail('unsupported-version', `Unsupported clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
     }
     clustering = held(clustering);
     const wasm = Module || await acquire();

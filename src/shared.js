@@ -24,6 +24,24 @@ export const isUint8Array = (value) => ArrayBuffer.isView(value) && tag(value) =
 export const isUint8ClampedArray = (value) => ArrayBuffer.isView(value) && tag(value) === '[object Uint8ClampedArray]';
 export const isArrayBufferLike = (value) => tag(value) === '[object ArrayBuffer]' || tag(value) === '[object SharedArrayBuffer]';
 
+// A typed array whose buffer was transferred away (to a worker, say) is empty and can't be read or viewed.
+export const isDetached = (view) => {
+    const buffer = view.buffer;
+    if (typeof buffer.detached === 'boolean') {return buffer.detached;}
+    try {new Uint8Array(buffer, 0, 0); return false;} catch (error) {return true;}
+};
+
+// An ImageData like `like`, with these pixels: made with `like`'s own class where it has one, so an ImageData from another
+// implementation (node-canvas, in Node or under jsdom) comes back as one that implementation accepts, and where there is
+// no global ImageData at all. The colour space is kept ('display-p3' canvases), since the pixels are still in it.
+export const imageDataLike = (like, pixels) => {
+    const {width, height, colorSpace} = like;
+    const own = like.constructor;
+    const make = typeof own === 'function' && own.name === 'ImageData' ? own : typeof ImageData === 'function' ? ImageData : null;
+    if (!make) {throw fail('invalid-argument', "Invalid image: an ImageData whose class can't be used to make the result. Pass { data, format: 'rgba', width } instead.", 'image');}
+    return colorSpace ? new make(pixels, width, height, {colorSpace}) : new make(pixels, width, height);
+};
+
 // What to say about something that isn't an image, when it is a common thing to pass by mistake: each has a one-line fix.
 export const imageHint = (image) => {
     const decode = " Decode it to pixels first, then pass them.";
@@ -214,7 +232,7 @@ export const readHeader = (clustering) => {
                 // A header field with a fixed set of meanings (colour space, weight unit) that holds a value this version
                 // doesn't know is how a later release would add one, so it asks for an upgrade rather than misreading it.
                 if (clustering[4] > 1 || clustering[6] > 1) {
-                    throw fail('unsupported-version', "Invalid clustering: it uses a colour space or weight unit that this version of agglomerative-clustering does not know. If it came from a newer version, upgrade the package; otherwise it is damaged.", 'clustering');
+                    throw fail('unsupported-version', "Unsupported clustering: it uses a colour space or weight unit that this version of agglomerative-clustering does not know. If it came from a newer version, upgrade the package; otherwise it is damaged.", 'clustering');
                 }
                 const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
                 const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
@@ -231,7 +249,7 @@ export const readHeader = (clustering) => {
             }
         }
         if (version > latestVersion) {
-            throw fail('unsupported-version', `Invalid clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`, 'clustering');
+            throw fail('unsupported-version', `Unsupported clustering: format version ${version} is newer than this version of agglomerative-clustering reads. Upgrade the package.`, 'clustering');
         }
     }
     throw notAClustering(clustering);
@@ -245,6 +263,9 @@ export const checkPalette = (palette) => {
     }
     if (!isUint8Array(palette) && !isUint8ClampedArray(palette) && !Array.isArray(palette)) {
         throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.", 'palette');
+    }
+    if (Array.isArray(palette) && palette.some((value) => Array.isArray(value) || ArrayBuffer.isView(value))) {
+        throw fail('invalid-argument', "Invalid palette: a plain array must be flat RGB bytes, integers from 0 to 255, not an array of [r, g, b] colours. Flatten it first: colours.flat().", 'palette');
     }
     if (palette.length % 3 !== 0) {
         throw fail('invalid-argument', "Invalid palette: length must be a multiple of 3 (flat RGB bytes).", 'palette');

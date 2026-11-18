@@ -694,7 +694,8 @@ public:
                 distance += uint64_t(d * d);
             }
             const uint32_t key = this->keys[candidate.index];
-            if (distance < best_distance || (distance == best_distance && key < best_key)) {
+            // Ties go to the smaller packed RGB key, then (for repeated entries) the first index.
+            if (distance < best_distance || (distance == best_distance && (key < best_key || (key == best_key && candidate.index < best_index)))) {
                 best_distance = distance;
                 best_key = key;
                 best_index = candidate.index;
@@ -797,7 +798,7 @@ public:
                 distance += uint64_t(d * d);
             }
 
-            if (distance < best_distance || (distance == best_distance && node.key < best_key)) {
+            if (distance < best_distance || (distance == best_distance && (node.key < best_key || (node.key == best_key && node.index < best_index)))) {
                 best_distance = distance;
                 best_key = node.key;
                 best_index = node.index;

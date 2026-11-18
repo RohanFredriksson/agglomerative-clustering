@@ -36,4 +36,37 @@ const fromFile = '&&typeof import.meta.url=="string"&&import.meta.url.startsWith
 patch('Node detection', (text) => text.includes(fromFile), /var ENVIRONMENT_IS_NODE=[^;]*process[^;]*;/g,
     (match) => `${match.slice(0, -1)}${fromFile};`);
 
+// 3. The glue's Node-only code uses Node's `process` bare (process.argv, process.exitCode). Parcel and some other bundlers
+//    add a `process` polyfill for any bare use, and fail the build where they may not install it (--no-autoinstall, CI).
+//    Through globalThis it is the same object in Node, and nothing for a bundler to provide.
+const bare = /(?<![.\w$'"])process\b(?=\s*[.[])/g;
+source = source.replace(bare, 'globalThis.process');
+
 writeFileSync(file, source);
+
+// 4. A CommonJS copy, dist/clustering.cjs, for module systems that can't require() an ES module: Jest's (in its default
+//    CommonJS mode, with or without jsdom) throws "Must use import to load ES Module", and can't run import() at all
+//    without --experimental-vm-modules. index.cjs requires the ES glue first, which Node (20.19 and later) and every
+//    bundler accept, and this copy only when that throws, so it only ever runs in Node-like runtimes. It reaches Node's
+//    modules through process.getBuiltinModule (Node 20.16 and later, Bun, Deno, and Jest's sandbox) rather than
+//    require("node:fs"), so a bundler that sees both requires in index.cjs finds nothing here to resolve.
+const replaceOnce = (text, name, pattern, replace) => {
+    const found = text.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)) || [];
+    if (found.length !== 1) {
+        throw new Error(`patch-glue (CommonJS copy, ${name}): expected exactly one match in the Emscripten glue, found ${found.length}. Update scripts/patch-glue.mjs for this Emscripten version.`);
+    }
+    return text.replace(pattern, replace);
+};
+let common = source;
+common = replaceOnce(common, 'node:module import', /const\{createRequire\}=await\(import\([^;]*\)\);var require=createRequire\(import\.meta\.url\)/,
+    'var require=(name)=>process.getBuiltinModule(name)');
+common = replaceOnce(common, 'Node detection', /typeof import\.meta\.url=="string"&&import\.meta\.url\.startsWith\("file:"\)/,
+    'typeof __filename=="string"&&typeof process.getBuiltinModule=="function"');
+common = replaceOnce(common, 'export', /export default createWasmModule;?/, 'module.exports=createWasmModule;');
+common = common.replaceAll('import.meta.url', '__agglomerativeGlueUrl');
+if (/\bimport\s*\(|\bimport\.meta\b|^\s*export\s/m.test(common)) {
+    throw new Error('patch-glue (CommonJS copy): ES module syntax is left in the CommonJS glue. Update scripts/patch-glue.mjs for this Emscripten version.');
+}
+// The glue's own URL, as import.meta.url would give it: this file's, in Node.
+common = `"use strict";var __agglomerativeGlueUrl=typeof __filename=="string"&&typeof process!="undefined"&&typeof process.getBuiltinModule=="function"?process.getBuiltinModule("node:url").pathToFileURL(__filename).href:"";\n${common}`;
+writeFileSync(new URL('../dist/clustering.cjs', import.meta.url), common);

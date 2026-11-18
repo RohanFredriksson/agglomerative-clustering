@@ -1,7 +1,7 @@
 // See main.mts.
 import { createWorker, init, getPalette, quantize, quantizeToIndices, terminate } from 'agglomerative-clustering/worker';
 import { Palette, Clustering } from 'agglomerative-clustering/worker';
-import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, RunOptions, InitOptions } from 'agglomerative-clustering/worker';
+import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, RunOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
 
 declare const imageData: ImageData;
 declare const bytes: Uint8Array;
@@ -10,6 +10,14 @@ const controller = new AbortController();
 async function main() {
     const worker: AgglomerativeWorker = createWorker({ transfer: false, wasm: 'x.wasm' });
     await worker.init({ wasm: new Uint8Array(1) });
+    // A worker script of your own, for bundlers that don't emit the package's (a URL, or a path in Node).
+    const options: WorkerOptions = { script: new URL('/assets/agglomerative-clustering/worker-thread.mjs', 'https://example.com') };
+    createWorker(options);
+    createWorker({ script: './node_modules/agglomerative-clustering/dist/worker-thread.mjs' });
+    const shared: SharedInitOptions = { script: '/assets/worker-thread.mjs', wasm: '/assets/clustering.wasm' };
+    await init(shared);
+    // @ts-expect-error A worker's own init takes no script: it is chosen with createWorker({ script }).
+    await worker.init({ script: 'x.mjs' });
     const handle: ClusteringHandle<ImageData> = await worker.cluster(imageData, { signal: controller.signal, onProgress: (p) => void p });
     const q: ImageData = await handle.quantize(8, { dither: true, signal: controller.signal });
     const palette: Palette = await handle.getPalette(8);

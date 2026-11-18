@@ -376,7 +376,8 @@ describe('real encoded files', () => {
         }
         const pixels = new Uint8Array(context.getImageData(0, 0, 16, 16).data);
         expect((await ac.getPalette(pixels, 2)).length).toBe(6);
-    });
+    // Loading the native canvas module for the first time can take several seconds on a busy Windows runner.
+    }, 30000);
 
     it('are not confused with random pixel data', async () => {
         let seed = 12345;

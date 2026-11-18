@@ -73,7 +73,7 @@
   ],
   "scripts": {
     "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_library_version','_get_clustering','_clustering_job_start','_clustering_job_step','_clustering_job_result','_clustering_job_free','_get_palette','_get_palette_from_clustering','_get_palette_weights','_quantize','_quantize_with_clustering','_quantize_with_palette','_quantize_indices','_quantize_indices_with_clustering','_quantize_indices_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js && node scripts/patch-glue.mjs",
-    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --ignore \"src/worker.js\",\"src/worker-thread.js\" --out-file-extension .cjs",
+    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --ignore \"src/worker.js\",\"src/worker-thread.js\" --out-file-extension .cjs && node scripts/patch-cjs.mjs",
     "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
     "build:types": "mkdirp dist && node -e \"const fs = require('fs'); for (const f of ['index.d.ts', 'worker.d.ts']) {fs.copyFileSync('src/' + f, 'dist/' + f);} fs.copyFileSync('src/index.d.ts', 'dist/index.d.cts');\"",
     "build:js": "npm run build:types && npm run build:cjs && npm run build:esm",
@@ -101,6 +101,8 @@
     "fast-png": "^8.0.0",
     "gifenc": "^1.0.3",
     "image-q": "^4.0.0",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
     "libimagequant-wasm": "^0.3.0",
     "mkdirp": "^3.0.1",
     "omggif": "^1.0.10",
