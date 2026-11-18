@@ -1,6 +1,6 @@
 // The main entry bundled into a CommonJS file for Node (esbuild, as a server build, a VS Code or Obsidian plugin would be),
 // run from a directory where the package isn't installed: import.meta.url is gone, so the glue can't find its .wasm or tell
-// that it runs in Node, and init({ wasm }) must still accept a path or a file: URL, as the README says.
+// that it runs in Node, and init({ wasm }) must still accept a path or a file: URL, as the docs say.
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';

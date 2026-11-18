@@ -1,4 +1,4 @@
-// Runs the README's "Using the output" recipes against the real encoders, so the documentation can't drift from the API.
+// Runs the recipes in docs/guides.md ("Converting the output" and others) against the real encoders, so the documentation can't drift from the API.
 import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
@@ -27,7 +27,7 @@ const image = { data, format: 'rgba', width, height };
 
 const toColors = (palette) => Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
 
-describe('README recipes', () => {
+describe('recipes in the guides', () => {
 
     it('palette conversions and swatches with shares', async () => {
         const clustering = await getClustering(image);
@@ -43,7 +43,7 @@ describe('README recipes', () => {
         expect(swatches[0].share).toBeGreaterThan(swatches[2].share);
     });
 
-    // The README's "Heaviest first" recipes. 40 red pixels and two similar blues of 30: in split order at three colours
+    // The guides' "Heaviest first" recipes. 40 red pixels and two similar blues of 30: in split order at three colours
     // the first entry is a blue (30 pixels) and the heaviest, red, is second.
     const split = (() => {
         const px = [];
@@ -174,7 +174,7 @@ describe('README recipes', () => {
         expect(decoded[(20 * w + 20) * 4 + 3]).toBe(255);
     });
 
-    // "Fixed palettes": choosing N colours from a fixed set (the README's function, as written there).
+    // "Fixed palettes": choosing N colours from a fixed set (the guides' function, as written there).
     it('chooses n threads from a fixed set, and beats the n most used threads', async () => {
         async function chooseThreads(image, threads, n) {
             const clustering = await getClustering(image);
@@ -210,7 +210,7 @@ describe('README recipes', () => {
         }
     });
 
-    // "Live video and camera frames": following the previous palette (the README's function, as written there).
+    // "Live video and camera frames": following the previous palette (the guides' function, as written there).
     it('follows the previous palette, moving a quarter of the way to the matched colours', async () => {
         const follow = (previous, next, weight = 0.25) => {
             if (!previous || previous.length !== next.length) {return Array.from(next);}
