@@ -1,7 +1,7 @@
 import createWasmModule from './clustering.js';
 import {
     version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData,
+    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -64,6 +64,12 @@ const hasSimd = () => {
 // process.versions.node, but their navigator.userAgent says what they are (Node 20 has no navigator at all).
 const isNodeLike = !!(globalThis.process && globalThis.process.versions && globalThis.process.versions.node)
     && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
+// A browser page or worker, as opposed to a server-side runtime that isn't Node (Cloudflare Workers, Vercel's edge runtime,
+// Deno Deploy): only those have a document, a worker scope or a browser's user agent.
+const isBrowserLike = () => typeof document !== 'undefined' || typeof WorkerGlobalScope !== 'undefined'
+    || (typeof navigator !== 'undefined' && /Mozilla\//.test(String(navigator.userAgent)));
+// Where the advice for a server runtime ends: a deployment that left the .wasm behind.
+const deployAdvice = "In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the bundler or file tracer may have left the package's dist/ files out: include node_modules/agglomerative-clustering/dist in the function's files, or leave the package unbundled (external).";
 // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
 const assertionsAdvice = /\s*\(?Build with -sASSERTIONS for more info\.?\)?/;
 const wasmLoadFailed = (cause, given) => {
@@ -79,7 +85,14 @@ const wasmLoadFailed = (cause, given) => {
     // Where an explicit init({ wasm }) URL or path pointed, to name in the message.
     const where = typeof given === 'string' ? ` (${given})` : '';
     let advice;
-    if (/Content.Security.Policy|blocked by CSP|wasm-eval|unsafe-eval|CompileError: .*(disallowed|refused)/i.test(text)) {
+    if (/disallowed by embedder|code generation disallowed/i.test(text) && !isNodeLike && !isBrowserLike()) {
+        // Edge runtimes (Cloudflare Workers, Vercel's edge runtime) compile WebAssembly only at build time, from an import.
+        advice = "This runtime doesn't compile WebAssembly while it runs, from bytes or from a URL (edge runtimes such as Cloudflare Workers and Vercel's): import clustering.wasm as a module, which the bundler compiles when it builds (in Wrangler a plain import of 'agglomerative-clustering/clustering.wasm'; in Next.js a relative path with ?module), and pass it to init({ wasm }) before the first call, as the README shows for Cloudflare Workers and Next.js.";
+    } else if (/(memory|allocate)/i.test(text) && /(could not|cannot|can't|failed to|out of) (allocate|memory|reserve)/i.test(text)) {
+        // A 64-bit engine reserves the module's whole address range up front (about 10 GB of virtual memory per instance),
+        // though it only uses what it needs; an address-space limit refuses that reservation.
+        advice = "The engine couldn't reserve memory for the module. Each instance reserves a large range of address space up front (about 10 GB of virtual memory on 64-bit engines, of which it uses only what it needs), so a limit on virtual memory (ulimit -v, or a container's address-space limit) refuses it: lift that limit, or run fewer instances (each worker has its own).";
+    } else if (/Content.Security.Policy|blocked by CSP|wasm-eval|unsafe-eval|CompileError: .*(disallowed|refused)/i.test(text)) {
         // Chrome's message names 'wasm-eval', which Chrome rejects in an extension's manifest; 'wasm-unsafe-eval' is the one.
         // Which policy applies depends on where the module is compiled: a worker started from a blob: URL (the worker entry
         // does that for a script from another origin, a content script's included) follows the page's.
@@ -97,6 +110,12 @@ const wasmLoadFailed = (cause, given) => {
                 ? "Check that URL or path: it must be this package's clustering.wasm, served with the application/wasm type."
                 : "Check that clustering.wasm is served next to the script or emitted by your bundler (open its URL in the browser), or say where it is with init({ wasm }).";
         }
+    } else if (/XMLHttpRequest is not defined|both async and sync fetching|failed to fetch|NetworkError|404|ENOENT/i.test(text) && isNodeLike) {
+        // In Node the file is read from disk, so the browser's reasons (a CSP, an extension's resources) don't apply.
+        reason = given ? `the .wasm file could not be read${where}` : 'the .wasm file could not be read (the package looks for clustering.wasm next to its script)';
+        advice = given
+            ? `Check that path: it must be this package's clustering.wasm (relative paths are read from the working directory, ${globalThis.process.cwd()}). ${deployAdvice}`
+            : `Keep the package's dist/ files together, or say where clustering.wasm is with init({ wasm: path }). ${deployAdvice}`;
     } else if (/XMLHttpRequest is not defined|both async and sync fetching|failed to fetch|NetworkError|404|ENOENT/i.test(text)) {
         reason = given ? `the .wasm file could not be fetched${where}` : 'the .wasm file could not be fetched (the package looks for clustering.wasm next to its script)';
         const blocked = " If it is there, something may block the request: a Content-Security-Policy's connect-src, or, in a browser extension's content script, a clustering.wasm not listed in web_accessible_resources (the browser's console names the URL).";
@@ -108,7 +127,11 @@ const wasmLoadFailed = (cause, given) => {
     } else if (isNodeLike) {
         // The glue's `new URL('clustering.wasm', import.meta.url)`, with import.meta emptied by a CommonJS bundle.
         if (/Invalid URL/i.test(reason)) {reason = "the package doesn't know where clustering.wasm is (bundled into CommonJS, it has lost its own URL)";}
-        advice = "If the package was bundled (a server build, a CommonJS bundle from esbuild or Rollup, a plugin's single file), the bundler moved clustering.wasm or dropped what tells the package where it is, and the package's own copy wasn't found from the working directory either: leave the package out of the bundle (mark it external; in Next.js, serverExternalPackages: ['agglomerative-clustering']), or say where the file is with init({ wasm: path }) or give its bytes.";
+        advice = `If the package was bundled (a server build, a CommonJS bundle from esbuild or Rollup, a plugin's single file), the bundler moved clustering.wasm or dropped what tells the package where it is, and the package's own copy wasn't found from the working directory either: leave the package out of the bundle (mark it external; in Next.js, serverExternalPackages: ['agglomerative-clustering']), or say where the file is with init({ wasm: path }) or give its bytes. ${deployAdvice}`;
+    } else if (!isBrowserLike()) {
+        // A server runtime that isn't Node (an edge runtime, Deno Deploy): it has no page, so a CSP or a 404 page are unlikely.
+        if (/Invalid URL/i.test(reason)) {reason = "the package can't tell where clustering.wasm is in this runtime";}
+        advice = "Give the module to init({ wasm }) before the first call: in an edge runtime (Cloudflare Workers, Vercel's), import clustering.wasm as a compiled module (the README shows how for Cloudflare Workers and Next.js); elsewhere its bytes or URL.";
     } else {
         advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
     }
@@ -343,6 +366,7 @@ const load = (image) => {
         if (isDetached(image.data)) {
             throw fail('invalid-argument', "Invalid image: the ImageData's pixels were transferred away (detached), for example to a worker created with transfer: true.", 'image');
         }
+        checkImageDataPixels(image);
         return {data: held(bytes(image.data)), format: 'rgba', width: image.width};
     }
 
@@ -547,6 +571,21 @@ const checkNotEmpty = (palette, image, cutoff) => {
 // The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
 const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
 
+// The module's memory is at most 2 GB (MAXIMUM_MEMORY in build:wasm) and its allocator takes a 32-bit signed size, so a
+// buffer of 2 GB or more can never be copied in: _malloc would read its length as negative, or (from 4 GB) wrap it to a
+// small number and hand back a block too short for the copy. Such buffers are rejected before any allocation.
+const maxBytes = 2 ** 31;
+const sizeText = (bytes) => bytes >= 2 ** 30 ? `${(bytes / 2 ** 30).toFixed(2)} GB` : `${Math.round(bytes / 2 ** 20)} MB`;
+const tooLarge = (bytes) => fail('out-of-memory', `The input is ${sizeText(bytes)}, more than the WebAssembly module can hold: it has at most 2 GB in all, for the pixels and the work on them, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels of RGBA). Scale the image down for its palette (a few megapixels give as good a one), and map a full-size image in strips with quantizeWithPalette.`);
+
+// Allocates `length` bytes in the WASM heap, or throws a coded out-of-memory error.
+const allocate = (wasm, length) => {
+    if (length >= maxBytes) {throw tooLarge(length);}
+    const pointer = wasm._malloc(length);
+    if (!pointer) {throw fail('out-of-memory', length >= 2 ** 28 ? `Failed to allocate ${sizeText(length)} of WASM memory for the input: the module has at most 2 GB in all, so an image this size leaves too little room for the work on it. Scale the image down first.` : "Failed to allocate WASM memory.");}
+    return pointer;
+};
+
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards.
 const call = (wasm, buffers, fn) => {
@@ -555,8 +594,7 @@ const call = (wasm, buffers, fn) => {
     let aborted = false;
     try {
         for (const buffer of buffers) {
-            const pointer = wasm._malloc(buffer.length);
-            if (!pointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
+            const pointer = allocate(wasm, buffer.length);
             pointers.push(pointer);
             wasm.HEAPU8.set(buffer, pointer);
         }
@@ -622,8 +660,7 @@ const isControlled = (o) => o.signal !== undefined || o.onProgress !== undefined
 // Clusters in slices and returns the clustering. `share` is the part of the whole call's progress this takes.
 const clusterInSlices = async (wasm, image, o, report, share) => {
     checkAborted(o.signal);
-    const imagePointer = wasm._malloc(image.data.length);
-    if (!imagePointer) {throw fail('out-of-memory', "Failed to allocate WASM memory.");}
+    const imagePointer = allocate(wasm, image.data.length);
     let job = 0;
     let aborted = false;
     try {

@@ -102,9 +102,16 @@ export interface AgglomerativeWorker {
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
     /** Stops the worker. Calls still waiting are rejected, and later calls fail. */
     terminate(): Promise<void>;
+    /** The same as `terminate()`, for `await using worker = createWorker()`. Present where the runtime has `Symbol.asyncDispose`. */
+    [Symbol.asyncDispose](): Promise<void>;
 }
 
-/** Starts a worker: a Web Worker in browsers, a worker thread in Node. It never keeps a Node process alive while idle. */
+/**
+ * Starts a worker: a Web Worker in browsers, a worker thread in Node. It never keeps a Node process alive while idle.
+ * Call `terminate()` when you are done with it (or use `await using`): its thread and memory stay until then. As a
+ * safety net, a worker you dropped without terminating is stopped some time after it is garbage-collected, once no call
+ * is in flight and no handle from it is left; when that happens is up to the engine.
+ */
 export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
 
 /** Stops the shared worker used by the exports below, rejecting calls still waiting. The next call starts a new one. */

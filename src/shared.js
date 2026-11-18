@@ -48,6 +48,14 @@ export const isImageData = (value) => typeof value === 'object' && value !== nul
         || (typeof value.constructor === 'function' && value.constructor.name === 'ImageData'
             && isUint8ClampedArray(value.data) && Number.isInteger(value.width) && Number.isInteger(value.height)));
 
+// ImageData can hold other pixel formats than 8-bit RGBA (Chromium's pixelFormat: 'rgba-float16', with a Float16Array of
+// pixels). The library reads 8-bit RGBA only, so those are rejected, rather than read as the bytes of their floats.
+export const checkImageDataPixels = (image) => {
+    if (isUint8ClampedArray(image.data)) {return;}
+    const format = typeof image.pixelFormat === 'string' ? ` (pixelFormat: '${image.pixelFormat}')` : '';
+    throw fail('invalid-argument', `Invalid image: this ImageData doesn't hold 8-bit RGBA pixels${format}, and the library reads only those. Ask for 8-bit pixels with getImageData(x, y, width, height, { pixelFormat: 'rgba-unorm8' }), or draw it to a canvas with the default format and take getImageData() from that.`, 'image');
+};
+
 // An ImageData like `like`, with these pixels: made with `like`'s own class where it has one, so an ImageData from another
 // implementation (node-canvas, in Node or under jsdom) comes back as one that implementation accepts, and where there is
 // no global ImageData at all. The colour space is kept ('display-p3' canvases), since the pixels are still in it.
@@ -245,7 +253,10 @@ export const readHeader = (clustering) => {
         }
         if (version === 3 && length >= 13) {
             const headerLength = clustering[2], recordLength = clustering[3];
-            if (headerLength >= 13 && recordLength >= 21 && headerLength <= length) {
+            // Header lengths are 22 (every release) or 13 (the fixture from before 3.0.0-beta.1, kept readable by the format
+            // rules), or longer from a later release that adds fields. 14 to 20 was never written: it is a damaged length, which
+            // would also put the checksum field out of reach, so the checksum couldn't catch it.
+            if ((headerLength === 13 || headerLength >= checksumAt + 4) && recordLength >= 21 && headerLength <= length) {
                 // A header field with a fixed set of meanings (colour space, weight unit) that holds a value this version
                 // doesn't know is how a later release would add one, so it asks for an upgrade rather than misreading it.
                 if (clustering[4] > 1 || clustering[6] > 1) {
@@ -254,8 +265,8 @@ export const readHeader = (clustering) => {
                 const merges = length < headerLength + 3 ? 0 : Math.floor((length - headerLength - 3) / recordLength);
                 const padding = length < headerLength + 3 ? length - headerLength : length - headerLength - 3 - merges * recordLength;
                 if (padding < 9) {
-                    // Headers shorter than 21 bytes (from before 3.0.0-beta.1) have no checksum field. A damaged header length that
-                    // makes one look that short skips this check, but then the records don't line up, which the replay reports.
+                    // A 13-byte header (from before 3.0.0-beta.1) has no checksum field. A damaged header length of 13 skips this
+                    // check, but then the records don't line up, which the replay reports.
                     if (!checked.has(clustering) && headerLength >= checksumAt + 4) {
                         const stored = (clustering[checksumAt] | (clustering[checksumAt + 1] << 8) | (clustering[checksumAt + 2] << 16) | (clustering[checksumAt + 3] << 24)) >>> 0;
                         if (stored !== 0 && stored !== crc32(clustering)) {throw damaged();}

@@ -265,6 +265,26 @@ describe('ImageData from another implementation', () => {
         await expect(ac.getPalette(new Other(), 1)).rejects.toMatchObject({ code: 'invalid-argument' });
     });
 
+    // Found by the fifth round (3.0.0-beta.5): Chromium's ImageData can hold float16 pixels (pixelFormat: 'rgba-float16'),
+    // which getPalette read as the bytes of the floats and quantize failed on without a code.
+    it('rejects an ImageData whose pixels are not 8-bit RGBA, in both entries', async () => {
+        class ImageData {
+            constructor(width, height) {Object.assign(this, { data: new Float32Array(4 * width * height), width, height, pixelFormat: 'rgba-float16' });}
+            get [Symbol.toStringTag]() {return 'ImageData';}
+        }
+        const input = new ImageData(2, 2);
+        for (const call of [() => ac.getPalette(input, 2), () => ac.quantize(input, 2), () => ac.quantizeToIndices(input, 2)]) {
+            await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining("pixelFormat: 'rgba-float16'") });
+        }
+        const worker = createWorker();
+        try {
+            await expect(worker.getPalette(input, 2)).rejects.toMatchObject({ code: 'invalid-argument', message: expect.stringContaining('rgba-unorm8') });
+            await expect(worker.quantize(input, 2)).rejects.toMatchObject({ code: 'invalid-argument' });
+        } finally {
+            await worker.terminate();
+        }
+    });
+
 });
 
 describe('messages', () => {
@@ -287,8 +307,23 @@ describe('messages', () => {
         const error = await lib.init({ wasm: missing }).catch((caught) => caught);
         expect(error.code).toBe('wasm-load-failed');
         expect(error.message).toContain(missing);
-        expect(error.message).toContain('could not be fetched');
+        expect(error.message).toContain('could not be read');
         expect(`${error.message} ${error.cause && error.cause.message}`).not.toContain('ASSERTIONS');
+        // Found by the fifth round (3.0.0-beta.5): in Node the advice was a browser's (a CSP, an extension's resources).
+        expect(error.message).not.toMatch(/Content-Security-Policy|connect-src|web_accessible_resources/);
+        expect(error.message).toContain('working directory');
+        expect(error.message).toContain('serverless');
+    });
+
+    it('rejects input too large for the module up front, with a code and its size', async () => {
+        // 2 GB and more can't be allocated (the allocator's size is 32 bits); from 4 GB it used to wrap around and throw a
+        // bare RangeError. A length is enough to show it: the check comes before any copying.
+        const huge = { data: new Uint8Array(2 ** 31), format: 'rgba' };
+        const error = await ac.getPalette(huge, 2).catch((caught) => caught);
+        expect(error.code).toBe('out-of-memory');
+        expect(error.message).toContain('2.00 GB');
+        expect(error.message).toContain('1.9 GB');
+        expect(await ac.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
     });
 
 });

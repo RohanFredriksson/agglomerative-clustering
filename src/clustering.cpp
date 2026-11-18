@@ -581,17 +581,22 @@ template <typename Emit>
 void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, int skip_below, Emit emit) {
 
     const ColorCoordinates space(color_space);
-    std::vector<std::array<uint8_t, 3>> colors;
     std::vector<AgglomerativeClustering::KDTree::Point> points;
     std::vector<uint32_t> keys;
-    colors.reserve(palette_length / 3);
-    points.reserve(palette_length / 3);
-    keys.reserve(palette_length / 3);
+    // The indexes are built over distinct colours only: a supplied palette can repeat a colour any number of times, and
+    // equal entries would all land in the same cell lists and tree leaves, making each lookup a pass over the repeats
+    // (a 200,000-entry palette of one colour took seconds for a thousand pixels). Equal entries tie, and ties go to
+    // the first of them, so `first[u]` is the palette index of distinct colour `u`'s first occurrence.
+    std::vector<int32_t> first;
+    std::unordered_map<uint32_t, int32_t> seen;
+    seen.reserve(std::min<size_t>(palette_length / 3, size_t(1) << 20));
 
     for (size_t i = 0; i + 2 < palette_length; i += 3) {
-        colors.push_back({palette[i], palette[i+1], palette[i+2]});
+        const uint32_t key = (uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]);
+        if (!seen.emplace(key, int32_t(points.size())).second) {continue;}
         points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
-        keys.push_back((uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]));
+        keys.push_back(key);
+        first.push_back(int32_t(i / 3));
     }
 
     // Up to 1024 colours a lazily built cell index answers lookups fastest (2.5 to 3 times faster than the k-d tree
@@ -622,10 +627,13 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         return memo_values[slot];
     };
 
-    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || colors.empty()) {
+    // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
+    auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
+
+    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || points.empty()) {
         for (size_t p = 0; p < pixels; p++) {
             const uint8_t* pixel = image_data + p * increment;
-            emit(p, nearest_index(pixel[0], pixel[1], pixel[2]));
+            emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
         }
         return;
     }
@@ -687,7 +695,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             float* e = &current[3 * (x + 1)];
             // Transparent pixels (alpha below `skip_below`) neither take error nor pass any on: their colour isn't seen.
             if (image_format == 0 && pixel[3] < skip_below) {
-                emit(p, nearest_index(pixel[0], pixel[1], pixel[2]));
+                emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
                 for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
                 continue;
             }
@@ -714,7 +722,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
                 }
                 index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
             }
-            emit(p, index);
+            emit(p, palette_index(index));
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];
             for (int c = 0; c < 3; c++) {

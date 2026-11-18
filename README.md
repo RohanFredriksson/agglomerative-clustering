@@ -163,6 +163,8 @@ const { explained } = await getClusteringInfo(clustering);   // null only for a 
 const k = (explained ?? []).findIndex((share) => share >= 0.99) + 1;
 ```
 
+How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (an accent colour, a theme), ask for more, 12 to 16: a small vivid area, such as a red sign in a street scene, only gets a colour of its own once the bigger areas have been split. Each colour is the average of its cluster, so it is a little less saturated than the image's most vivid pixels, and a white background comes back as a near-white such as `[254, 254, 254]` rather than exactly `#ffffff`. On a smooth single-hue photo no colour has a large share (the shares fall as `k` grows), so judge the heaviest swatch against the others, not by a fixed share. See [Picking colours from swatches](#picking-colours-from-swatches).
+
 ### GIFs and palette PNGs
 
 `quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`.
@@ -362,8 +364,9 @@ Palettes are flat RGB bytes, the compact form; each format an encoder or UI want
 // [[r, g, b], …]: what gifenc, fast-png, color-thief and libimagequant use
 const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
 
-// A CSS colour, and a 0xRRGGBB number
+// A CSS colour, a '#rrggbb' string and a 0xRRGGBB number
 const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
+const hexString = (i) => '#' + Array.from(palette.subarray(3 * i, 3 * i + 3), (v) => v.toString(16).padStart(2, '0')).join('');
 const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
 
 // Swatches with their share of the image (the palette is in split order, not sorted by share: sort `swatches` by `share` to put the biggest first)
@@ -389,6 +392,30 @@ const rankedPalette = byUse.map((old) => colors[old]);
 const rankedIndices = indices.map((index) => rank[index]);                           // same typed-array type as `indices`
 const rankedTransparentIndex = transparentIndex === null ? null : rank[transparentIndex];
 ```
+
+#### Picking colours from swatches
+
+The library answers which colours an image has and how much of each; choosing among them (a vivid accent, text that contrasts with a background) is colour arithmetic that a colour library already does well. With [culori](https://culorijs.org/):
+
+```js
+import { getSwatches } from 'agglomerative-clustering';
+import { converter, wcagContrast, formatHex } from 'culori';
+
+const oklch = converter('oklch');
+const { palette, shares } = await getSwatches(image, 12);
+const swatches = Array.from(shares, (share, i) => {
+  const color = { mode: 'rgb', r: palette[3 * i] / 255, g: palette[3 * i + 1] / 255, b: palette[3 * i + 2] / 255 };
+  return { hex: formatHex(color), share, ...oklch(color) };          // l (0-1), c (chroma), h (hue)
+}).sort((a, b) => b.share - a.share);                                 // heaviest first
+
+const background = swatches[0];
+// The most colourful swatch that covers at least 2% of the image, as an accent
+const accent = swatches.filter((s) => s.share >= 0.02 && s !== background).sort((a, b) => b.c - a.c)[0];
+// Text: black or white, whichever contrasts more with the background
+const text = wcagContrast(background.hex, '#000') > wcagContrast(background.hex, '#fff') ? '#000' : '#fff';
+```
+
+The colours come back as sRGB bytes whatever `colorSpace` they were clustered in; that option only changes how pixels are grouped. For picks by lightness, chroma or hue, convert them as above (OKLCH is the perceptual form of OKLab). Choose the colour space you cluster in as in [Choosing a colour space](#choosing-a-colour-space): the picks can differ between the two, since each gives different averages.
 
 ### Coming from color-thief, node-vibrant, image-q or get-image-colors
 
@@ -423,6 +450,8 @@ ImageData                                    // from a canvas: always RGBA, widt
 `width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`.
 
 > **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
+
+> **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels (from some native and WebGL APIs) back to straight alpha, 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits (sharp: `.toColourspace('srgb').raw({ depth: 'uchar' })`; pngjs: `inputHasAlpha` and its 8-bit output), and gray or gray-and-alpha pixels to RGBA (sharp's `.toColourspace('srgb').ensureAlpha()`). A gray buffer passed as it is gets misread, with no error when its length is a multiple of 4. Apply a photo's EXIF orientation (sharp's `.rotate()`) and colour profile when decoding; the library doesn't read either. An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })`.
 
 > **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: a canvas or `createImageBitmap` in a browser, sharp or pngjs in Node. Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`. Decoding is [planned](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/ROADMAP.md).
 
@@ -498,12 +527,12 @@ Give one or the other: `transparent` replaces `alpha`, so naming both is an erro
 The cutoff decides which side a half-transparent pixel falls on. With the default (128), a soft drop shadow under 50% opacity disappears, and the darker part of it becomes solid; raise the cutoff (`transparent: 200`) to drop more of it, or lower it to keep more.
 
 ### Palette and Clustering
-The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy three things:
+The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy four things:
 
 - **A palette maps in the space it was made in.** `quantizeWithPalette(image, palette)` matches an OKLab palette in OKLab without being told; name a `colorSpace` to override it. Plain bytes are matched in RGB.
 - **A clustering can't be passed as a palette**, or the other way round. TypeScript rejects it, and at run time it throws (`invalid-argument` or `invalid-clustering`), with no guessing about bytes.
 - **`new Palette(bytes, colorSpace)` and `new Clustering(bytes)` give bytes their type back**, and check them: `new Palette([300, 0, 0])` throws rather than wrapping 300 to 44, and `new Clustering(bytes)` throws `invalid-clustering` unless they are one. The functions still accept a clustering as plain bytes, so stored clusterings keep working in JavaScript; TypeScript wants the constructor.
-- **A clustering is checked before it is used.** Clusterings carry a checksum, so stored bytes that came back damaged (truncated, a changed byte, a lossy base64 round trip) are reported as `invalid-clustering` rather than cut into a wrong palette.
+- **A clustering is checked before it is used.** Clusterings carry a checksum, so stored bytes that came back damaged (truncated, a changed byte, a lossy base64 round trip) are reported as `invalid-clustering` rather than cut into a wrong palette. It is checked the first time an array is used, so bytes changed in place after that aren't caught. Clusterings from 2.x have no checksum. It catches accidents, not tampering (anyone can recompute it): a clustering or palette from an untrusted user can't crash the library or make it hang, but it can describe any palette it likes.
 
 ```js
 import { Clustering, Palette, getPaletteFromClustering } from 'agglomerative-clustering';
@@ -539,7 +568,7 @@ const clustering = await getClustering(image, {
 });
 ```
 
-- **Slices.** With either option, clustering runs in slices of about 10 ms (a large image has a few unsliced steps of up to 150 ms in between), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
+- **Slices.** With either option, clustering runs in slices of about 10 ms (a large photo has a few unsliced steps of up to 150 ms in between; an image with millions of distinct colours, longer: see [Performance and limits](#performance-and-limits)), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes (a `DOMException`'s `code` is a number). To tell an abort from a failure, check your signal (`signal.aborted`), not the error: a reason you gave (`controller.abort(new Error('superseded'))`) keeps its own name. An already aborted signal does no work.
 - **Mapping can't be interrupted** (it takes milliseconds: 6 ms at 768×512, 27 ms dithered). The functions that only map check the signal before they start, and don't take `onProgress`.
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.
@@ -556,7 +585,7 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | `invalid-argument` | A bad image, `k`, option or palette. |
 | `invalid-clustering` | Bytes that aren't a clustering this version can read, or a stored clustering that came back damaged (its checksum or its records don't fit). |
 | `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getSwatchesFromClustering`). |
-| `out-of-memory` | The WebAssembly module couldn't allocate. |
+| `out-of-memory` | The WebAssembly module couldn't allocate: an image with very many colours, or pixel data over its 2 GB (the message gives the size). |
 | `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped, failed, or a handle was released. `worker-terminated` is for calls running or waiting when `terminate()` was called, and every later call on that `createWorker()` worker, so retrying on it can't help (the shared worker starts again on the next call). After `worker-failed` (it couldn't start, crashed or exited), the next call starts a new worker. |
 
@@ -580,7 +609,9 @@ Messages are for people and may change. The worker entry fails the same way as t
 `agglomerative-clustering/worker` exports every function above, run in one shared worker started on first use, plus `terminate()`, which stops it (the next call starts a new one), and `createWorker(options?)`, which starts a worker of your own. A worker has every function as a method, plus:
 
 - **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
-- **`terminate()`** stops the worker and rejects the calls still waiting.
+- **`terminate()`** stops the worker and rejects the calls still waiting. `await using worker = createWorker()` calls it at the end of the block.
+
+**Terminate the workers you create.** A worker's thread, and the memory its last images needed, stay until `terminate()`: a running worker is never garbage-collected, so a server or page that creates a worker per request and drops it gathers threads. Keep a few workers and reuse them (see [Performance and limits](#performance-and-limits)), or use the shared worker, which the exported functions use. As a safety net, a worker you dropped is stopped some time after the garbage collector has collected it, once no call is running on it and no handle from it is left, but when that happens is up to the engine (it may be never, in a process with little memory pressure).
 
 `createWorker` takes `transfer`, `wasm` (see [Loading the WebAssembly module](#loading-the-webassembly-module)) and `script`: the URL (or in Node, the path) of a copy of the package's `dist/worker-thread.mjs`, for setups whose bundler doesn't emit the package's own. For the shared worker, `init({ script })` does the same, before any other call.
 
@@ -691,7 +722,7 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 
 Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite and webpack 5 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
 
-CI also loads `dist/` from another origin, as a page using a CDN does, and the worker entry from a sandboxed iframe, in the same browsers, and runs both entries under Jest. Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, SvelteKit and Nuxt, Next.js and Parcel 2 (see below).
+CI also loads `dist/` from another origin, as a page using a CDN does, and the worker entry from a sandboxed iframe, in the same browsers, and runs both entries under Jest. Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, the AWS Lambda Node image, pnpm and Yarn Plug'n'Play, SvelteKit, Nuxt, Astro, React Router, Angular, Next.js and Parcel 2 (see below).
 
 ### From a CDN, without a build step
 
@@ -738,6 +769,21 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 
 SvelteKit (adapter-node) and Nuxt (Nitro's node-server) need no configuration, in development and production builds: the worker entry for pages, the main entry in server routes. Importing either entry during server rendering is safe, and `createWorker()` starts no thread until its first call. On Nitro's Cloudflare preset, turn on `nitro: { experimental: { wasm: true } }` and pass the module from `import wasm from 'agglomerative-clustering/clustering.wasm?module'` to `init`, as for the Edge runtime below.
 
+### Serverless functions: AWS Lambda, Vercel, Netlify
+
+Both entries run in Node functions (checked in the AWS Lambda Node 20 image, with a read-only code directory, and with the file tracers Vercel and Netlify use). Unbundled, with `node_modules` in the package or a layer, nothing is needed. Bundled:
+
+- **An ES module bundle** finds `clustering.wasm` next to itself: copy `node_modules/agglomerative-clustering/dist/clustering.wasm` beside the bundle. **A CommonJS bundle** has lost the package's own location: pass `init({ wasm: path })`, with a path to the copy you ship.
+- **The worker entry** needs `worker-thread.mjs` and the files it imports (`index.mjs`, `shared.mjs`, `clustering.js`, `clustering.wasm`): leave the package external, or ship a copy of `dist/` and pass `createWorker({ script: path })`. Netlify's esbuild bundler moves them apart, so list the package in `external_node_modules`.
+- **Size and cold starts:** the files a function needs are about 180 KB (235 KB with the worker). Loading the module takes 10 to 70 ms, and a first palette of a 1-megapixel image at `precision: 6` came 0.3 to 0.5 s after a cold start; calling `init()` early doesn't make the first palette faster.
+- **Edge functions** (Vercel's edge runtime, Cloudflare) can't compile WebAssembly while they run: import the module as described for [Next.js](#nextjs) and [Cloudflare Workers](#deno-bun-and-cloudflare-workers).
+
+### pnpm, Yarn Plug'n'Play and monorepos
+
+pnpm (isolated or hoisted) and Yarn Plug'n'Play need nothing for the main entry. Under Plug'n'Play the package stays in its zip archive, and the worker entry's thread loads its ES modules from there only through Yarn's loader: run with `yarn node` (or `node --require ./.pnp.cjs --loader ./.pnp.loader.mjs`), or `yarn unplug agglomerative-clustering`. Yarn 4 holds back versions published in the last day by default, so to try a release on its first day set `npmMinimalAgeGate: 0` in `.yarnrc.yml`.
+
+Two versions in one process (a monorepo whose packages depend on different releases) each load their own module and don't share state; clusterings and palettes pass between them, and `isCodedError` recognises either one's errors.
+
 ### Next.js
 
 Checked with Next.js 16, under Turbopack and webpack, in production builds:
@@ -766,7 +812,7 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 
 ### Angular, esbuild, Rollup and other bundlers
 
-The main entry works in all of them. The worker entry needs its script (`worker-thread.mjs`, which imports the package's other files) next to the rest of `dist/`, and some bundlers emit neither it nor `clustering.wasm`. Then a worker call fails at run time with `worker-failed` or `wasm-load-failed`, often only after deploying, because a dev server serves `node_modules` as it is. Copy the package's `dist/` files out as static assets and say where they are:
+The main entry works in all of them, except that an Angular production build needs `init({ wasm })` (below). The worker entry needs its script (`worker-thread.mjs`, which imports the package's other files) next to the rest of `dist/`, and some bundlers emit neither it nor `clustering.wasm`. Then a worker call fails at run time with `worker-failed` or `wasm-load-failed`, often only after deploying, because a dev server serves `node_modules` as it is. Copy the package's `dist/` files out as static assets and say where they are:
 
 ```js
 import { createWorker } from 'agglomerative-clustering/worker';
@@ -776,7 +822,7 @@ const worker = createWorker({
 });
 ```
 
-- **Angular** (the default `application` builder): add the files to the app's `angular.json` assets, then use the code above.
+- **Angular** (the default `application` builder): add the files to the app's `angular.json` assets, then use the code above. Production builds don't emit `clustering.wasm` for the main entry either, so in the browser call `init({ wasm: '/assets/agglomerative-clustering/clustering.wasm' })` before the first call (the dev server works without it). With SSR, the server bundle finds the package's files from the directory the server starts in: start it from the project directory, or give the server its own `init({ wasm: path })`. zone.js needs nothing.
 
   ```json
   "assets": [{ "glob": "{worker-thread.mjs,shared.mjs,index.mjs,clustering.js,clustering.wasm}", "input": "node_modules/agglomerative-clustering/dist", "output": "assets/agglomerative-clustering" }]
@@ -825,7 +871,7 @@ Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wa
 - **Vitest** needs no configuration, in node, jsdom, happy-dom and browser mode. **Storybook** (Vite builder) works as it is.
 - **Jest** works in its default CommonJS mode, in the node and jsdom environments, with both entries, without transforms or `--experimental-vm-modules` (both have CommonJS builds). Mocha and `node:test` work too.
 - **jsdom and happy-dom** have no `ImageData` (install `canvas`, `@napi-rs/canvas` or `skia-canvas`, or pass `{ data, format: 'rgba', width }`) and no `Worker`: the worker entry then uses a Node worker thread, which is fine for tests. Results come back in the class of the `ImageData` you passed.
-- **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`. It doesn't stop Jest from exiting, but each test file otherwise leaves a worker thread, 15 to 30 MB, in the process until the run ends.
+- **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`. It doesn't stop Jest from exiting, but each test file otherwise leaves a worker thread, 15 to 30 MB, in the process until the run ends (or until the garbage collector gets to a dropped `createWorker()`, which may not happen in a test run).
 - **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })` (`isCodedError` accepts them).
 - **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and stay the same within a major version: snapshot them. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
 - Fake timers don't affect it. An unawaited call still running at the end holds Jest open until it finishes.
@@ -858,11 +904,14 @@ const swatches = await run('getSwatches', image, 8, { precision: 6, signal: cont
 ```
 
 - **Small images wait behind large ones** in a shared pool. If you serve both, give large uploads a pool of their own.
-- **Memory:** one image can need up to 2 GB in a worker, so a pool of four can peak near 8 GB on hostile input; a pixel cap and `precision: 6` keep it to a fraction of that. Memory comes back after a large image (below).
+- **Memory:** one image can need up to 2 GB in a worker, so a pool of four can peak near 8 GB on hostile input; a pixel cap and `precision: 6` keep it to a fraction of that. Memory comes back after a large image, but not at once (below).
+- **Address space:** each WebAssembly instance (the main entry's, and one per worker) reserves about 10 GB of *virtual* memory up front on 64-bit engines, of which it uses only what it needs. A virtual-memory limit (`ulimit -v`) refuses that reservation, which shows as `wasm-load-failed`; limit resident memory instead. A container's memory limit (a cgroup's `memory.max`, Docker's `--memory`) applies to what is used, but when it is reached the kernel kills the process: there is no `out-of-memory` error to catch, so cap the image size below it.
 - **Stored clusterings:** make them with `precision: 6`. An exact clustering of a noisy 4-megapixel image is 78 MB, against 5.5 MB at `precision: 6`. Read back, wrap the bytes once with `new Clustering(bytes)` and keep that object while you use it: its checksum is checked the first time an object is used (2 to 3 ms for a photo's clustering).
 - Running out of memory is a catchable `out-of-memory` error, and `terminate()` on each worker shuts the pool down.
 
-**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. (Times are from an idle machine; a busy or throttled one, a laptop on battery or a CI runner can be several times slower.) One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library replaces the instance (the next call loads a fresh one, in milliseconds): a server's memory comes back down after a huge image instead of staying at its peak.
+**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. (Times are from an idle machine; a busy or throttled one, a laptop on battery or a CI runner can be several times slower.) One WebAssembly instance can use up to 2 GB, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels of RGBA: 22000 × 22000 works); an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library drops the instance (the next call loads a fresh one, in milliseconds). The engine frees the old instance's memory at its next garbage collection, which in an idle process or worker can be much later: a worker that clustered 12 megapixels of noise held about 1 GB until it had served about a hundred more calls. `terminate()` frees a worker's memory at once.
+
+The unsliced steps between slices (see [Cancelling and progress](#cancelling-and-progress)) take up to about 150 ms on a 12-megapixel photo, but grow with the number of distinct colours: on 12 megapixels of noise at full precision one takes over a second, and progress moves unevenly. `precision: 6` keeps them short.
 
 ### Troubleshooting
 
@@ -882,6 +931,10 @@ const swatches = await run('getSwatches', image, 8, { precision: 6, signal: cont
 | `wasm-load-failed` mentioning a Content-Security-Policy | The page or extension forbids compiling WebAssembly. | Add `'wasm-unsafe-eval'` to `script-src`: the page's for the worker entry's worker, also from a content script. |
 | `wasm-load-failed`: "is not WebAssembly" | An error page (a 404, or a server's fallback page) was served in place of `clustering.wasm`. | Open the `.wasm` URL in the browser; copy the file where it is expected, or say where it is with `init({ wasm })`. |
 | `worker-failed` with the worker entry from a CDN, under a CSP | `worker-src` allows `blob:` but not the CDN the worker imports from. | `worker-src blob: <the CDN's origin>`. |
+| `worker-failed` in a serverless function, "Cannot find module … worker-thread.mjs" | The bundler or file tracer left the worker's files out. | Leave the package external, or ship `dist/` and pass `createWorker({ script })`: see [Serverless functions](#serverless-functions-aws-lambda-vercel-netlify). |
+| `worker-failed` under Yarn Plug'n'Play, a path inside a `.zip` | Node can't load the worker's ES modules from the zip without Yarn's loader. | Run with `yarn node`, or `yarn unplug agglomerative-clustering`. |
+| `wasm-load-failed` under `ulimit -v` | Each instance reserves about 10 GB of address space. | Limit resident memory instead (see [Performance and limits](#performance-and-limits)). |
+| Threads and memory grow in a long-running process | `createWorker()` workers that were dropped without `terminate()`. | Reuse a few workers, or terminate each one. |
 | TypeScript says a `Uint8Array` isn't a `Clustering` | Stored bytes lost their type. | `new Clustering(bytes)` (see "Palette and Clustering"). |
 
 ## More

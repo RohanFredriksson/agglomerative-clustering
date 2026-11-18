@@ -66,6 +66,19 @@ describe('checksums', () => {
         }
     });
 
+    // Found by the fifth round (3.0.0-beta.5): a header length of 17 to 20 put the checksum field out of reach, so the one
+    // changed byte was accepted, with a wrong root colour at k = 1 and nonsense from getClusteringInfo.
+    it('reports a changed header length, for every value and every reader', async () => {
+        for (let length = 0; length < 256; length++) {
+            if (length === clustering[2]) {continue;}
+            const damaged = clustering.slice();
+            damaged[2] = length;
+            for (const read of [() => getPaletteFromClustering(damaged, 1), () => getSwatchesFromClustering(damaged, 1), () => getClusteringInfo(damaged)]) {
+                await expect(read(), `header length ${length}`).rejects.toHaveProperty('code', expect.stringMatching(/^(invalid-clustering|unsupported-version)$/));
+            }
+        }
+    });
+
     it('reports truncated clusterings, at every length', async () => {
         for (let length = 0; length < clustering.length; length++) {
             const short = clustering.slice(0, length);

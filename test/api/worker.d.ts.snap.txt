@@ -44,6 +44,7 @@ export interface AgglomerativeWorker {
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
     terminate(): Promise<void>;
+    [Symbol.asyncDispose](): Promise<void>;
 }
 export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
 export function terminate(): Promise<void>;
