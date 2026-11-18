@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/npm/l/agglomerative-clustering)](LICENSE)
 ![types](https://img.shields.io/badge/types-included-blue)
 
-![The Kodak parrots photo cut to 4, 16 and 64 colours from one clustering, and 16 colours with dithering](docs/palette-sizes.png)
+![The Kodak parrots photo cut to 4, 16 and 64 colours from one clustering, and 16 colours with dithering](https://raw.githubusercontent.com/RohanFredriksson/agglomerative-clustering/master/docs/palette-sizes.png)
 
 Most colour quantizers answer one question: *give me k colours*. Ask for a different k and they start over. This library clusters an image's colours once, into a complete tree, and every palette size is then a cheap cut of that tree. A colour-count slider, or a set of 8, 16, 32 and 64 colour versions, costs one clustering instead of one per size.
 
@@ -26,7 +26,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 npm install agglomerative-clustering@next
 ```
 
-**3.0 is in beta.** This page describes 3.0, which is published under the `next` tag until its release; a plain `npm install agglomerative-clustering` still gives 2.0 (see [its README](https://www.npmjs.com/package/agglomerative-clustering/v/2.0.0) and [what changed](docs/migrating.md)).
+**3.0 is in beta.** This page describes 3.0, which is published under the `next` tag until its release; a plain `npm install agglomerative-clustering` still gives 2.0 (see [its README](https://www.npmjs.com/package/agglomerative-clustering/v/2.0.0) and [what changed](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md)).
 
 It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (see [Where it runs](#where-it-runs)).
 
@@ -257,7 +257,33 @@ slider.oninput = async () => {
 
 Calls to one worker run in order, and re-mapping a large image takes a while (0.2 to 0.3 s at 12 megapixels, about 1 s dithered), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Aborting the previous call drops it from the queue. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
 
-It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite, webpack 5 and esbuild, Parcel 2 works with its `packageExports` option on, and for Next.js see [Next.js](#nextjs). Loaded from a CDN (another origin than the page), it starts the worker through a small `blob:` script, as browsers don't start workers from other origins' scripts. In TypeScript a handle keeps the image type it was made from: a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`, whose `quantize` returns the general image type. In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
+It starts the worker with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for: CI tests Vite and webpack 5, Parcel 2 works with its `packageExports` option on, and for Next.js see [Next.js](#nextjs). Bundlers that don't emit that script (Angular's `application` builder, plain esbuild or Rollup) need it given to them: see [Angular, esbuild, Rollup and other bundlers](#angular-esbuild-rollup-and-other-bundlers). Loaded from a CDN (another origin than the page), it starts the worker through a small `blob:` script, as browsers don't start workers from other origins' scripts. In TypeScript a handle keeps the image type it was made from: a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`, whose `quantize` returns the general image type. In Node an idle worker never keeps the process alive. See the [worker reference](#worker-entry).
+
+### Fixed palettes: e-ink, thread, bricks
+
+Hardware, craft and print often have a palette you didn't choose. `quantizeToIndicesWithPalette(image, palette, options?)` maps to it and gives indices in *your* palette's order (what firmware, thread charts and parts lists need):
+
+```js
+const eink = [0,0,0, 255,255,255, 0,255,0, 0,0,255, 255,0,0, 255,255,0, 255,128,0];   // black white green blue red yellow orange
+const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', width }, eink, { dither: true });
+// indices[i] is the entry of `eink` for pixel i: pack it to 4 bits per pixel for the panel
+```
+
+- **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue.
+- **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering; with small palettes of widely spaced inks (e-ink, grey levels) `'rgb'` dithers better, and OKLab brightens black and white. Try both on your panel.
+- **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400): there is no function for it, but this works. Cluster the image, cut it to a few more than N colours, snap each cut colour to its nearest thread (pass the cut palette as a one-pixel-per-colour `rgb` image to `quantizeToIndicesWithPalette`), and raise the number you cut until N distinct threads appear. It beat "the N most used threads" by up to 6 dB PSNR in testing.
+- **Transparent pixels** map to black unless you pass `transparent`, which appends an entry for them (so a 1- or 2-bit panel has no room for it): composite the image onto your background first.
+- A palette of more than 1024 colours is mapped about three times slower than one of 1024 or fewer.
+
+### Swatches for many images (a build step)
+
+For placeholders, theming or colour search over a site's images, one call each is fast enough, and most of the time goes to decoding:
+
+- **Downscale first.** 512 px on the long side changes the palette by about 2% (256 px by 6%, 64 px by half) and is 3 to 8 times faster; with `precision: 6` a photo takes about 20 ms.
+- **Use a few workers, not one per image.** The main entry runs one call at a time, so throughput comes from several `createWorker()`s (the pool in [Performance and limits](#performance-and-limits)). About four is the sweet spot; more mostly adds memory.
+- **Cache palettes, not clusterings:** 1,500 palettes are about half a megabyte of JSON, and 1,500 clusterings are 0.2 to 1 GB. Key the cache by the image's content hash, plus the library's major version and your options; palettes are the same for every 3.x release (see [stability](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/stability.md)).
+- "Dominant colour" is up to you: the heaviest swatch of `getSwatches(image, 5)` (sort by `shares`) is a good one. These colours are averages of regions, so they are muted: for vivid accents, a library built for them (node-vibrant, colorthief) suits better.
+- A sharp `Buffer` from `.raw()` can be passed as it is, with `{ data, format: 'rgba', width }`.
 
 ### Using the output
 
@@ -312,7 +338,7 @@ ImageData                                    // from a canvas: always RGBA, widt
 
 > **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
 
-> **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: a canvas or `createImageBitmap` in a browser, sharp or pngjs in Node. Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`. Decoding is [planned](docs/ROADMAP.md).
+> **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: a canvas or `createImageBitmap` in a browser, sharp or pngjs in Node. Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`. Decoding is [planned](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/ROADMAP.md).
 
 The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format` (and `width` and `height`). In TypeScript the result type follows the input (`ImageResult<I>`). Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects.
 
@@ -427,7 +453,7 @@ const clustering = await getClustering(image, {
 });
 ```
 
-- **Slices.** With either option, clustering runs in slices of about 10 ms, so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
+- **Slices.** With either option, clustering runs in slices of about 10 ms (a large image has a few unsliced steps of up to 150 ms in between), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes: check `error.name === 'AbortError'`. An already aborted signal does no work.
 - **Mapping can't be interrupted** (it takes milliseconds: 6 ms at 768×512, 27 ms dithered). The functions that only map check the signal before they start, and don't take `onProgress`.
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.
@@ -465,6 +491,8 @@ Messages are for people and may change. The worker entry fails the same way as t
 
 - **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
 - **`terminate()`** stops the worker and rejects the calls still waiting.
+
+`createWorker` takes `transfer`, `wasm` (see [Loading the WebAssembly module](#loading-the-webassembly-module)) and `script`: the URL (or in Node, the path) of a copy of the package's `dist/worker-thread.mjs`, for setups whose bundler doesn't emit the package's own. For the shared worker, `init({ script })` does the same, before any other call.
 
 Calls run one at a time, in order. Results are transferred back without copying. Images are copied in, unless you create the worker with `createWorker({ transfer: true })`, which is faster but leaves your buffer empty. Only pixels that are a whole buffer of their own are transferred; a view into part of a larger buffer, such as a `subarray` or a small Node `Buffer`, is copied. The entry is an ES module; `require()` works too on the supported Node versions.
 
@@ -641,6 +669,59 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
   }
   ```
 
+### Angular, esbuild, Rollup and other bundlers
+
+The main entry works in all of them. The worker entry needs its script (`worker-thread.mjs`, which imports the package's other files) next to the rest of `dist/`, and some bundlers emit neither it nor `clustering.wasm`. Then a worker call fails at run time with `worker-failed` or `wasm-load-failed`, often only after deploying, because a dev server serves `node_modules` as it is. Copy the package's `dist/` files out as static assets and say where they are:
+
+```js
+import { createWorker } from 'agglomerative-clustering/worker';
+const worker = createWorker({
+  script: '/assets/agglomerative-clustering/worker-thread.mjs',   // relative URLs resolve against the page
+  wasm: '/assets/agglomerative-clustering/clustering.wasm',
+});
+```
+
+- **Angular** (the default `application` builder): add the files to the app's `angular.json` assets, then use the code above.
+
+  ```json
+  "assets": [{ "glob": "{worker-thread.mjs,shared.mjs,index.mjs,clustering.js,clustering.wasm}", "input": "node_modules/agglomerative-clustering/dist", "output": "assets/agglomerative-clustering" }]
+  ```
+- **esbuild and Rollup** do not recognise `new Worker(new URL(...))`, so copy the same files into the output and give `script`. Rollup users can also build `worker-thread.mjs` as a second entry.
+- **Vite, webpack 5 and Parcel** find the script themselves.
+- **The main entry** can also be told where the `.wasm` is with `init({ wasm })`.
+
+### Electron
+
+Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in the renderer, the main process and a `utilityProcess`, loaded from `file://`, a custom scheme or a dev server. For responsiveness, **decode in the renderer and use `agglomerative-clustering/worker`** there: the main entry in the main process blocks the whole app for the length of a clustering. Two traps:
+
+- **Keep the package external in a bundled main process** (electron-vite does by default; with webpack or esbuild mark it external). A bundle that inlines it finds the `.wasm` and worker script only when the app starts from the project directory, which a packaged app doesn't. If you must bundle it, pass `init({ wasm })` for the main entry and `createWorker({ script })` for the worker.
+- **`nodeIntegrationInWorker: true`** is supported: the worker script talks through `self` there.
+
+Errors lose their `code` and `argument` crossing Electron's IPC (only the message survives), so send `error.code` yourself. `nativeImage` gives BGRA pixels: swap the channels to RGBA first.
+
+### Browser extensions
+
+The main entry runs in every extension context: a Manifest V3 service worker, an offscreen document, extension pages and content scripts (a page's own Content-Security-Policy does not apply to a content script).
+
+- **Manifest CSP.** Compiling WebAssembly in the service worker, an offscreen document or an extension page needs `'wasm-unsafe-eval'` (not `'wasm-eval'`, which Chrome refuses in a manifest): `"content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" }`. Content scripts need nothing.
+- **A service worker has no `Worker`**, so use the main entry there, which already keeps the page's thread free. The worker entry works in an offscreen document or an extension page, and in a content script on a page whose CSP allows `worker-src blob:`.
+- **Files.** With Vite and CRXJS the `.wasm` and worker script are emitted and made web-accessible for you. Without a bundler, copy `dist/*.mjs`, `clustering.js` and `clustering.wasm` into the extension and list them under `web_accessible_resources` if a content script loads them.
+- A service worker can fetch cross-origin images with host permissions (a content script gets a tainted canvas), so cluster there. Typed arrays become plain objects through `chrome.runtime.sendMessage`: convert with `Array.from(palette)` and back with `new Uint8Array(...)`.
+
+### Testing code that uses it
+
+- **Vitest** needs no configuration, in node, jsdom, happy-dom and browser mode. **Storybook** (Vite builder) works as it is.
+- **Jest** works in its default CommonJS mode, in the node and jsdom environments, without transforms or `--experimental-vm-modules` (the package falls back to a CommonJS build of its glue where `require()` of an ES module fails).
+- **jsdom and happy-dom** have no `ImageData` (install `canvas`, or pass `{ data, format: 'rgba', width }`) and no `Worker`: the worker entry then uses a Node worker thread, which is fine for tests. Results come back in the class of the `ImageData` you passed.
+- **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`: each Jest test file otherwise leaves a worker thread, about 30 MB, in the process.
+- **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })`.
+- **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and stay the same within a major version: snapshot them. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
+- Fake timers don't affect it. An unawaited call still running at the end holds Jest open until it finishes.
+
+### Writing a package that wraps it
+
+Make `agglomerative-clustering` a **`peerDependency`** and keep it **external** in your build (tsup `external`, Rollup `external`): the app's bundler then finds the worker script and `.wasm` once, with one copy in the output. Bundling it into your package leaves `./worker-thread.mjs` unresolved. Re-export the types you need (`CodedError`, `ErrorCode`, `ClusteringOptions`, …), check `version` against your supported range at run time, and let your users pass `wasm` and `script` through. Importing it on the server (SSR) doesn't run anything: only calls load the module.
+
 ### Performance and limits
 
 **Servers.** Cap the pixel count of uploads (check the header's dimensions before decoding, as sharp's `limitInputPixels` does), use `precision: 6` (it bounds the memory an image with very many colours needs), and run the work in workers so a clustering doesn't block the event loop. One worker runs one call at a time, so create a few:
@@ -669,7 +750,7 @@ const swatches = await run('getSwatches', image, 8, { precision: 6, signal: cont
 - **Stored clusterings:** make them with `precision: 6`. An exact clustering of a noisy 4-megapixel image is 78 MB, against 5.5 MB at `precision: 6`. Read back, wrap the bytes once with `new Clustering(bytes)` and keep that object while you use it: its checksum is checked the first time an object is used (2 to 3 ms for a photo's clustering).
 - Running out of memory is a catchable `out-of-memory` error, and `terminate()` on each worker shuts the pool down.
 
-**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library replaces the instance (the next call loads a fresh one, in milliseconds): a server's memory comes back down after a huge image instead of staying at its peak.
+**Large images.** Time and memory grow with the number of *distinct colours*, not just pixels: a 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`, and 36 megapixels of random noise (the worst case) about 6 s with `precision: 6`. (Times are from an idle machine; a busy or throttled one, a laptop on battery or a CI runner can be several times slower.) One WebAssembly instance can use up to 2 GB; an image that needs more is rejected with `out-of-memory`, and later calls work normally. WebAssembly memory only grows, so after a call that leaves it above 256 MB the library replaces the instance (the next call loads a fresh one, in milliseconds): a server's memory comes back down after a huge image instead of staying at its peak.
 
 ### Troubleshooting
 
@@ -684,15 +765,17 @@ const swatches = await run('getSwatches', image, 8, { precision: 6, signal: cont
 | A stored OKLab palette maps differently from when it was made | Storage dropped its colour space, so it is matched in RGB. | Store `palette.colorSpace` too and restore it with `new Palette(bytes, colorSpace)` (see "Palette and Clustering"). |
 | `invalid-clustering` for a clustering you stored | Its bytes changed in storage (truncated, re-encoded, mixed up). | Cluster the image again, and check how it is stored: as a binary blob, or base64 that is decoded in full. |
 | `out-of-memory` | An image with very many distinct colours. | Use `precision: 6`, or a smaller image. |
-| The worker doesn't start under a bundler | The bundler didn't see the `new Worker(new URL(...))` form. | See "Off the main thread" for the bundlers that are tested. |
+| The worker doesn't start under a bundler (`worker-failed`, or a 404 for `worker-thread.mjs`) | The bundler didn't emit the worker script (Angular, esbuild, Rollup). | Copy the package's `dist/` files and pass `createWorker({ script })`: see [Angular, esbuild, Rollup and other bundlers](#angular-esbuild-rollup-and-other-bundlers). |
+| Jest: "Must use import to load ES Module" | An older package version; this one loads in Jest's CommonJS mode. | Upgrade to the latest `3.0.0-beta`. |
+| `wasm-load-failed` mentioning a Content-Security-Policy | The page or extension forbids compiling WebAssembly. | Add `'wasm-unsafe-eval'` to `script-src`. |
 | TypeScript says a `Uint8Array` isn't a `Clustering` | Stored bytes lost their type. | `new Clustering(bytes)` (see "Palette and Clustering"). |
 
 ## More
 
-- **[Migrating](docs/migrating.md)** from 2.x (and 1.x) to the current version, and the [CHANGELOG](CHANGELOG.md) for every release.
-- **[Stability and versioning](docs/stability.md)**: what won't change within a major version.
-- **[How it works](docs/how-it-works.md)**: the algorithm, and the architecture notes for contributors in [CLAUDE.md](CLAUDE.md).
-- **[Roadmap](docs/ROADMAP.md)**: what is planned and what was tried and dropped.
+- **[Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md)** from 2.x (and 1.x) to the current version, and the [CHANGELOG](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/CHANGELOG.md) for every release.
+- **[Stability and versioning](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/stability.md)**: what won't change within a major version.
+- **[How it works](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/how-it-works.md)**: the algorithm, and the architecture notes for contributors in [CLAUDE.md](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/CLAUDE.md).
+- **[Roadmap](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/ROADMAP.md)**: what is planned and what was tried and dropped.
 
 ### Demo
 
