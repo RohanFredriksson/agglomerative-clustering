@@ -14,6 +14,12 @@ export { Palette } from './index.js';
 /** The same class as the main entry's `Clustering`: the typed bytes of a clustering. */
 export { Clustering } from './index.js';
 
+/** The same list as the main entry's `errorCodes`: the worker entry's errors have the same codes. */
+export { errorCodes } from './index.js';
+
+/** The main entry's `isCodedError`: true for this library's errors, from either entry. */
+export { isCodedError } from './index.js';
+
 /** The version of this library, as in its `package.json`: the same value as the main entry's `version`. */
 export const version: string;
 

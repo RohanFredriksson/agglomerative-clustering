@@ -15,6 +15,15 @@ export const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 // 'worker-terminated', 'worker-failed' and 'invalid-handle'. When the error is about one argument, `argument` names it
 // for programs (the message is for people): 'image', 'k', 'clustering', 'palette', 'options', or 'options.<key>' for
 // one option.
+// Every code `fail` gives, for programs that branch on them or forward them (a wrapper package, an IPC bridge).
+export const errorCodes = Object.freeze(['invalid-argument', 'invalid-clustering', 'unsupported-version', 'out-of-memory', 'wasm-load-failed', 'worker-terminated', 'worker-failed', 'invalid-handle']);
+
+// Whether `value` is one of this library's errors: an error (or, after crossing Electron's IPC or a postMessage, a plain
+// object) with a string message and one of `errorCodes`. Checking `code` alone isn't enough: Node's own errors have a
+// `code` too ('ENOENT'), and an abort rejects with the signal's reason, which has none.
+export const isCodedError = (value) => value !== null && typeof value === 'object'
+    && typeof value.message === 'string' && typeof value.code === 'string' && errorCodes.includes(value.code);
+
 export const fail = (code, message, argument) => Object.assign(new Error(message), argument === undefined ? {code} : {code, argument});
 
 // Type checks by tag rather than `instanceof`, so values from another realm (an iframe, a vm context, a test sandbox,

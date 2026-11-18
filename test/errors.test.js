@@ -103,3 +103,36 @@ describe('which argument an error is about', () => {
         expect('argument' in terminated).toBe(false);
     });
 });
+
+describe('errorCodes and isCodedError', () => {
+
+    it('lists exactly the codes the source can throw, in both entries, frozen', async () => {
+        const { readFileSync } = await import('fs');
+        const source = ['index.js', 'shared.js', 'worker.js', 'worker-thread.js'].map((file) => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')).join('\n');
+        const thrown = new Set([...source.matchAll(/fail\('([a-z-]+)'/g)].map((match) => match[1]));
+        expect([...ac.errorCodes].sort()).toEqual([...thrown].sort());
+        expect(Object.isFrozen(ac.errorCodes)).toBe(true);
+        const workerEntry = await import('../dist/worker.mjs');
+        expect(workerEntry.errorCodes).toBe(ac.errorCodes);
+        expect(workerEntry.isCodedError).toBe(ac.isCodedError);
+    });
+
+    it("is true for the library's errors, from both entries, and for them after crossing IPC", async () => {
+        const main = await caught(ac.getPalette(image, 0));
+        const remote = await caught(worker.getPalette(image, 0));
+        for (const error of [main, remote, { message: remote.message, code: remote.code, argument: remote.argument }, JSON.parse(JSON.stringify({ message: 'x', code: 'worker-failed' }))]) {
+            expect(ac.isCodedError(error)).toBe(true);
+        }
+    });
+
+    it("is false for errors that aren't the library's", async () => {
+        const enoent = Object.assign(new Error('no such file'), { code: 'ENOENT' });
+        const controller = new AbortController();
+        controller.abort();
+        const aborted = await caught(ac.getPalette(image, 2, { signal: controller.signal }));
+        for (const value of [enoent, aborted, new Error('plain'), { code: 'invalid-argument' }, 'invalid-argument', null, undefined, 42]) {
+            expect(ac.isCodedError(value)).toBe(false);
+        }
+    });
+
+});

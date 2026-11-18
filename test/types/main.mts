@@ -1,7 +1,7 @@
 // Consumer type tests, compiled by `npm run test:types` against the built declarations (dist/*.d.ts, *.d.cts) with strict mode and
 // skipLibCheck off, under nodenext (ESM and CommonJS importers) and bundler resolution. `@ts-expect-error` lines must NOT compile.
 import {
-    version, formatVersion, Palette, Clustering, init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
+    version, formatVersion, Palette, Clustering, errorCodes, isCodedError, init, getClustering, getPalette, getPaletteFromClustering, getSwatches, getSwatchesFromClustering, getClusteringInfo,
     quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
@@ -73,6 +73,11 @@ async function main() {
     await getPaletteFromClustering(typed, 4);
     void [space, asBytes, slice];
     const code: ErrorCode = 'invalid-argument';
+    // isCodedError narrows an unknown catch value, with no cast; errorCodes is the list of every code.
+    try { await getPalette(bytes, 0); } catch (error: unknown) { if (isCodedError(error)) { const code: ErrorCode = error.code; const message: string = error.message; void [code, message]; } }
+    const codes: readonly ErrorCode[] = errorCodes;
+    // @ts-expect-error The list is read-only.
+    codes.push('invalid-argument');
     try { await getPalette(bytes, 0); } catch (error) { const coded = error as CodedError; const same: ErrorCode = coded.code; const which: ErrorArgument | undefined = coded.argument; if (which === 'options.colorSpace' || which === 'k') {void which;} void same; }
     const run: RunOptions = { signal: controller.signal, onProgress(p) { void p; } };
     const initOptions: InitOptions = {};
