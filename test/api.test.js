@@ -115,9 +115,11 @@ describe('the worker entry', () => {
 
     it('mirrors the main entry', () => {
         // Constants (the versions) are exported by both entries with the same values; only functions become worker methods.
-        // (`Palette` and `Clustering` are constructors, exported by both entries but not methods.)
-        const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function' && !/^[A-Z]/.test(name));
-        for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function')) {expect(worker[name], name).toBe(main[name]);}
+        // (`Palette` and `Clustering` are constructors, and `isCodedError` a synchronous helper: exported by both entries,
+        // the same function, but not methods.)
+        const helpers = ['isCodedError'];
+        const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function' && !/^[A-Z]/.test(name) && !helpers.includes(name));
+        for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function' || helpers.includes(name))) {expect(worker[name], name).toBe(main[name]);}
         expect(Object.keys(worker).sort()).toEqual([...Object.keys(main), 'createWorker', 'terminate'].sort());
         expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'terminate'].sort());
         expect(propertyNames(declaredType('worker.d.ts', 'AgglomerativeWorker'))).toEqual(Object.keys(instance).sort());

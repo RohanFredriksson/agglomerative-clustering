@@ -19,7 +19,7 @@ export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported
  */
 export type ErrorArgument = 'image' | 'k' | 'clustering' | 'palette' | 'colorSpace' | 'options' | `options.${string}`;
 
-/** An `Error` thrown by this library. There is no class to test with `instanceof`: check `code`. */
+/** An `Error` thrown by this library. There is no class to test with `instanceof`: use `isCodedError`, or check `code`. */
 export interface CodedError extends Error {
     code: ErrorCode;
     /**
@@ -29,6 +29,17 @@ export interface CodedError extends Error {
      */
     argument?: ErrorArgument;
 }
+
+/** Every `ErrorCode`, in a frozen array: for code that forwards or lists them (a wrapper package, an IPC bridge). */
+export const errorCodes: readonly ErrorCode[];
+
+/**
+ * Whether `value` is one of this library's errors: something with a string `message` and a `code` from `errorCodes`.
+ * Unlike checking `code` alone, it is false for Node's own errors (`'ENOENT'`) and for an abort (the signal's reason).
+ * It also accepts a plain object with those fields, which is what an error becomes after Electron's IPC or a
+ * `postMessage`; such an object has no `stack`, and is not an `instanceof Error`.
+ */
+export function isCodedError(value: unknown): value is CodedError;
 
 /**
  * An image as raw bytes with an explicit layout: for RGB data, a `Uint8ClampedArray`, or Node, where there is no

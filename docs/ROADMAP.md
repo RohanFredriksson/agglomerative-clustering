@@ -1,6 +1,8 @@
 # Roadmap
 
-What comes after 2.0, roughly in order. Each release keeps output byte-identical unless it says otherwise; `test/golden.test.js` enforces that.
+What is planned, what is only being considered, and what was decided against, with the reasons. Each release keeps output byte-identical unless it says otherwise; `test/golden.test.js` enforces that.
+
+**The rule for what goes where.** 3.0 freezes the API: anything that would change the shape or defaults of an existing function was decided before it. Everything below only adds (a new option, a new value of an option, a new function), so it can come in any 3.x release without breaking anyone. Most items come from exploratory testing of the 3.0 betas: fresh agents building real projects from the npm package alone (Electron, a Chrome extension, Jest and Vitest suites, e-ink and embroidery tools, a static-site build, a wrapper package, CDNs, Deno, Bun, Cloudflare Workers, SvelteKit, Nuxt, Next.js, servers, animated GIFs).
 
 ## 2.0.1: robustness (merged, never released; ships in 3.0)
 
@@ -24,7 +26,7 @@ Since 2.0 every clustering starts with `[0xAC, version, …]`. Clusterings from 
 4. **Readers reject versions newer than they know** with an error asking for an upgrade, and never guess. The same goes for a header field with a fixed set of meanings (the colour space, the weight unit) that holds a value they don't know: that is how a later release adds one, so it is `unsupported-version`, not "damaged".
 5. **Every version from 2 on stays readable.** `fixtures/clusterings/` holds a stored clustering of each format version with the palettes (and from v3 the weights and mean squared errors) its release gave, and `test/formats.test.js` checks them. Each new version adds a fixture; existing ones are never regenerated.
 
-## 3.0: worker, indexed output, weights and error curve (done, unreleased)
+## 3.0: worker, indexed output, weights and error curve (done; in beta, then 3.0.0)
 
 What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering format changes anyway.
 
@@ -34,21 +36,41 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 - [x] **Swatches** (`getSwatches`, `getSwatchesFromClustering`: palette, weights and shares) and the **error curve** (`getClusteringInfo().mse`, and the unitless `explained`), for choosing a palette size by error.
 - [x] **Cancellation and progress:** `signal` and `onProgress` on every function with an image; the clustering is a resumable job run in slices, and the worker stops working on a cancelled call.
 - [x] **`init({ wasm })`** and the `clustering.wasm` export, for CDNs, strict CSPs and edge runtimes; one shared load.
-- [x] **Error codes** on every error, kept across the worker boundary.
+- [x] **Error codes** on every error, kept across the worker boundary, with `errorCodes` and the `isCodedError` guard.
+- [x] **Runs where people put it:** CDNs (cross-origin workers through a `blob:` module), Deno, Bun, Cloudflare Workers, Next.js server bundles, SvelteKit and Nuxt, Electron (packaged with asar), browser extensions, Jest's CommonJS mode, jsdom; `createWorker({ script })` for bundlers that don't emit the worker script (Angular, esbuild, Rollup).
 - [x] **Tests as a consumer sees the package:** a Vite build run in headless Chromium (worker, `.wasm`, slices, aborts, `wasm` locations), strict TypeScript against the built declarations, and the full suite on Node 20, 22 and 24, in CI.
 
-## Next
+## 3.1: planned, in this order
 
-- **Slicing pixel mapping.** Cancellation and progress cover the clustering, which is most of the work. Mapping (a few milliseconds for a photo, more with dithering on very large images) still runs in one piece; it could be sliced by rows the same way.
+1. **Ordered (Bayer) dithering**, as a new option alongside the error-diffusion `dither` (for example `ditherMethod: 'ordered'`; the name is open). Error diffusion makes each frame's pattern depend on every pixel before it, so an animated GIF's dither crawls from frame to frame even where the picture is still; an ordered pattern is fixed to the pixel grid, so still areas stay still. It also suits 1-bit and 2-bit e-ink panels, where error diffusion's worms are most visible. Atkinson diffusion (lighter, higher contrast, the classic 1-bit look) is a small addition once the option exists. Asked for by the hardware-palette round; the animated-GIF round showed the flicker.
+2. **BGRA input and output** (`format: 'bgra'`): Electron's `nativeImage`, Windows bitmaps and some native capture APIs give BGRA, and today users swap the channels both ways in JavaScript. It is a pixel-reading change in C++ (the histogram and the mapping sinks), with `quantize` returning BGRA for BGRA input. Asked for by the Electron round.
+3. **Choosing N colours from a fixed palette** (12 threads out of 400, 40 bricks out of a full catalogue, 6 inks out of a pigment set): the README lists embroidery, LEGO and e-ink as fits, but only maps to a whole palette. The documented recipe (cluster, snap each cut colour to its nearest fixed one, grow the cut until N distinct ones appear) works and beat "the N most used" by up to 6 dB, but it can't weigh a fixed colour that is close to several clusters. A built-in could cluster with each merge's result snapped to the fixed set, or score subsets by the mapping error. **Start with a spike** comparing those against the recipe on Kodak and logos (PSNR and CIEDE2000 after mapping, time), and add a function only if it clearly wins.
+
+Each lands with tests, README and CHANGELOG entries, and (for 1 and 3) a quality comparison recorded here.
+
+## Larger, after 3.1
+
+- **Decoding image files** (asked for in every round of testing, and the biggest usability gain left; its own project because of the decoders' size and dependencies). Today a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file passed as a bare `Uint8Array` is recognised (`sniffImageFormat` in `src/index.js`) and rejected with a message saying how to decode it. The goal is that an encoded image just works. The groundwork is in place: detection is in one function, in the one place images enter (`load`), and only bare byte arrays are inspected, so a `{ data, format }` or `ImageData` is never second-guessed. Decoding would be added at that seam, which makes `load` asynchronous. The open questions are where the decoders come from (the browser's `createImageBitmap` where there is one; in Node, an optional peer such as sharp, or small bundled decoders for PNG, JPEG and GIF, which would add dependencies and size) and what to do with animation and EXIF orientation and colour profiles.
+- **Slicing pixel mapping.** Cancellation and progress cover the clustering, which is most of the work. Mapping (a few milliseconds for a photo, more with dithering on very large images) still runs in one piece; it could be sliced by rows the same way. Clustering a 12-megapixel image also has a couple of unsliced steps (the histogram and the precision grouping) of up to about 150 ms.
 - **A Parcel smoke test**, alongside the Vite and webpack ones.
-- **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for much of the growth from 75 KB to 88 KB.
-- **Decoding image files.** Today a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file passed as a bare `Uint8Array` is recognised (`sniffImageFormat` in `src/index.js`) and rejected with a message saying how to decode it. The goal is that an encoded image just works. The groundwork is in place: detection is in one function, in the one place images enter (`load`), and only bare byte arrays are inspected, so a `{ data, format }` or `ImageData` is never second-guessed. Decoding would be added at that seam, which makes `load` asynchronous. The open questions are where the decoders come from (the browser's `createImageBitmap` where there is one; in Node, an optional peer such as sharp, or small bundled decoders for PNG, JPEG and GIF, which would add dependencies and size) and what to do with animation and EXIF orientation and colour profiles.
+- **Smaller WebAssembly.** Pixel mapping is compiled twice (colour and index output), which accounts for much of the growth from 75 KB to about 93 KB.
 - **Suggesting a palette size** from the error curve (an elbow heuristic), if users ask for more than `mse` and `explained`.
 
 ## Engineering, alongside the releases
 
 - **Native build and coverage-guided fuzzing.** Sanitizers are done by hand through Emscripten's ASan/UBSan WebAssembly build (recipe in CLAUDE.md; the suite and the hostile-input fuzzers are clean), but not in CI. A native target (CMake or a short script) for the C++ would add reproducible instruction counts (callgrind) for speed work and a libFuzzer harness for `read_clustering`, `_get_palette_from_clustering` and `_get_palette_weights`: clusterings are stored by users and handed back as untrusted bytes. A CI job running the suite against the sanitized build would keep it clean.
 - **Contributor setup.** Every test needs `em++`. Add a `scripts/setup-emsdk.sh` pinned to the CI version, or a devcontainer, so `npm test` works from a fresh clone, and a SessionStart hook so cloud agent sessions can build too.
+
+## Considered, and why not (yet)
+
+These came up in testing. Each is either covered by a README recipe or not worth its permanent API yet; any can move up if users ask for it.
+
+- **A background (matte) colour for transparent pixels** (`matte: [255, 255, 255]`), for logos sent to opaque hardware. Compositing onto a background before the call is a few lines, and it is unclear whether an option should affect clustering, mapping or both. README: "Fixed palettes".
+- **A `dominant` colour, heaviest-first palettes, a hex helper.** Palettes come in split order so that smaller ones nest in larger ones; sorting by `shares` is one line, and "dominant" means different things to different apps (the heaviest swatch, the most saturated, the centre of the image). README: "Swatches for many images" and "Using the output".
+- **A built-in worker pool.** Every server tester wanted one, but its queueing policy (small images behind large ones, backpressure, memory per worker) depends on the app. README: the pool recipe in "Performance and limits".
+- **Clustering several images at once** (`getClustering([frames])`), for one palette across an animated GIF or a set of images. Concatenating sampled frames into one image already does it in one line, with the same result. README: "Animated GIFs and sets of images".
+- **Palette PNG and GIF writers.** fast-png and gifenc do it well; the README has both recipes, which decode pixel-exactly.
+- **Our own error class** (`instanceof AgglomerativeError`). Errors from the worker are rebuilt on the calling side, and errors that cross Electron's IPC or a `postMessage` are plain objects, so `instanceof` would mislead; `isCodedError` works in all three.
 
 ## Later, if asked for
 
