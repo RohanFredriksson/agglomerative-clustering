@@ -41,18 +41,18 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 
 ```html
 <script type="module">
-  import { getSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@next/dist/index.mjs';
-  import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@next/dist/worker.mjs';
+  import { getSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/index.mjs';
+  import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/worker.mjs';
 </script>
 ```
 
-- **Paths.** Import `dist/index.mjs` and `dist/worker.mjs` by their paths (jsDelivr and unpkg don't follow the package's `exports` for subpaths such as `/worker`); `https://esm.sh/agglomerative-clustering@next` works too. The `.wasm` is found next to the script, so `init` needs no `wasm` option. Pin an exact version in production, as `@3.0.0` rather than `@next`.
+- **Paths.** Import `dist/index.mjs` and `dist/worker.mjs` by their paths (jsDelivr and unpkg don't follow the package's `exports` for subpaths such as `/worker`); `https://esm.sh/agglomerative-clustering@3` works too. The `.wasm` is found next to the script, so `init` needs no `wasm` option. Pin an exact version in production, as `@3.0.0` rather than the range `@3`.
 - **Content-Security-Policy.** It needs the CDN in `script-src` and `connect-src` (the `.wasm` is fetched) and `'wasm-unsafe-eval'` in `script-src`. The worker entry starts its worker through a `blob:` script that imports from the CDN, so it also needs `worker-src blob:` *and* the CDN: `worker-src blob: https://cdn.jsdelivr.net`.
 
 ## Deno, Bun and Cloudflare Workers
 
 - **Bun** needs nothing: `bun add agglomerative-clustering`, then both entries work as in Node.
-- **Deno**: `import { getPalette } from 'npm:agglomerative-clustering@next'`, run with `--allow-read` (the `.wasm` is read from the package). Importing from a CDN URL works too, without it. The worker entry runs on Deno's `worker_threads`, which is about 3 times slower per call than the main entry; for a few calls, use the main entry. Deno doesn't install npm versions less than a day old by default, so on the day of a release it may quietly install the previous one (`"minimumDependencyAge": 0` in `deno.json` turns that off; the exported `version` says what you got).
+- **Deno**: `import { getPalette } from 'npm:agglomerative-clustering'`, run with `--allow-read` (the `.wasm` is read from the package). Importing from a CDN URL works too, without it. The worker entry runs on Deno's `worker_threads`, which is about 3 times slower per call than the main entry; for a few calls, use the main entry. Deno doesn't install npm versions less than a day old by default, so on the day of a release it may quietly install the previous one (`"minimumDependencyAge": 0` in `deno.json` turns that off; the exported `version` says what you got).
 - **Cloudflare Workers**: Wrangler imports a `.wasm` file as a compiled module, so give it to `init` before the first call. There are no threads, so use the main entry.
 
   ```js
