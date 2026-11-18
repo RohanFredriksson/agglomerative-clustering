@@ -22,7 +22,7 @@ async function main() {
     const q: ImageData = await handle.quantize(8, { dither: true, signal: controller.signal });
     const palette: Palette = await handle.getPalette(8);
     const info = await handle.getClusteringInfo();
-    const mse: Float64Array | null = info.mse;
+    const mse: Float64Array = info.mse;
     const indexed = await handle.quantizeToIndices(16, { transparent: 128 });
     const edited: ImageData = await handle.quantizeWithPalette(palette, { dither: true, signal: controller.signal });
     const editedIndexed = await handle.quantizeToIndicesWithPalette(palette, { transparent: true });

@@ -24,11 +24,11 @@ export { isCodedError } from './index.js';
 export const version: string;
 
 /** The version of the data this library stores (clusterings): the same value as the main entry's `formatVersion`. */
-export const formatVersion: 3;
+export const formatVersion: number;
 
 export type {
     ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, ErrorArgument, CodedError, InitOptions, RunOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, ClusteringInfoV2, ClusteringInfoV3, Swatches,
+    ErrorCode, ErrorArgument, CodedError, InitOptions, RunOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches,
 } from './index.js';
 
 /** Options for `createWorker`. */

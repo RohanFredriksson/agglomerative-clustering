@@ -289,8 +289,8 @@ describe('the transparent cutoff a clustering was made with', () => {
         expect((await ac.getClusteringInfo(await ac.getClustering(sprite, { transparent: false }))).transparent).toBe(false);
         // an RGB image has no alpha for a cutoff to apply to, so none is recorded
         expect((await ac.getClusteringInfo(await ac.getClustering({ data: new Uint8Array(30), format: 'rgb' }, { transparent: true }))).transparent).toBe(false);
-        // clusterings from 2.x had no such option
-        expect((await ac.getClusteringInfo(new Uint8Array([0xAC, 2, 0, 8]))).transparent).toBe(false);
+        // clusterings from 2.x had no such option (nor weights, so getClusteringInfo rejects them; mapping reads them as none)
+        await expect(ac.getClusteringInfo(new Uint8Array([0xAC, 2, 0, 8]))).rejects.toMatchObject({ code: 'unsupported-version' });
     });
 
     it('is the default cutoff when mapping to indices, so clustering and mapping agree', async () => {

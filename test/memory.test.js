@@ -32,6 +32,8 @@ describe('running out of memory', () => {
         const error = await getPalette(image, 16).catch((e) => e);
         expect(error.code).toBe('out-of-memory');
         expect(error.message).toContain('precision: 6');
+        // A large image is told to shrink first (found by the sixth round: the advice was only precision, which may already be low).
+        expect(error.message).toContain('Scale the image down');
         expect(await getPalette(normal, 16)).toEqual(expected);
 
         // The same through the sliced path used for signal and onProgress.

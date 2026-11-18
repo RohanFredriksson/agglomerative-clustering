@@ -326,4 +326,44 @@ describe('messages', () => {
         expect(await ac.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
     });
 
+    it('rejects input too large for the module in the worker entry too, before sending it', async () => {
+        // Found by the sixth round (3.0.0-beta.6): from 4 GB the buffer couldn't be cloned to send, which gave a different
+        // code (invalid-argument) from the main entry's. Now both check the size first, with the same error.
+        const worker = createWorker();
+        try {
+            const error = await worker.getPalette({ data: new Uint8Array(2 ** 31), format: 'rgba' }, 2).catch((caught) => caught);
+            expect(error.code).toBe('out-of-memory');
+            expect(error.message).toContain('1.9 GB');
+            expect(await worker.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+    it('fetches an http(s) URL given to init({ wasm }) in Node, and says when the server fails', async () => {
+        // Found by the sixth round (3.0.0-beta.6): Node read the URL as a file path, and the message blamed the path.
+        const { createServer } = await import('http');
+        const { readFile } = await import('fs/promises');
+        const wasm = await readFile(resolve(dist, 'clustering.wasm'));
+        const server = createServer((request, response) => {
+            if (request.url === '/clustering.wasm') {response.writeHead(200, { 'content-type': 'application/wasm' }); response.end(wasm);}
+            else {response.writeHead(404); response.end('not found');}
+        });
+        await new Promise((done) => server.listen(0, '127.0.0.1', done));
+        const base = `http://127.0.0.1:${server.address().port}`;
+        try {
+            const missing = await fresh();
+            const error = await missing.init({ wasm: `${base}/missing.wasm` }).catch((caught) => caught);
+            expect(error.code).toBe('wasm-load-failed');
+            expect(error.message).toContain('could not be fetched');
+            expect(error.message).toContain('404');
+            expect(error.message).not.toContain('working directory');
+            const entry = await fresh();
+            await entry.init({ wasm: `${base}/clustering.wasm` });
+            expect(await entry.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
+        } finally {
+            server.close();
+        }
+    });
+
 });

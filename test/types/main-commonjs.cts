@@ -30,9 +30,9 @@ async function main() {
     void shares;
     const info: ClusteringInfo = await getClusteringInfo(clustering);
     const libraryVersion: string = version;
-    const stored: 3 = formatVersion;
-    // The format version is the one a fresh clustering reports, so it narrows the info the same way.
-    if (info.formatVersion === formatVersion) {const total: number = info.totalWeight; void total;}
+    const stored: number = formatVersion;
+    // A stored clustering in an older format than this build writes: cluster the image again.
+    if (info.formatVersion < formatVersion) {const total: number = info.totalWeight; void total;}
     // @ts-expect-error the version is a constant
     version = '0';
     void libraryVersion; void stored;

@@ -70,8 +70,8 @@ interface IndexedImageFields {
     palette: Palette;
     colors: Palette;
     transparentIndex: number | null;
-    width?: number;
-    height?: number;
+    width?: number | undefined;
+    height?: number | undefined;
 }
 export type IndexedImage = (IndexedImageFields & {
     indexBits: 8;
@@ -87,7 +87,7 @@ export interface InitOptions {
     wasm?: string | URL | ArrayBuffer | ArrayBufferView | WasmModule | undefined;
 }
 export const version: string;
-export const formatVersion: 3;
+export const formatVersion: number;
 export function init(options?: InitOptions): Promise<void>;
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
@@ -99,25 +99,16 @@ export interface Swatches {
 }
 export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
-interface ClusteringInfoFields {
+export interface ClusteringInfo {
+    formatVersion: number;
     colorSpace: ColorSpace;
     precision: number;
     transparent: false | number;
     maxColors: number;
-}
-export interface ClusteringInfoV3 extends ClusteringInfoFields {
-    formatVersion: 3;
     totalWeight: number;
     mse: Float64Array;
     explained: Float64Array;
 }
-export interface ClusteringInfoV2 extends ClusteringInfoFields {
-    formatVersion: 2;
-    totalWeight: null;
-    mse: null;
-    explained: null;
-}
-export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
 export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
 export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;

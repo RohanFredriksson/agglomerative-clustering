@@ -1,7 +1,7 @@
 import createWasmModule from './clustering.js';
 import {
     version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels,
+    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -110,6 +110,10 @@ const wasmLoadFailed = (cause, given) => {
                 ? "Check that URL or path: it must be this package's clustering.wasm, served with the application/wasm type."
                 : "Check that clustering.wasm is served next to the script or emitted by your bundler (open its URL in the browser), or say where it is with init({ wasm }).";
         }
+    } else if (isNodeLike && typeof given === 'string' && /^https?:/i.test(given)) {
+        // Node fetches an http(s) URL itself (see nodeWasmFile), so the server or the network failed, not a path.
+        reason = `the .wasm file could not be fetched${where}: ${reason}`;
+        advice = "Check that this machine can reach that URL and that it serves this package's clustering.wasm. On a server, a path to the package's own copy (or its bytes) avoids the request.";
     } else if (/XMLHttpRequest is not defined|both async and sync fetching|failed to fetch|NetworkError|404|ENOENT/i.test(text) && isNodeLike) {
         // In Node the file is read from disk, so the browser's reasons (a CSP, an extension's resources) don't apply.
         reason = given ? `the .wasm file could not be read${where}` : 'the .wasm file could not be read (the package looks for clustering.wasm next to its script)';
@@ -191,6 +195,12 @@ const nodeWasmFile = async (wasm) => {
     if (text === null) {return null;}
     const isFileUrl = /^file:/i.test(text);
     // A string with a scheme (http:, data:, blob:) is a URL; a Windows drive letter (C:\) is a path.
+    // An http(s) URL is fetched here: the glue would read it as a file path in Node.
+    if (/^https?:/i.test(text)) {
+        const response = await fetch(text);
+        if (!response.ok) {throw new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);}
+        return new Uint8Array(await response.arrayBuffer());
+    }
     if (!isFileUrl && /^[a-z][a-z0-9+.-]+:/i.test(text) && !/^[a-z]:[\\/]/i.test(text)) {return null;}
     const {readFile} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'fs/promises'].join(':'));
     if (!isFileUrl) {return readFile(text);}
@@ -264,7 +274,17 @@ const retireAbove = 256 * 1024 * 1024;
 const retireIfLarge = (instance) => {
     if (instance.HEAPU8 && instance.HEAPU8.length > retireAbove) {discard(instance);}
 };
-const outOfMemory = () => fail('out-of-memory', "The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Try `precision: 6`, which bounds the memory an image with very many colours needs, or a smaller image.");
+// What to try depends on the call: a large input has to shrink whatever else changes, and `precision: 6` helps only a
+// clustering (`precision` given) that isn't already at 6 or below.
+const outOfMemory = (bytes, precision) => {
+    const large = bytes >= 2 ** 28;
+    const tries = [];
+    if (large) {tries.push(`scale the image down (its pixels alone are ${sizeText(bytes)}; a few megapixels give as good a palette)`);}
+    if (precision > 6) {tries.push('try `precision: 6`, which bounds the memory an image with very many colours needs');}
+    if (!large) {tries.push('use a smaller image');}
+    const text = tries.join(', or ');
+    return fail('out-of-memory', `The WebAssembly module ran out of memory (it can use up to 2 GB for one image). ${text[0].toUpperCase()}${text.slice(1)}.`);
+};
 
 const unpack = (wasm, pointer) => {
     const lengthBuffer = new Uint8Array(wasm.HEAPU8.subarray(pointer, pointer + 4));
@@ -571,13 +591,6 @@ const checkNotEmpty = (palette, image, cutoff) => {
 // The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
 const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
 
-// The module's memory is at most 2 GB (MAXIMUM_MEMORY in build:wasm) and its allocator takes a 32-bit signed size, so a
-// buffer of 2 GB or more can never be copied in: _malloc would read its length as negative, or (from 4 GB) wrap it to a
-// small number and hand back a block too short for the copy. Such buffers are rejected before any allocation.
-const maxBytes = 2 ** 31;
-const sizeText = (bytes) => bytes >= 2 ** 30 ? `${(bytes / 2 ** 30).toFixed(2)} GB` : `${Math.round(bytes / 2 ** 20)} MB`;
-const tooLarge = (bytes) => fail('out-of-memory', `The input is ${sizeText(bytes)}, more than the WebAssembly module can hold: it has at most 2 GB in all, for the pixels and the work on them, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels of RGBA). Scale the image down for its palette (a few megapixels give as good a one), and map a full-size image in strips with quantizeWithPalette.`);
-
 // Allocates `length` bytes in the WASM heap, or throws a coded out-of-memory error.
 const allocate = (wasm, length) => {
     if (length >= maxBytes) {throw tooLarge(length);}
@@ -587,8 +600,8 @@ const allocate = (wasm, length) => {
 };
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
-// freeing everything afterwards.
-const call = (wasm, buffers, fn) => {
+// freeing everything afterwards. `precision` is given for a clustering, for the out-of-memory advice.
+const call = (wasm, buffers, fn, precision) => {
     const pointers = [];
     let outputPointer = 0;
     let aborted = false;
@@ -607,7 +620,7 @@ const call = (wasm, buffers, fn) => {
         if (!isAbort(error)) {throw error;}
         aborted = true;
         discard(wasm);
-        throw outOfMemory();
+        throw outOfMemory(buffers[0].length, precision);
     } finally {
         // After an abort the instance is being thrown away, and its allocator can't be trusted.
         if (!aborted) {
@@ -680,7 +693,7 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
         if (!isAbort(error)) {throw error;}
         aborted = true;
         discard(wasm);
-        throw outOfMemory();
+        throw outOfMemory(image.data.length, o.precision);
     } finally {
         if (!aborted) {
             if (job) {wasm._clustering_job_free(job);}
@@ -715,7 +728,7 @@ export const getClustering = async (image, options) => {
         return markClustering(clustering);
     }
 
-    return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent)));
+    return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent), o.precision));
 
 };
 
@@ -735,7 +748,7 @@ export const getPalette = async (image, k, options) => {
         return markPalette(palette, colorSpaceName(o.colorSpace));
     }
 
-    return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent)), colorSpaceName(o.colorSpace));
+    return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent), o.precision), colorSpaceName(o.colorSpace));
 
 };
 
@@ -758,6 +771,14 @@ const weightsOf = (wasm, clustering, header, k) => {
     return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.length / 8);
 };
 
+// The functions that report weights (swatches, the error curve) need a clustering from 3.x: 2.x recorded none. The others
+// (palettes and mapping) still read 2.x clusterings.
+const needsWeights = (header) => {
+    if (header.version < 3) {
+        throw fail('unsupported-version', `Unsupported clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
+    }
+};
+
 // A palette with the weight and share of the image of each of its colours, from one cut of one clustering, so the three
 // arrays line up by construction. Weights are pixels: fully transparent pixels count 0 and partly transparent ones in
 // proportion to their opacity, as in clustering. Shares are the weights divided by their total, so they sum to 1.
@@ -766,9 +787,7 @@ export const getSwatchesFromClustering = async (clustering, k, ...extra) => {
     const header = readHeader(clustering);
     k = check(k);
     noOptions('getSwatchesFromClustering', extra);
-    if (header.version < 3) {
-        throw fail('unsupported-version', `Unsupported clustering: format version ${header.version} (agglomerative-clustering ${header.version}.x) has no weights. Cluster the image again.`, 'clustering');
-    }
+    needsWeights(header);
     clustering = held(clustering);
     const wasm = Module || await acquire();
 
@@ -799,9 +818,9 @@ export const getClusteringInfo = async (clustering, ...extra) => {
 
     const header = readHeader(clustering);
     noOptions('getClusteringInfo', extra);
+    needsWeights(header);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
-    const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, transparent: header.transparent === 0 ? false : header.transparent, maxColors: colors, totalWeight: null, mse: null, explained: null};
-    if (header.version < 3) {return info;}
+    const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, transparent: header.transparent === 0 ? false : header.transparent, maxColors: colors, totalWeight: 0, mse: null, explained: null};
 
     const view = new DataView(clustering.buffer, clustering.byteOffset, clustering.byteLength);
     const pixels = 2 ** clustering[7] / (clustering[6] === 1 ? 255 : 1);
@@ -846,7 +865,7 @@ export const quantize = async (image, k, options) => {
         return mapped;
     }
 
-    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)));
+    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent), o.precision));
 
 };
 
@@ -901,7 +920,7 @@ export const quantizeToIndices = async (image, k, options) => {
         return indexed;
     }
 
-    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent)), original, colorSpaceName(o.colorSpace));
+    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.width, o.transparent), o.precision), original, colorSpaceName(o.colorSpace));
 
 };
 
