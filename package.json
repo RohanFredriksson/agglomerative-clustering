@@ -1,6 +1,6 @@
 {
   "name": "agglomerative-clustering",
-  "version": "3.0.0-beta.3",
+  "version": "3.0.0-beta.4",
   "description": "Colour palette extraction and image quantization with exact Ward clustering, in WebAssembly. Cluster an image once, then cut it to a palette of any size.",
   "license": "MIT",
   "author": "Rohan Fredriksson",
