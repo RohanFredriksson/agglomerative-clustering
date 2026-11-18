@@ -26,6 +26,14 @@ export const isCodedError = (value) => value !== null && typeof value === 'objec
 
 export const fail = (code, message, argument) => Object.assign(new Error(message), argument === undefined ? {code} : {code, argument});
 
+// The module's memory is at most 2 GB (MAXIMUM_MEMORY in build:wasm) and its allocator takes a 32-bit signed size, so a
+// buffer of 2 GB or more can never be copied in: _malloc would read its length as negative, or (from 4 GB) wrap it to a
+// small number and hand back a block too short for the copy. Such buffers are rejected before any allocation, and the
+// worker entry rejects them before sending, as the main entry does (from 4 GB a buffer can't even be cloned to send).
+export const maxBytes = 2 ** 31;
+export const sizeText = (bytes) => bytes >= 2 ** 30 ? `${(bytes / 2 ** 30).toFixed(2)} GB` : `${Math.round(bytes / 2 ** 20)} MB`;
+export const tooLarge = (bytes) => fail('out-of-memory', `The input is ${sizeText(bytes)}, more than the WebAssembly module can hold: it has at most 2 GB in all, for the pixels and the work on them, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels of RGBA). Scale the image down for its palette (a few megapixels give as good a one), and map a full-size image in strips with quantizeWithPalette.`);
+
 // Type checks by tag rather than `instanceof`, so values from another realm (an iframe, a vm context, a test sandbox,
 // whose Uint8Array is a different constructor) are recognised. A Node Buffer is a Uint8Array by tag too.
 const tag = (value) => Object.prototype.toString.call(value);

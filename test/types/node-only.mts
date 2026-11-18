@@ -19,7 +19,7 @@ export async function run() {
     const g: RawImage = await f.quantize(4);
     const indexed = await quantizeToIndices(buffer, 8, { transparent: true, signal: new AbortController().signal });
     const info = await getClusteringInfo(await getClustering(bytes));
-    const mse: Float64Array | null = info.mse;
+    const mse: Float64Array = info.mse;
     await init({ wasm: 'clustering.wasm' });
     await init({ wasm: new Uint8Array(8) });
 

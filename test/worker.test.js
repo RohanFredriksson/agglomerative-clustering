@@ -212,6 +212,27 @@ describe('createWorker', () => {
         expect(() => createWorker({ threads: 2 })).toThrow("Invalid option 'threads'");
     });
 
+    it('stops a worker that is still starting once, however many calls wait for it', async () => {
+        // Found by the sixth round (3.0.0-beta.6): each waiting call terminated the started worker again, and in Node more
+        // than ten of them printed a MaxListenersExceededWarning.
+        const warnings = [];
+        const listen = (warning) => warnings.push(warning);
+        process.on('warning', listen);
+        try {
+            const starting = createWorker();
+            const calls = Array.from({ length: 12 }, () => starting.getPalette(image, 4).catch((error) => error.code));
+            const first = starting.terminate();
+            const second = starting.terminate();
+            expect(second).toBe(first);
+            await first;
+            expect(await Promise.all(calls)).toEqual(Array(12).fill('worker-terminated'));
+            await new Promise((done) => setTimeout(done, 50));
+            expect(warnings.filter((warning) => warning.name === 'MaxListenersExceededWarning')).toEqual([]);
+        } finally {
+            process.off('warning', listen);
+        }
+    });
+
     it('rejects calls waiting on a terminated worker, and later calls', async () => {
         const doomed = createWorker();
         await doomed.init();

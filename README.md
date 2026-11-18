@@ -39,7 +39,7 @@ import sharp from 'sharp';
 import { getPalette, quantize } from 'agglomerative-clustering';
 
 const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-const image = { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: info.width };
+const image = { data, format: 'rgba', width: info.width };   // in TypeScript: format: 'rgba' as const
 
 const palette = await getPalette(image, 8);                   // flat bytes: [r, g, b, r, g, b, ...]
 const reduced = await quantize(image, 16, { dither: true });  // the image, in 16 colours
@@ -159,15 +159,15 @@ const clustering = await getClustering(image);
 const eight = await getSwatchesFromClustering(clustering, 8);
 
 // The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
-const { explained } = await getClusteringInfo(clustering);   // null only for a clustering from 2.x
-const k = (explained ?? []).findIndex((share) => share >= 0.99) + 1;
+const { explained } = await getClusteringInfo(clustering);
+const k = explained.findIndex((share) => share >= 0.99) + 1;
 ```
 
 How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (an accent colour, a theme), ask for more, 12 to 16: a small vivid area, such as a red sign in a street scene, only gets a colour of its own once the bigger areas have been split. Each colour is the average of its cluster, so it is a little less saturated than the image's most vivid pixels, and a white background comes back as a near-white such as `[254, 254, 254]` rather than exactly `#ffffff`. On a smooth single-hue photo no colour has a large share (the shares fall as `k` grows), so judge the heaviest swatch against the others, not by a fixed share. See [Picking colours from swatches](#picking-colours-from-swatches).
 
 ### GIFs and palette PNGs
 
-`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`.
+`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`; a colour is always kept besides it, so `k = 1` can give 2 entries.
 
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
@@ -622,7 +622,7 @@ The entry is an ES module, with a CommonJS build for `require()` in Node and in 
 ### TypeScript
 Both entries ship declarations, checked in CI under strict mode with `nodenext` (ES module and CommonJS importers), `bundler`, and a Node-only project without the DOM lib. The worker entry's declarations use `await using` for handles, so they need **TypeScript 5.2 or newer** (or `skipLibCheck: true`); the main entry works on older versions. Both entries have CommonJS declarations too, so a `.cts` file or a CommonJS project imports either.
 
-Results narrow: checking `result.indexBits === 8` makes `indices` a `Uint8Array`, and checking `info.formatVersion === 3` makes `mse`, `explained` and `totalWeight` present. Palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`), and errors are `CodedError`s with `code` and `argument`.
+Results narrow: checking `result.indexBits === 8` makes `indices` a `Uint8Array`. Palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`), and errors are `CodedError`s with `code` and `argument`.
 
 An image object assigned to a variable before it is passed widens `format: 'rgba'` to `string`, which no longer matches `RawImage`: write `format: 'rgba' as const`, or declare the variable as `RawImage`.
 
@@ -663,7 +663,7 @@ What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, m
 - `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
 - `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces.
 
-For a 2.x clustering, `formatVersion` is 2 and `totalWeight`, `mse` and `explained` are `null`; in TypeScript, checking `info.formatVersion === 3` narrows them to present.
+It needs a clustering from 3.x, like `getSwatchesFromClustering`: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` (the palette and mapping functions still read it).
 
 ### `quantize(image, k, options?): Promise<the type of image>`
 Reduces the image to at most `k` colours.
@@ -714,7 +714,7 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 `errorCodes` is a frozen array of every `code` the library's errors have (see [Errors](#errors)). `isCodedError(value)` is true when `value` has a string `message` and one of those codes; in TypeScript it narrows to `CodedError`. Both entries export both.
 
 ### `version: string` and `formatVersion: number`
-`version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: if a stored clustering's `getClusteringInfo(stored).formatVersion` differs, cluster the image again (2.x clusterings still load, but have no weights). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
+`version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
 
 ## Running it
 
@@ -812,7 +812,7 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 
 ### Angular, esbuild, Rollup and other bundlers
 
-The main entry works in all of them, except that an Angular production build needs `init({ wasm })` (below). The worker entry needs its script (`worker-thread.mjs`, which imports the package's other files) next to the rest of `dist/`, and some bundlers emit neither it nor `clustering.wasm`. Then a worker call fails at run time with `worker-failed` or `wasm-load-failed`, often only after deploying, because a dev server serves `node_modules` as it is. Copy the package's `dist/` files out as static assets and say where they are:
+The main entry works in all of them, except that an Angular production build needs `init({ wasm })` (below). The worker entry needs its script (`worker-thread.mjs`, which imports the package's other files) next to the rest of `dist/`, and some bundlers emit neither it nor `clustering.wasm`. Then a worker call fails at run time with `worker-failed` or `wasm-load-failed`, often only after deploying, because a dev server serves `node_modules` as it is. Copy the package's whole `dist/` folder out as static assets and say where it is (copy all of it, not a list of files: which files the worker script imports isn't part of the API, and a minor release may change it):
 
 ```js
 import { createWorker } from 'agglomerative-clustering/worker';
@@ -825,9 +825,9 @@ const worker = createWorker({
 - **Angular** (the default `application` builder): add the files to the app's `angular.json` assets, then use the code above. Production builds don't emit `clustering.wasm` for the main entry either, so in the browser call `init({ wasm: '/assets/agglomerative-clustering/clustering.wasm' })` before the first call (the dev server works without it). With SSR, the server bundle finds the package's files from the directory the server starts in: start it from the project directory, or give the server its own `init({ wasm: path })`. zone.js needs nothing.
 
   ```json
-  "assets": [{ "glob": "{worker-thread.mjs,shared.mjs,index.mjs,clustering.js,clustering.wasm}", "input": "node_modules/agglomerative-clustering/dist", "output": "assets/agglomerative-clustering" }]
+  "assets": [{ "glob": "**/*", "input": "node_modules/agglomerative-clustering/dist", "output": "assets/agglomerative-clustering" }]
   ```
-- **esbuild, Rollup and `bun build`** do not recognise `new Worker(new URL(...))`, so copy the same files into the output and give `script` (and `wasm`). Rollup users can also build `worker-thread.mjs` as a second entry.
+- **esbuild, Rollup and `bun build`** do not recognise `new Worker(new URL(...))`, so copy the whole `dist/` folder into the output and give `script` (and `wasm`). Rollup users can also build `worker-thread.mjs` as a second entry.
 - **Vite, webpack 5 and Rsbuild** find the script themselves. So does **Parcel 2**, once it reads package `exports` (without this it can't resolve `agglomerative-clustering/worker`):
 
   ```json
@@ -873,7 +873,7 @@ Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wa
 - **jsdom and happy-dom** have no `ImageData` (install `canvas`, `@napi-rs/canvas` or `skia-canvas`, or pass `{ data, format: 'rgba', width }`) and no `Worker`: the worker entry then uses a Node worker thread, which is fine for tests. Results come back in the class of the `ImageData` you passed.
 - **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`. It doesn't stop Jest from exiting, but each test file otherwise leaves a worker thread, 15 to 30 MB, in the process until the run ends (or until the garbage collector gets to a dropped `createWorker()`, which may not happen in a test run).
 - **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })` (`isCodedError` accepts them).
-- **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and stay the same within a major version: snapshot them. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
+- **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and within a major version change only for a bug fix that the changelog names: snapshot them, and expect to update a snapshot when such a fix lands. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
 - Fake timers don't affect it. An unawaited call still running at the end holds Jest open until it finishes.
 
 ### Writing a package that wraps it

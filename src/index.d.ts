@@ -250,9 +250,9 @@ interface IndexedImageFields {
     /** The index of the entry for fully transparent pixels, or `null` if there is none. */
     transparentIndex: number | null;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `width`. */
-    width?: number;
+    width?: number | undefined;
     /** Copied from the input, when it is `ImageData` or a `RawImage` with `height`. */
-    height?: number;
+    height?: number | undefined;
 }
 
 /**
@@ -282,10 +282,10 @@ export const version: string;
 /**
  * The version of the data this library stores: the format of the clusterings `getClustering` writes (`getClusteringInfo`
  * reports a clustering's own as its `formatVersion`). One integer for the library's stored data, unrelated to `version`: it
- * changes only when the stored format does, so a new release that keeps the format keeps this number. This build reads
- * this format and the one before it (2).
+ * changes only when the stored format does, so a new release that keeps the format keeps this number, and a minor release
+ * may raise it. Every earlier format from 2 on stays readable (see `getClusteringInfo` for what 2.x clusterings lack).
  */
-export const formatVersion: 3;
+export const formatVersion: number;
 
 /**
  * Loads the WebAssembly module. Every other function does it on first use, so calling `init` is optional, except to
@@ -356,7 +356,13 @@ export function getSwatches(image: ImageLike, k: number, options?: ClusteringOpt
  */
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 
-interface ClusteringInfoFields {
+/** What a clustering holds (`getClusteringInfo`). */
+export interface ClusteringInfo {
+    /**
+     * The format of the clustering's bytes: the data version (compare it with the exported `formatVersion`, the one this
+     * build writes), not the library's `version`. 3 for a clustering from 3.x; a later minor release may write a higher one.
+     */
+    formatVersion: number;
     colorSpace: ColorSpace;
     /** Bits per channel it was clustered with. */
     precision: number;
@@ -367,12 +373,6 @@ interface ClusteringInfoFields {
     transparent: false | number;
     /** The largest palette it can be cut to: its number of distinct clustered colours (fewer than the image's own when `precision` is below 8). */
     maxColors: number;
-}
-
-/** What a 3.x clustering holds. A clustering you just made with `getClustering` is this one: check `formatVersion === 3` to narrow to it. */
-export interface ClusteringInfoV3 extends ClusteringInfoFields {
-    /** The format of the clustering's bytes: the data version (see `formatVersion`, the one this build writes), not the library's `version`. */
-    formatVersion: 3;
     /** Total weight in pixels (opacity-weighted). */
     totalWeight: number;
     /**
@@ -392,19 +392,11 @@ export interface ClusteringInfoV3 extends ClusteringInfoFields {
     explained: Float64Array;
 }
 
-/** What a 2.x clustering holds: no weights, so no error curve. */
-export interface ClusteringInfoV2 extends ClusteringInfoFields {
-    /** The format of the clustering's bytes (see `ClusteringInfoV3.formatVersion`). */
-    formatVersion: 2;
-    totalWeight: null;
-    mse: null;
-    explained: null;
-}
-
-/** What `getClusteringInfo` returns: check `formatVersion` to narrow to the 3.x or 2.x shape. */
-export type ClusteringInfo = ClusteringInfoV3 | ClusteringInfoV2;
-
-/** Reads what a clustering holds, including its error curve for choosing a palette size. */
+/**
+ * Reads what a clustering holds, including its error curve for choosing a palette size. Needs a clustering from 3.x: a 2.x
+ * clustering recorded no weights, so it is rejected with `unsupported-version` (as `getSwatchesFromClustering` rejects it);
+ * the palette and mapping functions still read it.
+ */
 export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 
 /**
@@ -442,6 +434,7 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
+ *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
@@ -450,6 +443,7 @@ export function quantizeToIndices(image: ImageLike, k: number, options?: Quantiz
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
+ *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
  */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 

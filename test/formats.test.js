@@ -64,10 +64,10 @@ describe.each(versions.filter((version) => version >= 2))('format version %i', (
             expect(Array.from((await getClusteringInfo(clustering)).mse)).toEqual(mse);
         });
     } else {
-        it('has no weights or error curve', async () => {
+        it('has no weights or error curve, so the functions that report them reject it', async () => {
             await expect(weightsOf(clustering, 4)).rejects.toThrow('has no weights');
-            const info = await getClusteringInfo(clustering);
-            expect([info.formatVersion, info.totalWeight, info.mse, info.explained]).toEqual([version, null, null, null]);
+            await expect(getClusteringInfo(clustering)).rejects.toMatchObject({ code: 'unsupported-version', argument: 'clustering' });
+            await expect(getClusteringInfo(clustering)).rejects.toThrow('has no weights');
         });
     }
 

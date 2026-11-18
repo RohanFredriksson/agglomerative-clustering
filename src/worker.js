@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels} from './shared.js';
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
@@ -189,6 +189,8 @@ const send = (image) => {
     if (pixels && isDetached(pixels)) {
         throw fail('invalid-argument', "Invalid image: its pixels were transferred away (detached), for example to a worker created with transfer: true, so it has none left. Pass a copy if you need to keep using it.", 'image');
     }
+    // Too large for the module, as the main entry reports it, before a copy is made to send (or, from 4 GB, fails to be).
+    if (pixels && pixels.byteLength >= maxBytes) {throw tooLarge(pixels.byteLength);}
     if (isImageData(image)) {
         checkImageDataPixels(image);
         const data = image.data;
@@ -425,7 +427,8 @@ const makeWorker = (options, allowScript) => {
             }
             const waitingFor = startingGeneration;
             const started = await starting;
-            if (terminated) {started.terminate(); throw fail('worker-terminated', "Worker terminated.");}
+            // terminate() stops the worker that was starting itself, once (not once per call that waited for it).
+            if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
             // The worker may have failed in the instant between starting and being adopted; it has been dropped then.
             if (waitingFor !== generation) {throw fail('worker-failed', 'Worker failed while starting.');}
             connection = connection || started;
@@ -596,15 +599,16 @@ const makeWorker = (options, allowScript) => {
         })();
     };
 
-    // Stops the worker. Calls still waiting are rejected, and later calls fail.
-    const stop = async () => {
-        if (terminated) {return;}
+    // Stops the worker. Calls still waiting are rejected, and later calls fail. Every call of it returns the same promise,
+    // so a second terminate() made while the first is running also waits until the thread has gone.
+    let stopping = null;
+    const stop = () => stopping = stopping || (async () => {
         terminated = true;
         for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-terminated', "Worker terminated."));}
         pending.clear();
         if (connection) {await connection.terminate();}
         else if (starting) {try {(await starting).terminate();} catch (ignored) {/* it never started */}}
-    };
+    })();
     // An abandoned worker is stopped once nothing can use it any more (see `abandoned`).
     const stopIfAbandoned = () => {
         if (abandoned && active === 0 && liveHandles === 0 && !terminated) {stop().catch(() => {});}
