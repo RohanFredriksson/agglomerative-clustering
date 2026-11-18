@@ -40,6 +40,14 @@ export const isDetached = (view) => {
     try {new Uint8Array(buffer, 0, 0); return false;} catch (error) {return true;}
 };
 
+// An ImageData: checked by tag as well as `instanceof`, so one from another realm (an iframe's canvas) is recognised, and by
+// its class's name with the shape of one, for implementations that have neither the tag nor the global (node-canvas under
+// jsdom, skia-canvas, whose tag is plain [object Object]).
+export const isImageData = (value) => typeof value === 'object' && value !== null
+    && ((typeof ImageData !== 'undefined' && value instanceof ImageData) || tag(value) === '[object ImageData]'
+        || (typeof value.constructor === 'function' && value.constructor.name === 'ImageData'
+            && isUint8ClampedArray(value.data) && Number.isInteger(value.width) && Number.isInteger(value.height)));
+
 // An ImageData like `like`, with these pixels: made with `like`'s own class where it has one, so an ImageData from another
 // implementation (node-canvas, in Node or under jsdom) comes back as one that implementation accepts, and where there is
 // no global ImageData at all. The colour space is kept ('display-p3' canvases), since the pixels are still in it.

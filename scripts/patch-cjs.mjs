@@ -12,3 +12,21 @@ if (found.length !== 1) {
     throw new Error(`patch-cjs: expected exactly one require of ./clustering.js in dist/index.cjs, found ${found.length}.`);
 }
 writeFileSync(file, source.replace(pattern, '(() => {\n  try {\n    return require("./clustering.js");\n  } catch (error) {\n    // A module system that can\'t require() an ES module (Jest): the CommonJS copy of the glue.\n    return require("./clustering.cjs");\n  }\n})()'));
+
+// The worker entry's CommonJS build, dist/worker.cjs, for require() in Node and in Jest's default CommonJS mode (which can't
+// load an ES module at all). It finds its worker script (worker-thread.mjs, an ES module that Node runs itself, outside
+// Jest's module system) from its own location, as import.meta.url would give it: __filename, in Node. Elsewhere (a browser
+// bundle that require()s it) it has none, and says to import the ES module or pass createWorker({ script }).
+const workerFile = new URL('../dist/worker.cjs', import.meta.url);
+let worker = readFileSync(workerFile, 'utf8');
+const metaUrl = /import\.meta\.url/g;
+if ((worker.match(metaUrl) || []).length < 2) {
+    throw new Error('patch-cjs: expected import.meta.url in dist/worker.cjs (the worker entry finds its script from it).');
+}
+worker = worker.replace(metaUrl, '__agglomerativeWorkerUrl');
+if (/\bimport\.meta\b|\bimport\s*\(/.test(worker)) {
+    throw new Error('patch-cjs: ES module syntax is left in dist/worker.cjs.');
+}
+const prefix = 'var __agglomerativeWorkerUrl = typeof __filename == "string" && globalThis.process && typeof globalThis.process.getBuiltinModule == "function" ? globalThis.process.getBuiltinModule("node:url").pathToFileURL(__filename).href : "";\n';
+worker = worker.startsWith('"use strict";') ? worker.replace('"use strict";', `"use strict";\n${prefix}`) : `${prefix}${worker}`;
+writeFileSync(workerFile, worker);

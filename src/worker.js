@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike} from './shared.js';
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
@@ -66,6 +66,11 @@ const isCrossOrigin = (url) => {
     } catch (error) {return false;}
 };
 
+// Whether the page (or worker) has an opaque origin: a sandboxed iframe without allow-same-origin, or a data: page.
+const isOpaqueOrigin = () => {
+    try {return typeof location !== 'undefined' && location.origin === 'null';} catch (error) {return false;}
+};
+
 // The page's (or worker's) base URL, to resolve relative URLs given in options against: the page, as fetch would, not the
 // worker script's folder, where the worker would otherwise resolve them.
 const pageBase = () => {
@@ -79,7 +84,7 @@ const pageBase = () => {
 // Why the worker can't start where there is no Worker, by what the runtime is.
 const noWorker = () => {
     if (!scriptUrl) {
-        return "the worker entry can't find its worker script: import.meta.url is not available, so it was bundled into CommonJS or a classic script. Keep it an ES module, or say where the script is with createWorker({ script }) (a copy of the package's dist/worker-thread.mjs, served next to the rest of dist/).";
+        return "the worker entry can't find its worker script: it doesn't know its own URL, so it was bundled into CommonJS or a classic script, or loaded with require() (which gives the CommonJS build, made for Node and Jest). Import it as an ES module, or say where the script is with createWorker({ script }) (a copy of the package's dist/worker-thread.mjs, served next to the rest of dist/).";
     }
     if (typeof ServiceWorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof ServiceWorkerGlobalScope) {
         return "this runtime has no Worker: a service worker (a browser extension's background script, for one) can't start threads. Use the main entry, 'agglomerative-clustering', there; it runs off the page's main thread already.";
@@ -97,24 +102,36 @@ const start = async (receive, chosen) => {
         const here = scriptUrl;
         const script = chosen ? new URL(chosen, pageBase()) : new URL('./worker-thread.mjs', here);
         const crossOrigin = isCrossOrigin(script);
+        // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
+        // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
+        const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
         let worker, source = null;
-        if (chosen && !crossOrigin) {
-            worker = new Worker(script, {type: 'module'});
-        } else if (crossOrigin) {
-            // A page can't start a worker from another origin's script, but a worker of its own can import one: a one-line
-            // module from a blob URL, which imports the script by its full URL (CDNs send the CORS headers that needs). A
-            // Content-Security-Policy then needs `worker-src blob:`.
-            source = URL.createObjectURL(new Blob([`import ${JSON.stringify(script.href)};`], {type: 'text/javascript'}));
-            worker = new Worker(source, {type: 'module'});
-            setTimeout(() => URL.revokeObjectURL(source), 60000);
-        } else {
-            // Written out in full so bundlers (Vite, webpack 5, Parcel) find and bundle the worker script.
-            worker = new Worker(new URL('./worker-thread.mjs', import.meta.url), {type: 'module'});
+        try {
+            if (opaque) {
+                worker = new Worker(`data:text/javascript,${encodeURIComponent(`import ${JSON.stringify(script.href)};`)}`, {type: 'module'});
+            } else if (chosen && !crossOrigin) {
+                worker = new Worker(script, {type: 'module'});
+            } else if (crossOrigin) {
+                // A page can't start a worker from another origin's script, but a worker of its own can import one: a one-line
+                // module from a blob URL, which imports the script by its full URL (CDNs send the CORS headers that needs). A
+                // Content-Security-Policy then needs `worker-src blob:` and the script's origin.
+                source = URL.createObjectURL(new Blob([`import ${JSON.stringify(script.href)};`], {type: 'text/javascript'}));
+                worker = new Worker(source, {type: 'module'});
+                setTimeout(() => URL.revokeObjectURL(source), 60000);
+            } else {
+                // Written out in full so bundlers (Vite, webpack 5, Parcel) find and bundle the worker script.
+                worker = new Worker(new URL('./worker-thread.mjs', import.meta.url), {type: 'module'});
+            }
+        } catch (error) {
+            throw Object.assign(fail('worker-failed', `Worker failed: ${error && error.message} ${scriptHint}`), {cause: error});
         }
         worker.addEventListener('message', (event) => receive(event.data));
-        worker.addEventListener('error', (event) => receive({failure: event.message || (crossOrigin
-            ? `The worker failed to start: its script comes from another origin (${script.origin}), so it was started through a blob: URL, which also failed. Check that the server sends CORS headers and that a Content-Security-Policy allows worker-src blob:.`
-            : 'The worker failed to start: check that its script (worker-thread) is served next to the package, or emitted by your bundler, and that a Content-Security-Policy allows it as a worker.')}));
+        worker.addEventListener('error', (event) => receive({failure: event.message ? `${event.message} ${scriptHint}` : crossOrigin
+            ? `The worker failed to start: its script comes from another origin (${script.origin}), so it was started through a blob: URL, which also failed. Check that the server sends CORS headers, and that a Content-Security-Policy allows the worker: worker-src needs both blob: and ${script.origin} (the blob: worker imports the script from there). Or serve a copy of dist/ from this origin and say where with createWorker({ script }) or init({ script }).`
+            : opaque
+                ? `The worker failed to start from this page, whose origin is opaque (a sandboxed iframe): it was started from a data: URL importing ${script.href}, which needs CORS headers on that script and on what it imports. Or bundle worker-thread.mjs and its imports into one file, and pass it as a data: URL with createWorker({ script }).`
+                : `The worker failed to start${chosen ? ` from ${script.href}` : ''}. ${scriptHint} A Content-Security-Policy must also allow it as a worker (worker-src).`}));
         return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => {}, unref: () => {}};
     }
     // The specifier is built at run time so no bundler tries to resolve it (esbuild ignores comment hints on a literal).
@@ -122,17 +139,18 @@ const start = async (receive, chosen) => {
     // The worker script needs none of the parent's flags, and some (like --input-type) are invalid in a worker.
     const worker = new NodeWorker(await nodeWorkerScript(chosen), {execArgv: []});
     worker.on('message', receive);
-    worker.on('error', (error) => receive({failure: error.message}));
+    // A worker script that can't be found, or that can't find what it imports: a copy of dist/ split up or bundled away.
+    const missing = (error) => error && (error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find module|import\.meta' outside a module/.test(String(error.message)));
+    worker.on('error', (error) => receive({failure: missing(error)
+        ? `${error.message}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL).`
+        : error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
     return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => worker.ref(), unref: () => worker.unref()};
 };
 
-// Checked by tag as well as `instanceof`, so an ImageData from another realm (an iframe's canvas) or a module compiled by a
-// bundler's runtime is recognised (see index.js).
+// Checked by tag as well as `instanceof`, so a module compiled by a bundler's runtime is recognised (see index.js).
 const tagOf = (value) => Object.prototype.toString.call(value);
-const isImageData = (value) => typeof value === 'object' && value !== null
-    && ((typeof ImageData !== 'undefined' && value instanceof ImageData) || tagOf(value) === '[object ImageData]');
 const isWasmModule = (value) => typeof value === 'object' && value !== null
     && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
 

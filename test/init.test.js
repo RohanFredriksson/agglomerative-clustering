@@ -54,6 +54,28 @@ describe('init({ wasm })', () => {
         expect(await ac.getPalette(image, 6)).toEqual(expected);
     });
 
+    // Found by the fourth round (3.0.0-beta.4): a 404 page served as the .wasm read as a bare compile error.
+    it('says when the file at a location is not WebAssembly (an error page in its place), and names it', async () => {
+        const { mkdtempSync, writeFileSync, rmSync } = await import('fs');
+        const { tmpdir } = await import('os');
+        const folder = mkdtempSync(resolve(tmpdir(), 'ac-page-'));
+        try {
+            const page = resolve(folder, 'clustering.wasm');
+            writeFileSync(page, '<!doctype html><title>404 Not Found</title>');
+            for (const worker of [false, true]) {
+                const target = worker ? createWorker() : await fresh();
+                const error = await target.init({ wasm: page }).catch((e) => e);
+                if (worker) {await target.terminate();}
+                expect(error.code).toBe('wasm-load-failed');
+                expect(error.message).toContain('is not WebAssembly');
+                expect(error.message).toContain('error page');
+                expect(error.message).toContain(page);
+            }
+        } finally {
+            rmSync(folder, { recursive: true, force: true });
+        }
+    });
+
     // A valid module that isn't this library's once threw inside the glue, where nothing caught it: the load never settled
     // and Node reported an unhandled rejection.
     it.each([

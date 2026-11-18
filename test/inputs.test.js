@@ -243,6 +243,28 @@ describe('ImageData from another implementation', () => {
         }
     });
 
+    // Found by the fourth round (3.0.0-beta.4): skia-canvas's ImageData has no tag (it reads [object Object]) and isn't the
+    // global class, so only its class name and shape say what it is.
+    it('recognises an ImageData by its class name and shape, without the tag', async () => {
+        class ImageData {
+            constructor(data, width, height) {Object.assign(this, { data, width, height });}
+        }
+        const input = new ImageData(new Uint8ClampedArray(4 * 16).map((_, i) => (i * 53) & 255), 4, 4);
+        expect(Object.prototype.toString.call(input)).toBe('[object Object]');
+        expect(await ac.getPalette(input, 3)).toEqual(await ac.getPalette({ data: input.data, format: 'rgba' }, 3));
+        expect(await ac.quantize(input, 3)).toBeInstanceOf(ImageData);
+        const worker = createWorker();
+        try {
+            expect(await worker.quantize(input, 3)).toBeInstanceOf(ImageData);
+        } finally {
+            await worker.terminate();
+        }
+        // Not just any object of that name: it must have an ImageData's shape.
+        class Other {constructor() {this.data = new Uint8Array(4); this.width = 1; this.height = 1;}}
+        Object.defineProperty(Other, 'name', { value: 'ImageData' });
+        await expect(ac.getPalette(new Other(), 1)).rejects.toMatchObject({ code: 'invalid-argument' });
+    });
+
 });
 
 describe('messages', () => {
