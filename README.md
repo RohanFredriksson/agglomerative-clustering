@@ -475,14 +475,18 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped or failed to start, or a handle was released. |
 
 ```js
+import { getPaletteFromClustering, isCodedError } from 'agglomerative-clustering';
+
 try {
   await getPaletteFromClustering(stored, 16);
 } catch (error) {
-  const code = error instanceof Error && 'code' in error ? error.code : undefined;   // also compiles in strict TypeScript
-  if (code === 'unsupported-version' || code === 'invalid-clustering') { /* cluster the image again */ }
+  // isCodedError narrows the type in TypeScript, and is false for errors that aren't the library's (Node's ENOENT, an abort)
+  if (isCodedError(error) && (error.code === 'unsupported-version' || error.code === 'invalid-clustering')) { /* cluster the image again */ }
   else { throw error; }
 }
 ```
+
+`errorCodes` lists every code, for code that forwards them (a wrapper package re-exporting them, a bridge between processes). `isCodedError` also accepts a plain object with a known `code` and a `message`, which is what an error becomes after Electron's IPC or a `postMessage`.
 
 Messages are for people and may change. The worker entry fails the same way as the main entry, with your call's stack (the worker's is on `cause`). A failure that isn't the library's own, such as a WebAssembly trap, has no `code`.
 
@@ -586,6 +590,9 @@ Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signa
 
 ### `init(options?): Promise<void>`
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a failed load can be retried. To say where the module is, see [Loading the WebAssembly module](#loading-the-webassembly-module).
+
+### `errorCodes: readonly string[]` and `isCodedError(value): boolean`
+`errorCodes` is a frozen array of every `code` the library's errors have (see [Errors](#errors)). `isCodedError(value)` is true when `value` has a string `message` and one of those codes; in TypeScript it narrows to `CodedError`. Both entries export both.
 
 ### `version: string` and `formatVersion: number`
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: if a stored clustering's `getClusteringInfo(stored).formatVersion` differs, cluster the image again (2.x clusterings still load, but have no weights). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
@@ -697,7 +704,7 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
 - **Keep the package external in a bundled main process** (electron-vite does by default; with webpack or esbuild mark it external). A bundle that inlines it finds the `.wasm` and worker script only when the app starts from the project directory, which a packaged app doesn't. If you must bundle it, pass `init({ wasm })` for the main entry and `createWorker({ script })` for the worker.
 - **`nodeIntegrationInWorker: true`** is supported: the worker script talks through `self` there.
 
-Errors lose their `code` and `argument` crossing Electron's IPC (only the message survives), so send `error.code` yourself. `nativeImage` gives BGRA pixels: swap the channels to RGBA first.
+Errors lose their `code` and `argument` crossing Electron's IPC (only the message survives), so send `{ message, code, argument }` yourself; `isCodedError` accepts that object on the other side. `nativeImage` gives BGRA pixels: swap the channels to RGBA first.
 
 ### Browser extensions
 
@@ -714,13 +721,13 @@ The main entry runs in every extension context: a Manifest V3 service worker, an
 - **Jest** works in its default CommonJS mode, in the node and jsdom environments, without transforms or `--experimental-vm-modules` (the package falls back to a CommonJS build of its glue where `require()` of an ES module fails).
 - **jsdom and happy-dom** have no `ImageData` (install `canvas`, or pass `{ data, format: 'rgba', width }`) and no `Worker`: the worker entry then uses a Node worker thread, which is fine for tests. Results come back in the class of the `ImageData` you passed.
 - **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`: each Jest test file otherwise leaves a worker thread, about 30 MB, in the process.
-- **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })`.
+- **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })` (`isCodedError` accepts them).
 - **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and stay the same within a major version: snapshot them. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
 - Fake timers don't affect it. An unawaited call still running at the end holds Jest open until it finishes.
 
 ### Writing a package that wraps it
 
-Make `agglomerative-clustering` a **`peerDependency`** and keep it **external** in your build (tsup `external`, Rollup `external`): the app's bundler then finds the worker script and `.wasm` once, with one copy in the output. Bundling it into your package leaves `./worker-thread.mjs` unresolved. Re-export the types you need (`CodedError`, `ErrorCode`, `ClusteringOptions`, …), check `version` against your supported range at run time, and let your users pass `wasm` and `script` through. Importing it on the server (SSR) doesn't run anything: only calls load the module.
+Make `agglomerative-clustering` a **`peerDependency`** and keep it **external** in your build (tsup `external`, Rollup `external`): the app's bundler then finds the worker script and `.wasm` once, with one copy in the output. Bundling it into your package leaves `./worker-thread.mjs` unresolved. Re-export `errorCodes`, `isCodedError` and the types you need (`CodedError`, `ErrorCode`, `ClusteringOptions`, …), check `version` against your supported range at run time, and let your users pass `wasm` and `script` through. Importing it on the server (SSR) doesn't run anything: only calls load the module.
 
 ### Performance and limits
 
