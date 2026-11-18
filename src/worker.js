@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData} from './shared.js';
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
@@ -140,9 +140,13 @@ const start = async (receive, chosen) => {
     const worker = new NodeWorker(await nodeWorkerScript(chosen), {execArgv: []});
     worker.on('message', receive);
     // A worker script that can't be found, or that can't find what it imports: a copy of dist/ split up or bundled away.
-    const missing = (error) => error && (error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find module|import\.meta' outside a module/.test(String(error.message)));
+    const missing = (error) => error && (error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find module|import\.meta' outside a module|Qualified path resolution failed/.test(String(error.message)));
+    // Yarn Plug'n'Play keeps packages in zip archives, which Node reads ES modules from only through Yarn's loader.
+    const inZip = (error) => /\.zip[\\/]/.test(String(error && error.message));
     worker.on('error', (error) => receive({failure: missing(error)
-        ? `${error.message}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL).`
+        ? inZip(error)
+            ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).`
+            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
         : error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
@@ -186,6 +190,7 @@ const send = (image) => {
         throw fail('invalid-argument', "Invalid image: its pixels were transferred away (detached), for example to a worker created with transfer: true, so it has none left. Pass a copy if you need to keep using it.", 'image');
     }
     if (isImageData(image)) {
+        checkImageDataPixels(image);
         const data = image.data;
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
     }
@@ -300,6 +305,9 @@ const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWit
 const mappingOnlyFunctions = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
+// Calls each worker's `abandon` once the worker made by createWorker() has been garbage-collected (see `abandoned`).
+const abandonment = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry((abandon) => abandon()) : null;
+
 // `allowScript`: whether init takes `script` (the shared worker's; createWorker takes it as an option instead).
 const makeWorker = (options, allowScript) => {
 
@@ -324,6 +332,13 @@ const makeWorker = (options, allowScript) => {
     let generation = 0;
     let startingGeneration = 0;
     let terminated = false;
+    // A worker created with createWorker() and then dropped without terminate() would keep its thread (and its memory) until
+    // the process or page ends: a running worker is never garbage-collected. So once the instance itself has been collected
+    // (`abandoned`), no call is in flight (`active`) and no handle is left (`liveHandles`), the thread is stopped. Nothing
+    // the worker's own listeners reach refers to `instance`, which is what lets it be collected while the thread runs.
+    let active = 0;
+    let liveHandles = 0;
+    let abandoned = false;
     let nextId = 1;
     let nextHandle = 1;
     const pending = new Map();
@@ -343,7 +358,12 @@ const makeWorker = (options, allowScript) => {
     // Safety net for handles dropped without release(): when a handle is garbage-collected, the worker frees what it
     // kept for it. Best-effort, since collection time is up to the engine; release() or `await using` is the contract.
     const reclaim = typeof FinalizationRegistry === 'function'
-        ? new FinalizationRegistry((id) => {if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}})
+        ? new FinalizationRegistry((id) => {
+            liveHandles--;
+            // The last thing keeping an abandoned worker going: stopping it frees everything, so there is nothing to release.
+            if (abandoned && liveHandles === 0) {stopIfAbandoned(); return;}
+            if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
+        })
         : null;
 
     // A worker that failed (could not start, crashed or exited) is dropped: the calls waiting on it get the failure, and
@@ -390,7 +410,7 @@ const makeWorker = (options, allowScript) => {
 
     // `origin` is an Error made in the caller's own (non-async) function, for the stack of a failure: async helpers
     // from transpiled code would otherwise fill the stack's frame limit before the caller shows up.
-    const invoke = async (method, args, transferable, origin, controls = {}) => {
+    const run = async (method, args, transferable, origin, controls = {}) => {
         if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
         if (!connection) {
             if (!starting) {
@@ -415,6 +435,14 @@ const makeWorker = (options, allowScript) => {
             await initialising;
         }
         return post(method, args, transferable, origin, controls);
+    };
+
+    // Every call counts as in flight from the moment it is made (while the worker starts, too) until it settles, so an
+    // abandoned worker is never stopped under a call: `createWorker().getPalette(image)` keeps only the promise.
+    const invoke = (...args) => {
+        active++;
+        const settled = () => {active--; stopIfAbandoned();};
+        return run(...args).then((value) => {settled(); return value;}, (error) => {settled(); throw error;});
     };
 
     const post = (method, args, transferable, origin, {signal, onProgress} = {}) => {
@@ -509,9 +537,13 @@ const makeWorker = (options, allowScript) => {
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = ready() ? send(image) : take(send(image));
+            // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
+            // existing (see `abandoned`).
+            liveHandles++;
             try {
                 await invoke('cluster', [id, sent, options], pixelBuffers(sent), origin, {signal, onProgress});
             } catch (error) {
+                liveHandles--;
                 // A cancelled call is rejected at once, but the worker may have finished it just before it heard: it
                 // would then keep the image and clustering with nobody able to release them. Releasing an unknown handle
                 // is harmless, and this message follows the cluster call in the worker's queue.
@@ -549,10 +581,12 @@ const makeWorker = (options, allowScript) => {
                 release: async () => {
                     if (released) {return;}
                     released = true;
+                    liveHandles--;
                     if (reclaim) {reclaim.unregister(handle);}
                     // If the worker has been terminated there is nothing left to free (so `await using` and
                     // terminate() can come in either order); any other failure is reported.
                     try {await invoke('release', [id], [], new Error());} catch (error) {if (error.code !== 'worker-terminated') {throw error;}}
+                    stopIfAbandoned();
                 },
             };
             // `await using handle = await worker.cluster(image)` releases it at the end of the block.
@@ -563,7 +597,7 @@ const makeWorker = (options, allowScript) => {
     };
 
     // Stops the worker. Calls still waiting are rejected, and later calls fail.
-    instance.terminate = async () => {
+    const stop = async () => {
         if (terminated) {return;}
         terminated = true;
         for (const call of pending.values()) {call.cleanup(); call.reject(fail('worker-terminated', "Worker terminated."));}
@@ -571,6 +605,14 @@ const makeWorker = (options, allowScript) => {
         if (connection) {await connection.terminate();}
         else if (starting) {try {(await starting).terminate();} catch (ignored) {/* it never started */}}
     };
+    // An abandoned worker is stopped once nothing can use it any more (see `abandoned`).
+    const stopIfAbandoned = () => {
+        if (abandoned && active === 0 && liveHandles === 0 && !terminated) {stop().catch(() => {});}
+    };
+    instance.terminate = stop;
+    // `await using worker = createWorker()` terminates it at the end of the block.
+    if (typeof Symbol.asyncDispose === 'symbol') {instance[Symbol.asyncDispose] = stop;}
+    if (allowScript === false && abandonment) {abandonment.register(instance, () => {abandoned = true; stopIfAbandoned();});}
 
     return instance;
 

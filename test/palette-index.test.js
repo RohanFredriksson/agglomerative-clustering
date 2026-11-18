@@ -35,4 +35,26 @@ describe('mapping to palettes of every size', () => {
         expect(wrong).toBe(0);
     });
 
+
+    it('maps to a palette of many repeated colours quickly, to the first of each', async () => {
+        // A supplied (perhaps untrusted) palette of one colour repeated 200,000 times, then two others: before the index was
+        // built over distinct colours, each lookup scanned the repeats, and this took seconds per thousand pixels.
+        const size = 200002;
+        const palette = new Uint8Array(3 * size);
+        for (let i = 0; i < size; i++) {palette.set([10, 20, 30], 3 * i);}
+        palette.set([250, 10, 10], 3 * 1000);
+        palette.set([10, 10, 250], 3 * (size - 1));
+        const image = bytes(4 * 50000);
+        const started = performance.now();
+        const { indices, palette: entries } = await quantizeToIndicesWithPalette(image, palette);
+        expect(performance.now() - started).toBeLessThan(5000);
+        for (const index of new Set(indices)) {expect([0, 1000, size - 1]).toContain(index);}
+        for (let p = 0; p < 200; p++) {
+            const expected = bruteForce(palette, image[4 * p], image[4 * p + 1], image[4 * p + 2]);
+            expect(indices[p]).toBe(expected);
+        }
+        expect(entries.length).toBe(3 * size);
+    });
+
 });
+
