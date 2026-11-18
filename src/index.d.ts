@@ -131,7 +131,7 @@ export type ColorSpace = 'rgb' | 'oklab';
 /** How pixel opacity affects clustering. */
 export type AlphaMode = 'weight' | 'ignore';
 
-/** Cancelling a call. Every function that takes an image has it; see `RunOptions.signal`. */
+/** Cancelling a call. Every function that takes an image has it. */
 export interface CancelOptions {
     /**
      * Cancels the call. A call given a `signal` clusters (where it clusters) in slices of about 10 ms and checks the
@@ -146,8 +146,8 @@ export interface CancelOptions {
     signal?: AbortSignal | undefined;
 }
 
-/** Cancelling a long call and watching it, for the functions that cluster. Both are optional and can be used apart. */
-export interface RunOptions extends CancelOptions {
+/** Cancelling a long call and watching its progress, for the functions that cluster. Both are optional and can be used apart. */
+export interface ProgressOptions extends CancelOptions {
     /**
      * Called with the fraction done, from 0 to 1, as the call runs: a few times per slice at most, never going
      * backwards, ending with 1. It is approximate and not linear in time. Giving it also makes the call run in
@@ -157,7 +157,7 @@ export interface RunOptions extends CancelOptions {
 }
 
 /** Options for building the colour hierarchy: `getClustering`, `getPalette`, and the clustering half of `quantize` and `quantizeToIndices`. */
-export interface ClusteringOptions extends RunOptions {
+export interface ClusteringOptions extends ProgressOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
      * `'oklab'` clusters in OKLab. Neither is better everywhere: see "Choosing a colour space" in docs/api.md.

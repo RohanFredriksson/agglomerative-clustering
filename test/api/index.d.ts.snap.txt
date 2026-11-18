@@ -46,10 +46,10 @@ export type AlphaMode = 'weight' | 'ignore';
 export interface CancelOptions {
     signal?: AbortSignal | undefined;
 }
-export interface RunOptions extends CancelOptions {
+export interface ProgressOptions extends CancelOptions {
     onProgress?: ((progress: number) => void) | undefined;
 }
-export interface ClusteringOptions extends RunOptions {
+export interface ClusteringOptions extends ProgressOptions {
     colorSpace?: ColorSpace | undefined;
     precision?: number | undefined;
     alpha?: AlphaMode | undefined;

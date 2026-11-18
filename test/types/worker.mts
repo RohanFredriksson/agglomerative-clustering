@@ -1,7 +1,7 @@
 // See main.mts.
 import { createWorker, init, getPalette, quantize, quantizeToIndices, terminate } from 'agglomerative-clustering/worker';
 import { Palette, Clustering } from 'agglomerative-clustering/worker';
-import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, RunOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
+import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, ProgressOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
 
 declare const imageData: ImageData;
 declare const bytes: Uint8Array;
@@ -39,7 +39,7 @@ async function main() {
     await init();
     const code: ErrorCode = 'worker-terminated';
     const e = null as unknown as CodedError;
-    const run: RunOptions = {};
+    const run: ProgressOptions = {};
     const o: InitOptions = {};
     const like: ImageLike = bytes;
     void [stored, new Palette(bytes, 'oklab'), q, palette, mse, indexed, x, y, z, p, code, e, run, o, like];

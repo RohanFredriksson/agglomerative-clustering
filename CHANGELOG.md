@@ -5,6 +5,7 @@
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below). Palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options, with one exception: `quantizeWithPalette` with a palette made in OKLab now matches in OKLab (below; pass `colorSpace: 'rgb'` for the 2.x result). The golden tests pin this, and 2.0 clusterings still load and cut to the same palettes. New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
 ### Since 3.0.0-beta.7
+- **Renamed: the `RunOptions` type is now `ProgressOptions`** (`signal` and `onProgress`, for the functions that cluster), from a review of every exported name before 3.0.0, which kept the function names. Only TypeScript code that imports the type by name changes.
 - **The README is a short landing page,** and the rest of the documentation moved into `docs/`: `guides.md` (recipes by task), `api.md` (input, options, errors, the worker entry, TypeScript and every function), `environments.md` (runtimes, frameworks, bundlers and testing), `performance.md` and `troubleshooting.md`. Nothing was dropped; repeated caveats were merged. The two error messages that pointed at the README for Cloudflare Workers and Next.js now link `docs/environments.md`.
 
 ### Since 3.0.0-beta.6
