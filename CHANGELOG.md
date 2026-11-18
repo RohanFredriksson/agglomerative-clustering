@@ -4,6 +4,9 @@
 
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below). Palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options, with one exception: `quantizeWithPalette` with a palette made in OKLab now matches in OKLab (below; pass `colorSpace: 'rgb'` for the 2.x result). The golden tests pin this, and 2.0 clusterings still load and cut to the same palettes. New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).
 
+### Since 3.0.0-beta.7
+- **The README is a short landing page,** and the rest of the documentation moved into `docs/`: `guides.md` (recipes by task), `api.md` (input, options, errors, the worker entry, TypeScript and every function), `environments.md` (runtimes, frameworks, bundlers and testing), `performance.md` and `troubleshooting.md`. Nothing was dropped; repeated caveats were merged. The two error messages that pointed at the README for Cloudflare Workers and Next.js now link `docs/environments.md`.
+
 ### Since 3.0.0-beta.6
 From a sixth round of exploratory testing (the worker lifecycle under random interleavings in Node and Chromium, a review of the API against what can't change after 3.0.0, a first-time user of the published package in Node, Vite and Next.js, and limits and error paths). No blockers; these are the last API changes before 3.0.0.
 - **Changed: `getClusteringInfo` needs a 3.x clustering**, like `getSwatchesFromClustering`: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` instead of returning `null` weights and error curve. `ClusteringInfo` is one interface again (`ClusteringInfoV2` and `ClusteringInfoV3` are gone), with `mse`, `explained` and `totalWeight` always present, so nothing needs narrowing. The palette and mapping functions still read 2.x clusterings.

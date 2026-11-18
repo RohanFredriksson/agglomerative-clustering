@@ -87,7 +87,7 @@ const wasmLoadFailed = (cause, given) => {
     let advice;
     if (/disallowed by embedder|code generation disallowed/i.test(text) && !isNodeLike && !isBrowserLike()) {
         // Edge runtimes (Cloudflare Workers, Vercel's edge runtime) compile WebAssembly only at build time, from an import.
-        advice = "This runtime doesn't compile WebAssembly while it runs, from bytes or from a URL (edge runtimes such as Cloudflare Workers and Vercel's): import clustering.wasm as a module, which the bundler compiles when it builds (in Wrangler a plain import of 'agglomerative-clustering/clustering.wasm'; in Next.js a relative path with ?module), and pass it to init({ wasm }) before the first call, as the README shows for Cloudflare Workers and Next.js.";
+        advice = "This runtime doesn't compile WebAssembly while it runs, from bytes or from a URL (edge runtimes such as Cloudflare Workers and Vercel's): import clustering.wasm as a module, which the bundler compiles when it builds (in Wrangler a plain import of 'agglomerative-clustering/clustering.wasm'; in Next.js a relative path with ?module), and pass it to init({ wasm }) before the first call, as the docs show for Cloudflare Workers and Next.js (https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
     } else if (/(memory|allocate)/i.test(text) && /(could not|cannot|can't|failed to|out of) (allocate|memory|reserve)/i.test(text)) {
         // A 64-bit engine reserves the module's whole address range up front (about 10 GB of virtual memory per instance),
         // though it only uses what it needs; an address-space limit refuses that reservation.
@@ -135,7 +135,7 @@ const wasmLoadFailed = (cause, given) => {
     } else if (!isBrowserLike()) {
         // A server runtime that isn't Node (an edge runtime, Deno Deploy): it has no page, so a CSP or a 404 page are unlikely.
         if (/Invalid URL/i.test(reason)) {reason = "the package can't tell where clustering.wasm is in this runtime";}
-        advice = "Give the module to init({ wasm }) before the first call: in an edge runtime (Cloudflare Workers, Vercel's), import clustering.wasm as a compiled module (the README shows how for Cloudflare Workers and Next.js); elsewhere its bytes or URL.";
+        advice = "Give the module to init({ wasm }) before the first call: in an edge runtime (Cloudflare Workers, Vercel's), import clustering.wasm as a compiled module (the docs show how for Cloudflare Workers and Next.js: https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md); elsewhere its bytes or URL.";
     } else {
         advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
     }

@@ -2,9 +2,10 @@
 // of the places it lives fails HERE instead of reaching users:
 //   - the declarations (dist/*.d.ts) are snapshotted without comments, so any signature change shows up as a diff in
 //     review. After a deliberate change, update the snapshots with:  npx vitest run test/api.test.js -u
-//   - the option properties the types declare, the option keys the runtime enforces and the README's options table agree
+//   - the option properties the types declare, the option keys the runtime enforces and the options table in docs/api.md agree
 //   - the worker entry mirrors the main entry, its call routing works for every function, and handles match their types
-//   - the README documents every function and error code, and every exported declaration has a doc comment
+//   - docs/api.md documents every function and error code, every exported declaration has a doc comment, and the README and
+//     docs link only to files and headings that exist
 import { describe, it, expect, afterAll } from 'vitest';
 import ts from 'typescript';
 import { readFileSync } from 'fs';
@@ -14,7 +15,11 @@ import * as main from '../dist/index.mjs';
 import * as worker from '../dist/worker.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const readme = readFileSync(resolve(root, 'README.md'), 'utf8');
+const read = (file) => readFileSync(resolve(root, file), 'utf8');
+const readme = read('README.md');
+const api = read('docs/api.md');
+// The user documentation: the README and the pages it links for using the library.
+const userDocs = ['README.md', 'docs/api.md', 'docs/guides.md', 'docs/environments.md', 'docs/performance.md', 'docs/troubleshooting.md'];
 const declarationFile = (name) => resolve(root, 'dist', name);
 
 const program = ts.createProgram([declarationFile('index.d.ts'), declarationFile('worker.d.ts')], {
@@ -91,8 +96,8 @@ describe('the declarations', () => {
 
 describe('options', () => {
 
-    it('are the same keys in the types, in what the runtime enforces, and in the README table', async () => {
-        const optionsTable = readme.match(/^\| Option \| Applies to[\s\S]*?\n\n/m)[0];
+    it('are the same keys in the types, in what the runtime enforces, and in the table in docs/api.md', async () => {
+        const optionsTable = api.match(/^\| Option \| Applies to[\s\S]*?\n\n/m)[0];
         const table = new Set([...optionsTable.matchAll(/^\| `(\w+)` \|/gm)].map((match) => match[1]));
         const union = new Set();
         expect(imageFunctions).toEqual(Object.keys(callArguments).sort());           // a new image function needs a row above
@@ -102,8 +107,8 @@ describe('options', () => {
             expect(declared, name).toEqual(enforced);
             enforced.forEach((key) => union.add(key));
         }
-        for (const key of union) {expect(table.has(key), `README options table lacks ${key}`).toBe(true);}
-        expect([...table].filter((key) => !union.has(key)), 'README options table has rows the runtime does not know').toEqual([]);
+        for (const key of union) {expect(table.has(key), `The options table lacks ${key}`).toBe(true);}
+        expect([...table].filter((key) => !union.has(key)), 'The options table has rows the runtime does not know').toEqual([]);
     });
 
 });
@@ -173,21 +178,21 @@ const parameterNamesOfMember = (interfaceName, member) => {
     return checker.getSignaturesOfType(checker.getTypeOfSymbol(property), ts.SignatureKind.Call)[0].getParameters().map((p) => p.name);
 };
 
-describe('the README', () => {
+describe('the API reference (docs/api.md)', () => {
 
     it('documents every function', () => {
         for (const name of [...Object.keys(worker), 'createWorker']) {
             // Functions are documented as `name(`; constants such as `version` have a heading of their own.
             const entry = typeof worker[name] === 'function' && !/^[A-Z]/.test(name) ? '`' + name + '(' : '`' + name + '`';
-            expect(readme.includes(entry), `README has no entry for ${name}`).toBe(true);
+            expect(api.includes(entry), `docs/api.md has no entry for ${name}`).toBe(true);
         }
     });
 
     it('lists, for each function, exactly the options it accepts', async () => {
         const checked = [];
         for (const name of Object.keys(callArguments)) {
-            const section = readme.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
-            expect(section, `README has a section for ${name}`).not.toBeNull();
+            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
+            expect(section, `docs/api.md has a section for ${name}`).not.toBeNull();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
             if (!line || /those of|theirs/.test(line)) {continue;}          // these point at another function's list
             const listed = [...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).filter((word) => !/^(getPaletteFromClustering|quantizeFromClustering)$/.test(word)).sort();
@@ -200,9 +205,12 @@ describe('the README', () => {
     it('does not use names that no longer exist', () => {
         // Each of these was renamed or removed; a match is a sentence nobody updated.
         const stale = ['getPaletteWeights', 'info.version', 'mse[colors', 'at `colors`', 'reserveTransparent', 'getPaletteFromClustering(clustering, k): Promise<Uint8Array>'];
-        for (const phrase of stale) {expect(readme.includes(phrase), `README still says ${phrase}`).toBe(false);}
-        // quantizeWithClustering is the 2.x name: it belongs only in the migration notes, where the rename is explained
-        expect(readme.includes('quantizeWithClustering'), 'README still says quantizeWithClustering').toBe(false);
+        for (const file of userDocs) {
+            const text = read(file);
+            for (const phrase of stale) {expect(text.includes(phrase), `${file} still says ${phrase}`).toBe(false);}
+            // quantizeWithClustering is the 2.x name: it belongs only in the migration notes, where the rename is explained
+            expect(text.includes('quantizeWithClustering'), `${file} still says quantizeWithClustering`).toBe(false);
+        }
         const migrating = readFileSync(resolve(root, 'docs/migrating.md'), 'utf8');
         const uses = migrating.split('\n').filter((line) => line.includes('quantizeWithClustering'));
         expect(uses.length).toBeGreaterThan(0);
@@ -211,8 +219,8 @@ describe('the README', () => {
 
     it('lists every error code, and only the ones that exist', () => {
         const codes = declaredType('index.d.ts', 'ErrorCode').types.map((type) => type.value).sort();
-        const listed = [...readme.matchAll(/^\| `([a-z-]+)`(?:, `([a-z-]+)`)*/gm)].flatMap((match) => match[0].match(/`[a-z-]+`/g).map((s) => s.slice(1, -1)));
-        for (const code of codes) {expect(listed.includes(code), `README error table lacks ${code}`).toBe(true);}
+        const listed = [...api.matchAll(/^\| `([a-z-]+)`(?:, `([a-z-]+)`)*/gm)].flatMap((match) => match[0].match(/`[a-z-]+`/g).map((s) => s.slice(1, -1)));
+        for (const code of codes) {expect(listed.includes(code), `The error table lacks ${code}`).toBe(true);}
         expect(codes.length).toBeGreaterThan(5);
     });
 
@@ -220,7 +228,10 @@ describe('the README', () => {
 
 describe('the documentation files', () => {
 
-    const docs = ['docs/migrating.md', 'docs/stability.md', 'docs/how-it-works.md', 'docs/ROADMAP.md'];
+    const docs = [...userDocs.slice(1), 'docs/migrating.md', 'docs/stability.md', 'docs/how-it-works.md', 'docs/ROADMAP.md'];
+    const github = 'https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/';
+    // GitHub's heading anchors: lower case, punctuation dropped, spaces to hyphens.
+    const anchorsOf = (text) => new Set([...text.matchAll(/^#{1,6} (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s/g, '-')));
 
     it('are linked from the README, and every relative link in the README and docs points at a file that exists', async () => {
         const { existsSync } = await import('fs');
@@ -233,14 +244,23 @@ describe('the documentation files', () => {
         checkLinks('README.md', readme);
         for (const doc of docs) {
             // As an absolute GitHub URL: the npm package doesn't contain docs/, so a relative link would be dead there.
-            expect(readme.includes(`/blob/master/${doc}`), `README does not link ${doc}`).toBe(true);
-            checkLinks(doc, readFileSync(resolve(root, doc), 'utf8'));
+            expect(readme.includes(`${github}${doc}`), `README does not link ${doc}`).toBe(true);
+            checkLinks(doc, read(doc));
         }
     });
 
-    it('send readers to anchors that exist in the README', () => {
-        const anchors = new Set([...readme.matchAll(/^#{1,6} (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[`'"()?:.,]/g, '').trim().replace(/\s+/g, '-')));
-        const wanted = [...readme.matchAll(/\]\(#([^)]+)\)/g)].map((m) => m[1]);
-        for (const anchor of wanted) {expect(anchors.has(anchor), `README links to #${anchor}, which is not a heading`).toBe(true);}
+    it('send readers to headings that exist, in the same file or another', () => {
+        for (const file of ['README.md', ...docs]) {
+            const text = read(file);
+            // In the same file (#anchor), in another doc (other.md#anchor), or from the README by GitHub URL.
+            const links = [
+                ...[...text.matchAll(/\]\(#([^)]+)\)/g)].map((m) => [file, m[1]]),
+                ...[...text.matchAll(/\]\((?!https?:)([^)#\s]+\.md)#([^)]+)\)/g)].map((m) => [resolve(root, dirname(file), m[1]).slice(root.length + 1), m[2]]),
+                ...[...text.matchAll(new RegExp(`\\]\\(${github.replace(/[.]/g, '\\.')}([^)#\\s]+\\.md)#([^)]+)\\)`, 'g'))].map((m) => [m[1], m[2]]),
+            ];
+            for (const [target, anchor] of links) {
+                expect(anchorsOf(read(target)).has(anchor), `${file} links to ${target}#${anchor}, which is not a heading`).toBe(true);
+            }
+        }
     });
 });

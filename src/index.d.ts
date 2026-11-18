@@ -160,7 +160,7 @@ export interface RunOptions extends CancelOptions {
 export interface ClusteringOptions extends RunOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
-     * `'oklab'` clusters in OKLab. Neither is better everywhere: see "Choosing a colour space" in the README.
+     * `'oklab'` clusters in OKLab. Neither is better everywhere: see "Choosing a colour space" in docs/api.md.
      */
     colorSpace?: ColorSpace | undefined;
     /**
