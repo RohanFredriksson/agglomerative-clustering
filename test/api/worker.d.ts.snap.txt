@@ -9,6 +9,10 @@ export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, 
 export interface WorkerOptions {
     transfer?: boolean | undefined;
     wasm?: InitOptions['wasm'] | undefined;
+    script?: string | URL | undefined;
+}
+export interface SharedInitOptions extends InitOptions {
+    script?: string | URL | undefined;
 }
 export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getClustering(): Promise<Clustering>;
@@ -41,7 +45,7 @@ export interface AgglomerativeWorker {
 }
 export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
 export function terminate(): Promise<void>;
-export const init: AgglomerativeWorker['init'];
+export function init(options?: SharedInitOptions): Promise<void>;
 export const getClustering: AgglomerativeWorker['getClustering'];
 export const getPalette: AgglomerativeWorker['getPalette'];
 export const getPaletteFromClustering: AgglomerativeWorker['getPaletteFromClustering'];

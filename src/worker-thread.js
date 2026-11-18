@@ -109,15 +109,34 @@ const onMessage = (data, post) => {
 };
 
 // No top-level await: bundlers build workers as classic scripts by default (Vite's 'iife'), which can't have it.
-// Decided the way worker.js decides how it started this thread: where Node's APIs exist (Node, Deno, Bun), the thread was
-// started through worker_threads and talks through parentPort. Bun also defines the browser's `self.postMessage`
-// inside such a thread, so checking `self` first would listen on a channel the parent never writes to.
-const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
-if (!isNode && typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function') {
-    self.addEventListener('message', (event) => onMessage(event.data, (message, transfer) => self.postMessage(message, transfer)));
+// Where Node's APIs exist (Node, Deno, Bun) the thread was usually started through worker_threads and talks through
+// parentPort. Bun also defines the browser's `self.postMessage` inside such a thread, so `self` is not checked first. But a
+// Web Worker can have Node's globals too (Electron with nodeIntegrationInWorker) and no worker_threads, or no parentPort:
+// then it talks through `self`. Messages that arrive while that is decided are kept, since a Web Worker drops messages
+// that find no listener. (`globalThis.process`, so bundlers don't take this for a use of Node's `process` to polyfill.)
+const runtime = globalThis.process;
+const isNode = !!(runtime && runtime.versions && runtime.versions.node);
+const hasSelf = typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof self.addEventListener === 'function';
+const viaSelf = (early = []) => {
+    const post = (message, transfer) => self.postMessage(message, transfer);
+    self.addEventListener('message', (event) => onMessage(event.data, post));
+    for (const data of early) {onMessage(data, post);}
+};
+if (!isNode && hasSelf) {
+    viaSelf();
 } else {
+    const early = [];
+    const keep = (event) => early.push(event.data);
+    if (hasSelf) {self.addEventListener('message', keep);}
+    const fallback = () => {
+        if (!hasSelf) {return;}
+        self.removeEventListener('message', keep);
+        viaSelf(early);
+    };
     // Built at run time so no bundler tries to resolve it (see worker.js).
     import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'worker_threads'].join(':')).then(({parentPort}) => {
+        if (!parentPort) {fallback(); return;}
+        if (hasSelf) {self.removeEventListener('message', keep);}
         parentPort.on('message', (data) => onMessage(data, (message, transfer) => parentPort.postMessage(message, transfer)));
-    });
+    }, fallback);
 }

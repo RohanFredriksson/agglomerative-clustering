@@ -26,3 +26,15 @@ describe('bundling with esbuild', () => {
     });
 
 });
+
+// Parcel (and some other bundlers) add a `process` polyfill for any bare use of Node's `process`, and fail the build
+// when they may not install it (--no-autoinstall, CI). The browser-facing files reach it through globalThis instead.
+describe('no bare process', () => {
+
+    it.each(['index.mjs', 'shared.mjs', 'worker.mjs', 'worker-thread.mjs', 'clustering.js'])('%s', async (file) => {
+        const { readFile } = await import('fs/promises');
+        const code = (await readFile(resolve(dist, file), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+        expect(code.match(/(?<![.\w$'"])process\b(?!['"])/g)).toBeNull();
+    });
+
+});

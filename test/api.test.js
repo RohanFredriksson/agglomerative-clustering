@@ -230,7 +230,8 @@ describe('the documentation files', () => {
         };
         checkLinks('README.md', readme);
         for (const doc of docs) {
-            expect(readme.includes(`(${doc})`), `README does not link ${doc}`).toBe(true);
+            // As an absolute GitHub URL: the npm package doesn't contain docs/, so a relative link would be dead there.
+            expect(readme.includes(`/blob/master/${doc}`), `README does not link ${doc}`).toBe(true);
             checkLinks(doc, readFileSync(resolve(root, doc), 'utf8'));
         }
     });

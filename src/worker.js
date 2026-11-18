@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint} from './shared.js';
+import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering} from './shared.js';
@@ -12,55 +12,95 @@ export const formatVersion = latestVersion;
 
 // Node's worker_threads, where this script runs from a file in Node, Bun or Deno (from npm). A runtime that only imitates Node
 // (Cloudflare Workers with nodejs_compat, a CDN copy in Deno) defines process.versions.node too, but isn't loaded from a file.
-const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined'
-    && typeof import.meta.url === 'string' && import.meta.url.startsWith('file:');
+// A DOM in Node (jsdom or happy-dom, in tests) defines `window` but has no Worker, so it uses worker_threads too; a page with
+// Node's globals and a real Worker (an Electron renderer with nodeIntegration) uses the Web Worker. `globalThis.process`, so
+// bundlers don't take this for a use of Node's `process` and add a polyfill (Parcel installs one).
+const runtime = globalThis.process;
+const scriptUrl = typeof import.meta.url === 'string' ? import.meta.url : '';
+const hasNode = !!(runtime && runtime.versions && runtime.versions.node) && (typeof window === 'undefined' || typeof Worker !== 'function');
+const isNode = hasNode && scriptUrl.startsWith('file:');
+// Node itself (or Bun) with this script bundled into CommonJS, where import.meta.url is gone: worker_threads still works, with
+// the script given, or the package's own copy. Runtimes that imitate Node say what they are in navigator.userAgent.
+const isBundledNode = hasNode && !scriptUrl && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
 
 // The worker thread's script in Node: the one next to this file, which imports the main entry (index.mjs) next to it. A
 // server bundle (Next.js with webpack or Turbopack) copies the script elsewhere without what it imports, and may hand
 // over its URL as another realm's URL object, which Node's Worker rejects. Then the package's own copy is used, found the
 // way Node resolves packages from the working directory. Built from strings so Node's own URL class makes it.
-const nodeWorkerScript = async () => {
+// `chosen` is the script given with createWorker({ script }): a URL, or a path (relative to the working directory).
+const nodeWorkerScript = async (chosen) => {
     const load = (name) => import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', name].join(':'));
+    if (chosen) {
+        if (/^[a-z][a-z0-9+.-]+:/i.test(chosen) && !/^[a-z]:[\\/]/i.test(chosen)) {return new URL(chosen);}
+        const [{resolve}, {pathToFileURL}] = await Promise.all([load('path'), load('url')]);
+        return pathToFileURL(resolve(chosen));
+    }
     // The base is a variable so bundlers don't take this Node-only URL for an asset to emit (Vite would copy the script a
     // second time for it): they look for `new URL('…', import.meta.url)` written out, which the browser branch of `start` keeps.
-    const here = import.meta.url;
+    const here = scriptUrl;
     const file = './worker-thread.mjs';
     let script = null;
     try {
-        const made = new URL(file, here);
+        const made = new URL(file, here || undefined);
         script = new URL(typeof made.href === 'string' ? made.href : String(made));
     } catch (error) {/* a URL Node can't read: use the package's copy */}
     try {
         const [{existsSync}, {fileURLToPath, pathToFileURL}] = await Promise.all([load('fs'), load('url')]);
         if (script && script.protocol === 'file:' && existsSync(fileURLToPath(script)) && existsSync(fileURLToPath(new URL('./index.mjs', script)))) {return script;}
         const {createRequire} = await load('module');
-        const packaged = new URL('./dist/worker-thread.mjs', pathToFileURL(createRequire(`${process.cwd()}/`).resolve('agglomerative-clustering/package.json')));
+        const packaged = new URL('./dist/worker-thread.mjs', pathToFileURL(createRequire(`${runtime.cwd()}/`).resolve('agglomerative-clustering/package.json')));
         if (existsSync(fileURLToPath(packaged))) {return packaged;}
     } catch (error) {/* not found: start the script as it is, and report what happens */}
-    return script || new URL(file, here);
+    if (!script) {throw fail('worker-failed', `Worker failed: ${noWorker()}`);}
+    return script;
 };
 
 // Whether a worker script at `url` is on another origin than the page (or worker) starting it.
+const webOrigins = ['http:', 'https:', 'chrome-extension:', 'moz-extension:', 'safari-web-extension:'];
 const isCrossOrigin = (url) => {
     try {
         const here = typeof location !== 'undefined' && location.origin;
-        return Boolean(here) && here !== 'null' && (url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== here;
+        // http(s), and an extension's own scheme in a content script, which runs with the page's origin. (Not file:,
+        // which webpack gives import.meta.url at build time, nor blob: or data:.)
+        return Boolean(here) && here !== 'null' && webOrigins.includes(url.protocol) && url.origin !== here;
     } catch (error) {return false;}
 };
 
-// Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`.
-const start = async (receive) => {
-    if (!isNode) {
-        if (typeof Worker !== 'function') {
-            throw fail('worker-failed', "Worker failed: this runtime has no Worker (Cloudflare Workers, for one, can't start threads). Use the main entry, 'agglomerative-clustering', instead.");
-        }
+// The page's (or worker's) base URL, to resolve relative URLs given in options against: the page, as fetch would, not the
+// worker script's folder, where the worker would otherwise resolve them.
+const pageBase = () => {
+    try {
+        if (typeof document !== 'undefined' && typeof document.baseURI === 'string') {return document.baseURI;}
+        if (typeof location !== 'undefined' && typeof location.href === 'string') {return location.href;}
+    } catch (error) {/* no page */}
+    return undefined;
+};
+
+// Why the worker can't start where there is no Worker, by what the runtime is.
+const noWorker = () => {
+    if (!scriptUrl) {
+        return "the worker entry can't find its worker script: import.meta.url is not available, so it was bundled into CommonJS or a classic script. Keep it an ES module, or say where the script is with createWorker({ script }) (a copy of the package's dist/worker-thread.mjs, served next to the rest of dist/).";
+    }
+    if (typeof ServiceWorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof ServiceWorkerGlobalScope) {
+        return "this runtime has no Worker: a service worker (a browser extension's background script, for one) can't start threads. Use the main entry, 'agglomerative-clustering', there; it runs off the page's main thread already.";
+    }
+    return "this runtime has no Worker (a service worker, Cloudflare Workers or another edge runtime, or a test environment without worker support can't start threads). Use the main entry, 'agglomerative-clustering', instead.";
+};
+
+// Starts the worker and returns {post, terminate, ref, unref}, with messages delivered to `receive`. `chosen` is the
+// script given with createWorker({ script }) (a URL, or in Node a path), or null for the package's own.
+const start = async (receive, chosen) => {
+    if (!isNode && !isBundledNode) {
+        if (typeof Worker !== 'function' || (!scriptUrl && !chosen)) {throw fail('worker-failed', `Worker failed: ${noWorker()}`);}
         // Where the script is when the package is used unbundled (from a CDN, say). The base is a variable so bundlers
         // leave this one alone; they rewrite the literal `new Worker(new URL(...))` below, which must stay written out.
-        const here = import.meta.url;
-        const script = new URL('./worker-thread.mjs', here);
+        const here = scriptUrl;
+        const script = chosen ? new URL(chosen, pageBase()) : new URL('./worker-thread.mjs', here);
         const crossOrigin = isCrossOrigin(script);
         let worker, source = null;
-        if (crossOrigin) {
+        if (chosen && !crossOrigin) {
+            worker = new Worker(script, {type: 'module'});
+        } else if (crossOrigin) {
             // A page can't start a worker from another origin's script, but a worker of its own can import one: a one-line
             // module from a blob URL, which imports the script by its full URL (CDNs send the CORS headers that needs). A
             // Content-Security-Policy then needs `worker-src blob:`.
@@ -80,7 +120,7 @@ const start = async (receive) => {
     // The specifier is built at run time so no bundler tries to resolve it (esbuild ignores comment hints on a literal).
     const {Worker: NodeWorker} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'worker_threads'].join(':'));
     // The worker script needs none of the parent's flags, and some (like --input-type) are invalid in a worker.
-    const worker = new NodeWorker(await nodeWorkerScript(), {execArgv: []});
+    const worker = new NodeWorker(await nodeWorkerScript(chosen), {execArgv: []});
     worker.on('message', receive);
     worker.on('error', (error) => receive({failure: error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
@@ -122,6 +162,11 @@ const notPixels = (image) => image !== null && typeof image === 'object' && !Arr
 
 const send = (image) => {
     if (notPixels(image)) {throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');}
+    // A detached buffer (transferred to a worker created with transfer: true, say) is reported as the main entry reports it.
+    const pixels = ArrayBuffer.isView(image) ? image : image && typeof image === 'object' && ArrayBuffer.isView(image.data) ? image.data : null;
+    if (pixels && isDetached(pixels)) {
+        throw fail('invalid-argument', "Invalid image: its pixels were transferred away (detached), for example to a worker created with transfer: true, so it has none left. Pass a copy if you need to keep using it.", 'image');
+    }
     if (isImageData(image)) {
         const data = image.data;
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
@@ -139,8 +184,7 @@ const send = (image) => {
 // RawImage, and a RawImage for ImageData, which is turned back into ImageData here.
 const rebuild = (image) => {
     if (isImageData(image)) {
-        const {width, height, colorSpace} = image;
-        return (result) => new ImageData(new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.byteLength), width, height, colorSpace ? {colorSpace} : undefined);
+        return (result) => imageDataLike(image, new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.byteLength));
     }
     return (result) => result;
 };
@@ -174,22 +218,40 @@ const remoteError = (info, origin) => {
 // Checks the `wasm` option (see init in the main entry) and makes it fit for posting to the worker: a URL becomes its
 // string, and bytes and compiled modules are cloned across.
 const wasmOption = (wasm) => {
-    if (typeof wasm === 'string') {return wasm;}
+    // A relative URL is resolved here, against the page, as fetch would; in the worker it would resolve against the worker
+    // script's folder. In Node it is a path, which the worker thread resolves against the same working directory.
+    if (typeof wasm === 'string') {
+        if (isNode || isBundledNode) {return wasm;}
+        try {return new URL(wasm, pageBase()).href;} catch (error) {return wasm;}
+    }
     if (typeof wasm === 'object' && wasm !== null && ((typeof URL !== 'undefined' && wasm instanceof URL) || tagOf(wasm) === '[object URL]')) {return wasm.href;}
     if (wasm instanceof ArrayBuffer || tagOf(wasm) === '[object ArrayBuffer]' || ArrayBuffer.isView(wasm)) {return wasm;}
     if (isWasmModule(wasm)) {return wasm;}
     throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
-// Options for init: only `wasm`, or none.
-const initOptions = (options) => {
+// The `script` option: the worker script to start, for setups where the package's own can't be found or bundled (Angular's
+// application builder, esbuild or Rollup without a worker plugin, a bundled Electron main process): a copy of the package's
+// dist/worker-thread.mjs, served or kept next to the rest of dist/, which it imports. A URL, or a string: in browsers
+// resolved against the page, in Node a path relative to the working directory (or a file: URL).
+const scriptOption = (script) => {
+    if (typeof script === 'string' && script.length > 0) {return isNode || isBundledNode ? script : new URL(script, pageBase()).href;}
+    if (typeof script === 'object' && script !== null && ((typeof URL !== 'undefined' && script instanceof URL) || tagOf(script) === '[object URL]')) {return script.href;}
+    throw fail('invalid-argument', "Invalid script: must be the URL (or in Node, the path) of a copy of the package's dist/worker-thread.mjs, as a string or a URL.", 'options.script');
+};
+
+// Options for init: `wasm`, and for the shared worker `script`, or none.
+const initOptions = (options, allowScript) => {
     if (options === undefined) {return undefined;}
     if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.", 'options');}
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected wasm.`, `options.${key}`);}
+        if (key === 'script' && !allowScript) {throw fail('invalid-argument', "Invalid option 'script': a worker's script is chosen when it is created, with createWorker({ script }).", 'options.script');}
+        if (key !== 'wasm' && key !== 'script') {throw fail('invalid-argument', `Invalid option '${key}': expected ${allowScript ? 'script, wasm' : 'wasm'}.`, `options.${key}`);}
     }
-    return options.wasm === undefined ? {} : {wasm: wasmOption(options.wasm)};
+    const checked = options.wasm === undefined ? {} : {wasm: wasmOption(options.wasm)};
+    if (options.script !== undefined) {checked.script = scriptOption(options.script);}
+    return checked;
 };
 
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
@@ -220,16 +282,19 @@ const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWit
 const mappingOnlyFunctions = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
-export const createWorker = (options) => {
+// `allowScript`: whether init takes `script` (the shared worker's; createWorker takes it as an option instead).
+const makeWorker = (options, allowScript) => {
 
     if (options === undefined) {options = {};}
     if (!isOptionsObject(options)) {throw fail('invalid-argument', "Invalid options: expected an object.", 'options');}
     options = snapshot(options);
     for (const key of Object.keys(options)) {
-        if (key !== 'transfer' && key !== 'wasm') {throw fail('invalid-argument', `Invalid option '${key}': expected transfer, wasm.`, `options.${key}`);}
+        if (key !== 'transfer' && key !== 'wasm' && key !== 'script') {throw fail('invalid-argument', `Invalid option '${key}': expected script, transfer, wasm.`, `options.${key}`);}
     }
     if (options.transfer !== undefined && typeof options.transfer !== 'boolean') {throw fail('invalid-argument', "Invalid transfer: must be a boolean.", 'options.transfer');}
     const transfer = options.transfer === true;
+    // The worker script to start instead of the package's own (see scriptOption); set by init({ script }) for the shared one.
+    let script = options.script === undefined ? null : scriptOption(options.script);
     // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
     const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
     let initial = initialWasm === undefined ? null : {wasm: initialWasm};
@@ -314,8 +379,9 @@ export const createWorker = (options) => {
                 const mine = ++generation;
                 startingGeneration = mine;
                 // A start that fails is not kept, so the next call tries again.
-                starting = start((message) => {if (mine === generation) {receive(message);}}).catch((error) => {
+                starting = start((message) => {if (mine === generation) {receive(message);}}, script).catch((error) => {
                     if (mine === generation) {starting = null;}
+                    if (error && error.code === 'worker-failed') {throw error;}
                     throw Object.assign(fail('worker-failed', `Worker failed: ${error && error.message}`), {cause: error});
                 });
             }
@@ -401,8 +467,20 @@ export const createWorker = (options) => {
     instance.init = (initArgs) => {
         const origin = new Error();
         let checked;
-        try {checked = initOptions(initArgs);} catch (error) {return Promise.reject(error);}
-        return invoke('init', checked === undefined ? [] : [checked], [], origin).then(() => undefined);
+        try {
+            checked = initOptions(initArgs, allowScript);
+            if (checked !== undefined && checked.script !== undefined) {
+                // The script decides how the worker starts, so it can only be chosen before it has.
+                const chosen = checked.script;
+                if ((connection || starting) && chosen !== script) {
+                    throw fail('invalid-argument', "Invalid script: the worker has already started. Call init({ script }) before any other call (or terminate() first).", 'options.script');
+                }
+                script = chosen;
+                const {script: _script, ...rest} = checked;
+                checked = rest;
+            }
+        } catch (error) {return Promise.reject(error);}
+        return invoke('init', checked === undefined || Object.keys(checked).length === 0 ? [] : [checked], [], origin).then(() => undefined);
     };
 
     // Clusters `image` and keeps it, with its clustering, in the worker.
@@ -480,8 +558,10 @@ export const createWorker = (options) => {
 
 };
 
+export const createWorker = (options) => makeWorker(options, false);
+
 let shared = null;
-const sharedWorker = () => (shared = shared || createWorker());
+const sharedWorker = () => (shared = shared || makeWorker({}, true));
 
 // Stops the shared worker, rejecting calls still waiting. The next call starts a fresh one.
 export const terminate = async () => {

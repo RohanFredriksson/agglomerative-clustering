@@ -36,6 +36,22 @@ export interface WorkerOptions {
     transfer?: boolean | undefined;
     /** Where the worker gets its WebAssembly module; see `InitOptions`. It is sent as the worker's first call. */
     wasm?: InitOptions['wasm'] | undefined;
+    /**
+     * The worker script to start, where the package's own isn't emitted or found: Angular's application builder, esbuild
+     * or Rollup without a worker plugin, a bundled Electron main process run from another directory. Point it at a copy
+     * of the package's `dist/worker-thread.mjs`, served or kept next to the rest of `dist/` (which it imports). A URL
+     * (relative URLs resolve against the page), or in Node a path (relative to the working directory) or `file:` URL.
+     */
+    script?: string | URL | undefined;
+}
+
+/** Options for the worker entry's shared `init`: the main entry's, plus the shared worker's `script`. */
+export interface SharedInitOptions extends InitOptions {
+    /**
+     * The shared worker's script (see `WorkerOptions.script`). Give it before any other call to the worker entry's
+     * functions: once the shared worker has started, a different script is rejected (call `terminate()` first).
+     */
+    script?: string | URL | undefined;
 }
 
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */
@@ -89,8 +105,11 @@ export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
 export function terminate(): Promise<void>;
 
 // The main entry's functions, run in one shared worker started on first use.
-/** The main entry's `init`, run in the shared worker (see `createWorker` for a worker of your own). */
-export const init: AgglomerativeWorker['init'];
+/**
+ * The main entry's `init`, run in the shared worker (see `createWorker` for a worker of your own). It also takes the
+ * shared worker's `script`, before any other call.
+ */
+export function init(options?: SharedInitOptions): Promise<void>;
 /** The main entry's `getClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const getClustering: AgglomerativeWorker['getClustering'];
 /** The main entry's `getPalette`, run in the shared worker (see `createWorker` for a worker of your own). */

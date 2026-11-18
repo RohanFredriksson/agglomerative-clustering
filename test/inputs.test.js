@@ -218,3 +218,55 @@ describe('small things from the beta.1 testing', () => {
     });
 
 });
+
+// Found by the third round of exploratory testing (3.0.0-beta.3): a node-canvas ImageData under jsdom, palettes given as
+// [r, g, b] colours, and messages that named the wrong problem.
+describe('ImageData from another implementation', () => {
+
+    it("returns a mapped image in the input's own ImageData class", async () => {
+        // Like node-canvas's: a class of its own, not the global ImageData (which a DOM in Node may not have at all).
+        class ImageData {
+            constructor(data, width, height) {Object.assign(this, { data, width, height });}
+            get [Symbol.toStringTag]() {return 'ImageData';}
+        }
+        const input = new ImageData(new Uint8ClampedArray(4 * 16).map((_, i) => (i * 53) & 255), 4, 4);
+        for (const mapped of [await ac.quantize(input, 3), await ac.quantizeWithPalette(input, [0, 0, 0, 255, 255, 255])]) {
+            expect(mapped).toBeInstanceOf(ImageData);
+            expect(mapped.width).toBe(4);
+            expect(mapped.data).toBeInstanceOf(Uint8ClampedArray);
+        }
+        const worker = createWorker();
+        try {
+            expect(await worker.quantize(input, 3)).toBeInstanceOf(ImageData);
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+});
+
+describe('messages', () => {
+
+    it('says to flatten a palette given as [r, g, b] colours, whatever their number', async () => {
+        for (const colours of [[[255, 0, 0]], [[255, 0, 0], [0, 0, 255]], [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]]) {
+            await expect(ac.quantizeWithPalette(new Uint8Array(4), colours)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'palette', message: expect.stringContaining('.flat()') });
+        }
+    });
+
+    it('starts unsupported-version messages with "Unsupported clustering"', async () => {
+        const error = await ac.getPaletteFromClustering(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]), 2).catch((caught) => caught);
+        expect(error.code).toBe('unsupported-version');
+        expect(error.message).toMatch(/^Unsupported clustering:/);
+    });
+
+    it('names the .wasm path that could not be loaded, without Emscripten\'s debug advice', async () => {
+        const lib = await fresh();
+        const missing = resolve(dist, 'no-such-file.wasm');
+        const error = await lib.init({ wasm: missing }).catch((caught) => caught);
+        expect(error.code).toBe('wasm-load-failed');
+        expect(error.message).toContain(missing);
+        expect(error.message).toContain('could not be fetched');
+        expect(`${error.message} ${error.cause && error.cause.message}`).not.toContain('ASSERTIONS');
+    });
+
+});
