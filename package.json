@@ -50,13 +50,18 @@
       }
     },
     "./worker": {
-      "types": "./dist/worker.d.ts",
-      "import": "./dist/worker.mjs",
+      "import": {
+        "types": "./dist/worker.d.ts",
+        "default": "./dist/worker.mjs"
+      },
       "require": {
         "types": "./dist/worker.d.cts",
         "default": "./dist/worker.cjs"
       },
-      "default": "./dist/worker.mjs"
+      "default": {
+        "types": "./dist/worker.d.ts",
+        "default": "./dist/worker.mjs"
+      }
     },
     "./clustering.wasm": "./dist/clustering.wasm",
     "./package.json": "./package.json"
