@@ -1,7 +1,7 @@
 import createWasmModule from './clustering.js';
 import {
     version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette, isDetached, imageDataLike,
+    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -14,9 +14,6 @@ export const formatVersion = latestVersion;
 // canvas, a WebAssembly.Module compiled by a bundler's runtime (Next.js Edge's `import wasm from '…wasm?module'`), a URL
 // from a vm context. A tag can be faked, but only on purpose, and the value is then used as what it claims to be.
 const tagOf = (value) => Object.prototype.toString.call(value);
-// (`instanceof` is kept too, for implementations without the tag, such as node-canvas's ImageData.)
-const isImageData = (value) => typeof value === 'object' && value !== null
-    && ((typeof ImageData !== 'undefined' && value instanceof ImageData) || tagOf(value) === '[object ImageData]');
 const isWasmModule = (value) => typeof value === 'object' && value !== null
     && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
@@ -82,20 +79,36 @@ const wasmLoadFailed = (cause, given) => {
     // Where an explicit init({ wasm }) URL or path pointed, to name in the message.
     const where = typeof given === 'string' ? ` (${given})` : '';
     let advice;
-    if (/Content.Security.Policy|wasm-eval|unsafe-eval|CompileError: .*(disallowed|refused)/i.test(text)) {
+    if (/Content.Security.Policy|blocked by CSP|wasm-eval|unsafe-eval|CompileError: .*(disallowed|refused)/i.test(text)) {
         // Chrome's message names 'wasm-eval', which Chrome rejects in an extension's manifest; 'wasm-unsafe-eval' is the one.
-        advice = "A Content-Security-Policy blocks compiling WebAssembly: add 'wasm-unsafe-eval' to its script-src (in a browser extension, to content_security_policy.extension_pages in the manifest).";
+        // Which policy applies depends on where the module is compiled: a worker started from a blob: URL (the worker entry
+        // does that for a script from another origin, a content script's included) follows the page's.
+        advice = "A Content-Security-Policy blocks compiling WebAssembly: add 'wasm-unsafe-eval' to the script-src of the policy that applies. That is the page's for a page and for the worker entry's worker (also when started from a content script, whose worker follows the page's policy); for a browser extension's own pages, offscreen document and service worker, it is content_security_policy.extension_pages in the manifest.";
     } else if (!hasSimd()) {
         advice = "This engine has no WebAssembly SIMD, which the module needs (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 16.4 or newer).";
+    } else if (/magic (word|number)|BufferSource argument is empty|wasm validation error: at offset [0-4]:/i.test(text)) {
+        // What a 404 page, or a server's fallback HTML page, looks like once it has been compiled as WebAssembly.
+        if (given === true) {
+            reason = `the bytes given to init({ wasm }) are not a WebAssembly module (${reason})`;
+            advice = "Pass this package's clustering.wasm: its bytes, its URL or path, or the module compiled from it.";
+        } else {
+            reason = `the file loaded as clustering.wasm${where} is not WebAssembly (${reason}): most likely an error page (a 404) or a fallback HTML page served in its place`;
+            advice = given
+                ? "Check that URL or path: it must be this package's clustering.wasm, served with the application/wasm type."
+                : "Check that clustering.wasm is served next to the script or emitted by your bundler (open its URL in the browser), or say where it is with init({ wasm }).";
+        }
     } else if (/XMLHttpRequest is not defined|both async and sync fetching|failed to fetch|NetworkError|404|ENOENT/i.test(text)) {
         reason = given ? `the .wasm file could not be fetched${where}` : 'the .wasm file could not be fetched (the package looks for clustering.wasm next to its script)';
+        const blocked = " If it is there, something may block the request: a Content-Security-Policy's connect-src, or, in a browser extension's content script, a clustering.wasm not listed in web_accessible_resources (the browser's console names the URL).";
         advice = given
-            ? "Check that URL or path: it must be this package's clustering.wasm, served (not a 404) with the application/wasm type."
-            : "Check that clustering.wasm is served next to the script or emitted by your bundler, or say where it is with init({ wasm }).";
+            ? `Check that URL or path: it must be this package's clustering.wasm, served (not a 404) with the application/wasm type.${blocked}`
+            : `Check that clustering.wasm is served next to the script or emitted by your bundler, or say where it is with init({ wasm }).${blocked}`;
     } else if (given) {
         advice = `Check what init({ wasm }) was given${where}: it must be this package's clustering.wasm (its URL or path, its bytes, or the module compiled from it).`;
     } else if (isNodeLike) {
-        advice = "If the package was bundled into a server build (Next.js and others), the bundler may have moved or renamed clustering.wasm: leave the package out of the bundle (in Next.js, serverExternalPackages: ['agglomerative-clustering']) or give the module with init({ wasm }).";
+        // The glue's `new URL('clustering.wasm', import.meta.url)`, with import.meta emptied by a CommonJS bundle.
+        if (/Invalid URL/i.test(reason)) {reason = "the package doesn't know where clustering.wasm is (bundled into CommonJS, it has lost its own URL)";}
+        advice = "If the package was bundled (a server build, a CommonJS bundle from esbuild or Rollup, a plugin's single file), the bundler moved clustering.wasm or dropped what tells the package where it is, and the package's own copy wasn't found from the working directory either: leave the package out of the bundle (mark it external; in Next.js, serverExternalPackages: ['agglomerative-clustering']), or say where the file is with init({ wasm: path }) or give its bytes.";
     } else {
         advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
     }
@@ -145,6 +158,23 @@ const packagedWasm = async () => {
     return readFile(file);
 };
 
+// In Node, init({ wasm }) given a path or a file: URL reads the file here and hands the glue its bytes. The glue reads files
+// itself only when it knows it runs in Node, which it tells from import.meta.url; in a server build bundled into CommonJS
+// (esbuild, Rollup, a VS Code or Obsidian plugin) that is gone, so it would try to fetch the path as if in a browser.
+// Anything else (an http(s) URL, bytes, a module) is left as it is. Returns null when the option is not a file.
+const nodeWasmFile = async (wasm) => {
+    if (!isNodeLike) {return null;}
+    const text = typeof wasm === 'string' ? wasm : isURL(wasm) ? wasm.href : null;
+    if (text === null) {return null;}
+    const isFileUrl = /^file:/i.test(text);
+    // A string with a scheme (http:, data:, blob:) is a URL; a Windows drive letter (C:\) is a path.
+    if (!isFileUrl && /^[a-z][a-z0-9+.-]+:/i.test(text) && !/^[a-z]:[\\/]/i.test(text)) {return null;}
+    const {readFile} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'fs/promises'].join(':'));
+    if (!isFileUrl) {return readFile(text);}
+    const {fileURLToPath} = await import(/* webpackIgnore: true */ /* @vite-ignore */ ['node', 'url'].join(':'));
+    return readFile(fileURLToPath(text));
+};
+
 // The module loads once: concurrent calls share one load, and a load that fails is forgotten, so it can be retried.
 let loading = null;
 
@@ -169,7 +199,8 @@ const acquire = async (options) => {
         loading = (async () => {
             let instance;
             try {
-                instance = await instantiate(wasm);
+                const file = await nodeWasmFile(wasm);
+                instance = await instantiate(file === null ? wasm : file);
             } catch (error) {
                 // In Node, a bundler that rewrote the glue's `new URL('clustering.wasm', import.meta.url)` (a Next.js server
                 // build, say) leaves it pointing at a file that isn't there. The package's own copy is then looked for the

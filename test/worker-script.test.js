@@ -55,6 +55,23 @@ describe('createWorker({ script })', () => {
         }
     });
 
+    // Found by the fourth round (3.0.0-beta.4): Node's bare "Cannot find module" said nothing about what to do.
+    it('says what the script needs next to it when it was copied without the rest of dist/', async () => {
+        const alone = join(folder, 'alone');
+        cpSync(join(dist, 'worker-thread.mjs'), join(alone, 'worker-thread.mjs'));
+        for (const script of [join(alone, 'worker-thread.mjs'), join(folder, 'nowhere', 'worker-thread.mjs')]) {
+            const worker = createWorker({ script });
+            try {
+                const error = await worker.getPalette(image, 4).catch((caught) => caught);
+                expect(error.code).toBe('worker-failed');
+                expect(error.message).toContain('keep dist/ together');
+                expect(error.message).toContain('createWorker({ script })');
+            } finally {
+                await worker.terminate();
+            }
+        }
+    });
+
     it('rejects a script that is not a URL or path', () => {
         for (const script of ['', 3, {}, null]) {
             expect(() => createWorker({ script })).toThrow(expect.objectContaining({ code: 'invalid-argument', argument: 'options.script' }));

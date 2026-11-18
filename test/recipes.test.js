@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering } from '../dist/index.mjs';
+import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, getPalette } from '../dist/index.mjs';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -172,6 +172,72 @@ describe('README recipes', () => {
         reader.decodeAndBlitFrameRGBA(3, decoded);
         expect(decoded[3]).toBe(0);                              // frame 3's transparent strip
         expect(decoded[(20 * w + 20) * 4 + 3]).toBe(255);
+    });
+
+    // "Fixed palettes": choosing N colours from a fixed set (the README's function, as written there).
+    it('chooses n threads from a fixed set, and beats the n most used threads', async () => {
+        async function chooseThreads(image, threads, n) {
+            const clustering = await getClustering(image);
+            let chosen = [];
+            for (let k = n; k <= 4 * n && chosen.length < n; k++) {
+                const cut = await getPaletteFromClustering(clustering, k);
+                const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
+                chosen = [...new Set(indices)].slice(0, n);
+            }
+            return chosen;
+        }
+        // A smooth photo-like image, and 120 pseudo-random threads.
+        const w = 64, h = 48, photo = new Uint8Array(w * h * 4);
+        for (let i = 0; i < w * h; i++) {photo.set([(i % w) * 4, Math.floor(i / w) * 5, ((i % w) * 3 + Math.floor(i / w) * 2) & 255, 255], i * 4);}
+        let seed = 11;
+        const threads = new Uint8Array(120 * 3).map(() => (seed = (seed * 16807) % 2147483647) % 256);
+        const pick = (chosen) => new Uint8Array(chosen.flatMap((i) => [threads[3 * i], threads[3 * i + 1], threads[3 * i + 2]]));
+        const error = async (palette) => {
+            const mapped = (await quantizeWithPalette(photo, palette));
+            let sum = 0;
+            for (let i = 0; i < photo.length; i++) {if (i % 4 !== 3) {sum += (photo[i] - mapped[i]) ** 2;}}
+            return sum;
+        };
+        const { indices } = await quantizeToIndicesWithPalette(photo, threads);
+        const used = new Uint32Array(120);
+        for (const index of indices) {used[index]++;}
+        for (const n of [4, 8]) {
+            const chosen = await chooseThreads({ data: photo, format: 'rgba', width: w }, threads, n);
+            expect(chosen).toHaveLength(n);
+            expect(new Set(chosen).size).toBe(n);
+            const top = Array.from(used.keys()).sort((a, b) => used[b] - used[a]).slice(0, n);
+            expect(await error(pick(chosen))).toBeLessThan(await error(pick(top)));
+        }
+    });
+
+    // "Live video and camera frames": following the previous palette (the README's function, as written there).
+    it('follows the previous palette, moving a quarter of the way to the matched colours', async () => {
+        const follow = (previous, next, weight = 0.25) => {
+            if (!previous || previous.length !== next.length) {return Array.from(next);}
+            const free = new Set(Array.from({ length: next.length / 3 }, (_, i) => i));
+            const smoothed = [];
+            for (let i = 0; i < previous.length; i += 3) {
+                let best = 0, bestDistance = Infinity;
+                for (const j of free) {
+                    const d = (previous[i] - next[3 * j]) ** 2 + (previous[i + 1] - next[3 * j + 1]) ** 2 + (previous[i + 2] - next[3 * j + 2]) ** 2;
+                    if (d < bestDistance) {bestDistance = d; best = j;}
+                }
+                free.delete(best);
+                for (let c = 0; c < 3; c++) {smoothed.push(previous[i + c] + weight * (next[3 * best + c] - previous[i + c]));}
+            }
+            return smoothed;
+        };
+        const first = await getPalette(image, 3);
+        expect(follow(null, first)).toEqual(Array.from(first));
+        // The same colours in another order: each keeps its slot, and doesn't move.
+        const swapped = new Uint8Array([...first.slice(3, 6), ...first.slice(0, 3), ...first.slice(6, 9)]);
+        expect(follow(Array.from(first), swapped)).toEqual(Array.from(first));
+        // A colour that moved: a quarter of the way.
+        const moved = Uint8Array.from(first);
+        moved[0] = first[0] >= 128 ? first[0] - 40 : first[0] + 40;
+        expect(follow(Array.from(first), moved)[0]).toBeCloseTo(first[0] + 0.25 * (moved[0] - first[0]));
+        // A different number of colours starts again.
+        expect(follow(Array.from(first), first.slice(0, 6))).toEqual(Array.from(first.slice(0, 6)));
     });
 
 });

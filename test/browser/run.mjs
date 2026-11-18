@@ -76,6 +76,22 @@ try {
         if (palette === 'HUNG') {throw new Error('the call never settled');}
         return Array.from(palette).join() === expected;
     });
+    // A sandboxed iframe without allow-same-origin (a plugin host's, such as Figma's) has an opaque origin, from which no
+    // worker starts from an http(s) script (nor, in Chromium, a blob: one): the worker entry starts it from a data: URL.
+    await check('workerInSandboxedIframe', async () => {
+        const frame = document.createElement('iframe');
+        frame.sandbox = 'allow-scripts';
+        frame.srcdoc = '<script type="module">const w = await import(' + JSON.stringify(cdn + '/worker.mjs') + ');'
+            + 'const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);'
+            + 'w.getPalette(image, 4).then((p) => parent.postMessage({ palette: Array.from(p).join() }, "*"), (e) => parent.postMessage({ error: e.message }, "*"));'
+            + '<\\/script>';
+        const answer = new Promise((done) => addEventListener('message', (event) => {if (event.source === frame.contentWindow) {done(event.data);}}));
+        document.body.append(frame);
+        const reply = await Promise.race([answer, new Promise((done) => setTimeout(() => done({ error: 'no answer from the iframe' }), 20000))]);
+        frame.remove();
+        if (reply.error) {throw new Error(reply.error);}
+        return reply.palette === expected;
+    });
     window.result = { checks, details };
 } catch (error) {
     window.result = { error: String(error && error.stack || error) };

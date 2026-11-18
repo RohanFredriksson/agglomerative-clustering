@@ -19,6 +19,7 @@
     "worker.mts",
     "disposable.mts",
     "main-commonjs.cts",
+    "worker-commonjs.cts",
     "union.mts",
     "shapes.mts"
   ]

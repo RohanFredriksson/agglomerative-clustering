@@ -14,6 +14,6 @@ it('runs under Jest in CommonJS mode, in the node and jsdom environments', () =>
         env: { ...process.env, NODE_OPTIONS: '' },
     });
     const output = `${run.stdout}\n${run.stderr}`;
-    expect(output, output).toMatch(/Tests:\s+6 passed, 6 total/);
+    expect(output, output).toMatch(/Tests:\s+10 passed, 10 total/);
     expect(run.status, output).toBe(0);
 }, 150000);
