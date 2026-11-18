@@ -21,10 +21,10 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 ## Install
 
 ```sh
-npm install agglomerative-clustering@next
+npm install agglomerative-clustering
 ```
 
-**3.0 is in beta.** This page describes 3.0, which is published under the `next` tag until its release; a plain `npm install agglomerative-clustering` still gives 2.0 (see [its README](https://www.npmjs.com/package/agglomerative-clustering/v/2.0.0) and [what changed](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md)).
+Upgrading from 2.x? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md): one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
 
 It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
 
