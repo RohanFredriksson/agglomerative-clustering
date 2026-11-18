@@ -5,7 +5,7 @@ import {
     quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
-import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, RunOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace, ErrorArgument } from 'agglomerative-clustering';
+import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, ProgressOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace, ErrorArgument } from 'agglomerative-clustering';
 
 declare const bytes: Uint8Array;
 declare const imageData: ImageData;
@@ -79,7 +79,7 @@ async function main() {
     // @ts-expect-error The list is read-only.
     codes.push('invalid-argument');
     try { await getPalette(bytes, 0); } catch (error) { const coded = error as CodedError; const same: ErrorCode = coded.code; const which: ErrorArgument | undefined = coded.argument; if (which === 'options.colorSpace' || which === 'k') {void which;} void same; }
-    const run: RunOptions = { signal: controller.signal, onProgress(p) { void p; } };
+    const run: ProgressOptions = { signal: controller.signal, onProgress(p) { void p; } };
     const initOptions: InitOptions = {};
     const asLike: ImageLike = bytes;
     void [cut, weights, mse, explained, a, b, c, d, e, cutoff, t, bits, idx, code, run, initOptions, asLike];
