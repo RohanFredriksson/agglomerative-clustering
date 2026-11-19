@@ -6,6 +6,8 @@ export interface CodedError extends Error {
     argument?: ErrorArgument;
 }
 export const errorCodes: readonly ErrorCode[];
+export const ditherMethods: readonly DitherMethod[];
+export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
 export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;

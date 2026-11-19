@@ -7,7 +7,7 @@
 import {fail, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
-export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
+export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps} from './shared.js';
 export const formatVersion = latestVersion;
 
 // Node's worker_threads, where this script runs from a file in Node, Bun or Deno (from npm). A runtime that only imitates Node

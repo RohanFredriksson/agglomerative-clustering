@@ -6,7 +6,7 @@ import {
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
-export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
+export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps} from './shared.js';
 // The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
 // `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
 export const formatVersion = latestVersion;

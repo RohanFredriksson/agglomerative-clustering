@@ -1,6 +1,6 @@
 // The shapes of results and inputs: what narrows, and which palette inputs the types accept. Uses only types that exist
 // without the DOM lib, so it is compiled in every configuration.
-import { getClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+import { getClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps } from 'agglomerative-clustering';
 import { createWorker } from 'agglomerative-clustering/worker';
 import type { ClusteringInfo, DitherMethod, DitherSteps, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
 
@@ -62,6 +62,11 @@ export async function shapes() {
     await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: 'ordered', steps } });
     // @ts-expect-error not a method
     await quantizeWithPalette(raw, [0, 0, 0], { dither: 'bayer' });
+    // The exported lists narrow strings and numbers from a form.
+    const selected: string = 'ordered', slid: number = 32;
+    const method: DitherMethod | undefined = ditherMethods.find((m) => m === selected);
+    const fromSlider: DitherSteps | undefined = ditherSteps.find((s) => s === slid);
+    void [method, fromSlider];
     // UI state holding any method: steps is caught unless the method is known to be 'ordered'.
     const ui: { method: DitherMethod; strength: number; steps: DitherSteps } = { method: 'atkinson', strength: 1, steps: 16 };
     // @ts-expect-error steps with a method that may not be 'ordered'

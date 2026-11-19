@@ -108,8 +108,10 @@ export const snapshot = (options) => {
 // ----- Dithering ------------------------------------------------------------------------------------------------------
 // The dither methods and their codes in C, and the step counts ordered dithering takes (the counts that divide the 64
 // cells of its 8x8 matrix evenly). Steps 0 tells C to choose: 64 for a palette of two colours, else 16.
-const ditherMethods = {'floyd-steinberg': 0, 'atkinson': 1, 'ordered': 2};
-const ditherStepCounts = [2, 4, 8, 16, 32, 64];
+const ditherMethodCodes = {'floyd-steinberg': 0, 'atkinson': 1, 'ordered': 2};
+// The method names and step counts, exported (like errorCodes) for code that builds options from a form.
+export const ditherMethods = Object.freeze(Object.keys(ditherMethodCodes));
+export const ditherSteps = Object.freeze([2, 4, 8, 16, 32, 64]);
 
 // A short description of a value for an error message.
 const describe = (value) => typeof value === 'string' ? `'${value}'`
@@ -121,15 +123,19 @@ const describe = (value) => typeof value === 'string' ? `'${value}'`
 // Returns {strength, method, steps}, with strength 0 meaning no dithering and steps 0 meaning the default.
 export const parseDither = (value) => {
     const invalid = (key, message) => fail('invalid-argument', message, key === undefined ? 'options.dither' : `options.dither.${key}`);
-    const wrongForm = () => invalid(undefined, `Invalid dither: got ${describe(value)}; it must be a boolean, a strength from 0 to 1, 'floyd-steinberg', 'atkinson', 'ordered', or an object { method, strength, steps }.`);
-    const has = (key) => Object.prototype.hasOwnProperty.call(ditherMethods, key);
+    // What a value from a form most likely meant: 'none' for no dithering, or a number given as a string.
+    const numeric = (v) => typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v));
+    const asNumber = (v) => numeric(v) ? ` It is a string: pass a number, for example Number(value).` : '';
+    const wrongForm = () => invalid(undefined, `Invalid dither: got ${describe(value)}; it must be a boolean, a strength from 0 to 1, 'floyd-steinberg', 'atkinson', 'ordered', or an object { method, strength, steps }.${
+        typeof value === 'string' && ['none', 'off', 'false'].includes(value.trim().toLowerCase()) ? ' Use false for no dithering.' : asNumber(value)}`);
+    const has = (key) => Object.prototype.hasOwnProperty.call(ditherMethodCodes, key);
     if (value === undefined || value === false) {return {strength: 0, method: 0, steps: 0};}
     if (value === true) {return {strength: 1, method: 0, steps: 0};}
     if (typeof value === 'number') {
         if (!Number.isFinite(value) || value < 0 || value > 1) {throw wrongForm();}
         return {strength: value, method: 0, steps: 0};
     }
-    if (typeof value === 'string' && has(value)) {return {strength: 1, method: ditherMethods[value], steps: 0};}
+    if (typeof value === 'string' && has(value)) {return {strength: 1, method: ditherMethodCodes[value], steps: 0};}
     if (!isOptionsObject(value)) {throw wrongForm();}
     const object = snapshot(value);
     for (const key of Object.keys(object)) {
@@ -141,15 +147,15 @@ export const parseDither = (value) => {
     }
     const strength = object.strength === undefined ? 1 : object.strength;
     if (typeof strength !== 'number' || !Number.isFinite(strength) || strength < 0 || strength > 1) {
-        throw invalid('strength', `Invalid dither.strength: got ${describe(strength)}; it must be a number from 0 to 1.`);
+        throw invalid('strength', `Invalid dither.strength: got ${describe(strength)}; it must be a number from 0 to 1.${asNumber(strength)}`);
     }
     if (object.steps !== undefined && methodName !== 'ordered') {
         throw invalid('steps', `Invalid dither.steps: only ordered dithering takes steps, so write dither: { method: 'ordered', steps }.`);
     }
-    if (object.steps !== undefined && !ditherStepCounts.includes(object.steps)) {
-        throw invalid('steps', `Invalid dither.steps: got ${describe(object.steps)}; it must be 2, 4, 8, 16, 32 or 64.`);
+    if (object.steps !== undefined && !ditherSteps.includes(object.steps)) {
+        throw invalid('steps', `Invalid dither.steps: got ${describe(object.steps)}; it must be 2, 4, 8, 16, 32 or 64.${asNumber(object.steps)}`);
     }
-    return {strength, method: ditherMethods[methodName], steps: object.steps === undefined ? 0 : object.steps};
+    return {strength, method: ditherMethodCodes[methodName], steps: object.steps === undefined ? 0 : object.steps};
 };
 
 // ----- Palette and Clustering ----------------------------------------------------------------------------------------

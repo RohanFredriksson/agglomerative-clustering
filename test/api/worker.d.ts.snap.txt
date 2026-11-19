@@ -4,6 +4,7 @@ import type { Palette, Clustering } from './index.js';
 export { Palette } from './index.js';
 export { Clustering } from './index.js';
 export { errorCodes } from './index.js';
+export { ditherMethods, ditherSteps } from './index.js';
 export { isCodedError } from './index.js';
 export const version: string;
 export const formatVersion: number;

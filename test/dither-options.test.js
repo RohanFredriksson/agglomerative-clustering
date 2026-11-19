@@ -1,8 +1,8 @@
 // The forms the dither option takes: a boolean or a strength (Floyd-Steinberg, as in 3.0), a method name, or an object
 // { method, strength, steps }. Every form is validated the same way in both entries.
 import { describe, it, expect, afterAll } from 'vitest';
-import { quantize } from '../dist/index.mjs';
-import { quantize as workerQuantize, terminate } from '../dist/worker.mjs';
+import { quantize, ditherMethods, ditherSteps } from '../dist/index.mjs';
+import { quantize as workerQuantize, terminate, ditherMethods as workerDitherMethods, ditherSteps as workerDitherSteps } from '../dist/worker.mjs';
 
 afterAll(() => terminate());
 
@@ -57,6 +57,23 @@ describe('dither option forms', () => {
         }
         // steps without a method says which method takes it.
         await expect(run({ steps: 8 })).rejects.toThrow("method: 'ordered'");
+    });
+
+    it('says how to write the values a form or a slider gives', async () => {
+        // 'none' from a <select>: no dithering is false.
+        for (const dither of ['none', 'off']) {await expect(run(dither)).rejects.toThrow('Use false for no dithering');}
+        // Numbers that arrived as strings (input.value).
+        await expect(run({ method: 'ordered', steps: '16' })).rejects.toThrow('Number(');
+        await expect(run({ strength: '0.5' })).rejects.toThrow('Number(');
+        await expect(run('0.5')).rejects.toThrow('Number(');
+    });
+
+    it('lists the methods and step counts it takes', () => {
+        expect(ditherMethods).toEqual(['floyd-steinberg', 'atkinson', 'ordered']);
+        expect(ditherSteps).toEqual([2, 4, 8, 16, 32, 64]);
+        expect(Object.isFrozen(ditherMethods) && Object.isFrozen(ditherSteps)).toBe(true);
+        expect(workerDitherMethods).toEqual(ditherMethods);
+        expect(workerDitherSteps).toEqual(ditherSteps);
     });
 
     it('needs a width for every method', async () => {

@@ -34,6 +34,15 @@ export interface CodedError extends Error {
 export const errorCodes: readonly ErrorCode[];
 
 /**
+ * Every dither method, as a frozen list: for building a choice from them, or narrowing a string from a form with
+ * `ditherMethods.find((m) => m === value)`.
+ */
+export const ditherMethods: readonly DitherMethod[];
+
+/** Every step count ordered dithering takes, as a frozen list: narrow a number with `ditherSteps.find((s) => s === value)`. */
+export const ditherSteps: readonly DitherSteps[];
+
+/**
  * Whether `value` is one of this library's errors: something with a string `message` and a `code` from `errorCodes`.
  * Unlike checking `code` alone, it is false for Node's own errors (`'ENOENT'`) and for an abort (the signal's reason).
  * It also accepts a plain object with those fields, which is what an error becomes after Electron's IPC or a
@@ -198,7 +207,7 @@ export type DitherMethod = 'floyd-steinberg' | 'atkinson' | 'ordered';
 
 /**
  * The step counts ordered dithering takes: the counts that divide the 64 cells of its 8x8 pattern evenly. Narrow a
- * number to it with a check, for example `([2, 4, 8, 16, 32, 64] as const).find((s) => s === value)`.
+ * number to it with the exported list: `ditherSteps.find((s) => s === value)`.
  */
 export type DitherSteps = 2 | 4 | 8 | 16 | 32 | 64;
 
