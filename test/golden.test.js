@@ -105,6 +105,11 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         const large = await getPaletteFromClustering(await getClustering(rgba), 400);
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));
         check(`${name}/map/oklab/400`, await quantizeWithPalette(rgba, large, { colorSpace: 'oklab' }));
+        // Ordered dithering searches small RGB palettes (up to 64 colours) its own way; these pin the other two paths, the
+        // cell index (here 400 colours) and, above 1024 colours, the k-d tree.
+        check(`${name}/map/rgb/400/dither-ordered`, await quantizeWithPalette(rgba, large, { dither: 'ordered', width }));
+        const huge = await getPaletteFromClustering(await getClustering(rgba), 1100);
+        check(`${name}/map/rgb/1100/dither-ordered`, await quantizeWithPalette(rgba, huge, { dither: 'ordered', width }));
         const indexed = (result) => new Uint8Array([...result.palette, ...new Uint8Array(result.indices.buffer), (result.transparentIndex ?? -1) & 255]);
         check(`${name}/indices/rgb/16/dither/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: true, width, transparent: true })));
         check(`${name}/indices/rgb/16/dither-ordered/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: 'ordered', width, transparent: true })));

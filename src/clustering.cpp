@@ -757,11 +757,12 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             }
         }
         const float recipe_strength = float(internal);
-        // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (about
-        // 8 MB of entries and up to 4 MB of keys), and at least 2^17 above that, since a photo has 50,000 to 100,000
-        // colours and a slot two colours share is a recipe built twice; but never more than twice the image's pixels, so
-        // a small image doesn't pay for a large table. A recipe depends on nothing but its colour, so the table changes
-        // speed only.
+        // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (8 MB of
+        // entries, plus 4 MB of keys at 2 steps down to 0.5 MB at 16). Above that it holds 2^17, since a photo has 50,000
+        // to 100,000 colours and a slot two colours share is a recipe built twice: 16 MB of entries at 32 steps and 32 MB
+        // at 64 (the default for black and white), plus 0.5 MB of keys. It never holds more than twice the image's pixels,
+        // so a small image doesn't pay for a large table. A recipe depends on nothing but its colour, so the table
+        // changes speed only.
         int recipe_bits = 21;
         for (size_t m = steps; m > 1; m >>= 1) {recipe_bits--;}
         recipe_bits = std::max(recipe_bits, 17);
