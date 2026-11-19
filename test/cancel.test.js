@@ -17,6 +17,16 @@ const image = new Uint8Array(width * height * 4);
     }
 }
 
+// Noise with about half a million distinct colours: its clustering takes many slices even on a fast machine. Slices
+// are about 10 ms each, so the small image above can finish in as few as two on a fast runner.
+// (An integer generator: `random` above multiplies in floating point, loses precision and repeats, so its noise has only
+// about twelve thousand colours.)
+const busy = new Uint8Array(800 * 600 * 4);
+{
+    let seed = 11;
+    for (let i = 0; i < busy.length; i++) {busy[i] = i % 4 === 3 ? 255 : (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;}
+}
+
 const progressOf = () => {
     const calls = [];
     return { calls, onProgress: (value) => calls.push(value) };
@@ -74,7 +84,7 @@ describe('progress', () => {
 
     it('goes up from 0 to 1, in several steps for a big enough image', async () => {
         const { calls, onProgress } = progressOf();
-        await getClustering(image, { onProgress });
+        await getClustering(busy, { onProgress });
         expect(calls[0]).toBe(0);
         expect(calls[calls.length - 1]).toBe(1);
         expect(calls.length).toBeGreaterThan(3);
