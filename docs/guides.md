@@ -85,8 +85,9 @@ for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.dat
 const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
 
 for (const frame of frames) {
-  // The same 256 entries for every frame (transparent one included), dithered lightly to limit shimmer between frames.
-  const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
+  // The same 256 entries for every frame (transparent one included). Ordered dithering is a fixed pattern, so the parts
+  // of the picture that don't move stay the same from frame to frame; error diffusion would make them shimmer.
+  const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 'ordered' });
   // … gif.writeFrame(indices, width, height, { palette: …, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
 }
 ```
@@ -192,7 +193,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 // indices[i] is the entry of `eink` for pixel i: pack it to 4 bits per pixel for the panel
 ```
 
-- **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue.
+- **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue. Error diffusion (`dither: true`) is the most accurate here; use `dither: 'ordered'` where a fixed pattern matters more (an animated or partly refreshed display), and see [Choosing a dither method](api.md#choosing-a-dither-method).
 - **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering; with small palettes of widely spaced inks (e-ink, grey levels) `'rgb'` dithers better, and OKLab brightens black and white. Try both on your panel.
 - **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but a few lines do it: cut the clustering, snap each cut colour to its nearest thread, and cut finer until N distinct threads appear. In testing it beat "the N most used threads" by 3 to 8 dB PSNR for N up to 12; the gain shrinks as N grows (under 1 dB at 24).
 

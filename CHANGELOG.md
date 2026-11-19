@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased (3.1.0)
+
+Every 3.0 call gives the same output as before: `false`, `true` and a strength still mean Floyd–Steinberg, and the golden tests pin it.
+
+### Added
+- **Dither methods.** `dither` also takes `'atkinson'`, `'ordered'`, `'floyd-steinberg'`, or an object `{ method, strength, mix }`, which the other forms are shorthands for. `'ordered'` is pattern dithering: each colour gets a recipe of palette colours that average out to it, laid out in a fixed 8×8 pattern, so a pixel's colour depends only on its own colour and position and the still parts of an animation stay still from frame to frame. `mix` (2, 4, 8, 16, 32 or 64, default 16, `'ordered'` only) sets how many colours a recipe holds. `'atkinson'` is error diffusion that passes on 3/4 of the error, for a lighter, higher-contrast look. See "Choosing a dither method" in `docs/api.md`. Types: `DitherMethod`, `DitherOptions`.
+- **An option-shape convention** (`docs/api.md`): an option is a plain value while it has one setting, and gets an object form, with its plain values as shorthands, when it has more. `dither` is the first. `docs/stability.md` now says an option may accept new values or an object form in a minor release.
+- **`bench/dither.bench.js`:** mapping time for each method.
+
 ## 3.0.0
 
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below). Palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options, with one exception: `quantizeWithPalette` with a palette made in OKLab now matches in OKLab (below; pass `colorSpace: 'rgb'` for the 2.x result). The golden tests pin this, and 2.0 clusterings still load and cut to the same palettes. New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).

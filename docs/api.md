@@ -52,12 +52,14 @@ Every function that takes an image also takes an optional last argument of optio
 | `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'rgb'` minimises squared error in sRGB (the best PSNR); `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/). Neither wins everywhere: see [Choosing a colour space](#choosing-a-colour-space). |
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. |
 | `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see [Transparency](#transparency). |
-| `dither` | mapping | `false` (default), `true`, or `0`–`1` | Serpentine Floyd–Steinberg error diffusion, with a strength from 0 to 1. Hides banding in gradients at low colour counts, at a cost in per-pixel metrics such as PSNR. Fully transparent pixels are left undithered. |
+| `dither` | mapping | `false` (default), `true`, `0`–`1`, `'floyd-steinberg'`, `'atkinson'`, `'ordered'`, or `{ method, strength, mix }` | Dithering, which hides banding at low colour counts at a cost in per-pixel metrics such as PSNR. `true` or a strength from 0 to 1 is Floyd–Steinberg error diffusion; a method name picks another; the object form sets `strength` (0 to 1, default 1) and, for `'ordered'`, `mix` (2, 4, 8, 16, 32 or 64; default 16). See [Choosing a dither method](#choosing-a-dither-method). Fully transparent pixels are left undithered. |
 | `width` | mapping | integer | The image width, for dithering a `Uint8Array` or a `RawImage` without one. If the image has a width of its own, this must equal it. |
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see [Cancelling and progress](#cancelling-and-progress). |
 | `onProgress` | clustering | `(fraction) => void` | Reports 0 to 1 as the clustering runs; see [Cancelling and progress](#cancelling-and-progress). |
 
 Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `getClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions`, so give each call the options it takes, or keep one object per stage.
+
+**Option shapes.** An option is a plain value (a boolean, a number or a string) while it has one setting. An option with several settings, or with settings that apply to only some of its values, also takes an object, and its plain values stay valid as shorthands for that object: `dither: 'ordered'` is `dither: { method: 'ordered' }`. Unknown keys inside the object are an `invalid-argument` error, as unknown options are. Options that describe the image rather than how to process it (`width`) stay top-level, and so do `signal` and `onProgress`.
 
 ```js
 // Perceptual palettes for a photo, quickly
@@ -68,6 +70,10 @@ const retro = await quantize(imageData, 8, { dither: true });
 
 // Dithering a raw buffer needs its width
 const out = await quantize(rgbaBytes, 32, { dither: 0.8, width: 640 });
+
+// A fixed pattern for animation frames, and a gentler one
+const frame = await quantizeWithPalette(frameData, palette, { dither: 'ordered' });
+const soft = await quantizeWithPalette(frameData, palette, { dither: { method: 'ordered', strength: 0.5 } });
 ```
 
 ### Choosing a colour space
@@ -94,6 +100,20 @@ How the options trade speed and quality, measured on the Kodak photos:
 | `colorSpace: 'oklab'` | 4.46 | **1.60** | 78 ms |
 | `colorSpace: 'oklab', precision: 6` | 4.44 | 1.61 | 30 ms |
 | libimagequant, for reference | 4.38 | 1.61 | 79 ms |
+
+### Choosing a dither method
+
+| Method | What it does | Use it for |
+|---|---|---|
+| `'floyd-steinberg'` (`true`) | Spreads each pixel's error to the pixels after it. | Still images, including e-ink and other fixed palettes: it is the most accurate. |
+| `'ordered'` | Gives each colour a recipe of palette colours that average out to it, and lays the recipe out in a fixed 8×8 pattern. A pixel's colour depends only on its own colour and position. | Animation and video, where a still area must stay still from frame to frame (error diffusion makes it shimmer), and displays that need a stable pattern. |
+| `'atkinson'` | Error diffusion that passes on only 3/4 of the error, to six neighbours. | Its look: lighter and higher in contrast, the classic 1-bit style. |
+
+Measured on six Kodak photos after a slight blur (to stand in for viewing distance), mean ΔE2000 at 16 colours was 2.55 for Floyd–Steinberg, 2.72 for ordered and 3.09 for Atkinson, against 3.72 undithered (64 colours: 1.21, 1.41, 1.57 and 1.97); with the seven e-ink inks, 2.91, 8.2 and 6.7 against 21.6. Ordered dithering is never more accurate than error diffusion on a still image, and much less so with a few widely spaced inks; its value is the fixed pattern.
+
+`strength` (0 to 1, default 1) scales how much of the error is passed on, or for `'ordered'`, how far each recipe reaches for other colours; 0 is no dithering. `mix` sets how many palette colours each recipe holds: more gives smoother shades, and each doubling about doubles the time. At 16 colours, 8 to 16 was about 5% more accurate (ΔE 2.87 to 2.72) and visibly smoother on gradients; 16 to 32 about 5% more again (2.59), with little visible difference.
+
+Mapping a 768×512 photo (kodim23) to 16 colours took 6 ms undithered, 27 ms with Floyd–Steinberg, 26 ms with Atkinson, and 33, 66 and 144 ms ordered with a mix of 8, 16 and 32 (64 colours: 7, 35, 28, and 51, 101 and 213 ms). Ordered dithering builds one recipe per distinct colour, so its time grows with the image's number of colours as well as its size. `bench/dither.bench.js` measures it.
 
 ### Transparency
 
@@ -150,7 +170,7 @@ const clustering = await getClustering(image, {
 
 - **Slices.** With either option, clustering runs in slices of about 10 ms (a large photo has a few unsliced steps of up to 150 ms in between; an image with millions of distinct colours, longer: see [Performance and limits](performance.md#large-images)), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes (a `DOMException`'s `code` is a number). To tell an abort from a failure, check your signal (`signal.aborted`), not the error: a reason you gave (`controller.abort(new Error('superseded'))`) keeps its own name. An already aborted signal does no work.
-- **Mapping can't be interrupted** (it takes milliseconds: 6 ms at 768×512, 27 ms dithered). The functions that only map check the signal before they start, and don't take `onProgress`.
+- **Mapping can't be interrupted** (it takes milliseconds: 6 ms at 768×512, 27 ms dithered, 66 ms with ordered dithering). The functions that only map check the signal before they start, and don't take `onProgress`.
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.
 - **In a worker** the work in the worker stops too, and a call still queued is removed without running. The worker keeps running for later calls.
 
