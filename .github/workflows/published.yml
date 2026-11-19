@@ -44,7 +44,9 @@ jobs:
           # Until the tarball itself downloads: the registry lists a new version a minute or so before its tarball is
           # served, and installing in between fails with a 404 (as all six smoke jobs did for 3.1.0).
           for i in $(seq 1 30); do
-            url=$(npm view "agglomerative-clustering@$VERSION" dist.tarball 2>/dev/null)
+            # `|| true`: steps run under bash -e, where a failed command substitution in an assignment ends the step,
+            # and npm view fails until the version is listed.
+            url=$(npm view --prefer-online "agglomerative-clustering@$VERSION" dist.tarball 2>/dev/null) || true
             [ -n "$url" ] && node -e "fetch(process.argv[1], {method: 'HEAD'}).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" "$url" && exit 0
             sleep 20
           done
@@ -92,7 +94,9 @@ jobs:
           # Until the tarball itself downloads: the registry lists a new version a minute or so before its tarball is
           # served, and installing in between fails with a 404 (as all six smoke jobs did for 3.1.0).
           for i in $(seq 1 30); do
-            url=$(npm view "agglomerative-clustering@$VERSION" dist.tarball 2>/dev/null)
+            # `|| true`: steps run under bash -e, where a failed command substitution in an assignment ends the step,
+            # and npm view fails until the version is listed.
+            url=$(npm view --prefer-online "agglomerative-clustering@$VERSION" dist.tarball 2>/dev/null) || true
             [ -n "$url" ] && node -e "fetch(process.argv[1], {method: 'HEAD'}).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" "$url" && exit 0
             sleep 20
           done
