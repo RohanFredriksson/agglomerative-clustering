@@ -224,8 +224,8 @@ export interface MappingOptions extends CancelOptions {
     /**
      * Dithering: `false` (default); `true` or a strength from 0 to 1 for Floyd-Steinberg error diffusion; a method name
      * (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`); or a {@link DitherOptions} object, which the other forms are
-     * shorthands for. A strength of 0 is no dithering. Every method needs the image width: taken from `ImageData` or
-     * `RawImage.width`, or given as `width`. See "Choosing a dither method" in docs/api.md.
+     * shorthands for. A strength of 0 is no dithering. Dithering needs the image width (not at strength 0): taken from
+     * `ImageData` or `RawImage.width`, or given as `width`. See "Choosing a dither method" in docs/api.md.
      */
     dither?: boolean | number | DitherMethod | DitherOptions | undefined;
     /**

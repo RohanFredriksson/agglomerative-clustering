@@ -111,11 +111,11 @@ How the options trade speed and quality, measured on the Kodak photos:
 
 Measured on six Kodak photos after a slight blur (to stand in for viewing distance), mean ΔE2000 at 16 colours was 2.55 for Floyd–Steinberg, 2.72 for ordered and 3.09 for Atkinson, against 3.72 undithered (64 colours: 1.21, 1.41, 1.57 and 1.97). Ordered dithering is never more accurate than error diffusion on a still image; its value is the fixed pattern.
 
-**`strength`** (0 to 1, default 1) sets how much of each pixel's error is passed on, or for `'ordered'`, how far each recipe reaches for other colours. 0 is no dithering, and for every method equal steps of strength give roughly equal changes: at 0.25, about a quarter to a third of the pixels that full strength changes.
+**`strength`** (0 to 1, default 1) sets how much of each pixel's error is passed on, or for `'ordered'`, how far each recipe reaches for other colours. 0 is no dithering. Ordered dithering responds very differently to the raw amount (with 64 steps, a hundredth of it already does a third of the work), so its strength goes through a table, measured for each step count, that makes it change about the same share of pixels as Floyd–Steinberg at the same strength: on photos, about 6% of full strength's changes at 0.05, 30% at 0.25 and 60% at 0.5. Atkinson tracks Floyd–Steinberg closely by itself.
 
 **`steps`** (`'ordered'` only) is how many cells of the 8×8 pattern each colour's mix is spread over, so two colours blend in `steps + 1` shades: 2, 4, 8, 16, 32 or 64. The default is 64 for a palette of two colours (black and white), where every shade shows on a smooth gradient, and 16 otherwise. Each doubling about doubles the time; at 16 colours, 8 to 16 was about 5% more accurate (ΔE 2.87 to 2.72) and visibly smoother on gradients, and 16 to 32 about 5% more again (2.59), with little visible difference. The pattern starts at each image's top-left pixel, so tiles dithered separately line up only at offsets that are multiples of 8.
 
-**Speed.** Mapping a 768×512 photo (kodim23) to 16 colours took 6 ms undithered, 27 ms with Floyd–Steinberg, 26 ms with Atkinson, and 33, 66 and 144 ms ordered with 8, 16 and 32 steps (64 colours: 7, 35, 28, and 51, 101 and 213 ms; 256 colours with 64 steps took about a second). Ordered dithering builds a recipe for every distinct colour in the image, on every call, so its time grows with the number of colours as well as the size: on smaller frames it is a larger multiple of Floyd–Steinberg's time (about 7× at 384×256). `bench/dither.bench.js` measures it.
+**Speed.** Mapping a 768×512 photo (kodim23) to 16 colours took 6 ms undithered, 27 ms with Floyd–Steinberg, 26 ms with Atkinson, and 33, 66 and 144 ms ordered with 8, 16 and 32 steps (64 colours: 7, 35, 28, and 51, 101 and 213 ms; 256 colours with 64 steps took about a second). In black and white the default 64 steps took about 220 ms, against 48 ms with 16. Ordered dithering builds a recipe for every distinct colour in the image, on every call, so its time follows the number of distinct colours more than the size: on smaller frames it is a larger multiple of Floyd–Steinberg's time (about 7× at 384×256), and on images where nearly every pixel is a different colour it is far slower (768×512 noise: 2 s with 16 colours and 64 steps, 10 s with 256; a 16-megapixel image of all different colours: 22 s at the default for 16 colours, 58 s in black and white). Mapping can't be interrupted once it starts (see [Cancelling and progress](#cancelling-and-progress)), so for such images use fewer steps, or scale them down. `bench/dither.bench.js` measures it.
 
 #### Dithering to a few inks: mix in light
 
@@ -124,14 +124,21 @@ Every method mixes colours as sRGB values, the numbers in the image. The eye mix
 To mix in light, convert the image and the palette to linear values first, and use the indices with your palette as it is:
 
 ```js
-// sRGB 0-255 to linear light, scaled back to 0-255
-const toLinear = (v) => Math.round(v <= 10 ? v / 12.92 : 255 * ((v / 255 + 0.055) / 1.055) ** 2.4);
-const linear = data.map((v, i) => (i % 4 === 3 ? v : toLinear(v)));
-const { indices } = await quantizeToIndicesWithPalette({ data: linear, format: 'rgba', width }, eink.map(toLinear), { dither: true });
+// sRGB 0-255 to linear light, scaled back to 0-255, as a table (it is called for every byte)
+const toLinear = new Uint8Array(256).map((_, v) => Math.round(v <= 10 ? v / 12.92 : 255 * ((v / 255 + 0.055) / 1.055) ** 2.4));
+const linear = data.map((v, i) => (i % 4 === 3 ? v : toLinear[v]));   // RGBA: alpha stays as it is (for RGB data, convert every byte)
+const { indices } = await quantizeToIndicesWithPalette({ data: linear, format: 'rgba', width }, eink.map((v) => toLinear[v]), { dither: true });
 // indices[i] is the entry of `eink` (in its own colours) for pixel i
 ```
 
-On the same photos this cut the error in light from 17–22 to 5–7 with Floyd–Steinberg on the seven inks, and from 22–25 to 11–18 in black and white; ordered dithering improves about as much, Atkinson little. Eight-bit linear values have few dark shades, so very dark gradients can band. A built-in way to mix in light is on the [roadmap](ROADMAP.md).
+On the same photos this cut the error in light from 17–22 to 5–7 with Floyd–Steinberg on the seven inks, and from 22–25 to 11–18 in black and white; ordered dithering improves a little less (7.5–11 and 11–17). Keep to these:
+
+- **Use Floyd–Steinberg or ordered dithering.** Atkinson drops a quarter of the error, which in linear values makes photos too dark (worse than not converting, on some). And undithered, linear values make every dark tone snap to black.
+- **Keep `colorSpace: 'rgb'`** (the default). In `'oklab'` the linear values are read as if they were sRGB.
+- **Look at the result at 1:1, or on the panel.** A viewer that shrinks the image averages its pixels as sRGB values, so a correct result looks too dark when shown small.
+- Eight-bit linear values have few dark shades, so very dark gradients can band.
+
+A built-in way to mix in light is on the [roadmap](ROADMAP.md).
 
 ### Transparency
 
