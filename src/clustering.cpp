@@ -726,10 +726,12 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
             {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
         const size_t mix = size_t(dither_mix);
-        // Recipes are memoised by colour in a direct-mapped table of about 8 MB, whatever the mix. A recipe depends on
-        // nothing but its colour, so the table changes speed only.
+        // Recipes are memoised by colour in a direct-mapped table: about 8 MB up to a mix of 16, and at least 2^17 slots
+        // above it (16 MB at 32, 32 MB at 64), since a photo has 50,000 to 100,000 colours and a slot that two colours
+        // share is a recipe built twice. A recipe depends on nothing but its colour, so the table changes speed only.
         int recipe_bits = 21;
         for (size_t m = mix; m > 1; m >>= 1) {recipe_bits--;}
+        recipe_bits = std::max(recipe_bits, 17);
         std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
         std::vector<int32_t> recipes((size_t(1) << recipe_bits) * mix);
         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
@@ -742,6 +744,80 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         auto darker = [&](int32_t a, int32_t b) {
             const uint32_t la = brightness[size_t(a)], lb = brightness[size_t(b)];
             return la != lb ? la < lb : keys[size_t(a)] < keys[size_t(b)];
+        };
+        // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For RGB
+        // palettes up to 64 colours a step compares the target with every colour, four at a time: squared 8-bit RGB
+        // distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a group, so
+        // keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the earlier
+        // position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`.
+        typedef int32_t i32x4 __attribute__((vector_size(16)));
+        const bool scan = color_space == ColorSpace::rgb && points.size() <= 64;
+        const size_t groups = scan ? (points.size() + 3) / 4 : 0;
+        std::vector<i32x4> scan_r(groups), scan_g(groups), scan_b(groups);
+        std::vector<int32_t> scan_index(groups * 4, 0);
+        if (scan) {
+            std::vector<int32_t> order(points.size());
+            for (size_t i = 0; i < order.size(); i++) {order[i] = int32_t(i);}
+            std::sort(order.begin(), order.end(), [&](int32_t a, int32_t b) {return keys[size_t(a)] < keys[size_t(b)];});
+            for (size_t i = 0; i < groups * 4; i++) {
+                // Unused lanes repeat the last colour: never strictly nearer than it, and later in order, so never chosen.
+                const int32_t source = order[std::min(i, order.size() - 1)];
+                scan_r[i / 4][i % 4] = points[size_t(source)][0];
+                scan_g[i / 4][i % 4] = points[size_t(source)][1];
+                scan_b[i / 4][i % 4] = points[size_t(source)][2];
+                scan_index[i] = source;
+            }
+        }
+        auto scan_nearest = [&](const int32_t* target) -> int32_t {
+            const i32x4 tr = {target[0], target[0], target[0], target[0]};
+            const i32x4 tg = {target[1], target[1], target[1], target[1]};
+            const i32x4 tb = {target[2], target[2], target[2], target[2]};
+            i32x4 best = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
+            i32x4 best_group = {0, 0, 0, 0};
+            for (size_t g = 0; g < groups; g++) {
+                const i32x4 dr = scan_r[g] - tr, dg = scan_g[g] - tg, db = scan_b[g] - tb;
+                const i32x4 distance = dr * dr + dg * dg + db * db;
+                const i32x4 nearer = distance < best;
+                best = nearer ? distance : best;
+                const int32_t gi = int32_t(g);
+                const i32x4 here = {gi, gi, gi, gi};
+                best_group = nearer ? here : best_group;
+            }
+            size_t chosen = 0;
+            int32_t chosen_distance = INT32_MAX;
+            for (int lane = 0; lane < 4; lane++) {
+                const size_t position = size_t(best_group[lane]) * 4 + size_t(lane);
+                if (best[lane] < chosen_distance || (best[lane] == chosen_distance && position < chosen)) {
+                    chosen_distance = best[lane];
+                    chosen = position;
+                }
+            }
+            return scan_index[chosen];
+        };
+        auto pick_recipe = [&](float* wanted) -> int32_t {
+            if (!scan) {return pick(wanted);}
+            bool outside = false;
+            for (int c = 0; c < 3; c++) {
+                if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
+            }
+            int32_t target[3];
+            if (outside) {
+                // Far outside the cube the target is matched as it is, unclamped (see `pick`). At full strength it is a
+                // whole number (whole colours plus whole errors), and then the scan's integer distances are the exact ones
+                // nearest_outside computes in doubles, as long as they fit in 32 bits: a target within 20,000 of the cube
+                // keeps every squared distance under 1.3 billion.
+                for (int c = 0; c < 3; c++) {
+                    const float whole = std::nearbyint(wanted[c]);
+                    if (whole != wanted[c] || std::fabs(whole) > 20000.0f) {return nearest_outside(wanted);}
+                    target[c] = int32_t(whole);
+                }
+                return scan_nearest(target);
+            }
+            for (int c = 0; c < 3; c++) {
+                wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+                target[c] = int32_t(std::lround(wanted[c]));
+            }
+            return scan_nearest(target);
         };
         for (size_t y = 0; y < height; y++) {
             for (size_t x = 0; x < size_t(width); x++) {
@@ -761,7 +837,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
                     for (size_t i = 0; i < mix; i++) {
                         float wanted[3];
                         for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * strength;}
-                        const int32_t chosen = pick(wanted);
+                        const int32_t chosen = pick_recipe(wanted);
                         recipe[i] = chosen;
                         for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
                     }

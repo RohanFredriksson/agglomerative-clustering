@@ -164,6 +164,53 @@ describe('ordered', () => {
         expect((await quantizeWithPalette(gradient, reversed, { dither: 'ordered' })).data).toEqual(a.data);
     });
 
+    it('matches a reference implementation of the recipes', async () => {
+        // The algorithm written plainly. At full strength in RGB everything is a whole number, so this is exact: targets
+        // more than 32 outside the cube are matched as they are, the rest clamped to it; ties go to the smaller packed key.
+        const bayer = [[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26], [12, 44, 4, 36, 14, 46, 6, 38], [60, 28, 52, 20, 62, 30, 54, 22],
+            [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25], [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21]];
+        const reference = (data, width, palette, mix) => {
+            const colours = [];
+            for (let i = 0; i < palette.length; i += 3) {
+                const key = (palette[i] << 16) | (palette[i + 1] << 8) | palette[i + 2];
+                if (!colours.some((c) => c.key === key)) {colours.push({ rgb: palette.slice(i, i + 3), key, luma: 299 * palette[i] + 587 * palette[i + 1] + 114 * palette[i + 2] });}
+            }
+            const nearest = (t) => {
+                let best = null, bestDistance = Infinity;
+                for (const c of colours) {
+                    const d = (c.rgb[0] - t[0]) ** 2 + (c.rgb[1] - t[1]) ** 2 + (c.rgb[2] - t[2]) ** 2;
+                    if (d < bestDistance || (d === bestDistance && c.key < best.key)) {best = c; bestDistance = d;}
+                }
+                return best;
+            };
+            const out = new Uint8Array(data.length);
+            for (let p = 0; p < data.length / 4; p++) {
+                const base = [data[4 * p], data[4 * p + 1], data[4 * p + 2]];
+                const e = [0, 0, 0], recipe = [];
+                for (let i = 0; i < mix; i++) {
+                    let t = base.map((b, c) => b + e[c]);
+                    if (!t.some((v) => v < -255 / 8 || v > 255 + 255 / 8)) {t = t.map((v) => Math.min(255, Math.max(0, v)));}
+                    const chosen = nearest(t);
+                    recipe.push(chosen);
+                    for (let c = 0; c < 3; c++) {e[c] += base[c] - chosen.rgb[c];}
+                }
+                recipe.sort((a, b) => a.luma - b.luma || a.key - b.key);
+                const x = p % width, y = Math.floor(p / width);
+                out.set([...recipe[Math.floor(bayer[y & 7][x & 7] * mix / 64)].rgb, 255], 4 * p);
+            }
+            return out;
+        };
+        let seed = 3;
+        const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
+        const palettes = { eink, sixteen: Array.from({ length: 48 }, random), sixtyFour: Array.from({ length: 192 }, random), hundred: Array.from({ length: 300 }, random) };
+        for (const [name, palette] of Object.entries(palettes)) {
+            for (const mix of [4, 16]) {
+                const result = await quantizeWithPalette(gradient, palette, { dither: { method: 'ordered', mix } });
+                expect(result.data, `${name}, mix ${mix}`).toEqual(reference(gradientData, size, palette, mix));
+            }
+        }
+    });
+
     edgeCases('ordered');
 
 });
