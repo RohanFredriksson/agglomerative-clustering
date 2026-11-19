@@ -5,9 +5,13 @@
 Every 3.0 call gives the same output as before: `false`, `true` and a strength still mean Floyd–Steinberg, and the golden tests pin it.
 
 ### Added
-- **Dither methods.** `dither` also takes `'atkinson'`, `'ordered'`, `'floyd-steinberg'`, or an object `{ method, strength, mix }`, which the other forms are shorthands for. `'ordered'` is pattern dithering: each colour gets a recipe of palette colours that average out to it, laid out in a fixed 8×8 pattern, so a pixel's colour depends only on its own colour and position and the still parts of an animation stay still from frame to frame. `mix` (2, 4, 8, 16, 32 or 64, default 16, `'ordered'` only) sets how many colours a recipe holds. `'atkinson'` is error diffusion that passes on 3/4 of the error, for a lighter, higher-contrast look. See "Choosing a dither method" in `docs/api.md`. Types: `DitherMethod`, `DitherOptions`.
+- **Dither methods.** `dither` also takes `'atkinson'`, `'ordered'`, `'floyd-steinberg'`, or an object `{ method, strength, steps }`, which the other forms are shorthands for. `'ordered'` is pattern dithering: each colour gets a recipe of palette colours that average out to it, laid out in a fixed 8×8 pattern, so a pixel's colour depends only on its own colour and position and the still parts of an animation stay still from frame to frame. `steps` (`'ordered'` only: 2, 4, 8, 16, 32 or 64) is how many pattern cells a colour's mix is spread over, so two colours blend in `steps + 1` shades; the default is 64 for a palette of two colours and 16 otherwise. `strength` scales every method about evenly. `'atkinson'` is error diffusion that passes on 3/4 of the error, for a higher-contrast look. See "Choosing a dither method" in `docs/api.md`, which also shows how to dither to a few inks in linear light, so photos don't come out too light on e-ink and 1-bit panels. Types: `DitherMethod`, `DitherOptions`, `DitherSteps`.
+- **Clearer option errors:** an invalid `dither` names the value it got, and a dither setting written as an option of its own (`ditherMethod`, `strength`, `steps`) points at `dither: { method, strength, steps }`.
 - **An option-shape convention** (`docs/api.md`): an option is a plain value while it has one setting, and gets an object form, with its plain values as shorthands, when it has more. `dither` is the first. `docs/stability.md` now says an option may accept new values or an object form in a minor release.
 - **`bench/dither.bench.js`:** mapping time for each method.
+
+### Fixed
+- **Chrome and Edge 91–92 and Firefox 89–91:** the worker entry called `Object.hasOwn`, which those versions lack, so every worker call failed there. A test now checks that no built file uses it.
 
 ## 3.0.0
 
