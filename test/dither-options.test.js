@@ -66,3 +66,28 @@ describe('dither option forms', () => {
     });
 
 });
+
+// The supported engines (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 20.19; see .babelrc) don't all have every
+// newer built-in, and Babel doesn't polyfill built-ins. Object.hasOwn arrived in Chrome 93 and Firefox 92.
+describe('built-ins the supported engines lack', () => {
+
+    it('parses method names and objects without Object.hasOwn', async () => {
+        const saved = Object.hasOwn;
+        delete Object.hasOwn;
+        try {
+            await expect(quantize(image, 8, { dither: 'ordered' })).resolves.toBeTruthy();
+            await expect(quantize(image, 8, { dither: { method: 'atkinson' } })).resolves.toBeTruthy();
+        } finally {
+            Object.hasOwn = saved;
+        }
+    });
+
+    it('leaves Object.hasOwn out of every built file', async () => {
+        const { readdirSync, readFileSync } = await import('node:fs');
+        const dist = new URL('../dist/', import.meta.url);
+        for (const file of readdirSync(dist).filter((name) => /\.(mjs|cjs|js)$/.test(name))) {
+            expect(readFileSync(new URL(file, dist), 'utf8').includes('Object.hasOwn('), file).toBe(false);
+        }
+    });
+
+});

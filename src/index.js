@@ -513,14 +513,14 @@ const parseDither = (value) => {
     if (value === undefined || value === false) {return {strength: 0, method: 0, mix: defaultDitherMix};}
     if (value === true) {return {strength: 1, method: 0, mix: defaultDitherMix};}
     if (typeof value === 'number') {return {strength: checkStrength(value), method: 0, mix: defaultDitherMix};}
-    if (typeof value === 'string' && Object.hasOwn(ditherMethods, value)) {return {strength: 1, method: ditherMethods[value], mix: defaultDitherMix};}
+    if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(ditherMethods, value)) {return {strength: 1, method: ditherMethods[value], mix: defaultDitherMix};}
     if (!isOptionsObject(value)) {checkStrength(NaN);}
     const object = snapshot(value);
     for (const key of Object.keys(object)) {
         if (!['method', 'strength', 'mix'].includes(key)) {throw invalid(key, `Invalid dither option '${key}': expected method, strength or mix.`);}
     }
     const methodName = object.method === undefined ? 'floyd-steinberg' : object.method;
-    if (typeof methodName !== 'string' || !Object.hasOwn(ditherMethods, methodName)) {
+    if (typeof methodName !== 'string' || !Object.prototype.hasOwnProperty.call(ditherMethods, methodName)) {
         throw invalid('method', "Invalid dither.method: must be 'floyd-steinberg', 'atkinson' or 'ordered'.");
     }
     const strength = object.strength === undefined ? 1 : checkStrength(object.strength, 'strength');

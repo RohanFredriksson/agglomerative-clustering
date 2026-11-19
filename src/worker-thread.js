@@ -69,7 +69,7 @@ const respond = async ({id, method, args, progress}, post) => {
     const controller = controllers.get(id);
     try {
         if (controller && controller.signal.aborted) {return;}
-        if (!Object.hasOwn(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
+        if (!Object.prototype.hasOwnProperty.call(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
         if (controller || progress) {
             args = args.slice();
             const index = optionsIndex[method];
