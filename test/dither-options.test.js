@@ -1,0 +1,68 @@
+// The forms the dither option takes: a boolean or a strength (Floyd-Steinberg, as in 3.0), a method name, or an object
+// { method, strength, mix }. Every form is validated the same way in both entries.
+import { describe, it, expect, afterAll } from 'vitest';
+import { quantize } from '../dist/index.mjs';
+import { quantize as workerQuantize, terminate } from '../dist/worker.mjs';
+
+afterAll(() => terminate());
+
+const width = 32, height = 32;
+const gradient = new Uint8Array(width * height * 4);
+for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+        gradient.set([Math.round(x / (width - 1) * 255), Math.round(y / (height - 1) * 255), 96 + ((x * 7 + y * 3) % 64), 255], 4 * (y * width + x));
+    }
+}
+const image = { data: gradient, format: 'rgba', width };
+const run = (dither) => quantize(image, 8, { dither }).then((result) => result.data);
+
+describe('dither option forms', () => {
+
+    it('accepts every form of the floyd-steinberg option', async () => {
+        const reference = await run(true);
+        for (const dither of [1, 'floyd-steinberg', {}, { method: 'floyd-steinberg' }, { strength: 1 }]) {
+            expect(await run(dither), JSON.stringify(dither)).toEqual(reference);
+        }
+        expect(await run({ strength: 0.5 })).toEqual(await run(0.5));
+    });
+
+    it('rejects bad dither values with their argument', async () => {
+        const cases = [
+            ['yes', 'options.dither'],
+            [{ method: 'bayer' }, 'options.dither.method'],
+            [{ strength: 2 }, 'options.dither.strength'],
+            [{ strength: NaN }, 'options.dither.strength'],
+            [{ method: 'ordered', mix: 12 }, 'options.dither.mix'],
+            [{ method: 'ordered', mix: 128 }, 'options.dither.mix'],
+            [{ mix: 8 }, 'options.dither.mix'],
+            [{ method: 'atkinson', mix: 8 }, 'options.dither.mix'],
+            [{ size: 4 }, 'options.dither.size'],
+            [new Map(), 'options.dither'],
+            [[], 'options.dither'],
+            [null, 'options.dither'],
+        ];
+        for (const [dither, argument] of cases) {
+            await expect(run(dither), String(argument)).rejects.toMatchObject({ code: 'invalid-argument', argument });
+        }
+    });
+
+    it('needs a width for every method', async () => {
+        for (const dither of ['ordered', { method: 'atkinson' }]) {
+            await expect(quantize(gradient, 8, { dither })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options.width' });
+        }
+    });
+
+    it('reads the dither object at call time', async () => {
+        const dither = { method: 'floyd-steinberg', strength: 1 };
+        const pending = quantize(image, 8, { dither });
+        dither.strength = 0;
+        expect((await pending).data).toEqual(await run(true));
+    });
+
+    it('rejects the same values in the worker entry', async () => {
+        for (const [dither, argument] of [[{ method: 'bayer' }, 'options.dither.method'], [{ method: 'ordered', mix: 12 }, 'options.dither.mix'], [{ size: 4 }, 'options.dither.size']]) {
+            await expect(workerQuantize(image, 8, { dither })).rejects.toMatchObject({ code: 'invalid-argument', argument });
+        }
+    });
+
+});

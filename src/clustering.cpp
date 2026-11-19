@@ -578,7 +578,7 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 // needs the image's `width`. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1
 // when the palette is empty.
 template <typename Emit>
-void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, int skip_below, Emit emit) {
+void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width, int skip_below, Emit emit) {
 
     const ColorCoordinates space(color_space);
     std::vector<AgglomerativeClustering::KDTree::Point> points;
@@ -742,12 +742,12 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
 // Maps the image to the palette (see map_pixels) and returns the mapped image, in the input's format with alpha
 // preserved, as a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
 // With an empty palette every pixel becomes black.
-uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width) {
+uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
     uint8_t* packed = allocate_variable_size(pixels * increment);
     uint8_t* output = packed + 4;
-    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, width, 1, [&](size_t p, int32_t index) {
+    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_mix, width, 1, [&](size_t p, int32_t index) {
         uint8_t* out = output + p * increment;
         const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
         for (int c = 0; c < 3; c++) {out[c] = colour ? colour[c] : 0;}
@@ -778,7 +778,7 @@ int colours_for_entries(const uint8_t* image_data, int image_length, int image_f
     return has_transparent_entry(image_data, image_length, image_format, cutoff) ? std::max(1, k - 1) : k;
 }
 
-uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int width, int cutoff) {
+uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width, int cutoff) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
 
@@ -806,7 +806,7 @@ uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int imag
     std::memcpy(output + header, entries.data(), entries.size());
     uint8_t* indices = output + header + entries.size();
 
-    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, width, transparent ? cutoff : 1, [&](size_t p, int32_t index) {
+    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_mix, width, transparent ? cutoff : 1, [&](size_t p, int32_t index) {
         if (transparent && image_data[p * 4 + 3] < cutoff) {index = transparent_index;}
         uint8_t* out = indices + p * index_bytes;
         for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
@@ -880,53 +880,53 @@ uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, in
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_mix, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k, valid);
     // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
     if (!valid) {return nullptr;}
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_mix, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
-uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width) {
+uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_mix, int width) {
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k, valid);
     if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_mix, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int width) {
-    return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, width);
+uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_mix, int width) {
+    return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_mix, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int width, int transparent) {
+uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_mix, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
     // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
     if (!valid) {return nullptr;}
-    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, width, transparent);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_mix, width, transparent);
 }
 
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
-uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int width, int transparent) {
+uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_mix, int width, int transparent) {
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
     if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
-    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, width, transparent);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_mix, width, transparent);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_indices_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int width, int transparent) {
-    return _quantize_indices(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, width, transparent);
+uint8_t* quantize_indices_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_mix, int width, int transparent) {
+    return _quantize_indices(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_mix, width, transparent);
 }
 
 }

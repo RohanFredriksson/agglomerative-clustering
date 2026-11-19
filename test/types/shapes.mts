@@ -42,4 +42,20 @@ export async function shapes() {
     await handle.quantizeWithPalette([255, 0, 0, 0, 255, 0]);
     await handle.quantizeToIndicesWithPalette(new Uint8ClampedArray(6));
     void [unnarrowed, typed, precision];
+
+    // Dithering: every form, and `mix` only with 'ordered'.
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: true });
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: 0.5 });
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: 'atkinson' });
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: 'ordered', mix: 32, strength: 0.75 } });
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { strength: 0.5 } });
+    await handle.quantize(16, { dither: { method: 'ordered' } });
+    // @ts-expect-error mix needs method: 'ordered'
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { mix: 8 } });
+    // @ts-expect-error nor does Atkinson take one
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: 'atkinson', mix: 8 } });
+    // @ts-expect-error mix is one of the sizes that divide the 8x8 pattern
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: 'ordered', mix: 12 } });
+    // @ts-expect-error not a method
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: 'bayer' });
 }
