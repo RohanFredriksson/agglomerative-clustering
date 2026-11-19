@@ -714,6 +714,63 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         return color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
     };
 
+    if (dither_method == 2) {
+        // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `mix` palette entries whose average is
+        // close to it, built by picking the entry nearest the colour plus the error carried so far (scaled by the
+        // strength), `mix` times. The recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8
+        // Bayer matrix points to. A pixel's colour depends only on its own colour and position, so a still area of an
+        // animation dithers the same way in every frame, whatever changes elsewhere.
+        static constexpr uint8_t bayer[8][8] = {
+            { 0, 32,  8, 40,  2, 34, 10, 42}, {48, 16, 56, 24, 50, 18, 58, 26},
+            {12, 44,  4, 36, 14, 46,  6, 38}, {60, 28, 52, 20, 62, 30, 54, 22},
+            { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
+            {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
+        const size_t mix = size_t(dither_mix);
+        // Recipes are memoised by colour in a direct-mapped table of about 8 MB, whatever the mix. A recipe depends on
+        // nothing but its colour, so the table changes speed only.
+        int recipe_bits = 21;
+        for (size_t m = mix; m > 1; m >>= 1) {recipe_bits--;}
+        std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
+        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * mix);
+        // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
+        // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
+        auto darker = [&](int32_t a, int32_t b) {
+            const auto& pa = points[size_t(a)];
+            const auto& pb = points[size_t(b)];
+            const uint32_t la = color_space == ColorSpace::rgb ? 299u * pa[0] + 587u * pa[1] + 114u * pa[2] : pa[0];
+            const uint32_t lb = color_space == ColorSpace::rgb ? 299u * pb[0] + 587u * pb[1] + 114u * pb[2] : pb[0];
+            return la != lb ? la < lb : keys[size_t(a)] < keys[size_t(b)];
+        };
+        for (size_t y = 0; y < height; y++) {
+            for (size_t x = 0; x < size_t(width); x++) {
+                const size_t p = y * size_t(width) + x;
+                const uint8_t* pixel = image_data + p * increment;
+                if (image_format == 0 && pixel[3] < skip_below) {
+                    emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+                    continue;
+                }
+                const uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
+                const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
+                int32_t* recipe = &recipes[size_t(slot) * mix];
+                if (recipe_keys[slot] != key) {
+                    recipe_keys[slot] = key;
+                    const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
+                    float e[3] = {0.0f, 0.0f, 0.0f};
+                    for (size_t i = 0; i < mix; i++) {
+                        float wanted[3];
+                        for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * strength;}
+                        const int32_t chosen = pick(wanted);
+                        recipe[i] = chosen;
+                        for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
+                    }
+                    std::sort(recipe, recipe + mix, darker);
+                }
+                emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * mix / 64]));
+            }
+        }
+        return;
+    }
+
     if (dither_method == 1) {
         // Atkinson: serpentine like Floyd-Steinberg, but 1/8 of the error goes to each of six neighbours (two ahead, three
         // on the next row, one two rows down) and the remaining quarter is dropped, which keeps highlights and shadows

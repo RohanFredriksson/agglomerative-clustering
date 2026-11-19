@@ -88,3 +88,82 @@ describe('atkinson', () => {
     edgeCases('atkinson');
 
 });
+
+describe('ordered', () => {
+
+    it('keeps still areas still when part of the image changes', async () => {
+        const palette = [0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 160, 0, 0, 0, 200, 230, 200, 40, 120, 120, 120, 90, 40, 160];
+        const changed = new Uint8Array(gradientData);
+        const inBlock = (x, y) => x >= 24 && x < 40 && y >= 24 && y < 40;
+        for (let y = 24; y < 40; y++) {for (let x = 24; x < 40; x++) {changed.set([255, 0, 0, 255], 4 * (y * size + x));}}
+        const outsideDiffers = async (dither) => {
+            const a = (await quantizeWithPalette(gradient, palette, { dither })).data;
+            const b = (await quantizeWithPalette({ data: changed, format: 'rgba', width: size }, palette, { dither })).data;
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const o = 4 * (y * size + x);
+                    if (!inBlock(x, y) && (a[o] !== b[o] || a[o + 1] !== b[o + 1] || a[o + 2] !== b[o + 2])) {return true;}
+                }
+            }
+            return false;
+        };
+        expect(await outsideDiffers('ordered')).toBe(false);
+        // Error diffusion carries the change past the block, which shows the comparison can fail.
+        expect(await outsideDiffers(true)).toBe(true);
+    });
+
+    it('repeats every 8 pixels on a flat colour', async () => {
+        // A dark grey: about 27% white. (Error diffusion makes a mid-grey a checkerboard, which also repeats.)
+        const { indices } = await quantizeToIndicesWithPalette(flat([70, 70, 70], 32), [0, 0, 0, 255, 255, 255], { dither: 'ordered' });
+        for (let y = 0; y < 32; y++) {
+            for (let x = 0; x < 32; x++) {expect(indices[y * 32 + x]).toBe(indices[(y % 8) * 32 + (x % 8)]);}
+        }
+        let white = 0;
+        for (let y = 0; y < 8; y++) {for (let x = 0; x < 8; x++) {white += indices[y * 32 + x];}}
+        expect(Math.abs(white - 64 * 70 / 255)).toBeLessThanOrEqual(4);
+    });
+
+    it('defaults to a mix of 16', async () => {
+        const run = (dither) => quantize(gradient, 8, { dither }).then((result) => result.data);
+        expect(await run('ordered')).toEqual(await run({ method: 'ordered', mix: 16 }));
+        expect(await run({ method: 'ordered', mix: 4 })).not.toEqual(await run({ method: 'ordered', mix: 16 }));
+    });
+
+    it('does not depend on palette order', async () => {
+        const reversed = [];
+        for (let i = eink.length - 3; i >= 0; i -= 3) {reversed.push(...eink.slice(i, i + 3));}
+        const a = await quantizeWithPalette(gradient, eink, { dither: 'ordered' });
+        const b = await quantizeWithPalette(gradient, reversed, { dither: 'ordered' });
+        expect(a.data).toEqual(b.data);
+    });
+
+    it('gives transparent pixels the transparent entry', async () => {
+        const image = tiny(4, 4);
+        image.data[3] = 0;
+        const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, eink, { dither: 'ordered', transparent: true });
+        expect(indices[0]).toBe(transparentIndex);
+    });
+
+    it('handles one-colour and duplicated palettes', async () => {
+        const one = await quantizeToIndicesWithPalette(gradient, [9, 9, 9], { dither: 'ordered' });
+        expect(one.indices.every((index) => index === 0)).toBe(true);
+        const repeated = await quantizeToIndicesWithPalette(gradient, [0, 0, 0, 255, 255, 255, 0, 0, 0], { dither: 'ordered' });
+        expect(repeated.indices.includes(2)).toBe(false);
+    });
+
+    it('works with a palette over 1024 colours', async () => {
+        let seed = 7;
+        const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
+        const palette = Array.from({ length: 2000 * 3 }, random);
+        const reversed = [];
+        for (let i = palette.length - 3; i >= 0; i -= 3) {reversed.push(...palette.slice(i, i + 3));}
+        const a = await quantizeWithPalette(gradient, palette, { dither: 'ordered' });
+        const colours = new Set();
+        for (let i = 0; i < palette.length; i += 3) {colours.add((palette[i] << 16) | (palette[i + 1] << 8) | palette[i + 2]);}
+        for (let i = 0; i < a.data.length; i += 4) {expect(colours.has((a.data[i] << 16) | (a.data[i + 1] << 8) | a.data[i + 2])).toBe(true);}
+        expect((await quantizeWithPalette(gradient, reversed, { dither: 'ordered' })).data).toEqual(a.data);
+    });
+
+    edgeCases('ordered');
+
+});
