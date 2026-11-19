@@ -83,8 +83,10 @@ describe('dither option forms', () => {
             for (const dither of [{ method: 'bogus' }, 'ordered', () => 'ordered']) {
                 const main = await getClustering(image, { dither }).catch((error) => error);
                 expect(main).toMatchObject({ code: 'invalid-argument', argument: 'options.dither' });
-                for (const call of [workerGetClustering(image, { dither }), worker.cluster(image, { dither })]) {
-                    const error = await call.catch((e) => e);
+                // Both calls at once, each with its handler attached straight away: one rejecting before the other is awaited
+                // must not be an unhandled rejection.
+                const errors = await Promise.all([workerGetClustering(image, { dither }), worker.cluster(image, { dither })].map((call) => call.catch((e) => e)));
+                for (const error of errors) {
                     expect(error).toMatchObject({ code: 'invalid-argument', argument: 'options.dither', message: main.message });
                 }
             }
