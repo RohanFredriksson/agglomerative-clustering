@@ -686,6 +686,77 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         return match_values[slot];
     };
 
+    // The colour a pixel should take is its own plus the error it was given, that error limited in length (see `most`).
+    // Clears the error once read.
+    auto carry = [&](const AgglomerativeClustering::KDTree::Point& base, float* e, float* wanted) {
+        const float length = std::sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+        const float scale = length > most ? most / length : 1.0f;
+        for (int c = 0; c < 3; c++) {
+            wanted[c] = float(base[c]) + e[c] * scale;
+            e[c] = 0.0f;
+        }
+    };
+
+    // The distinct-colour index nearest a wanted colour in matching coordinates, by the rule described above: near the
+    // cube it is clamped to the cube (in place, so the error left over is measured from the clamped colour) and looked
+    // up in the index; further out it is matched exactly, unclamped. Every method picks its colours through this.
+    auto pick = [&](float* wanted) -> int32_t {
+        bool outside = false;
+        for (int c = 0; c < 3; c++) {
+            if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
+        }
+        if (outside) {return nearest_outside(wanted);}
+        AgglomerativeClustering::KDTree::Point target;
+        for (int c = 0; c < 3; c++) {
+            wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+            target[c] = uint16_t(std::lround(wanted[c]));
+        }
+        return color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
+    };
+
+    if (dither_method == 1) {
+        // Atkinson: serpentine like Floyd-Steinberg, but 1/8 of the error goes to each of six neighbours (two ahead, three
+        // on the next row, one two rows down) and the remaining quarter is dropped, which keeps highlights and shadows
+        // clean. Three rows of error, with two pixels of padding on each side so no neighbour needs a check.
+        const size_t stride = 3 * (size_t(width) + 4);
+        std::vector<float> rows(3 * stride, 0.0f);
+        for (size_t y = 0; y < height; y++) {
+            float* row0 = &rows[(y % 3) * stride];
+            float* row1 = &rows[((y + 1) % 3) * stride];
+            float* row2 = &rows[((y + 2) % 3) * stride];
+            const bool forward = y % 2 == 0;
+            for (size_t i = 0; i < size_t(width); i++) {
+                const size_t x = forward ? i : size_t(width) - 1 - i;
+                const size_t p = y * size_t(width) + x;
+                const uint8_t* pixel = image_data + p * increment;
+                float* e = &row0[3 * (x + 2)];
+                if (image_format == 0 && pixel[3] < skip_below) {
+                    emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+                    for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
+                    continue;
+                }
+                float wanted[3];
+                carry(match(pixel[0], pixel[1], pixel[2]), e, wanted);
+                const int32_t index = pick(wanted);
+                emit(p, palette_index(index));
+                const ptrdiff_t ahead = forward ? 3 : -3;
+                float* below = &row1[3 * (x + 2)];
+                float* under = &row2[3 * (x + 2)];
+                for (int c = 0; c < 3; c++) {
+                    const float error = (wanted[c] - float(points[index][c])) * strength * (1.0f / 8.0f);
+                    e[c + ahead] += error;
+                    e[c + 2 * ahead] += error;
+                    below[c - ahead] += error;
+                    below[c] += error;
+                    below[c + ahead] += error;
+                    under[c] += error;
+                }
+            }
+            std::fill(row0, row0 + stride, 0.0f);
+        }
+        return;
+    }
+
     for (size_t y = 0; y < height; y++) {
         const bool forward = y % 2 == 0;
         for (size_t i = 0; i < size_t(width); i++) {
@@ -702,26 +773,9 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
             // is the one that best cancels it; mixing spaces lets error pile up into streaks.
             const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
-            const float length = std::sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
-            const float scale = length > most ? most / length : 1.0f;
             float wanted[3];
-            bool outside = false;
-            for (int c = 0; c < 3; c++) {
-                wanted[c] = float(base[c]) + e[c] * scale;
-                if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
-                e[c] = 0.0f;
-            }
-            int32_t index;
-            if (outside) {
-                index = nearest_outside(wanted);
-            } else {
-                AgglomerativeClustering::KDTree::Point target;
-                for (int c = 0; c < 3; c++) {
-                    wanted[c] = std::clamp(wanted[c], 0.0f, limit);
-                    target[c] = uint16_t(std::lround(wanted[c]));
-                }
-                index = color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
-            }
+            carry(base, e, wanted);
+            const int32_t index = pick(wanted);
             emit(p, palette_index(index));
             const ptrdiff_t ahead = forward ? 3 : -3;
             float* below = &next[3 * (x + 1)];
