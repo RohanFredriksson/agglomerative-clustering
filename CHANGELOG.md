@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (3.1.1)
+
+Output is unchanged from 3.1.0.
+
+### Fixed
+- **The worker entry reports `dither` given to a function that takes none the way the main entry does.** `getClustering`, `getPalette`, `getSwatches` and `worker.cluster` with a `dither` option are rejected with `argument: 'options.dither'` and the main entry's message ("Invalid option 'dither': expected one of …"). Before, the worker entry checked the value first: a bad one gave a different `argument` and message, and a function gave a "cannot be sent to the worker" error.
+- **Error messages say "got a function", "got a symbol"**, not "got function".
+
+### Tests
+- Golden hashes for ordered dithering with palettes of 400 and 1100 colours, which take the two search paths the small-palette search doesn't.
+
 ## 3.1.0
 
 Every 3.0 call gives the same output as before: `false`, `true` and a strength still mean Floyd–Steinberg, and the golden tests pin it.

@@ -281,13 +281,16 @@ const initOptions = (options, allowScript) => {
 
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
-const takeControls = (options, progressAllowed = true) => {
+const takeControls = (options, progressAllowed = true, ditherAllowed = true) => {
     // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
     // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
     options = snapshot(options);
     // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
     // at all, for a Proxy or a function): read it here the way the main entry does, and send a plain copy.
+    // A function that takes no dither option rejects the key whatever its value, as the main entry does: send a value that
+    // can cross, for the worker's validation to name the option.
+    if (!ditherAllowed && 'dither' in options) {options.dither = null;}
     if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
         // One read of each setting (a getter could answer differently twice): the copy is what is checked and sent.
         const copy = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
@@ -312,6 +315,8 @@ const abortReason = (signal) => signal.reason !== undefined ? signal.reason : ne
 const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
 // These only map pixels, so they take a signal but no progress callback (see mapOptions in index.js).
+// The functions that only cluster, and so take no dither option.
+const clusteringOnlyFunctions = ['getClustering', 'getPalette', 'getSwatches'];
 const mappingOnlyFunctions = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
@@ -505,7 +510,7 @@ const makeWorker = (options, allowScript) => {
             const origin = new Error();
             return (async () => {
                 const position = optionsPosition[name];
-                const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name));
+                const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name), !clusteringOnlyFunctions.includes(name));
                 // Checked before the image is copied or transferred away, so an aborted call leaves it with the caller.
                 if (signal && signal.aborted) {throw abortReason(signal);}
                 let args = rest.slice();
@@ -544,7 +549,7 @@ const makeWorker = (options, allowScript) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
-            const {options, signal, onProgress} = takeControls(clusterOptions);
+            const {options, signal, onProgress} = takeControls(clusterOptions, true, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = ready() ? send(image) : take(send(image));

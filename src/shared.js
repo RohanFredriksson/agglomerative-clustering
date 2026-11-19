@@ -121,7 +121,7 @@ export const ditherSteps = Object.freeze([2, 4, 8, 16, 32, 64]);
 // A short description of a value for an error message.
 const describe = (value) => typeof value === 'string' ? `'${value}'`
     : typeof value === 'number' || typeof value === 'boolean' || value === null ? String(value)
-    : Array.isArray(value) ? 'an array' : typeof value === 'object' ? `a ${Object.prototype.toString.call(value).slice(8, -1)}` : typeof value;
+    : Array.isArray(value) ? 'an array' : typeof value === 'object' ? `a ${Object.prototype.toString.call(value).slice(8, -1)}` : `a ${typeof value}`;
 
 // Reads every form of the dither option: false/undefined (off), true or a strength from 0 to 1 (Floyd-Steinberg, as in
 // 3.0), a method name, or an object { method, strength, steps } that the plain forms are shorthands for.
