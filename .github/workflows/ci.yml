@@ -10,8 +10,7 @@ permissions:
 
 jobs:
   test:
-    # Not ubuntu-latest: that moved to Ubuntu 26.04, for which the pinned Playwright (playwright-core in package.json) has
-    # no Firefox or WebKit. Move on together with a Playwright upgrade.
+    # A fixed Ubuntu rather than ubuntu-latest, so a new runner image doesn't change the build under us.
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -61,13 +60,45 @@ jobs:
         continue-on-error: true
         run: for config in nodenext bundler node; do npx -y -p typescript@latest tsc -p test/types/tsconfig.$config.json; done
 
-      # Bundles a page with Vite and webpack and runs it in the runner's Chrome, and in Playwright's Firefox and WebKit:
-      # the worker and the .wasm as browsers get them. Playwright's browsers match the playwright-core version in package.json.
-      - name: Install Firefox and WebKit
-        if: matrix.node == 24
-        run: npx -y playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps firefox webkit
+
+  # The playwright-core version the lockfile pins, for the browser job's container: Playwright's images are tagged by
+  # version, and each only has the browsers that version drives.
+  playwright:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
+
+  # Bundles a page with Vite and webpack and runs it in Chromium, Firefox and WebKit: the worker and the .wasm as browsers
+  # get them, against the Linux job's build. In Playwright's own image, which has the browsers and their system libraries:
+  # installing those libraries on the runner (playwright install --with-deps) took 15 minutes, nearly all of it fetching
+  # Ubuntu packages from a slow mirror.
+  browsers:
+    needs: [test, playwright]
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright.outputs.version }}-noble
+    env:
+      # Firefox won't start as root when HOME belongs to another user, which GitHub's container HOME (/github/home) does.
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - run: npm ci
       - run: npm run test:browser
-        if: matrix.node == 24
         env:
           BROWSERS: chromium,firefox,webkit
 
