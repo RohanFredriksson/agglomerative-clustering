@@ -734,11 +734,13 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         std::vector<int32_t> recipes((size_t(1) << recipe_bits) * mix);
         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
         // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
+        std::vector<uint32_t> brightness(points.size());
+        for (size_t i = 0; i < points.size(); i++) {
+            const auto& point = points[i];
+            brightness[i] = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
+        }
         auto darker = [&](int32_t a, int32_t b) {
-            const auto& pa = points[size_t(a)];
-            const auto& pb = points[size_t(b)];
-            const uint32_t la = color_space == ColorSpace::rgb ? 299u * pa[0] + 587u * pa[1] + 114u * pa[2] : pa[0];
-            const uint32_t lb = color_space == ColorSpace::rgb ? 299u * pb[0] + 587u * pb[1] + 114u * pb[2] : pb[0];
+            const uint32_t la = brightness[size_t(a)], lb = brightness[size_t(b)];
             return la != lb ? la < lb : keys[size_t(a)] < keys[size_t(b)];
         };
         for (size_t y = 0; y < height; y++) {
