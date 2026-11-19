@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (3.1.1)
+## 3.1.1
 
 Output is unchanged from 3.1.0.
 
