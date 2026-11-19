@@ -129,12 +129,17 @@ async function run() {
         let last = performance.now(), worst = 0, ticks = 0;
         const timer = setInterval(() => {const now = performance.now(); worst = Math.max(worst, now - last); last = now; ticks++;}, 4);
         await run();
+        // The gap still open when the run ends: for a run that blocks, that is the whole run, during which no tick could
+        // fire (on a fast machine none fires at all).
+        worst = Math.max(worst, performance.now() - last);
         clearInterval(timer);
         return { worst, ticks };
     };
     const blocking = await gaps(() => ac.getClustering(big));
     const sliced2 = await gaps(() => ac.getClustering(big, { onProgress: () => {} }));
-    checks.slicingKeepsThePageResponsive = sliced2.ticks > 10 && sliced2.worst < Math.max(150, blocking.worst * 0.5);
+    // The page gets turns while it slices (a few at least: a fast machine finishes in a few dozen milliseconds), and its
+    // longest wait is a small part of the blocking run's.
+    checks.slicingKeepsThePageResponsive = sliced2.ticks >= 3 && sliced2.worst < Math.max(150, blocking.worst * 0.5);
     details.slicingKeepsThePageResponsive = `ticks ${sliced2.ticks}, longest gap ${sliced2.worst.toFixed(1)} ms sliced against ${blocking.worst.toFixed(1)} ms blocking`;
 
     // transfer: true hands the pixel buffer to the worker (the caller's copy is emptied) and the result is still right.
