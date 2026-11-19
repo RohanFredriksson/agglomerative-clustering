@@ -150,24 +150,28 @@ describe('ordered', () => {
         }
     });
 
-    it('scales with strength about as error diffusion does', async () => {
-        // The share of pixels that differ from undithered, at a strength, against at full strength.
-        const share = async (method, strength) => {
-            const none = (await quantizeWithPalette(gradient, eink)).data;
-            const out = (await quantizeWithPalette(gradient, eink, { dither: { method, strength } })).data;
-            let changed = 0;
-            for (let i = 0; i < none.length; i += 4) {if (none[i] !== out[i] || none[i + 1] !== out[i + 1] || none[i + 2] !== out[i + 2]) {changed++;}}
-            return changed;
+    it('scales with strength about as error diffusion does, at every step count', async () => {
+        // The share of pixels that differ from undithered, at a strength, against at full strength: Floyd-Steinberg's is
+        // about 0.06, 0.3 and 0.6 at 0.05, 0.25 and 0.5, and ordered dithering should track it for every step count.
+        const share = async (palette, dither, strength) => {
+            const none = (await quantizeWithPalette(gradient, palette)).data;
+            const changed = async (s) => {
+                const out = (await quantizeWithPalette(gradient, palette, { dither: { ...dither, strength: s } })).data;
+                let n = 0;
+                for (let i = 0; i < none.length; i += 4) {if (none[i] !== out[i] || none[i + 1] !== out[i + 1] || none[i + 2] !== out[i + 2]) {n++;}}
+                return n;
+            };
+            return await changed(strength) / await changed(1);
         };
-        const full = await share('ordered', 1);
-        const half = await share('ordered', 0.5) / full, quarter = await share('ordered', 0.25) / full, tenth = await share('ordered', 0.1) / full;
-        expect(tenth).toBeGreaterThan(0);
-        expect(quarter).toBeLessThan(0.55);
-        expect(half).toBeLessThan(0.9);
-        expect(tenth).toBeLessThan(quarter);
-        expect(quarter).toBeLessThan(half);
+        for (const [palette, steps] of [[eink, 16], [[0, 0, 0, 255, 255, 255], 64], [eink, 4], [[0, 0, 0, 85, 85, 85, 170, 170, 170, 255, 255, 255], 32]]) {
+            const label = `${palette.length / 3} colours, ${steps} steps`;
+            expect(await share(palette, { method: 'ordered', steps }, 0.05), label).toBeGreaterThan(0.01);
+            for (const strength of [0.25, 0.5]) {
+                const fs = await share(palette, { method: 'floyd-steinberg' }, strength);
+                expect(Math.abs(await share(palette, { method: 'ordered', steps }, strength) - fs), `${label}, strength ${strength}`).toBeLessThan(0.2);
+            }
+        }
     });
-
     it('does not depend on palette order', async () => {
         const reversed = [];
         for (let i = eink.length - 3; i >= 0; i -= 3) {reversed.push(...eink.slice(i, i + 3));}

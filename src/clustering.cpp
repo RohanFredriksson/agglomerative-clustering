@@ -729,10 +729,34 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         // gradient (black and white), and 16 otherwise, where colours are closer together and 16 is where more steps
         // stop paying for their time (each doubling about doubles it).
         const size_t steps = dither_steps > 0 ? size_t(dither_steps) : points.size() <= 2 ? 64 : 16;
-        // The error a recipe carries is scaled by the strength to the power 2.5. Taken as it is, the strength barely
-        // changes a recipe until it is small (0.5 looked like 1); this curve makes equal steps of strength give roughly
-        // equal changes, as they do for error diffusion (measured on photos, black and white, four greys and e-ink inks).
-        const float recipe_strength = float(std::pow(double(strength), 2.5));
+        // The error a recipe carries is scaled by an internal strength, which the strength given maps to through a table
+        // per step count. Ordered dithering responds very steeply to it (with 64 steps, 0.01 already does a third of
+        // what 1 does), and more steeply the more steps there are. The table was measured so that the share of pixels a
+        // strength changes, against full strength, follows Floyd-Steinberg's at 0.05, 0.1, 0.25, 0.5 and 0.75 (on
+        // photos, gradients and a grey ramp, with black and white, four greys, seven e-ink inks, and 4 and 16 colours
+        // from each image), so a strength means about the same for every method. Between the knots it is interpolated
+        // geometrically, as the response is roughly logarithmic in the internal strength.
+        static constexpr double knot_strengths[7] = {0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0};
+        static constexpr double knot_internal[6][7] = {
+            {0.0, 0.0322, 0.0669, 0.167, 0.408, 0.691, 1.0},      // 2 steps
+            {0.0, 0.0180, 0.0392, 0.102, 0.278, 0.570, 1.0},      // 4
+            {0.0, 0.00930, 0.0208, 0.0576, 0.166, 0.411, 1.0},    // 8
+            {0.0, 0.00463, 0.0108, 0.0304, 0.0938, 0.285, 1.0},   // 16
+            {0.0, 0.00241, 0.00555, 0.0158, 0.0505, 0.179, 1.0},  // 32
+            {0.0, 0.00124, 0.00283, 0.00811, 0.0272, 0.107, 1.0}, // 64
+        };
+        size_t row = 0;
+        for (size_t m = steps; m > 2; m >>= 1) {row++;}
+        double internal = 1.0;
+        for (size_t k = 1; k < 7; k++) {
+            if (double(strength) <= knot_strengths[k]) {
+                const double t = (double(strength) - knot_strengths[k - 1]) / (knot_strengths[k] - knot_strengths[k - 1]);
+                const double low = knot_internal[row][k - 1], high = knot_internal[row][k];
+                internal = low == 0.0 ? t * high : low * std::pow(high / low, t);
+                break;
+            }
+        }
+        const float recipe_strength = float(internal);
         // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (about
         // 8 MB of entries and up to 4 MB of keys), and at least 2^17 above that, since a photo has 50,000 to 100,000
         // colours and a slot two colours share is a recipe built twice; but never more than twice the image's pixels, so

@@ -209,7 +209,7 @@ export type DitherSteps = 2 | 4 | 8 | 16 | 32 | 64;
  * doubles the time.
  */
 export type DitherOptions =
-    | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined }
+    | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined; steps?: undefined }
     | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
 
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */

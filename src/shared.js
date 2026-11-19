@@ -105,6 +105,53 @@ export const snapshot = (options) => {
     return copy;
 };
 
+// ----- Dithering ------------------------------------------------------------------------------------------------------
+// The dither methods and their codes in C, and the step counts ordered dithering takes (the counts that divide the 64
+// cells of its 8x8 matrix evenly). Steps 0 tells C to choose: 64 for a palette of two colours, else 16.
+const ditherMethods = {'floyd-steinberg': 0, 'atkinson': 1, 'ordered': 2};
+const ditherStepCounts = [2, 4, 8, 16, 32, 64];
+
+// A short description of a value for an error message.
+const describe = (value) => typeof value === 'string' ? `'${value}'`
+    : typeof value === 'number' || typeof value === 'boolean' || value === null ? String(value)
+    : Array.isArray(value) ? 'an array' : typeof value === 'object' ? `a ${Object.prototype.toString.call(value).slice(8, -1)}` : typeof value;
+
+// Reads every form of the dither option: false/undefined (off), true or a strength from 0 to 1 (Floyd-Steinberg, as in
+// 3.0), a method name, or an object { method, strength, steps } that the plain forms are shorthands for.
+// Returns {strength, method, steps}, with strength 0 meaning no dithering and steps 0 meaning the default.
+export const parseDither = (value) => {
+    const invalid = (key, message) => fail('invalid-argument', message, key === undefined ? 'options.dither' : `options.dither.${key}`);
+    const wrongForm = () => invalid(undefined, `Invalid dither: got ${describe(value)}; it must be a boolean, a strength from 0 to 1, 'floyd-steinberg', 'atkinson', 'ordered', or an object { method, strength, steps }.`);
+    const has = (key) => Object.prototype.hasOwnProperty.call(ditherMethods, key);
+    if (value === undefined || value === false) {return {strength: 0, method: 0, steps: 0};}
+    if (value === true) {return {strength: 1, method: 0, steps: 0};}
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value) || value < 0 || value > 1) {throw wrongForm();}
+        return {strength: value, method: 0, steps: 0};
+    }
+    if (typeof value === 'string' && has(value)) {return {strength: 1, method: ditherMethods[value], steps: 0};}
+    if (!isOptionsObject(value)) {throw wrongForm();}
+    const object = snapshot(value);
+    for (const key of Object.keys(object)) {
+        if (!['method', 'strength', 'steps'].includes(key)) {throw invalid(key, `Invalid dither option '${key}': expected method, strength or steps.`);}
+    }
+    const methodName = object.method === undefined ? 'floyd-steinberg' : object.method;
+    if (typeof methodName !== 'string' || !has(methodName)) {
+        throw invalid('method', `Invalid dither.method: got ${describe(methodName)}; it must be 'floyd-steinberg', 'atkinson' or 'ordered'.`);
+    }
+    const strength = object.strength === undefined ? 1 : object.strength;
+    if (typeof strength !== 'number' || !Number.isFinite(strength) || strength < 0 || strength > 1) {
+        throw invalid('strength', `Invalid dither.strength: got ${describe(strength)}; it must be a number from 0 to 1.`);
+    }
+    if (object.steps !== undefined && methodName !== 'ordered') {
+        throw invalid('steps', `Invalid dither.steps: only ordered dithering takes steps, so write dither: { method: 'ordered', steps }.`);
+    }
+    if (object.steps !== undefined && !ditherStepCounts.includes(object.steps)) {
+        throw invalid('steps', `Invalid dither.steps: got ${describe(object.steps)}; it must be 2, 4, 8, 16, 32 or 64.`);
+    }
+    return {strength, method: ditherMethods[methodName], steps: object.steps === undefined ? 0 : object.steps};
+};
+
 // ----- Palette and Clustering ----------------------------------------------------------------------------------------
 // Palettes and clusterings are byte arrays, and nothing about a Uint8Array says which one it is, or (for a palette) which
 // colour space its colours were made in. So the ones this library returns are ordinary Uint8Arrays carrying two hidden,

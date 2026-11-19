@@ -2,7 +2,7 @@
 // without the DOM lib, so it is compiled in every configuration.
 import { getClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 import { createWorker } from 'agglomerative-clustering/worker';
-import type { ClusteringInfo, DitherSteps, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
+import type { ClusteringInfo, DitherMethod, DitherSteps, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
 
 declare const raw: RawImage;
 
@@ -62,4 +62,9 @@ export async function shapes() {
     await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: 'ordered', steps } });
     // @ts-expect-error not a method
     await quantizeWithPalette(raw, [0, 0, 0], { dither: 'bayer' });
+    // UI state holding any method: steps is caught unless the method is known to be 'ordered'.
+    const ui: { method: DitherMethod; strength: number; steps: DitherSteps } = { method: 'atkinson', strength: 1, steps: 16 };
+    // @ts-expect-error steps with a method that may not be 'ordered'
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: { method: ui.method, strength: ui.strength, steps: ui.steps } });
+    await quantizeWithPalette(raw, [0, 0, 0], { dither: ui.method === 'ordered' ? { method: 'ordered', strength: ui.strength, steps: ui.steps } : { method: ui.method, strength: ui.strength } });
 }

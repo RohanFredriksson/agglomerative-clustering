@@ -85,6 +85,23 @@ describe('a worker call with a signal or onProgress', () => {
         expect(thirdResult).toEqual(await ac.getPalette(small, 4));
     }, 60000);
 
+    it('skips cancelled calls queued behind mapping calls, which run in one piece', async () => {
+        // Mapping doesn't yield to the event loop the way a sliced clustering does, so a cancel can only be read between
+        // calls. Ten slow mappings sent at once with the first nine cancelled at once should cost about one mapping.
+        const handle = await worker.cluster(noise(300, 200, 3));
+        const dither = { method: 'ordered', steps: 32 };
+        const one = await timed(handle.quantize(64, { dither }));
+        const controllers = Array.from({ length: 10 }, () => new AbortController());
+        const calls = controllers.map((controller) => handle.quantize(64, { dither, signal: controller.signal }));
+        const cancelled = calls.slice(0, 9).map((call) => call.then(() => 'ran', (error) => error.name));
+        controllers.slice(0, 9).forEach((controller) => controller.abort());
+        const last = await timed(calls[9]);
+        expect(await Promise.all(cancelled)).toEqual(Array(9).fill('AbortError'));
+        expect(same(last.value.data, one.value.data)).toBe(true);
+        expect(last.ms, `one mapping took ${one.ms.toFixed(0)} ms`).toBeLessThan(one.ms * 3);
+        await handle.release();
+    }, 60_000);
+
     it('rejects a call whose signal is already aborted without sending or detaching anything', async () => {
         const moving = createWorker({ transfer: true });
         try {

@@ -78,6 +78,17 @@ describe('dither option forms', () => {
         }
     });
 
+    it('reads the dither object the same way in the worker entry', async () => {
+        // Inherited keys count, as they do for the options themselves, and a Proxy is read like the object it wraps.
+        for (const dither of [Object.create({ method: 'atkinson' }), Object.create({ method: 'ordered', steps: 4 }), new Proxy({ method: 'ordered' }, {})]) {
+            expect((await workerQuantize(image, 8, { dither })).data).toEqual((await quantize(image, 8, { dither })).data);
+        }
+        await expect(workerQuantize(image, 8, { dither: Object.create({ extra: 1 }) })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options.dither.extra' });
+        for (const dither of [() => 'ordered', Symbol('ordered')]) {
+            await expect(workerQuantize(image, 8, { dither })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options.dither' });
+        }
+    });
+
 });
 
 // The supported engines (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 20.19; see .babelrc) don't all have every
