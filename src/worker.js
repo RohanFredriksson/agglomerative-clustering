@@ -289,8 +289,10 @@ const takeControls = (options, progressAllowed = true) => {
     // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
     // at all, for a Proxy or a function): read it here the way the main entry does, and send a plain copy.
     if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
-        parseDither(options.dither);
-        options.dither = Object.assign({}, snapshot(options.dither));
+        // One read of each setting (a getter could answer differently twice): the copy is what is checked and sent.
+        const copy = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
+        parseDither(copy);
+        options.dither = copy;
     }
     const {signal, onProgress} = options;
     if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.", 'options.onProgress');}

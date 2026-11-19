@@ -13,7 +13,7 @@ Every 3.0 call gives the same output as before: `false`, `true` and a strength s
 - **`bench/dither.bench.js`:** mapping time for each method.
 
 ### Fixed
-- **Cancelling a call queued behind a mapping call in a worker** now stops it from running. Mapping runs in one piece, so the worker read cancels only between calls, by which time the next call had already started: cancelled calls ran anyway, and a slider following the documented recipe could fall many seconds behind. The worker now takes a turn of its event loop before each call that can be cancelled.
+- **Cancelling a call queued behind a mapping call in a worker** now stops it from running. Mapping runs in one piece, so the worker read cancels only between calls, by which time the next call had already started: cancelled calls ran anyway, and a slider following the documented recipe could fall many seconds behind. The worker now takes a turn of its event loop before each call that can be cancelled (in a browser, a message to itself, which unlike a zero timeout isn't stretched to 4 ms), and skips it for a call already cancelled, so a hundred cancelled calls cost a few milliseconds.
 - **Chrome and Edge 91–92 and Firefox 89–91:** the worker entry called `Object.hasOwn`, which those versions lack, so every worker call failed there. A test now checks that no built file uses it.
 
 ## 3.0.0

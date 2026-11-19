@@ -87,7 +87,7 @@ const colors = await getPaletteFromClustering(clustering, 255);   // 255 colours
 
 for (const frame of frames) {
   // The same colours at the same indices in every frame, and the transparent entry (when a frame has transparent pixels)
-  // at index 255. Ordered dithering is a fixed pattern, so the parts of the picture that don't move stay the same from
+  // right after them: index 255, or fewer when the sample has fewer than 255 colours. Ordered dithering is a fixed pattern, so the parts of the picture that don't move stay the same from
   // frame to frame; error diffusion would make them shimmer.
   const { palette, indices, transparentIndex } = await quantizeToIndicesWithPalette(frame, colors, { transparent: true, dither: 'ordered' });
   // … gif.writeFrame(indices, width, height, { palette: …, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
@@ -95,7 +95,7 @@ for (const frame of frames) {
 ```
 
 - **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`quantizeToIndicesFromClustering(frame, clustering, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
-- **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter (255); a GIF with one global palette can use the 256-entry one throughout.
+- **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `colors.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
 ## Live video and camera frames

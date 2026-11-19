@@ -95,6 +95,12 @@ describe('dither option forms', () => {
         }
     });
 
+    it('reads each dither setting once in the worker entry, as the main entry does', async () => {
+        // A getter that answers differently on a second read: what is validated must be what is used.
+        const changing = () => {let reads = 0; return {get method() {return reads++ === 0 ? 'ordered' : 'bogus';}};};
+        expect((await workerQuantize(image, 8, { dither: changing() })).data).toEqual((await quantize(image, 8, { dither: changing() })).data);
+    });
+
     it('reads the dither object the same way in the worker entry', async () => {
         // Inherited keys count, as they do for the options themselves, and a Proxy is read like the object it wraps.
         for (const dither of [Object.create({ method: 'atkinson' }), Object.create({ method: 'ordered', steps: 4 }), new Proxy({ method: 'ordered' }, {})]) {
