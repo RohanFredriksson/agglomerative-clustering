@@ -6,6 +6,11 @@ export interface CodedError extends Error {
     argument?: ErrorArgument;
 }
 export const errorCodes: readonly ErrorCode[];
+export const colorSpaces: readonly ColorSpace[];
+export const imageFormats: readonly ImageFormat[];
+export const alphaModes: readonly AlphaMode[];
+export const ditherMethods: readonly DitherMethod[];
+export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
 export interface RawImage {
     data: Uint8Array | Uint8ClampedArray;
@@ -55,9 +60,20 @@ export interface ClusteringOptions extends ProgressOptions {
     alpha?: AlphaMode | undefined;
     transparent?: boolean | number | undefined;
 }
+export type DitherMethod = 'floyd-steinberg' | 'atkinson' | 'ordered';
+export type DitherSteps = 2 | 4 | 8 | 16 | 32 | 64;
+export type DitherOptions = {
+    method?: 'floyd-steinberg' | 'atkinson' | undefined;
+    strength?: number | undefined;
+    steps?: undefined;
+} | {
+    method: 'ordered';
+    strength?: number | undefined;
+    steps?: DitherSteps | undefined;
+};
 export interface MappingOptions extends CancelOptions {
     colorSpace?: ColorSpace | undefined;
-    dither?: boolean | number | undefined;
+    dither?: boolean | number | DitherMethod | DitherOptions | undefined;
     width?: number | undefined;
 }
 export type QuantizeOptions = ClusteringOptions & MappingOptions;

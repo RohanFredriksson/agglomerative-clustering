@@ -33,6 +33,24 @@ export interface CodedError extends Error {
 /** Every `ErrorCode`, in a frozen array: for code that forwards or lists them (a wrapper package, an IPC bridge). */
 export const errorCodes: readonly ErrorCode[];
 
+/** Every colour space, as a frozen list: narrow a string with `colorSpaces.find((c) => c === value)`. */
+export const colorSpaces: readonly ColorSpace[];
+
+/** Every image format, as a frozen list. A minor release may add one, as it may add an error code. */
+export const imageFormats: readonly ImageFormat[];
+
+/** Every alpha mode, as a frozen list. */
+export const alphaModes: readonly AlphaMode[];
+
+/**
+ * Every dither method, as a frozen list: for building a choice from them, or narrowing a string from a form with
+ * `ditherMethods.find((m) => m === value)`.
+ */
+export const ditherMethods: readonly DitherMethod[];
+
+/** Every step count ordered dithering takes, as a frozen list: narrow a number with `ditherSteps.find((s) => s === value)`. */
+export const ditherSteps: readonly DitherSteps[];
+
 /**
  * Whether `value` is one of this library's errors: something with a string `message` and a `code` from `errorCodes`.
  * Unlike checking `code` alone, it is false for Node's own errors (`'ENOENT'`) and for an abort (the signal's reason).
@@ -187,6 +205,31 @@ export interface ClusteringOptions extends ProgressOptions {
     transparent?: boolean | number | undefined;
 }
 
+/**
+ * How dithering spreads the difference between a pixel and its palette colour.
+ * - `'floyd-steinberg'`: error diffusion, the most accurate for still images (what `dither: true` means).
+ * - `'atkinson'`: error diffusion that passes on only 3/4 of the error, for a lighter, higher-contrast look.
+ * - `'ordered'`: a fixed 8x8 pattern, so a pixel's colour depends only on its own colour and position: still areas of
+ *   an animation stay still from frame to frame.
+ */
+export type DitherMethod = 'floyd-steinberg' | 'atkinson' | 'ordered';
+
+/**
+ * The step counts ordered dithering takes: the counts that divide the 64 cells of its 8x8 pattern evenly. Narrow a
+ * number to it with the exported list: `ditherSteps.find((s) => s === value)`.
+ */
+export type DitherSteps = 2 | 4 | 8 | 16 | 32 | 64;
+
+/**
+ * The full form of the `dither` option. `strength` (0 to 1, default 1) scales how much of the error is spread; 0 is no
+ * dithering. `steps` is for `'ordered'` only: how many pattern cells each colour's mix is spread over, so two colours
+ * blend in `steps + 1` shades. The default is 64 for a palette of two colours and 16 otherwise; each doubling about
+ * doubles the time.
+ */
+export type DitherOptions =
+    | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined; steps?: undefined }
+    | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
+
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
 export interface MappingOptions extends CancelOptions {
     /**
@@ -197,10 +240,12 @@ export interface MappingOptions extends CancelOptions {
      */
     colorSpace?: ColorSpace | undefined;
     /**
-     * Error-diffusion dithering (serpentine Floyd-Steinberg): `false` (default), `true`, or a strength from 0 to 1.
-     * Needs the image width: taken from `ImageData` or `RawImage.width`, or given as `width`.
+     * Dithering: `false` (default); `true` or a strength from 0 to 1 for Floyd-Steinberg error diffusion; a method name
+     * (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`); or a {@link DitherOptions} object, which the other forms are
+     * shorthands for. A strength of 0 is no dithering. Dithering needs the image width (not at strength 0): taken from
+     * `ImageData` or `RawImage.width`, or given as `width`. See "Choosing a dither method" in docs/api.md.
      */
-    dither?: boolean | number | undefined;
+    dither?: boolean | number | DitherMethod | DitherOptions | undefined;
     /**
      * Image width in pixels, for dithering a `Uint8Array` or a `RawImage` without `width`. An image that has its own
      * `width` (`ImageData`, or a `RawImage` with one) must agree with it: a different value is an `invalid-argument` error.

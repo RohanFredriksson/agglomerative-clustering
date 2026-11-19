@@ -4,10 +4,10 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
+import {fail, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
-export {version, Palette, Clustering, errorCodes, isCodedError} from './shared.js';
+export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
 export const formatVersion = latestVersion;
 
 // Node's worker_threads, where this script runs from a file in Node, Bun or Deno (from npm). A runtime that only imitates Node
@@ -286,6 +286,12 @@ const takeControls = (options, progressAllowed = true) => {
     // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
     options = snapshot(options);
+    // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
+    // at all, for a Proxy or a function): read it here the way the main entry does, and send a plain copy.
+    if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
+        parseDither(options.dither);
+        options.dither = Object.assign({}, snapshot(options.dither));
+    }
     const {signal, onProgress} = options;
     if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.", 'options.onProgress');}
     if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}

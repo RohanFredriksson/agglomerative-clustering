@@ -101,7 +101,7 @@ The one-shot functions (`getPalette`, `quantize`, …) do every step for you. To
 
 **`…FromClustering`** takes the colours from a clustering you already hold, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `getClustering` builds a clustering, `getClusteringInfo` reads one (including its error curve, for choosing a palette size), and `init` loads the WebAssembly module (optional). Most code only needs the first column.
 
-Palettes come in **split order**: the palette for `k + 1` is the one for `k` with one colour split in two, so entries keep their place as `k` grows (they are not sorted by share). The options are `precision` (6 is about 3× faster at practically the same quality), `colorSpace` (`'rgb'` or `'oklab'`), `alpha`, `transparent`, `dither`, `width`, `signal` and `onProgress`: see the [API reference](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md).
+Palettes come in **split order**: the palette for `k + 1` is the one for `k` with one colour split in two, so entries keep their place as `k` grows (they are not sorted by share). The options are `precision` (6 is about 3× faster at practically the same quality), `colorSpace` (`'rgb'` or `'oklab'`), `alpha`, `transparent`, `dither` (Floyd–Steinberg, Atkinson, or ordered for animation, which keeps still areas still), `width`, `signal` and `onProgress`: see the [API reference](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md).
 
 ## Use cases
 

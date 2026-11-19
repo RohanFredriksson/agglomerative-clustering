@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (3.1.0)
+
+Every 3.0 call gives the same output as before: `false`, `true` and a strength still mean Floyd–Steinberg, and the golden tests pin it.
+
+### Added
+- **Dither methods.** `dither` also takes `'atkinson'`, `'ordered'`, `'floyd-steinberg'`, or an object `{ method, strength, steps }`, which the other forms are shorthands for. `'ordered'` is pattern dithering: each colour gets a recipe of palette colours that average out to it, laid out in a fixed 8×8 pattern, so a pixel's colour depends only on its own colour and position and the still parts of an animation stay still from frame to frame. `steps` (`'ordered'` only: 2, 4, 8, 16, 32 or 64) is how many pattern cells a colour's mix is spread over, so two colours blend in `steps + 1` shades; the default is 64 for a palette of two colours and 16 otherwise. `strength` means about the same for every method: ordered dithering's goes through a table, measured for each step count, so it changes about the same share of pixels as Floyd–Steinberg's. `'atkinson'` is error diffusion that passes on 3/4 of the error, for a higher-contrast look. See "Choosing a dither method" in `docs/api.md`, which also shows how to dither to a few inks in linear light, so photos don't come out too light on e-ink and 1-bit panels. Types: `DitherMethod`, `DitherOptions`, `DitherSteps`.
+- **Clearer option errors:** an invalid `dither` names the value it got, says to use `false` for `'none'`, and says to pass a number for a number given as a string (`steps: '16'`); a dither setting written as an option of its own (`ditherMethod`, `strength`, `steps`) points at `dither: { method, strength, steps }`.
+- **Lists of names:** `colorSpaces`, `imageFormats`, `alphaModes`, `ditherMethods` and `ditherSteps`, frozen lists of every value of the options that take one of a fixed set of names, exported from both entries like `errorCodes`, for building a form's choices and narrowing its values (`ditherMethods.find((m) => m === value)`). Every such option has one, a rule written down in `docs/api.md` for options to come.
+- **TypeScript:** `MappingOptions['dither']` now also includes `DitherMethod` and `DitherOptions`, so code that reads the option's type and handles only `boolean | number` needs a branch for them (see `docs/stability.md`).
+- **An option-shape convention** (`docs/api.md`): an option is a plain value while it has one setting, and gets an object form, with its plain values as shorthands, when it has more. `dither` is the first. `docs/stability.md` now says an option may accept new values or an object form in a minor release.
+- **`bench/dither.bench.js`:** mapping time for each method.
+
+### Fixed
+- **Cancelling a call queued behind a mapping call in a worker** now stops it from running. Mapping runs in one piece, so the worker read cancels only between calls, by which time the next call had already started: cancelled calls ran anyway, and a slider following the documented recipe could fall many seconds behind. The worker now takes a turn of its event loop before each call that can be cancelled.
+- **Chrome and Edge 91–92 and Firefox 89–91:** the worker entry called `Object.hasOwn`, which those versions lack, so every worker call failed there. A test now checks that no built file uses it.
+
 ## 3.0.0
 
 Every 2.x function and default is unchanged except one rename (`quantizeWithClustering` is now `quantizeFromClustering`, below). Palettes and quantized images are byte-identical to 2.0.0 for the same inputs and options, with one exception: `quantizeWithPalette` with a palette made in OKLab now matches in OKLab (below; pass `colorSpace: 'rgb'` for the 2.x result). The golden tests pin this, and 2.0 clusterings still load and cut to the same palettes. New: a worker entry, cancellation and progress, indexed output, swatches, an error curve, error codes, and a new clustering format. See [Migrating](docs/migrating.md).

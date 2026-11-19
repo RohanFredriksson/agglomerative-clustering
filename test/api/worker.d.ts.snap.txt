@@ -4,10 +4,11 @@ import type { Palette, Clustering } from './index.js';
 export { Palette } from './index.js';
 export { Clustering } from './index.js';
 export { errorCodes } from './index.js';
+export { colorSpaces, imageFormats, alphaModes, ditherMethods, ditherSteps } from './index.js';
 export { isCodedError } from './index.js';
 export const version: string;
 export const formatVersion: number;
-export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, } from './index.js';
+export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, DitherMethod, DitherOptions, DitherSteps, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, } from './index.js';
 export interface WorkerOptions {
     transfer?: boolean | undefined;
     wasm?: InitOptions['wasm'] | undefined;

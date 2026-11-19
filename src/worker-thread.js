@@ -65,11 +65,18 @@ const optionsIndex = {
 // still waiting its turn can be cancelled and never starts.
 const controllers = new Map();
 
+// A turn of the event loop, so messages already sent to this thread (cancels) are read. Node's setImmediate runs after
+// pending messages; elsewhere a zero timeout does.
+const nextTurn = () => new Promise((resolve) => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
+
 const respond = async ({id, method, args, progress}, post) => {
     const controller = controllers.get(id);
     try {
+        // The call before this one may have run in one piece (mapping does), with no turn of the event loop for a cancel
+        // of this call to arrive; take one before starting, so a call cancelled while it waited never runs.
+        if (controller) {await nextTurn();}
         if (controller && controller.signal.aborted) {return;}
-        if (!Object.hasOwn(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
+        if (!Object.prototype.hasOwnProperty.call(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
         if (controller || progress) {
             args = args.slice();
             const index = optionsIndex[method];

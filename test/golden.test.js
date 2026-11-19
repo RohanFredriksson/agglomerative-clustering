@@ -95,12 +95,20 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         check(`${name}/quantize/oklab/64`, await quantize(rgba, 64, { colorSpace: 'oklab' }));
         check(`${name}/quantize/rgb/16/dither`, await quantize(rgba, 16, { dither: true, width }));
         check(`${name}/quantize/oklab/64/dither-0.5`, await quantize(rgba, 64, { colorSpace: 'oklab', dither: 0.5, width }));
+        check(`${name}/quantize/rgb/16/dither-atkinson`, await quantize(rgba, 16, { dither: 'atkinson', width }));
+        check(`${name}/quantize/rgb/16/dither-ordered`, await quantize(rgba, 16, { dither: 'ordered', width }));
+        check(`${name}/quantize/oklab/64/dither-ordered-0.5`, await quantize(rgba, 64, { colorSpace: 'oklab', dither: { method: 'ordered', strength: 0.5 }, width }));
+        check(`${name}/quantize/rgb/16/dither-ordered-steps4`, await quantize(rgba, 16, { dither: { method: 'ordered', steps: 4 }, width }));
+        check(`${name}/quantize/rgb/16/dither-ordered-steps64`, await quantize(rgba, 16, { dither: { method: 'ordered', steps: 64 }, width }));
+        check(`${name}/quantize/rgb/2/dither-ordered`, await quantize(rgba, 2, { dither: 'ordered', width }));
         // Above 256 colours, mapping uses the k-d tree instead of the cell index.
         const large = await getPaletteFromClustering(await getClustering(rgba), 400);
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));
         check(`${name}/map/oklab/400`, await quantizeWithPalette(rgba, large, { colorSpace: 'oklab' }));
         const indexed = (result) => new Uint8Array([...result.palette, ...new Uint8Array(result.indices.buffer), (result.transparentIndex ?? -1) & 255]);
         check(`${name}/indices/rgb/16/dither/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: true, width, transparent: true })));
+        check(`${name}/indices/rgb/16/dither-ordered/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: 'ordered', width, transparent: true })));
+        check(`${name}/indices/oklab/16/dither-atkinson`, indexed(await quantizeToIndices(rgba, 16, { colorSpace: 'oklab', dither: 'atkinson', width })));
         check(`${name}/indices/oklab/400`, indexed(await quantizeToIndicesWithPalette(rgba, large, { colorSpace: 'oklab' })));
     }, 60_000);
 

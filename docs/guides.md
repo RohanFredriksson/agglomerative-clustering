@@ -75,7 +75,7 @@ const png = encode({
 One palette for a whole animation (or a set of images that should share colours) keeps colours from flickering between frames. Cluster a sample of the frames as one image, by putting their pixels end to end, then map every frame with that clustering:
 
 ```js
-import { getClustering, quantizeToIndicesFromClustering } from 'agglomerative-clustering';
+import { getClustering, getPaletteFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
 // `frames` are { data, format: 'rgba', width, height }. Every 5th one, end to end, is one image to cluster.
 const sample = frames.filter((_, i) => i % 5 === 0);
@@ -83,16 +83,19 @@ const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length,
 let offset = 0;
 for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
 const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
+const colors = await getPaletteFromClustering(clustering, 255);   // 255 colours, and room for the transparent entry
 
 for (const frame of frames) {
-  // The same 256 entries for every frame (transparent one included), dithered lightly to limit shimmer between frames.
-  const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
+  // The same colours at the same indices in every frame, and the transparent entry (when a frame has transparent pixels)
+  // at index 255. Ordered dithering is a fixed pattern, so the parts of the picture that don't move stay the same from
+  // frame to frame; error diffusion would make them shimmer.
+  const { palette, indices, transparentIndex } = await quantizeToIndicesWithPalette(frame, colors, { transparent: true, dither: 'ordered' });
   // … gif.writeFrame(indices, width, height, { palette: …, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
 }
 ```
 
-- **Cutting the clustering keeps `k` counting the transparent entry**, so the palette fits a GIF. A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added to it instead, so 256 colours become 257 entries: cut 255.
-- **A frame with no transparent pixels has no transparent entry**, so its palette can be one entry shorter than another frame's; a GIF with one global palette should reserve a slot for it.
+- **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`quantizeToIndicesFromClustering(frame, clustering, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
+- **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter (255); a GIF with one global palette can use the 256-entry one throughout.
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
 ## Live video and camera frames
@@ -176,6 +179,26 @@ slider.oninput = async () => {
 
 Calls to one worker run in order, and re-mapping a large image takes a while (0.2 to 0.3 s at 12 megapixels, about 1 s dithered), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
 
+Cancelling skips calls still waiting their turn, but a call already mapping finishes: mapping runs in one piece. With an expensive method (ordered dithering with many steps can take a second or more; see [Choosing a dither method](api.md#choosing-a-dither-method)), keep the picture close behind the slider by running one call at a time and only ever the newest setting:
+
+```js
+let running = false, wanted = null;
+const render = async () => {
+  if (running) {return;}            // the call in flight picks up `wanted` when it finishes
+  running = true;
+  try {
+    while (wanted !== null) {
+      const k = wanted;
+      wanted = null;
+      ctx.putImageData(await handle.quantize(k, { dither: 'ordered' }), 0, 0);
+    }
+  } finally {
+    running = false;
+  }
+};
+slider.oninput = () => {wanted = Number(slider.value); render();};
+```
+
 - **Bundlers.** The worker is started with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, which Vite, webpack 5, Rsbuild and Next.js pick up. Angular, plain esbuild and Rollup need the script copied for them: see [Angular, esbuild, Rollup and other bundlers](environments.md#angular-esbuild-rollup-and-other-bundlers).
 - **Terminate the workers you create.** A worker you make with `createWorker()` keeps its thread until `terminate()` (or `await using worker = createWorker()`). The shared worker behind the exported functions needs nothing.
 - **TypeScript:** a handle keeps the image type it was made from, so a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`.
@@ -192,8 +215,8 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 // indices[i] is the entry of `eink` for pixel i: pack it to 4 bits per pixel for the panel
 ```
 
-- **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue.
-- **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering; with small palettes of widely spaced inks (e-ink, grey levels) `'rgb'` dithers better, and OKLab brightens black and white. Try both on your panel.
+- **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue. With a few widely spaced inks, dithering in sRGB values makes photos come out much lighter on the panel: convert to linear light first (a few lines, in [Dithering to a few inks: mix in light](api.md#dithering-to-a-few-inks-mix-in-light)), then use error diffusion (`dither: true`) for stills, or `dither: 'ordered'` where a fixed pattern matters (an animated or partly refreshed display). See [Choosing a dither method](api.md#choosing-a-dither-method).
+- **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering; with small palettes of widely spaced inks (e-ink, grey levels), dither in `'rgb'` after converting to linear light, as [Dithering to a few inks: mix in light](api.md#dithering-to-a-few-inks-mix-in-light) shows (in OKLab the recipe's linear values would be read as sRGB). Without that conversion every method makes photos too light, and OKLab more so in black and white.
 - **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but a few lines do it: cut the clustering, snap each cut colour to its nearest thread, and cut finer until N distinct threads appear. In testing it beat "the N most used threads" by 3 to 8 dB PSNR for N up to 12; the gain shrinks as N grows (under 1 dB at 24).
 
   ```js
@@ -213,7 +236,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
     return chosen;   // can be fewer than n for an image with few colours
   }
   ```
-- **Transparent pixels** map to black unless you pass `transparent`, which appends an entry for them (so a 1- or 2-bit panel has no room for it): composite the image onto your background first.
+- **Transparent pixels** map to whichever entry is nearest their colour values (often black, as fully transparent pixels are often stored as black, but not always) unless you pass `transparent`, which appends an entry for them (so a 1- or 2-bit panel has no room for it): composite the image onto your background first.
 - **Index width:** up to 256 entries give 8-bit indices; more give 16-bit ones (`indexBits` says which), so a 257-colour palette doesn't fit an 8-bit format.
 - **Speed:** a palette of more than 1024 colours is mapped about three times slower than one of 1024 or fewer, and dithered about four to six times slower (at 12 megapixels, about 2 s with 1024 colours against 8 to 13 s with 1025 to 2000).
 
