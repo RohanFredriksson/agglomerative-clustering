@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (3.1.0)
+## 3.1.0
 
 Every 3.0 call gives the same output as before: `false`, `true` and a strength still mean Floyd–Steinberg, and the golden tests pin it.
 
