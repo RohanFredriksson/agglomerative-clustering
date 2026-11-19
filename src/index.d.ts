@@ -197,13 +197,20 @@ export interface ClusteringOptions extends ProgressOptions {
 export type DitherMethod = 'floyd-steinberg' | 'atkinson' | 'ordered';
 
 /**
+ * The step counts ordered dithering takes: the counts that divide the 64 cells of its 8x8 pattern evenly. Narrow a
+ * number to it with a check, for example `([2, 4, 8, 16, 32, 64] as const).find((s) => s === value)`.
+ */
+export type DitherSteps = 2 | 4 | 8 | 16 | 32 | 64;
+
+/**
  * The full form of the `dither` option. `strength` (0 to 1, default 1) scales how much of the error is spread; 0 is no
- * dithering. `mix` is for `'ordered'` only: how many palette colours each colour's pattern mixes, 2, 4, 8, 16 (default),
- * 32 or 64. More is smoother and slower (each step about doubles the time), with little gain past 16.
+ * dithering. `steps` is for `'ordered'` only: how many pattern cells each colour's mix is spread over, so two colours
+ * blend in `steps + 1` shades. The default is 64 for a palette of two colours and 16 otherwise; each doubling about
+ * doubles the time.
  */
 export type DitherOptions =
     | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined }
-    | { method: 'ordered'; strength?: number | undefined; mix?: 2 | 4 | 8 | 16 | 32 | 64 | undefined };
+    | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
 
 /** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
 export interface MappingOptions extends CancelOptions {

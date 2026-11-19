@@ -123,10 +123,49 @@ describe('ordered', () => {
         expect(Math.abs(white - 64 * 70 / 255)).toBeLessThanOrEqual(4);
     });
 
-    it('defaults to a mix of 16', async () => {
-        const run = (dither) => quantize(gradient, 8, { dither }).then((result) => result.data);
-        expect(await run('ordered')).toEqual(await run({ method: 'ordered', mix: 16 }));
-        expect(await run({ method: 'ordered', mix: 4 })).not.toEqual(await run({ method: 'ordered', mix: 16 }));
+    it('defaults to 64 steps for two colours and 16 for more', async () => {
+        const run = (palette, dither) => quantizeWithPalette(gradient, palette, { dither }).then((result) => result.data);
+        const two = [0, 0, 0, 255, 255, 255];
+        expect(await run(two, 'ordered')).toEqual(await run(two, { method: 'ordered', steps: 64 }));
+        expect(await run(two, 'ordered')).not.toEqual(await run(two, { method: 'ordered', steps: 16 }));
+        // A repeated entry is still one colour.
+        expect(await run([...two, 0, 0, 0], 'ordered')).toEqual(await run(two, { method: 'ordered', steps: 64 }));
+        expect(await run(eink, 'ordered')).toEqual(await run(eink, { method: 'ordered', steps: 16 }));
+        expect(await run(eink, { method: 'ordered', steps: 4 })).not.toEqual(await run(eink, { method: 'ordered', steps: 16 }));
+    });
+
+    it('gives two colours steps + 1 shades', async () => {
+        // A grey ramp in black and white: each 8x8 tile is a shade, so count the distinct shares of white.
+        const ramp = new Uint8Array(256 * 8 * 4);
+        for (let y = 0; y < 8; y++) {for (let x = 0; x < 256; x++) {ramp.set([x, x, x, 255], 4 * (y * 256 + x));}}
+        for (const steps of [4, 16, 64]) {
+            const { indices } = await quantizeToIndicesWithPalette({ data: ramp, format: 'rgba', width: 256 }, [0, 0, 0, 255, 255, 255], { dither: { method: 'ordered', steps } });
+            const shades = new Set();
+            for (let tile = 0; tile < 32; tile++) {
+                let white = 0;
+                for (let y = 0; y < 8; y++) {for (let x = 0; x < 8; x++) {white += indices[y * 256 + tile * 8 + x];}}
+                shades.add(white);
+            }
+            expect(shades.size, `steps ${steps}`).toBe(Math.min(steps + 1, 32));
+        }
+    });
+
+    it('scales with strength about as error diffusion does', async () => {
+        // The share of pixels that differ from undithered, at a strength, against at full strength.
+        const share = async (method, strength) => {
+            const none = (await quantizeWithPalette(gradient, eink)).data;
+            const out = (await quantizeWithPalette(gradient, eink, { dither: { method, strength } })).data;
+            let changed = 0;
+            for (let i = 0; i < none.length; i += 4) {if (none[i] !== out[i] || none[i + 1] !== out[i + 1] || none[i + 2] !== out[i + 2]) {changed++;}}
+            return changed;
+        };
+        const full = await share('ordered', 1);
+        const half = await share('ordered', 0.5) / full, quarter = await share('ordered', 0.25) / full, tenth = await share('ordered', 0.1) / full;
+        expect(tenth).toBeGreaterThan(0);
+        expect(quarter).toBeLessThan(0.55);
+        expect(half).toBeLessThan(0.9);
+        expect(tenth).toBeLessThan(quarter);
+        expect(quarter).toBeLessThan(half);
     });
 
     it('does not depend on palette order', async () => {
@@ -169,7 +208,7 @@ describe('ordered', () => {
         // more than 32 outside the cube are matched as they are, the rest clamped to it; ties go to the smaller packed key.
         const bayer = [[0, 32, 8, 40, 2, 34, 10, 42], [48, 16, 56, 24, 50, 18, 58, 26], [12, 44, 4, 36, 14, 46, 6, 38], [60, 28, 52, 20, 62, 30, 54, 22],
             [3, 35, 11, 43, 1, 33, 9, 41], [51, 19, 59, 27, 49, 17, 57, 25], [15, 47, 7, 39, 13, 45, 5, 37], [63, 31, 55, 23, 61, 29, 53, 21]];
-        const reference = (data, width, palette, mix) => {
+        const reference = (data, width, palette, steps) => {
             const colours = [];
             for (let i = 0; i < palette.length; i += 3) {
                 const key = (palette[i] << 16) | (palette[i + 1] << 8) | palette[i + 2];
@@ -187,7 +226,7 @@ describe('ordered', () => {
             for (let p = 0; p < data.length / 4; p++) {
                 const base = [data[4 * p], data[4 * p + 1], data[4 * p + 2]];
                 const e = [0, 0, 0], recipe = [];
-                for (let i = 0; i < mix; i++) {
+                for (let i = 0; i < steps; i++) {
                     let t = base.map((b, c) => b + e[c]);
                     if (!t.some((v) => v < -255 / 8 || v > 255 + 255 / 8)) {t = t.map((v) => Math.min(255, Math.max(0, v)));}
                     const chosen = nearest(t);
@@ -196,7 +235,7 @@ describe('ordered', () => {
                 }
                 recipe.sort((a, b) => a.luma - b.luma || a.key - b.key);
                 const x = p % width, y = Math.floor(p / width);
-                out.set([...recipe[Math.floor(bayer[y & 7][x & 7] * mix / 64)].rgb, 255], 4 * p);
+                out.set([...recipe[Math.floor(bayer[y & 7][x & 7] * steps / 64)].rgb, 255], 4 * p);
             }
             return out;
         };
@@ -204,9 +243,9 @@ describe('ordered', () => {
         const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
         const palettes = { eink, sixteen: Array.from({ length: 48 }, random), sixtyFour: Array.from({ length: 192 }, random), hundred: Array.from({ length: 300 }, random) };
         for (const [name, palette] of Object.entries(palettes)) {
-            for (const mix of [4, 16]) {
-                const result = await quantizeWithPalette(gradient, palette, { dither: { method: 'ordered', mix } });
-                expect(result.data, `${name}, mix ${mix}`).toEqual(reference(gradientData, size, palette, mix));
+            for (const steps of [4, 16]) {
+                const result = await quantizeWithPalette(gradient, palette, { dither: { method: 'ordered', steps } });
+                expect(result.data, `${name}, steps ${steps}`).toEqual(reference(gradientData, size, palette, steps));
             }
         }
     });

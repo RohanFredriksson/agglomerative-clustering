@@ -20,7 +20,7 @@ describe('a worker gives the same results as the main entry', () => {
     const raw = { data: image, format: 'rgba', width, height };
 
     it('dithers with every method like the main entry', async () => {
-        for (const dither of ['atkinson', 'ordered', { method: 'ordered', mix: 8 }]) {
+        for (const dither of ['atkinson', 'ordered', { method: 'ordered', steps: 8 }]) {
             expect((await worker.quantize(raw, 8, { dither })).data, JSON.stringify(dither)).toEqual((await ac.quantize(raw, 8, { dither })).data);
         }
     });

@@ -1,5 +1,5 @@
 // The forms the dither option takes: a boolean or a strength (Floyd-Steinberg, as in 3.0), a method name, or an object
-// { method, strength, mix }. Every form is validated the same way in both entries.
+// { method, strength, steps }. Every form is validated the same way in both entries.
 import { describe, it, expect, afterAll } from 'vitest';
 import { quantize } from '../dist/index.mjs';
 import { quantize as workerQuantize, terminate } from '../dist/worker.mjs';
@@ -32,10 +32,11 @@ describe('dither option forms', () => {
             [{ method: 'bayer' }, 'options.dither.method'],
             [{ strength: 2 }, 'options.dither.strength'],
             [{ strength: NaN }, 'options.dither.strength'],
-            [{ method: 'ordered', mix: 12 }, 'options.dither.mix'],
-            [{ method: 'ordered', mix: 128 }, 'options.dither.mix'],
-            [{ mix: 8 }, 'options.dither.mix'],
-            [{ method: 'atkinson', mix: 8 }, 'options.dither.mix'],
+            [{ method: 'ordered', steps: 12 }, 'options.dither.steps'],
+            [{ method: 'ordered', steps: 128 }, 'options.dither.steps'],
+            [{ steps: 8 }, 'options.dither.steps'],
+            [{ method: 'atkinson', steps: 8 }, 'options.dither.steps'],
+            [{ method: 'ordered', mix: 8 }, 'options.dither.mix'],
             [{ size: 4 }, 'options.dither.size'],
             [new Map(), 'options.dither'],
             [[], 'options.dither'],
@@ -44,6 +45,18 @@ describe('dither option forms', () => {
         for (const [dither, argument] of cases) {
             await expect(run(dither), String(argument)).rejects.toMatchObject({ code: 'invalid-argument', argument });
         }
+    });
+
+    it('says what was wrong and how to write it', async () => {
+        // The value given is echoed back.
+        await expect(run('orderd')).rejects.toThrow("'orderd'");
+        await expect(run(1.5)).rejects.toThrow('1.5');
+        // A setting of dither written as an option of its own points at the object form.
+        for (const key of ['ditherMethod', 'method', 'strength', 'steps']) {
+            await expect(quantize(image, 8, { [key]: 'ordered' }), key).rejects.toThrow('dither: {');
+        }
+        // steps without a method says which method takes it.
+        await expect(run({ steps: 8 })).rejects.toThrow("method: 'ordered'");
     });
 
     it('needs a width for every method', async () => {
@@ -60,7 +73,7 @@ describe('dither option forms', () => {
     });
 
     it('rejects the same values in the worker entry', async () => {
-        for (const [dither, argument] of [[{ method: 'bayer' }, 'options.dither.method'], [{ method: 'ordered', mix: 12 }, 'options.dither.mix'], [{ size: 4 }, 'options.dither.size']]) {
+        for (const [dither, argument] of [[{ method: 'bayer' }, 'options.dither.method'], [{ method: 'ordered', steps: 12 }, 'options.dither.steps'], [{ size: 4 }, 'options.dither.size']]) {
             await expect(workerQuantize(image, 8, { dither })).rejects.toMatchObject({ code: 'invalid-argument', argument });
         }
     });

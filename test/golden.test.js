@@ -98,8 +98,9 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         check(`${name}/quantize/rgb/16/dither-atkinson`, await quantize(rgba, 16, { dither: 'atkinson', width }));
         check(`${name}/quantize/rgb/16/dither-ordered`, await quantize(rgba, 16, { dither: 'ordered', width }));
         check(`${name}/quantize/oklab/64/dither-ordered-0.5`, await quantize(rgba, 64, { colorSpace: 'oklab', dither: { method: 'ordered', strength: 0.5 }, width }));
-        check(`${name}/quantize/rgb/16/dither-ordered-mix4`, await quantize(rgba, 16, { dither: { method: 'ordered', mix: 4 }, width }));
-        check(`${name}/quantize/rgb/16/dither-ordered-mix64`, await quantize(rgba, 16, { dither: { method: 'ordered', mix: 64 }, width }));
+        check(`${name}/quantize/rgb/16/dither-ordered-steps4`, await quantize(rgba, 16, { dither: { method: 'ordered', steps: 4 }, width }));
+        check(`${name}/quantize/rgb/16/dither-ordered-steps64`, await quantize(rgba, 16, { dither: { method: 'ordered', steps: 64 }, width }));
+        check(`${name}/quantize/rgb/2/dither-ordered`, await quantize(rgba, 2, { dither: 'ordered', width }));
         // Above 256 colours, mapping uses the k-d tree instead of the cell index.
         const large = await getPaletteFromClustering(await getClustering(rgba), 400);
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));

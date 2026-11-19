@@ -578,7 +578,7 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 // needs the image's `width`. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1
 // when the palette is empty.
 template <typename Emit>
-void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width, int skip_below, Emit emit) {
+void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, Emit emit) {
 
     const ColorCoordinates space(color_space);
     std::vector<AgglomerativeClustering::KDTree::Point> points;
@@ -715,25 +715,37 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
     };
 
     if (dither_method == 2) {
-        // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `mix` palette entries whose average is
-        // close to it, built by picking the entry nearest the colour plus the error carried so far (scaled by the
-        // strength), `mix` times. The recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8
-        // Bayer matrix points to. A pixel's colour depends only on its own colour and position, so a still area of an
-        // animation dithers the same way in every frame, whatever changes elsewhere.
+        // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `steps` palette entries whose average is
+        // close to it, built by picking the entry nearest the colour plus the error carried so far, `steps` times. The
+        // recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8 Bayer matrix points to, so two
+        // colours blend in steps + 1 shades. A pixel's colour depends only on its own colour and position, so a still area
+        // of an animation dithers the same way in every frame, whatever changes elsewhere.
         static constexpr uint8_t bayer[8][8] = {
             { 0, 32,  8, 40,  2, 34, 10, 42}, {48, 16, 56, 24, 50, 18, 58, 26},
             {12, 44,  4, 36, 14, 46,  6, 38}, {60, 28, 52, 20, 62, 30, 54, 22},
             { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
             {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
-        const size_t mix = size_t(dither_mix);
-        // Recipes are memoised by colour in a direct-mapped table: about 8 MB up to a mix of 16, and at least 2^17 slots
-        // above it (16 MB at 32, 32 MB at 64), since a photo has 50,000 to 100,000 colours and a slot that two colours
-        // share is a recipe built twice. A recipe depends on nothing but its colour, so the table changes speed only.
+        // Steps 0 is the default: 64 for two colours, where every one of the matrix's 65 shades shows on a smooth
+        // gradient (black and white), and 16 otherwise, where colours are closer together and 16 is where more steps
+        // stop paying for their time (each doubling about doubles it).
+        const size_t steps = dither_steps > 0 ? size_t(dither_steps) : points.size() <= 2 ? 64 : 16;
+        // The error a recipe carries is scaled by the strength to the power 2.5. Taken as it is, the strength barely
+        // changes a recipe until it is small (0.5 looked like 1); this curve makes equal steps of strength give roughly
+        // equal changes, as they do for error diffusion (measured on photos, black and white, four greys and e-ink inks).
+        const float recipe_strength = float(std::pow(double(strength), 2.5));
+        // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (about
+        // 8 MB of entries and up to 4 MB of keys), and at least 2^17 above that, since a photo has 50,000 to 100,000
+        // colours and a slot two colours share is a recipe built twice; but never more than twice the image's pixels, so
+        // a small image doesn't pay for a large table. A recipe depends on nothing but its colour, so the table changes
+        // speed only.
         int recipe_bits = 21;
-        for (size_t m = mix; m > 1; m >>= 1) {recipe_bits--;}
+        for (size_t m = steps; m > 1; m >>= 1) {recipe_bits--;}
         recipe_bits = std::max(recipe_bits, 17);
+        int image_bits = 1;
+        while (image_bits < recipe_bits && (size_t(1) << image_bits) < 2 * pixels) {image_bits++;}
+        recipe_bits = std::max(4, std::min(recipe_bits, image_bits));
         std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
-        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * mix);
+        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * steps);
         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
         // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
         std::vector<uint32_t> brightness(points.size());
@@ -829,21 +841,21 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
                 }
                 const uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
                 const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
-                int32_t* recipe = &recipes[size_t(slot) * mix];
+                int32_t* recipe = &recipes[size_t(slot) * steps];
                 if (recipe_keys[slot] != key) {
                     recipe_keys[slot] = key;
                     const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
                     float e[3] = {0.0f, 0.0f, 0.0f};
-                    for (size_t i = 0; i < mix; i++) {
+                    for (size_t i = 0; i < steps; i++) {
                         float wanted[3];
-                        for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * strength;}
+                        for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
                         const int32_t chosen = pick_recipe(wanted);
                         recipe[i] = chosen;
                         for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
                     }
-                    std::sort(recipe, recipe + mix, darker);
+                    std::sort(recipe, recipe + steps, darker);
                 }
-                emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * mix / 64]));
+                emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
             }
         }
         return;
@@ -931,12 +943,12 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
 // Maps the image to the palette (see map_pixels) and returns the mapped image, in the input's format with alpha
 // preserved, as a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
 // With an empty palette every pixel becomes black.
-uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width) {
+uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
     uint8_t* packed = allocate_variable_size(pixels * increment);
     uint8_t* output = packed + 4;
-    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_mix, width, 1, [&](size_t p, int32_t index) {
+    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 1, [&](size_t p, int32_t index) {
         uint8_t* out = output + p * increment;
         const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
         for (int c = 0; c < 3; c++) {out[c] = colour ? colour[c] : 0;}
@@ -967,7 +979,7 @@ int colours_for_entries(const uint8_t* image_data, int image_length, int image_f
     return has_transparent_entry(image_data, image_length, image_format, cutoff) ? std::max(1, k - 1) : k;
 }
 
-uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_mix, int width, int cutoff) {
+uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int cutoff) {
     const int increment = image_format == 1 ? 3 : 4;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
 
@@ -995,7 +1007,7 @@ uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int imag
     std::memcpy(output + header, entries.data(), entries.size());
     uint8_t* indices = output + header + entries.size();
 
-    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_mix, width, transparent ? cutoff : 1, [&](size_t p, int32_t index) {
+    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, [&](size_t p, int32_t index) {
         if (transparent && image_data[p * 4 + 3] < cutoff) {index = transparent_index;}
         uint8_t* out = indices + p * index_bytes;
         for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
@@ -1069,53 +1081,53 @@ uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, in
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_mix, int width, int transparent) {
+uint8_t* quantize(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_steps, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), k, valid);
     // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
     if (!valid) {return nullptr;}
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_mix, width);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_steps, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
-uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_mix, int width) {
+uint8_t* quantize_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_steps, int width) {
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, k, valid);
     if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
-    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_mix, width);
+    return _quantize(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_steps, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_mix, int width) {
-    return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_mix, width);
+uint8_t* quantize_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_steps, int width) {
+    return _quantize(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_steps, width);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_mix, int width, int transparent) {
+uint8_t* quantize_indices(uint8_t* image_data, int image_length, int image_format, int k, int color_space, int precision, int weight_alpha, double dither, int dither_method, int dither_steps, int width, int transparent) {
     std::vector<uint8_t> clustering = _get_clustering(image_data, image_length, image_format, ColorSpace(color_space), precision, weight_alpha != 0, transparent);
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering.data(), clustering.size(), colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
     // Made a moment ago, so it is valid; if the check ever disagreed, the caller hears of it rather than getting an empty palette.
     if (!valid) {return nullptr;}
-    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_mix, width, transparent);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), ColorSpace(color_space), dither, dither_method, dither_steps, width, transparent);
 }
 
 EMSCRIPTEN_KEEPALIVE
 // A negative `color_space` matches in the space the clustering was made in.
-uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_mix, int width, int transparent) {
+uint8_t* quantize_indices_with_clustering(uint8_t* image_data, int image_length, int image_format, uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_steps, int width, int transparent) {
     bool valid = false;
     std::vector<uint8_t> palette = _get_palette_from_clustering(clustering_data, clustering_length, colours_for_entries(image_data, image_length, image_format, transparent, k), valid);
     if (!valid) {return nullptr;}
     ColorSpace space = color_space < 0 ? read_clustering(clustering_data, clustering_length).color_space : ColorSpace(color_space);
-    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_mix, width, transparent);
+    return _quantize_indices(image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_steps, width, transparent);
 }
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* quantize_indices_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_mix, int width, int transparent) {
-    return _quantize_indices(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_mix, width, transparent);
+uint8_t* quantize_indices_with_palette(uint8_t* image_data, int image_length, int image_format, uint8_t* palette_data, int palette_length, int color_space, double dither, int dither_method, int dither_steps, int width, int transparent) {
+    return _quantize_indices(image_data, image_length, image_format, palette_data, palette_length, ColorSpace(color_space), dither, dither_method, dither_steps, width, transparent);
 }
 
 }
