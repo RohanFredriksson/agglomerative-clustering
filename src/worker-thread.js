@@ -65,16 +65,24 @@ const optionsIndex = {
 // still waiting its turn can be cancelled and never starts.
 const controllers = new Map();
 
-// A turn of the event loop, so messages already sent to this thread (cancels) are read. Node's setImmediate runs after
-// pending messages; elsewhere a zero timeout does.
-const nextTurn = () => new Promise((resolve) => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
+// A turn of the event loop, so messages already sent to this thread (cancels) are read first. In Node, setImmediate runs
+// after the pending messages. In a browser, a message to itself on a MessageChannel: it is queued behind the messages
+// already waiting, as they are posted messages too, and unlike a zero timeout it isn't stretched to 4 ms when timers
+// nest (as they do along a queue of calls), which made each skipped call cost 4 ms.
+const nextTurn = typeof setImmediate === 'function' ? () => new Promise((resolve) => setImmediate(resolve))
+    : typeof MessageChannel === 'function' ? (() => {
+        const channel = new MessageChannel(), waiting = [];
+        channel.port1.onmessage = () => waiting.shift()();
+        return () => new Promise((resolve) => {waiting.push(resolve); channel.port2.postMessage(null);});
+    })()
+    : () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const respond = async ({id, method, args, progress}, post) => {
     const controller = controllers.get(id);
     try {
         // The call before this one may have run in one piece (mapping does), with no turn of the event loop for a cancel
         // of this call to arrive; take one before starting, so a call cancelled while it waited never runs.
-        if (controller) {await nextTurn();}
+        if (controller && !controller.signal.aborted) {await nextTurn();}
         if (controller && controller.signal.aborted) {return;}
         if (!Object.prototype.hasOwnProperty.call(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
         if (controller || progress) {

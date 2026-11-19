@@ -98,6 +98,31 @@ async function run() {
     checks.workerAbortFreesWorker = equal(next.value, await ac.getPaletteFromClustering(await ac.getClustering(image), 4)) && next.ms < fullTime.ms * 0.5;
     await cancelWorker.terminate();
 
+    // Cancelled calls queued behind a mapping call, which runs in one piece, never run: ten slow mappings sent at once,
+    // the first nine cancelled at once, cost about one.
+    const queueWorker = createWorker();
+    const queued = await queueWorker.cluster(noise(300, 200, 9));
+    const slow = { method: 'ordered', steps: 32 };
+    const single = await time(queued.quantize(64, { dither: slow }));
+    const controllers = Array.from({ length: 10 }, () => new AbortController());
+    const calls = controllers.map((controller) => queued.quantize(64, { dither: slow, signal: controller.signal }));
+    const skipped = calls.slice(0, 9).map((call) => call.then(() => 'ran', (error) => error.name));
+    controllers.slice(0, 9).forEach((controller) => controller.abort());
+    const last = await time(calls[9]);
+    details.workerQueuedCancelSkipped = `one mapping ${Math.round(single.ms)} ms, the last of ten ${Math.round(last.ms)} ms`;
+    checks.workerQueuedCancelSkipped = (await Promise.all(skipped)).every((name) => name === 'AbortError') && !last.error && last.ms < single.ms * 3;
+    // Skipping a cancelled call costs next to nothing: a hundred quick calls, ninety-nine cancelled, take milliseconds (a
+    // zero timeout per call would be stretched to 4 ms each once timers nest).
+    const quick = await queueWorker.cluster(image);
+    const many = Array.from({ length: 100 }, () => new AbortController());
+    const quickCalls = many.map((controller) => quick.quantize(4, { signal: controller.signal }));
+    quickCalls.slice(0, 99).forEach((call) => call.catch(() => {}));
+    many.slice(0, 99).forEach((controller) => controller.abort());
+    const lastQuick = await time(quickCalls[99]);
+    details.workerQueuedCancelCheap = `the last of a hundred took ${Math.round(lastQuick.ms)} ms`;
+    checks.workerQueuedCancelCheap = !lastQuick.error && lastQuick.ms < 150;
+    await queueWorker.terminate();
+
     // The page stays responsive while a clustering runs in slices: timers keep firing, and the longest gap between ticks
     // is a small fraction of the whole clustering (without slices it blocks for all of it).
     const gaps = async (run) => {
