@@ -1,0 +1,35 @@
+name: Prune stale branches
+
+# Deletes branches that are merged into master AND whose last commit is over a week old
+# (scripts/prune-stale-branches.sh). Runs on every branch push rather than on a schedule, so it only does work while
+# the repo is active: after a quiet spell the old branches are all still there, and the first push back cleans up.
+# Merged branches get a week's grace for follow-ups. master, release/* branches and tags are never touched; unmerged
+# branches are never touched. A deleted branch can be restored from its PR page; its commits are in master either way.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be deleted without deleting it
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prune-stale-branches
+  cancel-in-progress: true
+
+jobs:
+  prune:
+    # A branch deletion is also a push event; nothing to do for those.
+    if: github.event_name != 'push' || !github.event.deleted
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: scripts/prune-stale-branches.sh ${{ inputs.dry_run && '--dry-run' || '' }}
