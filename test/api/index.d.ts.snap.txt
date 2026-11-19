@@ -6,6 +6,9 @@ export interface CodedError extends Error {
     argument?: ErrorArgument;
 }
 export const errorCodes: readonly ErrorCode[];
+export const colorSpaces: readonly ColorSpace[];
+export const imageFormats: readonly ImageFormat[];
+export const alphaModes: readonly AlphaMode[];
 export const ditherMethods: readonly DitherMethod[];
 export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;

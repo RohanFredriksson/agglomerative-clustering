@@ -33,6 +33,15 @@ export interface CodedError extends Error {
 /** Every `ErrorCode`, in a frozen array: for code that forwards or lists them (a wrapper package, an IPC bridge). */
 export const errorCodes: readonly ErrorCode[];
 
+/** Every colour space, as a frozen list: narrow a string with `colorSpaces.find((c) => c === value)`. */
+export const colorSpaces: readonly ColorSpace[];
+
+/** Every image format, as a frozen list. A minor release may add one, as it may add an error code. */
+export const imageFormats: readonly ImageFormat[];
+
+/** Every alpha mode, as a frozen list. */
+export const alphaModes: readonly AlphaMode[];
+
 /**
  * Every dither method, as a frozen list: for building a choice from them, or narrowing a string from a form with
  * `ditherMethods.find((m) => m === value)`.

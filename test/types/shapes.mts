@@ -1,8 +1,8 @@
 // The shapes of results and inputs: what narrows, and which palette inputs the types accept. Uses only types that exist
 // without the DOM lib, so it is compiled in every configuration.
-import { getClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps } from 'agglomerative-clustering';
+import { getClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes } from 'agglomerative-clustering';
 import { createWorker } from 'agglomerative-clustering/worker';
-import type { ClusteringInfo, DitherMethod, DitherSteps, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
+import type { AlphaMode, ClusteringInfo, ColorSpace, DitherMethod, DitherSteps, ImageFormat, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
 
 declare const raw: RawImage;
 
@@ -66,7 +66,10 @@ export async function shapes() {
     const selected: string = 'ordered', slid: number = 32;
     const method: DitherMethod | undefined = ditherMethods.find((m) => m === selected);
     const fromSlider: DitherSteps | undefined = ditherSteps.find((s) => s === slid);
-    void [method, fromSlider];
+    const space: ColorSpace | undefined = colorSpaces.find((c) => c === selected);
+    const imageFormat: ImageFormat | undefined = imageFormats.find((f) => f === selected);
+    const alpha: AlphaMode | undefined = alphaModes.find((a) => a === selected);
+    void [method, fromSlider, space, imageFormat, alpha];
     // UI state holding any method: steps is caught unless the method is known to be 'ordered'.
     const ui: { method: DitherMethod; strength: number; steps: DitherSteps } = { method: 'atkinson', strength: 1, steps: 16 };
     // @ts-expect-error steps with a method that may not be 'ordered'

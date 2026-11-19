@@ -17,8 +17,8 @@ export { Clustering } from './index.js';
 /** The same list as the main entry's `errorCodes`: the worker entry's errors have the same codes. */
 export { errorCodes } from './index.js';
 
-/** The same lists as the main entry's `ditherMethods` and `ditherSteps`. */
-export { ditherMethods, ditherSteps } from './index.js';
+/** The same lists as the main entry's: every colour space, image format, alpha mode, dither method and step count. */
+export { colorSpaces, imageFormats, alphaModes, ditherMethods, ditherSteps } from './index.js';
 
 /** The main entry's `isCodedError`: true for this library's errors, from either entry. */
 export { isCodedError } from './index.js';

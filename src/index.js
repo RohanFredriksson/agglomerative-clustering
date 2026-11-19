@@ -1,12 +1,12 @@
 import createWasmModule from './clustering.js';
 import {
     parseDither,
-    version, fail, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
+    version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
     latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
-export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps} from './shared.js';
+export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
 // The version of stored data (clusterings) this build writes. It reads this one and format 2 (see readHeader). Unlike
 // `version`, it changes only when the stored format does, so a 3.x release that keeps the format keeps this number.
 export const formatVersion = latestVersion;
@@ -20,7 +20,7 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
 const codes = {'rgba': 0, 'rgb': 1};
-const alphaModes = {'ignore': 0, 'weight': 1};
+const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
 
@@ -511,12 +511,12 @@ const parseOptions = (options, allowed, image) => {
     }
 
     const colorSpace = options.colorSpace === undefined ? 'rgb' : options.colorSpace;
-    if (!Object.keys(colorSpaces).includes(colorSpace)) {
+    if (!colorSpaces.includes(colorSpace)) {
         throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.", 'options.colorSpace');
     }
 
     const alpha = options.alpha === undefined ? 'weight' : options.alpha;
-    if (!Object.keys(alphaModes).includes(alpha)) {
+    if (!Object.keys(alphaModeCodes).includes(alpha)) {
         throw fail('invalid-argument', "Invalid alpha: must be 'weight' or 'ignore'.", 'options.alpha');
     }
 
@@ -567,7 +567,7 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.", 'options');
     }
 
-    return {colorSpace: colorSpaces[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModes[alpha], precision, dither, ditherMethod, ditherSteps, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
+    return {colorSpace: colorSpaceCodes[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModeCodes[alpha], precision, dither, ditherMethod, ditherSteps, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
 
 };
 
@@ -594,7 +594,7 @@ const checkNotEmpty = (palette, image, cutoff) => {
 };
 
 // The space to match pixels to a palette in: the one the caller names, else the one a Palette was made in, else RGB.
-const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaces[isPalette(palette) ? palette.colorSpace : 'rgb'];
+const matchingSpace = (o, palette) => o.colorSpaceGiven ? o.colorSpace : colorSpaceCodes[isPalette(palette) ? palette.colorSpace : 'rgb'];
 
 // Allocates `length` bytes in the WASM heap, or throws a coded out-of-memory error.
 const allocate = (wasm, length) => {

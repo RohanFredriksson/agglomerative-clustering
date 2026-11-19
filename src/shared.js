@@ -6,7 +6,12 @@
 // is built from, src/version.hpp) in step with it. Do not edit it by hand.
 export const version = '3.0.0';
 
-export const colorSpaces = {'rgb': 0, 'oklab': 1};
+export const colorSpaceCodes = {'rgb': 0, 'oklab': 1};
+// Every option whose value is one of a fixed set of names has the set exported as a frozen list (like errorCodes,
+// ditherMethods and ditherSteps), for building a choice from it or checking a value against it.
+export const colorSpaces = Object.freeze(Object.keys(colorSpaceCodes));
+export const imageFormats = Object.freeze(['rgb', 'rgba']);
+export const alphaModes = Object.freeze(['weight', 'ignore']);
 export const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 
 // Every error this library throws is an Error with a `code` saying what went wrong, so callers needn't match on message
@@ -199,7 +204,7 @@ export const markClustering = (bytes) => {
 // A function and not a `class`, because it returns a plain Uint8Array and answers `instanceof` itself, which transpiled class
 // checks would trip over.
 export function Palette(source, colorSpace = 'rgb') {
-    if (!Object.keys(colorSpaces).includes(colorSpace)) {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.", 'colorSpace');}
+    if (!colorSpaces.includes(colorSpace)) {throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.", 'colorSpace');}
     if (source === undefined) {source = 0;}
     // The same rules as for a palette passed to a function, so a Palette can't hold what they would reject: a number coerced to a
     // byte (300 would become 44), a string turned into 0, or a length that isn't whole colours.
