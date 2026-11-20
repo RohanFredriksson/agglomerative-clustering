@@ -192,12 +192,12 @@ export interface ClusteringOptions extends ProgressOptions {
      */
     precision?: number | undefined;
     /**
-     * How RGBA pixels count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
+     * How pixels of an image with alpha (RGBA or BGRA) count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
      * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
      */
     alpha?: AlphaMode | undefined;
     /**
-     * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for RGBA images: pixels with alpha
+     * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for images with alpha (RGBA or BGRA): pixels with alpha
      * below the cutoff don't exist as far as the palette is concerned. They are left out of clustering, and the rest count
      * whole instead of by opacity (so it replaces `alpha` for this call). That is the model of indexed output (GIF, palette
      * PNG), and it gives the same palette everywhere: `getPalette(image, k, { transparent })` is the palette
@@ -264,7 +264,7 @@ export type QuantizeOptions = ClusteringOptions & MappingOptions;
 export interface IndexOptions {
     /**
      * `false` (default): every pixel gets the index of its nearest colour, whatever its alpha.
-     * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image is RGBA and has pixels with alpha
+     * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image has alpha (RGBA or BGRA) and has pixels with alpha
      * below the cutoff, they get an extra entry appended after the palette (black, taking no part in matching), as
      * GIFs and palette PNGs expect; its index is the result's `transparentIndex`. Every other pixel is shown fully
      * opaque in its nearest colour. `k` counts that entry, so `k = 256` gives at most 256 entries (255 colours and the

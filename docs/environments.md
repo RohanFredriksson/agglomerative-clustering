@@ -144,6 +144,7 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
 - **`nativeImage` gives BGRA pixels** (Skia's native order in Electron on Windows, macOS and Linux): pass them as `format: 'bgra'`, and a mapped image comes back in the same order for `nativeImage.createFromBitmap`. They are also **premultiplied** (`toBitmap()` writes Skia's premultiplied N32), while the library reads straight alpha. Opaque images (screenshots, captures, opaque pages) are the same either way; for partly transparent ones, convert on the way in and out (premultiplied input is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected)):
 
   ```js
+  // In the main process (or a preload script): nativeImage and Buffer aren't in a sandboxed renderer.
   const { width, height } = img.getSize();
   const data = img.toBitmap();
   for (let i = 0; i < data.length; i += 4) {   // premultiplied to straight
