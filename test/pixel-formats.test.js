@@ -1,6 +1,7 @@
-// BGRA images ({ data, format: 'bgra' }) are read and returned in their own channel order, and otherwise behave exactly
-// like the same image as RGBA: the same clusterings, palettes, swatches, info and indices, and mapped output that is the
-// RGBA output with R and B swapped.
+// The 4-byte image formats. BGRA images ({ data, format: 'bgra' }) are read and returned in their own channel order, and
+// otherwise behave exactly like the same image as RGBA: the same clusterings, palettes, swatches, info and indices, and
+// mapped output that is the RGBA output with R and B swapped. 'rgbx' and 'bgrx' have a padding byte where alpha would be:
+// they behave exactly like the same pixels as 'rgb', whatever that byte holds, and mapped output writes 255 there.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ac from '../dist/index.mjs';
 import * as dropIn from '../dist/worker.mjs';
@@ -212,12 +213,124 @@ describe('BGRA validation', () => {
                 message: "Invalid image data: length must be a multiple of 4 for 'bgra'.", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.getPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
-                message: "Invalid format: must be 'rgb', 'rgba' or 'bgra'.", code: 'invalid-argument', argument: 'image',
+                message: "Invalid format: must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'.", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.quantize({ data: new Uint8Array(16), format: 'bgra' }, 2, { dither: true })).rejects.toMatchObject({
                 code: 'invalid-argument', argument: 'options.width',
             });
         });
     }
+
+});
+
+// The RGB bytes of an RGBA image, and the same pixels with a padding byte in `order` ('rgb' or 'bgr'), holding `fourth`
+// (a byte value, or 'random').
+const toRgb = (rgba) => rgba.filter((_, i) => i % 4 !== 3);
+const toX = (rgba, order, fourth) => {
+    const out = new Uint8Array(rgba.length);
+    let seed = 12345;
+    for (let i = 0; i < rgba.length; i += 4) {
+        const [r, g, b] = [rgba[i], rgba[i + 1], rgba[i + 2]];
+        out.set(order === 'bgr' ? [b, g, r] : [r, g, b], i);
+        seed = (seed * 1103515245 + 12345) >>> 0;
+        out[i + 3] = fourth === 'random' ? seed >>> 24 : fourth;
+    }
+    return out;
+};
+// An RGB image widened to 4 bytes in `order`, with 255 in the fourth byte: what an 'x' format's mapped output must be.
+const widen = (rgb, order) => {
+    const out = new Uint8Array(rgb.length / 3 * 4);
+    for (let p = 0; p < rgb.length / 3; p++) {
+        const [r, g, b] = [rgb[3 * p], rgb[3 * p + 1], rgb[3 * p + 2]];
+        out.set(order === 'bgr' ? [b, g, r, 255] : [r, g, b, 255], 4 * p);
+    }
+    return out;
+};
+
+describe('rgbx and bgrx behave as the same pixels in RGB', () => {
+
+    // [name, order, fourth]: every image with a zero padding byte in both orders, and the small ones with 255 and noise.
+    const variants = [];
+    for (const name of ['synthetic', 'opaque', 'kodak']) {
+        for (const order of ['rgb', 'bgr']) {
+            for (const fourth of name === 'kodak' ? [0] : [0, 255, 'random']) {variants.push([name, order, fourth]);}
+        }
+    }
+    const rgbOf = (name) => ({ data: toRgb(images[name].rgba.data), format: 'rgb', width: images[name].rgba.width, height: images[name].rgba.height });
+    const xOf = (name, order, fourth) => ({ data: toX(images[name].rgba.data, order, fourth), format: order + 'x', width: images[name].rgba.width, height: images[name].rgba.height });
+
+    it('clusters, cuts, weighs and indexes x formats as rgb', async () => {
+        for (const [name, order, fourth] of variants) {
+            const rgb = rgbOf(name), x = xOf(name, order, fourth);
+            for (const o of cases[name]) {
+                const label = `${name} ${order}x ${fourth} ${JSON.stringify(o)}`;
+                const fromRgb = await ac.getClustering(rgb, o), fromX = await ac.getClustering(x, o);
+                expect(compare(fromX, fromRgb), label).toBe(0);
+                expect(await ac.getClusteringInfo(fromX), label).toEqual(await ac.getClusteringInfo(fromRgb));
+                expect(await ac.getPaletteFromClustering(fromX, 16), label).toEqual(await ac.getPaletteFromClustering(fromRgb, 16));
+                expect(await ac.getSwatchesFromClustering(fromX, 16), label).toEqual(await ac.getSwatchesFromClustering(fromRgb, 16));
+                const indexed = await ac.quantizeToIndicesFromClustering(x, fromX, 16, { ...mapOnly(o), transparent: true });
+                const expected = await ac.quantizeToIndicesFromClustering(rgb, fromRgb, 16, { ...mapOnly(o), transparent: true });
+                expect(indexed.transparentIndex, label).toBe(null);
+                expect(indexed.palette, label).toEqual(expected.palette);
+                expect(compare(indexed.indices, expected.indices), label).toBe(0);
+                if (small.includes(name)) {
+                    expect(await ac.getPalette(x, 16, o), label).toEqual(await ac.getPalette(rgb, 16, o));
+                    expect(await ac.getSwatches(x, 16, o), label).toEqual(await ac.getSwatches(rgb, 16, o));
+                    const oneShot = await ac.quantizeToIndices(x, 16, o);
+                    expect(oneShot.transparentIndex, label).toBe(null);
+                    expect(compare(oneShot.indices, (await ac.quantizeToIndices(rgb, 16, o)).indices), label).toBe(0);
+                }
+            }
+        }
+    }, 300_000);
+
+    it('maps x formats to the rgb result with 255 in the fourth byte', async () => {
+        for (const [name, order, fourth] of variants) {
+            const rgb = rgbOf(name), x = xOf(name, order, fourth);
+            const clustering = await ac.getClustering(rgb);
+            const palette = await ac.getPaletteFromClustering(clustering, 12);
+            for (const dither of ditherSets) {
+                const label = `${name} ${order}x ${fourth} ${JSON.stringify(dither)}`;
+                const calls = [
+                    (image) => ac.quantizeFromClustering(image, clustering, 16, { dither }),
+                    (image) => ac.quantizeWithPalette(image, palette, { dither }),
+                ];
+                if (small.includes(name)) {calls.push((image) => ac.quantize(image, 16, { dither, transparent: true }));}
+                for (const call of calls) {
+                    const actual = await call(x), expected = await call(rgb);
+                    expect(actual.format, label).toBe(order + 'x');
+                    expect([actual.width, actual.height], label).toEqual([x.width, x.height]);
+                    expect(compare(actual.data, widen(expected.data, order)), label).toBe(0);
+                }
+            }
+        }
+    }, 300_000);
+
+    it('maps a bgrx result back to itself when read as bgra', async () => {
+        const x = xOf('synthetic', 'bgr', 0);
+        const palette = await ac.getPalette(x, 8);
+        const once = await ac.quantizeWithPalette(x, palette, { dither: true });
+        const again = await ac.quantizeWithPalette({ ...once, format: 'bgra' }, palette, { dither: true });
+        expect(compare(again.data, once.data)).toBe(0);
+    });
+
+    it('gives the same bgrx results through the worker, a handle and the sliced path', async () => {
+        const worker = createWorker();
+        try {
+            const x = xOf('synthetic', 'bgr', 0);
+            const controls = { signal: new AbortController().signal, onProgress: () => {} };
+            const main = await ac.quantize(x, 8, { dither: true });
+            expect(compare((await worker.quantize(x, 8, { dither: true })).data, main.data)).toBe(0);
+            expect(compare((await ac.quantize(x, 8, { dither: true, ...controls })).data, main.data)).toBe(0);
+            const handle = await worker.cluster(x);
+            expect(compare(await handle.getClustering(), await ac.getClustering(x))).toBe(0);
+            const fromHandle = await handle.quantize(8);
+            expect(fromHandle.format).toBe('bgrx');
+            expect(compare(fromHandle.data, (await ac.quantize(x, 8)).data)).toBe(0);
+        } finally {
+            worker.terminate();
+        }
+    });
 
 });

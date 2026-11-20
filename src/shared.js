@@ -10,9 +10,11 @@ export const colorSpaceCodes = {'rgb': 0, 'oklab': 1};
 // Every option whose value is one of a fixed set of names has the set exported as a frozen list (like errorCodes,
 // ditherMethods and ditherSteps), for building a choice from it or checking a value against it.
 export const colorSpaces = Object.freeze(Object.keys(colorSpaceCodes));
-export const imageFormats = Object.freeze(['rgb', 'rgba', 'bgra']);
-// Bytes per pixel of an image format: 'rgb' has no alpha, 'rgba' and 'bgra' do.
+export const imageFormats = Object.freeze(['rgb', 'rgba', 'bgra', 'rgbx', 'bgrx']);
+// Bytes per pixel of an image format: 3 for 'rgb', 4 for the rest.
 export const channels = (format) => format === 'rgb' ? 3 : 4;
+// Whether an image format's fourth byte is alpha ('rgbx' and 'bgrx' have a padding byte there instead).
+export const hasAlpha = (format) => format === 'rgba' || format === 'bgra';
 export const alphaModes = Object.freeze(['weight', 'ignore']);
 export const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 

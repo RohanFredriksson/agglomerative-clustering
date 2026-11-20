@@ -2,7 +2,7 @@ import createWasmModule from './clustering.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, imageFormats, channels, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
+    latestVersion, imageFormats, channels, hasAlpha, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -19,7 +19,7 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
     && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
-const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2};
+const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2, 'rgbx': 3, 'bgrx': 4};
 // The accepted formats as text: 'rgb', 'rgba' or 'bgra'.
 const formatNames = imageFormats.map((f) => `'${f}'`).join(', ').replace(/, ([^,]*)$/, ' or $1');
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
@@ -590,8 +590,8 @@ const mapIndexOptions = [...mapOptions, 'transparent'];
 const checkNotEmpty = (palette, image, cutoff) => {
     if (palette.length > 0) {return;}
     const data = image.data;
-    let visible = channels(image.format) === 3 ? data.length > 0 : false;
-    for (let i = 3; !visible && i < data.length; i += 4) {visible = data[i] >= cutoff;}
+    let visible = hasAlpha(image.format) ? false : data.length > 0;
+    for (let i = 3; !visible && hasAlpha(image.format) && i < data.length; i += 4) {visible = data[i] >= cutoff;}
     if (visible) {throw fail('invalid-argument', "Invalid palette: it is empty, but the image has visible pixels to map to it.", 'palette');}
 };
 

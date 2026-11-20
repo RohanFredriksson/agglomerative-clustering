@@ -99,20 +99,24 @@ uint32_t clustering_crc(const uint8_t* data, size_t length) {
 }
 
 // Where an image format keeps its channels: the bytes per pixel, the offsets of red and blue (green is always byte 1),
-// and whether byte 3 is alpha. Read at run time rather than compiled per format, so the pixel loops exist once.
-// Format codes: rgba 0, rgb 1, bgra 2 (`codes` in index.js).
+// whether byte 3 is alpha, and whether it is padding instead (the 'x' formats: every pixel is opaque, and mapped output
+// writes 255 there). Read at run time rather than compiled per format, so the pixel loops exist once.
+// Format codes: rgba 0, rgb 1, bgra 2, rgbx 3, bgrx 4 (`codes` in index.js).
 struct PixelLayout {
     int stride;
     int r;
     int b;
     bool alpha;
+    bool opaque;
 };
 
 PixelLayout layout_of(int image_format) {
     switch (image_format) {
-        case 1: return {3, 0, 2, false};
-        case 2: return {4, 2, 0, true};
-        default: return {4, 0, 2, true};
+        case 1: return {3, 0, 2, false, false};
+        case 2: return {4, 2, 0, true, false};
+        case 3: return {4, 0, 2, false, true};
+        case 4: return {4, 2, 0, false, true};
+        default: return {4, 0, 2, true, false};  // rgba; JS validates the format before any code reaches here
     }
 }
 
@@ -999,7 +1003,7 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
         out[L.r] = colour ? colour[0] : 0;
         out[1] = colour ? colour[1] : 0;
         out[L.b] = colour ? colour[2] : 0;
-        if (L.alpha) {out[3] = image_data[p * increment + 3];}
+        if (L.opaque) {out[3] = 255;} else if (L.alpha) {out[3] = image_data[p * increment + 3];}
     });
     return packed;
 }
