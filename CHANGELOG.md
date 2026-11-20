@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+
+Output is unchanged for every input 3.1 accepted; the golden tests pin it.
+
+### Added
+- **BGRA images:** `{ data, format: 'bgra', width?, height? }`, the order of Windows bitmaps and Electron's `nativeImage`, is read as it is, and `quantize`, `quantizeFromClustering` and `quantizeWithPalette` return BGRA for it, so neither direction needs a channel swap in JavaScript. Clusterings, palettes, swatches and indices are the same as for the image in RGBA. `imageFormats` lists `'bgra'`, and the `ImageFormat` type includes it: TypeScript code that spells out `'rgb' | 'rgba'` for a result's `format` should use `ImageFormat` (as [the stability promise](docs/stability.md) says, lists and their types grow in minor releases). The Electron notes in docs/environments.md show the round trip, including the conversion for premultiplied alpha (`toBitmap()` is premultiplied; reading it directly is planned for 4.0).
+
 ## 3.1.1
 
 Output is unchanged from 3.1.0.

@@ -141,7 +141,22 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
 - **Keep the package external in a bundled main process** (electron-vite does by default; with webpack or esbuild mark it external). A bundle that inlines it finds the `.wasm` and worker script only when the app starts from the project directory, which a packaged app doesn't. If you must bundle it, pass `init({ wasm })` for the main entry and `createWorker({ script })` for the worker.
 - **`nodeIntegrationInWorker: true`** is supported: the worker script talks through `self` there.
 - **Errors lose their `code` and `argument` crossing Electron's IPC** (only the message survives), so send `{ message, code, argument }` yourself; `isCodedError` accepts that object on the other side.
-- **`nativeImage` gives BGRA pixels:** swap the channels to RGBA first.
+- **`nativeImage` gives BGRA pixels** (Skia's native order in Electron on Windows, macOS and Linux): pass them as `format: 'bgra'`, and a mapped image comes back in the same order for `nativeImage.createFromBitmap`. They are also **premultiplied** (`toBitmap()` writes Skia's premultiplied N32), while the library reads straight alpha. Opaque images (screenshots, captures, opaque pages) are the same either way; for partly transparent ones, convert on the way in and out (premultiplied input is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected)):
+
+  ```js
+  const { width, height } = img.getSize();
+  const data = img.toBitmap();
+  for (let i = 0; i < data.length; i += 4) {   // premultiplied to straight
+      const a = data[i + 3];
+      for (let c = i; c < i + 3; c++) {data[c] = a ? Math.min(255, Math.round(data[c] * 255 / a)) : 0;}
+  }
+  const result = await quantize({ data, format: 'bgra', width, height }, 16);
+  for (let i = 0; i < result.data.length; i += 4) {   // straight to premultiplied
+      const a = result.data[i + 3];
+      for (let c = i; c < i + 3; c++) {result.data[c] = Math.round(result.data[c] * a / 255);}
+  }
+  const reduced = nativeImage.createFromBitmap(Buffer.from(result.data.buffer, result.data.byteOffset, result.data.byteLength), { width, height });
+  ```
 
 ## Browser extensions
 

@@ -80,7 +80,7 @@ slider.oninput = async () => {
 };
 ```
 
-Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba', width?, height? }`. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use the same functions from `agglomerative-clustering/worker` (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)).
+Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra', width?, height? }` (BGRA for Windows bitmaps and Electron's `nativeImage`). RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use the same functions from `agglomerative-clustering/worker` (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)).
 
 ## How it works
 

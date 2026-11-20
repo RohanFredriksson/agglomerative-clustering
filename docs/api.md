@@ -27,12 +27,12 @@ Every function that takes an image accepts:
 ```ts
 Uint8Array                                   // raw RGBA bytes
 ImageData                                    // from a canvas: always RGBA, width included
-{ data: Uint8Array | Uint8ClampedArray,      // explicit format, for RGB data or clamped arrays
-  format: 'rgb' | 'rgba',
+{ data: Uint8Array | Uint8ClampedArray,      // explicit format, for RGB or BGRA data or clamped arrays
+  format: 'rgb' | 'rgba' | 'bgra',
   width?: number, height?: number }          // optional: used for dithering, copied to results
 ```
 
-`width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`. A Node `Buffer` (sharp's `.raw()` output) is a `Uint8Array`, so it can be passed as it is.
+`'bgra'` is the order Windows bitmaps and Electron's `nativeImage` use (blue, green, red, alpha): it is read as it is and mapped images come back in it, with no swapping on your side, while palettes are RGB as always. `width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`. A Node `Buffer` (sharp's `.raw()` output) is a `Uint8Array`, so it can be passed as it is.
 
 - **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
 - **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels (from some native and WebGL APIs) back to straight alpha, 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits (sharp: `.toColourspace('srgb').raw({ depth: 'uchar' })`; pngjs: `inputHasAlpha` and its 8-bit output), and gray or gray-and-alpha pixels to RGBA (sharp's `.toColourspace('srgb').ensureAlpha()`); a gray buffer passed as it is gets misread. Apply a photo's EXIF orientation (sharp's `.rotate()`) and colour profile when decoding; the library doesn't read either. An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })`.
@@ -144,7 +144,7 @@ A built-in way to mix in light is on the [roadmap](ROADMAP.md).
 
 ### Transparency
 
-Alpha matters only for RGBA input (bare `Uint8Array`s and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none). Two options handle it, at different stages, and naming both is an error:
+Alpha matters only for RGBA and BGRA input (bare `Uint8Array`s and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none). Two options handle it, at different stages, and naming both is an error:
 
 - **`alpha`** (the default, `'weight'`) weighs each pixel by its opacity when clustering, and each pixel keeps its own alpha in the output. Use it for swatches and for images that keep their alpha.
 - **`transparent`** is for destinations with one transparent colour, as GIF and palette PNG have. Pass it in the clustering step too, so the palette you cut is the one you map with. Translucent palette colours are not supported.
@@ -348,7 +348,7 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 `errorCodes` is a frozen array of every `code` the library's errors have (see [Errors](#errors)). `isCodedError(value)` is true when `value` has a string `message` and one of those codes; in TypeScript it narrows to `CodedError`. Both entries export both.
 
 ### Lists of names: `colorSpaces`, `imageFormats`, `alphaModes`, `ditherMethods` and `ditherSteps`
-Frozen arrays of every value of the options that take one of a fixed set of names (see [Lists of names](#options)): `colorSpaces` (`'rgb'`, `'oklab'`), `imageFormats` (`'rgb'`, `'rgba'`), `alphaModes` (`'weight'`, `'ignore'`), `ditherMethods` (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`) and `ditherSteps` (2, 4, 8, 16, 32, 64). In TypeScript each is typed as a list of its option's type, so `find` narrows a value from a form: `ditherMethods.find((m) => m === select.value)` is a `DitherMethod` or `undefined`, and `ditherSteps.find((s) => s === Number(slider.value))` a `DitherSteps`. No dithering is `dither: false`, not a method. Both entries export all of them.
+Frozen arrays of every value of the options that take one of a fixed set of names (see [Lists of names](#options)): `colorSpaces` (`'rgb'`, `'oklab'`), `imageFormats` (`'rgb'`, `'rgba'`, `'bgra'`), `alphaModes` (`'weight'`, `'ignore'`), `ditherMethods` (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`) and `ditherSteps` (2, 4, 8, 16, 32, 64). In TypeScript each is typed as a list of its option's type, so `find` narrows a value from a form: `ditherMethods.find((m) => m === select.value)` is a `DitherMethod` or `undefined`, and `ditherSteps.find((s) => s === Number(slider.value))` a `DitherSteps`. No dithering is `dither: false`, not a method. Both entries export all of them.
 
 ### `version: string` and `formatVersion: number`
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
