@@ -1,10 +1,10 @@
 name: Prune stale branches
 
-# Deletes branches that are merged into master AND whose last commit is over a week old
-# (scripts/prune-stale-branches.sh). Runs on every branch push rather than on a schedule, so it only does work while
-# the repo is active: after a quiet spell the old branches are all still there, and the first push back cleans up.
-# Merged branches get a week's grace for follow-ups. master, release/* branches and tags are never touched; unmerged
-# branches are never touched. A deleted branch can be restored from its PR page; its commits are in master either way.
+# Deletes branches that are done (merged into master, or released: a patch/x.y.z branch whose tip is in a v* tag)
+# AND whose last commit is over a week old (scripts/prune-stale-branches.sh). Runs on every branch push rather than on
+# a schedule, so it only does work while the repo is active: after a quiet spell the old branches are all still there,
+# and the first push back cleans up. The week is grace for follow-ups. master, tags and unfinished branches are never
+# touched. A deleted branch can be restored from its PR page; its commits are in master or a tag either way.
 on:
   push:
     branches: ['**']

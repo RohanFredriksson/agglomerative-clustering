@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deletes local branches whose remote branch is gone (merged branches are deleted on GitHub a week after their last
 # commit, see .github/workflows/prune-stale-branches.yml). Uses `git branch -d`, which refuses anything not merged,
-# so unmerged work is kept and listed instead. Never touches the current branch, master, release/* branches,
+# so unmerged work is kept and listed instead; a branch whose tip is in a release tag (v*) is removed too. Never touches the current branch, master,
 # or branches that were never pushed. Safe to run any time.
 set -euo pipefail
 
@@ -12,8 +12,10 @@ removed=0
 kept=()
 
 while read -r branch; do
-  case "$branch" in master | release/* | "$current") continue ;; esac
-  if git branch -d "$branch" >/dev/null 2>&1; then
+  case "$branch" in master | "$current") continue ;; esac
+  # A released patch branch never merges into master, but its release tag keeps its commits.
+  if git branch -d "$branch" >/dev/null 2>&1 ||
+     { [ -n "$(git tag --list 'v*' --contains "$branch" | head -n 1)" ] && git branch -D "$branch" >/dev/null; }; then
     echo "removed $branch"
     removed=$((removed + 1))
   else
