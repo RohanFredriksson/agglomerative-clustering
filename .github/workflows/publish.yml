@@ -47,11 +47,13 @@ jobs:
       - run: npm test
       - run: npm run test:types
 
+      # Prereleases go to `next`; a patch to an older line (3.1.2 from release/3.1.x after 3.2.0) goes to `v3.1-latest`
+      # instead of taking `latest` back (scripts/dist-tag.mjs). A failed lookup of `latest` stops the publish rather
+      # than guessing.
       - name: Publish
         run: |
           version=$(node -p "require('./package.json').version")
-          case "$version" in
-            *-*) tag=next ;;
-            *) tag=latest ;;
-          esac
+          latest=$(npm view --prefer-online agglomerative-clustering dist-tags.latest)
+          tag=$(node scripts/dist-tag.mjs "$version" "$latest")
+          echo "Publishing $version under the dist-tag $tag (latest is $latest)"
           npm publish --tag "$tag" --ignore-scripts
