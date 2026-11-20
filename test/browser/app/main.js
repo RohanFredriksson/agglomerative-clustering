@@ -48,6 +48,10 @@ async function run() {
     const mainResult = await ac.quantize(image, 8, { dither: true });
     const workerResult = await workerQuantize(image, 8, { dither: true });
     checks.dropInMatchesMain = workerResult instanceof ImageData && equal(workerResult.data, mainResult.data);
+    // BGRA through the bundled worker: the same pixels with red and blue swapped give the RGBA result swapped back.
+    const swap = (bytes) => {const out = new Uint8Array(bytes); for (let i = 0; i < out.length; i += 4) {out[i] = bytes[i + 2]; out[i + 2] = bytes[i];} return out;};
+    const bgraResult = await workerQuantize({ data: swap(image.data), format: 'bgra', width, height }, 8, { dither: true });
+    checks.bgraMatchesRgba = bgraResult.format === 'bgra' && equal(swap(bgraResult.data), mainResult.data);
 
     const worker = createWorker();
     const handle = await worker.cluster(image, { colorSpace: 'oklab' });
