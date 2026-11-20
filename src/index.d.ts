@@ -1,5 +1,15 @@
-/** How pixel bytes are laid out: `'rgb'` is 3 bytes per pixel, `'rgba'` is 4 (red, green, blue, alpha). */
-export type ImageFormat = 'rgb' | 'rgba';
+/**
+ * How pixel bytes are laid out:
+ * - `'rgb'`: 3 bytes per pixel, red, green, blue.
+ * - `'rgba'`, `'bgra'`: 4 bytes, with straight (not premultiplied) alpha last. BGRA is the order of Windows bitmaps and
+ *   Electron's `nativeImage`, whose `toBitmap()` is premultiplied: convert it first (see Input in docs/api.md).
+ * - `'rgbx'`, `'bgrx'`: 4 bytes whose last is padding, not alpha (Windows `BI_RGB` bitmaps, WebCodecs `'BGRX'`, ffmpeg
+ *   `bgr0`): every pixel is opaque, and mapped output writes 255 there.
+ *
+ * Mapped images come back in the input's format; palettes are RGB whatever it is. New formats can come in a minor release,
+ * so take the names from `imageFormats` rather than spelling them out.
+ */
+export type ImageFormat = 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx';
 
 /**
  * What went wrong, on the `code` of every error this library throws (the message is for people and may change):
@@ -60,7 +70,7 @@ export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
 
 /**
- * An image as raw bytes with an explicit layout: for RGB data, a `Uint8ClampedArray`, or Node, where there is no
+ * An image as raw bytes with an explicit layout: for RGB or BGRA data, a `Uint8ClampedArray`, or Node, where there is no
  * `ImageData`. Functions that return an image give back an object of this shape with the same `format`.
  */
 export interface RawImage {
@@ -188,12 +198,13 @@ export interface ClusteringOptions extends ProgressOptions {
      */
     precision?: number | undefined;
     /**
-     * How RGBA pixels count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
-     * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
+     * How pixels of an image with alpha (RGBA or BGRA) count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
+     * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x. Clustering only:
+     * mapping still treats alpha-0 pixels as transparent, so for bytes whose fourth byte isn't alpha use `'rgbx'`/`'bgrx'`.
      */
     alpha?: AlphaMode | undefined;
     /**
-     * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for RGBA images: pixels with alpha
+     * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for images with alpha (RGBA or BGRA): pixels with alpha
      * below the cutoff don't exist as far as the palette is concerned. They are left out of clustering, and the rest count
      * whole instead of by opacity (so it replaces `alpha` for this call). That is the model of indexed output (GIF, palette
      * PNG), and it gives the same palette everywhere: `getPalette(image, k, { transparent })` is the palette
@@ -260,11 +271,11 @@ export type QuantizeOptions = ClusteringOptions & MappingOptions;
 export interface IndexOptions {
     /**
      * `false` (default): every pixel gets the index of its nearest colour, whatever its alpha.
-     * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image is RGBA and has pixels with alpha
+     * `true`, or an alpha cutoff from 1 to 255 (`true` means 128): if the image has alpha (RGBA or BGRA) and has pixels with alpha
      * below the cutoff, they get an extra entry appended after the palette (black, taking no part in matching), as
      * GIFs and palette PNGs expect; its index is the result's `transparentIndex`. Every other pixel is shown fully
      * opaque in its nearest colour. `k` counts that entry, so `k = 256` gives at most 256 entries (255 colours and the
-     * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is always kept. Where
+     * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is kept when any pixel is visible (an image with none gives just the transparent entry). Where
      * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
      * `ClusteringOptions.transparent`), so its palette is `getPalette(image, k - 1, { transparent })`'s. With a palette
      * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
@@ -479,7 +490,8 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
- *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
+ *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
+ *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
@@ -488,7 +500,8 @@ export function quantizeToIndices(image: ImageLike, k: number, options?: Quantiz
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
- *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
+ *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
+ *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
  */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 

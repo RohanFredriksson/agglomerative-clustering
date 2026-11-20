@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.2.0
+
+Output is unchanged for every input 3.1 read correctly; the golden tests pin it. `ImageData` that 3.1 misread (see Fixed) is now rejected.
+
+### Added
+- **BGRA images:** `{ data, format: 'bgra', width?, height? }`, the order of Electron's `nativeImage` and Windows bitmaps, is read as it is, and `quantize`, `quantizeFromClustering` and `quantizeWithPalette` return BGRA for it, so neither direction needs a channel swap in JavaScript. Clusterings, palettes, swatches and indices are the same as for the image in RGBA.
+- **`'rgbx'` and `'bgrx'`,** for 4-byte pixels whose fourth byte isn't alpha: Windows `BI_RGB` bitmaps and GDI screenshots (where it is usually 0), WebCodecs `'BGRX'` and `'RGBX'`, ffmpeg `bgr0` and `rgb0`. They behave exactly like `'rgb'`, and mapped output writes 255 in that byte. Passed as `'bgra'`, such buffers read as fully transparent and gave an empty palette and black output, with no error.
+- **The API reference lists where pixels come from** (canvases, sharp, Electron, node-canvas, `@napi-rs/canvas`, skia-canvas, WebGL, WebCodecs, ffmpeg, Windows), with each source's channel order, whether it is premultiplied, and what to pass; and the conversion for premultiplied pixels, which node-canvas, `@napi-rs/canvas`, Electron and WebGL give. Reading premultiplied pixels directly is planned for 4.0. The guides have WebCodecs and ffmpeg recipes, and the Electron notes handle `@2x` images (the earlier snippet's sizes were wrong for them).
+- **Clearer errors:** a format error shows the value it got and says when the name is the wrong case (`'BGRA'`), what Cairo's ARGB32 is (`'argb'`) and that 24-bit BGR can be widened to `'bgrx'`. A `VideoFrame` passed as an image gets a hint to `copyTo` it.
+
+### Fixed
+- **An `ImageData` that doesn't hold 8-bit RGBA pixels is rejected** with `invalid-argument`, rather than misread: skia-canvas's `colorType: 'bgra'` gave red for blue, and node-canvas's `A8` or skia's `gray8` gave the wrong number of pixels. The message names the `{ data, format }` to pass where one fits.
+- **The worker entry works in Electron Web Workers with `nodeIntegrationInWorker`.** The glue took them for Node and failed to load the module (`wasm-load-failed`), even with `wasm` bytes given. Electron's service-worker preload realms take the same path. A load that fails this way now says so, with the original error, rather than that the file couldn't be fetched.
+- **Docs:** indexed output keeps a colour besides the transparent entry when the image has visible pixels; an image with none gives just the transparent entry (as it always has).
+
+### TypeScript
+`ImageFormat` gains `'bgra'`, `'rgbx'` and `'bgrx'`. As [the stability promise](docs/stability.md) says, lists and their types grow in minor releases, so code that lists every format stops compiling until it handles the new ones: an exhaustive `switch` ending in `never`, a `Record<ImageFormat, …>` or `satisfies` one, a union spelled out as `'rgb' | 'rgba'` (for a result's `format`, use `ImageFormat`), or `if (format === 'rgb') … else /* rgba */`. Take the names from `imageFormats`, or add a default branch.
+
 ## 3.1.1
 
 Output is unchanged from 3.1.0.

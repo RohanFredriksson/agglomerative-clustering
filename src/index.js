@@ -2,7 +2,7 @@ import createWasmModule from './clustering.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -19,7 +19,18 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
     && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
-const codes = {'rgba': 0, 'rgb': 1};
+const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2, 'rgbx': 3, 'bgrx': 4};
+// A hint for a format name that isn't one: the right case, the name other libraries use for the same bytes, or the nearest
+// supported layout.
+const formatHint = (format) => {
+    if (typeof format !== 'string') {return '';}
+    const lower = format.toLowerCase();
+    if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
+    if (lower === 'xrgb' || lower === 'rgb24') {return " Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'.";}
+    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).";}
+    if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
+    return '';
+};
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
@@ -111,6 +122,10 @@ const wasmLoadFailed = (cause, given) => {
                 ? "Check that URL or path: it must be this package's clustering.wasm, served with the application/wasm type."
                 : "Check that clustering.wasm is served next to the script or emitted by your bundler (open its URL in the browser), or say where it is with init({ wasm }).";
         }
+    } else if (/dynamically imported module|node:module/i.test(text)) {
+        // The glue took its Node path somewhere that has Node's globals but not Node's module loader.
+        reason = `Node's module loader isn't available here, in a page or worker with Node's globals but not its loader (${reason})`;
+        advice = "Load the package where it can take its browser path, or report this environment as an issue.";
     } else if (isNodeLike && typeof given === 'string' && /^https?:/i.test(given)) {
         // Node fetches an http(s) URL itself (see nodeWasmFile), so the server or the network failed, not a path.
         reason = `the .wasm file could not be fetched${where}: ${reason}`;
@@ -371,7 +386,7 @@ const load = (image) => {
     }
 
     if (ArrayBuffer.isView(image) && isDetached(image)) {
-        throw fail('invalid-argument', "Invalid image: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+        throw detachedError('bare');
     }
 
     if (isUint8Array(image)) {
@@ -385,7 +400,7 @@ const load = (image) => {
 
     if (isImageData(image)) {
         if (isDetached(image.data)) {
-            throw fail('invalid-argument', "Invalid image: the ImageData's pixels were transferred away (detached), for example to a worker created with transfer: true.", 'image');
+            throw detachedError('imagedata');
         }
         checkImageDataPixels(image);
         return {data: held(bytes(image.data)), format: 'rgba', width: image.width};
@@ -403,19 +418,19 @@ const load = (image) => {
         throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
     }
     if (isDetached(image.data)) {
-        throw fail('invalid-argument', "Invalid image data: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+        throw detachedError('data');
     }
 
-    if (!Object.keys(codes).includes(image.format)) {
-        throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.", 'image');
+    if (!imageFormats.includes(image.format)) {
+        throw fail('invalid-argument', `Invalid format: got ${describe(image.format)}; it must be ${formatNames}.${formatHint(image.format)}`, 'image');
     }
 
-    const channels = image.format === 'rgb' ? 3 : 4;
-    if (image.data.length % channels !== 0) {
-        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`, 'image');
+    const stride = channels(image.format);
+    if (image.data.length % stride !== 0) {
+        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${stride} for '${image.format}'.`, 'image');
     }
 
-    const pixels = image.data.length / channels;
+    const pixels = image.data.length / stride;
     checkSize(pixels, image.width, 'image width', 'image');
     checkSize(pixels, image.height, 'image height', 'image');
     if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
@@ -533,15 +548,15 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`, 'options.width');
     }
     if (options.width !== undefined && image) {
-        checkSize(image.data.length / (image.format === 'rgb' ? 3 : 4), options.width, 'width', 'options.width');
+        checkSize(image.data.length / channels(image.format), options.width, 'width', 'options.width');
     }
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
-        const channels = image.format === 'rgb' ? 3 : 4;
+        const stride = channels(image.format);
         if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
             throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.", 'options.width');
         }
-        if ((image.data.length / channels) % width !== 0) {
+        if ((image.data.length / stride) % width !== 0) {
             throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.", 'options.width');
         }
     }
@@ -588,8 +603,8 @@ const mapIndexOptions = [...mapOptions, 'transparent'];
 const checkNotEmpty = (palette, image, cutoff) => {
     if (palette.length > 0) {return;}
     const data = image.data;
-    let visible = image.format === 'rgb' ? data.length > 0 : false;
-    for (let i = 3; !visible && i < data.length; i += 4) {visible = data[i] >= cutoff;}
+    let visible = hasAlpha(image.format) ? false : data.length > 0;
+    for (let i = 3; !visible && hasAlpha(image.format) && i < data.length; i += 4) {visible = data[i] >= cutoff;}
     if (visible) {throw fail('invalid-argument', "Invalid palette: it is empty, but the image has visible pixels to map to it.", 'palette');}
 };
 

@@ -125,7 +125,7 @@ Both entries run in Node functions (checked in the AWS Lambda Node 20 image, wit
 
 - **An ES module bundle** finds `clustering.wasm` next to itself: copy `node_modules/agglomerative-clustering/dist/clustering.wasm` beside the bundle. **A CommonJS bundle** has lost the package's own location: pass `init({ wasm: path })`, with a path to the copy you ship.
 - **The worker entry** needs `worker-thread.mjs` and the files it imports: leave the package external, or ship a copy of `dist/` and pass `createWorker({ script: path })`. Netlify's esbuild bundler moves them apart, so list the package in `external_node_modules`.
-- **Size and cold starts:** the files a function needs are about 180 KB (235 KB with the worker). Loading the module takes 10 to 70 ms, and a first palette of a 1-megapixel image at `precision: 6` came 0.3 to 0.5 s after a cold start; calling `init()` early doesn't make the first palette faster.
+- **Size and cold starts:** the files a function needs are about 235 KB (290 KB with the worker). Loading the module takes 10 to 70 ms, and a first palette of a 1-megapixel image at `precision: 6` came 0.3 to 0.5 s after a cold start; calling `init()` early doesn't make the first palette faster.
 - **Edge functions** (Vercel's edge runtime, Cloudflare) can't compile WebAssembly while they run: import the module as for [Next.js](#nextjs) and [Cloudflare Workers](#deno-bun-and-cloudflare-workers).
 
 ## pnpm, Yarn Plug'n'Play and monorepos
@@ -141,7 +141,20 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
 - **Keep the package external in a bundled main process** (electron-vite does by default; with webpack or esbuild mark it external). A bundle that inlines it finds the `.wasm` and worker script only when the app starts from the project directory, which a packaged app doesn't. If you must bundle it, pass `init({ wasm })` for the main entry and `createWorker({ script })` for the worker.
 - **`nodeIntegrationInWorker: true`** is supported: the worker script talks through `self` there.
 - **Errors lose their `code` and `argument` crossing Electron's IPC** (only the message survives), so send `{ message, code, argument }` yourself; `isCodedError` accepts that object on the other side.
-- **`nativeImage` gives BGRA pixels:** swap the channels to RGBA first.
+- **`nativeImage` gives premultiplied BGRA pixels** (Skia's native order in Electron on Windows, macOS and Linux, from `SkImageInfo::MakeN32Premul`). Pass them as `format: 'bgra'` after converting them to straight alpha ([Input](api.md#input) has the loop; opaque images, such as screenshots and captures, need no conversion), and a mapped image comes back in the same order for `nativeImage.createFromBitmap`. An image from an `@2x` file holds more pixels than `getSize()` says, which is in device-independent pixels, so take the size from the scale factor:
+
+  ```js
+  // In the main process (or a preload script): nativeImage and Buffer aren't in a sandboxed renderer.
+  const scaleFactor = Math.max(...img.getScaleFactors());
+  const data = img.toBitmap({ scaleFactor });
+  const width = Math.round(img.getSize().width * scaleFactor), height = data.length / 4 / width;
+  unpremultiply(data);                     // the first loop in Input; skip it for opaque images
+  const result = await quantize({ data, format: 'bgra', width, height }, 16);
+  premultiply(result.data);                // the second loop: createFromBitmap reads premultiplied pixels
+  const reduced = nativeImage.createFromBitmap(Buffer.from(result.data.buffer, result.data.byteOffset, result.data.byteLength), { width, height, scaleFactor });
+  ```
+
+  Reading premultiplied pixels directly is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected). A translucent result has more distinct colours than `k` once it is premultiplied again (the rounding differs per alpha), so for an exact palette use `quantizeToIndices` and your own encoder.
 
 ## Browser extensions
 
@@ -156,7 +169,7 @@ The main entry runs in every extension context: a Manifest V3 service worker, an
 
 Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wasm` and worker script can't sit next to it. Embed them, and say where everything is: in these hosts the package can't find its own files. (Tested against stand-ins for these hosts: a sandboxed iframe, a Node host process, an Electron renderer. Not inside the apps themselves.)
 
-- **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 92 KB, 122 KB as base64, and 54 KB gzipped then base64 (decompress it with `DecompressionStream` before passing it).
+- **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 127 KB, 170 KB as base64, and 69 KB gzipped then base64 (decompress it with `DecompressionStream` before passing it).
 - **The worker script as a `data:` URL.** Bundle `node_modules/agglomerative-clustering/dist/worker-thread.mjs` into one ES module (esbuild `--bundle --format=esm`) and pass it as `createWorker({ script: 'data:text/javascript;base64,…', wasm: bytes })`. In a sandboxed iframe (Figma's UI) a `blob:` worker fails in Chromium; a `data:` one works. The main entry alone is often enough for a plugin's images, and needs only the bytes.
 - **VS Code.** The extension host is Node: bundle your extension with the package external and ship it in `node_modules`, or bundle it and pass a path to a `.wasm` you ship (`init({ wasm: path.join(context.extensionPath, 'dist', 'clustering.wasm') })`); a bundled extension otherwise looks for the package from the working directory, which is not your extension's. A webview's CSP needs `'wasm-unsafe-eval'` in `script-src`, and `worker-src` for the worker entry.
 - **Obsidian** ships `main.js`, `manifest.json` and `styles.css` only, so embed the `.wasm` bytes. Its renderer has Node's globals and a real `Worker`, so both entries work once given the bytes (and, for workers, the `data:` script).

@@ -98,7 +98,29 @@ uint32_t clustering_crc(const uint8_t* data, size_t length) {
     return crc ^ 0xFFFFFFFFu;
 }
 
-// Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA pixel counts in proportion to its
+// Where an image format keeps its channels: the bytes per pixel, the offsets of red and blue (green is always byte 1),
+// whether byte 3 is alpha, and whether it is padding instead (the 'x' formats: every pixel is opaque, and mapped output
+// writes 255 there). Read at run time rather than compiled per format, so the pixel loops exist once.
+// Format codes: rgba 0, rgb 1, bgra 2, rgbx 3, bgrx 4 (`codes` in index.js).
+struct PixelLayout {
+    int stride;
+    int r;
+    int b;
+    bool alpha;
+    bool opaque;
+};
+
+PixelLayout layout_of(int image_format) {
+    switch (image_format) {
+        case 1: return {3, 0, 2, false, false};
+        case 2: return {4, 2, 0, true, false};
+        case 3: return {4, 0, 2, false, true};
+        case 4: return {4, 2, 0, false, true};
+        default: return {4, 0, 2, true, false};  // rgba; JS validates the format before any code reaches here
+    }
+}
+
+// Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA (or BGRA) pixel counts in proportion to its
 // opacity, so fully transparent pixels drop out and Ward minimises the error that is actually visible. With
 // `precision` below 8, colours are first grouped by the top `precision` bits of each channel, and each group
 // enters the clustering as one cluster at the weighted mean of its colours: at most 2^(3 * precision) clusters,
@@ -115,7 +137,7 @@ public:
 
     // The image must stay where it is until the job has scanned it (the first stage).
     ClusteringJob(const uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision, bool weight_alpha, int cutoff)
-        : image_data(image_data), image_format(image_format), color_space(color_space), precision(precision), cutoff(cutoff),
+        : image_data(image_data), layout(layout_of(image_format)), color_space(color_space), precision(precision), cutoff(cutoff),
           space(color_space), clustering(clustering_header, 0) {
         this->clustering[0] = clustering_magic;
         this->clustering[1] = clustering_version;
@@ -123,12 +145,12 @@ public:
         this->clustering[3] = uint8_t(clustering_record);
         this->clustering[4] = uint8_t(color_space);
         this->clustering[5] = uint8_t(precision);
-        this->limit = image_format == 1 ? int64_t(image_length) - 2 : int64_t(image_length) - 3;
-        this->increment = image_format == 1 ? 3 : 4;
-        // With a cutoff (RGBA only), pixels with alpha below it are left out and the rest count whole: it is the
+        this->limit = int64_t(image_length) - (this->layout.stride - 1);
+        this->increment = this->layout.stride;
+        // With a cutoff (formats with alpha only), pixels with alpha below it are left out and the rest count whole: it is the
         // indexed-output model, where a pixel is either transparent or fully shown.
-        this->binary = cutoff > 0 && image_format == 0;
-        this->weight_alpha = weight_alpha && image_format == 0 && !this->binary;
+        this->binary = cutoff > 0 && this->layout.alpha;
+        this->weight_alpha = weight_alpha && this->layout.alpha && !this->binary;
         this->clustering[12] = this->binary ? uint8_t(cutoff) : 0;
     }
 
@@ -174,7 +196,7 @@ private:
     };
 
     const uint8_t* image_data;
-    int image_format;
+    PixelLayout layout;
     ColorSpace color_space;
     int precision;
     int cutoff;
@@ -208,7 +230,7 @@ private:
             const int64_t end = std::min(this->limit, this->position + block * this->increment);
             for (; this->position < end; this->position += this->increment) {
                 const uint8_t* pixel = this->image_data + this->position;
-                uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
+                uint32_t key = (uint32_t(pixel[this->layout.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[this->layout.b]);
                 if (this->binary) {
                     if (pixel[3] >= this->cutoff) {this->histogram.add(key);}
                     continue;
@@ -609,7 +631,8 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
     if (small) {cells.build(points, keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {tree.build(points, keys);}
     auto lookup = [&](const AgglomerativeClustering::KDTree::Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
 
-    int increment = image_format == 1 ? 3 : 4;
+    const PixelLayout L = layout_of(image_format);
+    const int increment = L.stride;
     size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
 
     // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
@@ -633,7 +656,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
     if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || points.empty()) {
         for (size_t p = 0; p < pixels; p++) {
             const uint8_t* pixel = image_data + p * increment;
-            emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+            emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
         }
         return;
     }
@@ -860,16 +883,16 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             for (size_t x = 0; x < size_t(width); x++) {
                 const size_t p = y * size_t(width) + x;
                 const uint8_t* pixel = image_data + p * increment;
-                if (image_format == 0 && pixel[3] < skip_below) {
-                    emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+                if (L.alpha && pixel[3] < skip_below) {
+                    emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
                     continue;
                 }
-                const uint32_t key = (uint32_t(pixel[0]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[2]);
+                const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
                 const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
                 int32_t* recipe = &recipes[size_t(slot) * steps];
                 if (recipe_keys[slot] != key) {
                     recipe_keys[slot] = key;
-                    const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
+                    const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
                     float e[3] = {0.0f, 0.0f, 0.0f};
                     for (size_t i = 0; i < steps; i++) {
                         float wanted[3];
@@ -902,13 +925,13 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
                 const size_t p = y * size_t(width) + x;
                 const uint8_t* pixel = image_data + p * increment;
                 float* e = &row0[3 * (x + 2)];
-                if (image_format == 0 && pixel[3] < skip_below) {
-                    emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+                if (L.alpha && pixel[3] < skip_below) {
+                    emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
                     for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
                     continue;
                 }
                 float wanted[3];
-                carry(match(pixel[0], pixel[1], pixel[2]), e, wanted);
+                carry(match(pixel[L.r], pixel[1], pixel[L.b]), e, wanted);
                 const int32_t index = pick(wanted);
                 emit(p, palette_index(index));
                 const ptrdiff_t ahead = forward ? 3 : -3;
@@ -937,14 +960,14 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             const uint8_t* pixel = image_data + p * increment;
             float* e = &current[3 * (x + 1)];
             // Transparent pixels (alpha below `skip_below`) neither take error nor pass any on: their colour isn't seen.
-            if (image_format == 0 && pixel[3] < skip_below) {
-                emit(p, palette_index(nearest_index(pixel[0], pixel[1], pixel[2])));
+            if (L.alpha && pixel[3] < skip_below) {
+                emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
                 for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
                 continue;
             }
             // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
             // is the one that best cancels it; mixing spaces lets error pile up into streaks.
-            const AgglomerativeClustering::KDTree::Point base = match(pixel[0], pixel[1], pixel[2]);
+            const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
             float wanted[3];
             carry(base, e, wanted);
             const int32_t index = pick(wanted);
@@ -969,15 +992,18 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
 // preserved, as a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
 // With an empty palette every pixel becomes black.
 uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width) {
-    const int increment = image_format == 1 ? 3 : 4;
+    const PixelLayout L = layout_of(image_format);
+    const int increment = L.stride;
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
     uint8_t* packed = allocate_variable_size(pixels * increment);
     uint8_t* output = packed + 4;
     map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 1, [&](size_t p, int32_t index) {
         uint8_t* out = output + p * increment;
         const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
-        for (int c = 0; c < 3; c++) {out[c] = colour ? colour[c] : 0;}
-        if (image_format == 0) {out[3] = image_data[p * increment + 3];}
+        out[L.r] = colour ? colour[0] : 0;
+        out[1] = colour ? colour[1] : 0;
+        out[L.b] = colour ? colour[2] : 0;
+        if (L.opaque) {out[3] = 255;} else if (L.alpha) {out[3] = image_data[p * increment + 3];}
     });
     return packed;
 }
@@ -985,15 +1011,15 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
 // Maps the image to the palette (see map_pixels) and returns each pixel's palette index instead of its colour.
 // The length-prefixed payload is [entries (u32), transparent index (i32, -1 for none), index bytes (u32)], then
 // the palette (3 bytes per entry), then one little-endian index of `index bytes` (1, 2 or 4) per pixel.
-// With a `cutoff` (1-255) and RGBA input that has pixels with alpha below it, those pixels get an extra black entry
+// With a `cutoff` (1-255) and input with alpha (RGBA or BGRA) that has pixels with alpha below it, those pixels get an extra black entry
 // appended after the palette, which takes no part in matching (the callers cut the palette one colour smaller to make room, see
 // colours_for_entries: `k` counts the entries of the result); every other pixel maps to its nearest colour,
 // fully opaque. Without one (0), all pixels map to their nearest colour like any other pixel. An empty palette stays empty unless some pixel needs an entry to point at, in which case it becomes a
 // single black entry, as _quantize maps it: so an empty image has an empty palette, and a fully transparent image
 // with a cutoff has just the transparent entry (index 0).
-// Whether indexed output with this cutoff will have a transparent entry: the image is RGBA and some pixel is below it.
+// Whether indexed output with this cutoff will have a transparent entry: the image has alpha and some pixel is below it.
 bool has_transparent_entry(const uint8_t* image_data, int image_length, int image_format, int cutoff) {
-    if (cutoff <= 0 || image_format != 0 || image_length < 4) {return false;}
+    if (cutoff <= 0 || !layout_of(image_format).alpha || image_length < 4) {return false;}
     for (size_t p = 0; p + 3 < size_t(image_length); p += 4) {if (image_data[p + 3] < cutoff) {return true;}}
     return false;
 }
@@ -1005,12 +1031,12 @@ int colours_for_entries(const uint8_t* image_data, int image_length, int image_f
 }
 
 uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int cutoff) {
-    const int increment = image_format == 1 ? 3 : 4;
-    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
+    const PixelLayout L = layout_of(image_format);
+    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
 
     std::vector<uint8_t> entries(palette, palette + palette_length / 3 * 3);
     bool transparent = false;
-    if (cutoff > 0 && image_format == 0) {
+    if (cutoff > 0 && L.alpha) {
         for (size_t p = 0; p < pixels && !transparent; p++) {transparent = image_data[p * 4 + 3] < cutoff;}
     }
     bool needs_entry = false;

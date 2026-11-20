@@ -34,7 +34,7 @@ How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (
 
 ## GIFs and palette PNGs
 
-`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`; a colour is always kept besides it, so `k = 1` can give 2 entries.
+`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`; a colour is kept besides it whenever the image has visible pixels, so `k = 1` can give 2 entries (an image with no visible pixels gives just the transparent entry).
 
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 
@@ -47,10 +47,12 @@ import { quantizeToIndices } from 'agglomerative-clustering';
 // k counts the transparent entry, so 256 is the most a GIF holds. `image` is { data, format: 'rgba', width, height }.
 const { palette, indices, indexBits, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
 if (indexBits !== 8) {throw new Error('unreachable: 256 entries or fewer have 8-bit indices');}   // tells TypeScript `indices` is a Uint8Array
-const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]]);
+// gifenc and fast-png take a palette as [r, g, b] entries; the library's is flat bytes, transparent entry included.
+const toEntries = (flat) => Array.from({ length: flat.length / 3 }, (_, i) => [flat[3 * i], flat[3 * i + 1], flat[3 * i + 2]]);
+const entries = toEntries(palette);
 
 const gif = GIFEncoder();
-gif.writeFrame(indices, image.width, image.height, { palette: colors, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
+gif.writeFrame(indices, image.width, image.height, { palette: entries, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
 gif.finish();
 const bytes = gif.bytes();
 ```
@@ -66,7 +68,7 @@ const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
 const png = encode({
   width: image.width, height: image.height, depth: 8, channels: 1,
   data: indices.map(swap),
-  palette: colors.map((_, i) => [...colors[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
+  palette: entries.map((_, i) => [...entries[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
 });
 ```
 
@@ -83,19 +85,19 @@ const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length,
 let offset = 0;
 for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
 const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
-const colors = await getPaletteFromClustering(clustering, 255);   // 255 colours, and room for the transparent entry
+const shared = await getPaletteFromClustering(clustering, 255);   // 255 colours, and room for the transparent entry
 
 for (const frame of frames) {
   // The same colours at the same indices in every frame, and the transparent entry (when a frame has transparent pixels)
   // right after them: index 255, or fewer when the sample has fewer than 255 colours. Ordered dithering is a fixed pattern, so the parts of the picture that don't move stay the same from
   // frame to frame; error diffusion would make them shimmer.
-  const { palette, indices, transparentIndex } = await quantizeToIndicesWithPalette(frame, colors, { transparent: true, dither: 'ordered' });
-  // … gif.writeFrame(indices, width, height, { palette: …, transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
+  const { palette, indices, transparentIndex } = await quantizeToIndicesWithPalette(frame, shared, { transparent: true, dither: 'ordered' });
+  gif.writeFrame(indices, width, height, { palette: toEntries(palette), transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 })
 }
 ```
 
 - **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`quantizeToIndicesFromClustering(frame, clustering, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
-- **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `colors.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
+- **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `shared.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
 ## Live video and camera frames
@@ -146,7 +148,23 @@ video.requestVideoFrameCallback(onFrame);
   };
   ```
 - **One palette for a whole clip** (no flicker at all) is the [animated GIF](#animated-gifs-and-sets-of-images) recipe: cluster a sample of frames once.
-- **In Node**, pipe ffmpeg's raw output (`-f rawvideo -pix_fmt rgba`) and hand each frame to a few `createWorker()`s; memory stayed flat over thousands of frames in testing.
+- **In Node**, pipe ffmpeg's raw output and hand each frame to a few `createWorker()`s; memory stayed flat over thousands of frames in testing. Ask for `-f rawvideo -pix_fmt bgra` and pass `format: 'bgra'`, or `-pix_fmt bgr0` with `format: 'bgrx'` for video without alpha (ffmpeg fills that byte with 255 for opaque sources but passes alpha through from sources that have it, so `'bgrx'` is the safe name). Frames arrive in pipe chunks of any size, so collect exactly `width × height × 4` bytes per frame:
+
+  ```js
+  import { spawn } from 'node:child_process';
+  const ffmpeg = spawn('ffmpeg', ['-i', input, '-vf', 'scale=160:90', '-f', 'rawvideo', '-pix_fmt', 'bgr0', '-']);
+  const size = 160 * 90 * 4;
+  let pending = Buffer.alloc(0);
+  for await (const chunk of ffmpeg.stdout) {
+    pending = Buffer.concat([pending, chunk]);
+    while (pending.length >= size) {
+      const frame = { data: pending.subarray(0, size), format: 'bgrx', width: 160, height: 90 };
+      pending = pending.subarray(size);
+      onPalette(await worker.getPalette(frame, 8, { precision: 6 }));
+    }
+  }
+  ```
+- **WebCodecs frames** copy straight into a format the library reads, cheaper than drawing to a canvas: `frame.copyTo(buffer, { format: 'BGRA' })` gives BGRA whatever the frame holds (decoders give I420), sized by `frame.allocationSize({ format: 'BGRA' })`. Pass `{ data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }`, which is what `copyTo` copies (`displayWidth` differs for video with non-square pixels), and call `frame.close()` once copied. Ask for `'BGRA'`, not `'BGRX'`: in a `'BGRX'` copy the fourth byte isn't reliably 255 (frames made from a canvas carry their alpha into it), and if you do get `'BGRX'` frames pass them as `'bgrx'`. Frames made from a canvas copy out premultiplied; decoded video is opaque, so it is the same either way.
 
 ## Workers
 
