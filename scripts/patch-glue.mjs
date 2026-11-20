@@ -13,7 +13,9 @@
 //    running the package from a CDN URL. The glue then takes its Node path (createRequire(import.meta.url), node:fs) and
 //    fails before it looks at a module passed to init({ wasm }). Node, Bun and Deno running from npm, and server bundles,
 //    load the glue from a file, so being loaded from a `file:` URL is required too; everything else takes the web path,
-//    which fetches the .wasm or uses the module it was given.
+//    which fetches the .wasm or uses the module it was given. Electron gives its pages (process.type 'renderer', which
+//    the glue already excludes) and their Web Workers ('worker', with nodeIntegrationInWorker) Node's globals but not
+//    Node's module loader, so those take the web path as well.
 import { readFileSync, writeFileSync } from 'fs';
 
 const file = new URL('../dist/clustering.js', import.meta.url);
@@ -32,7 +34,7 @@ const hinted = 'import(/* webpackIgnore: true */ /* @vite-ignore */ ';
 patch('node:module import', (text) => text.includes(hinted), /import\((["'])(node:)?module\1\)/g,
     (match, quote, scheme) => `${hinted}${scheme ? '["node", "module"].join(":")' : '["module"].join("")'})`);
 
-const fromFile = '&&typeof import.meta.url=="string"&&import.meta.url.startsWith("file:")';
+const fromFile = '&&globalThis.process?.type!="worker"&&typeof import.meta.url=="string"&&import.meta.url.startsWith("file:")';
 patch('Node detection', (text) => text.includes(fromFile), /var ENVIRONMENT_IS_NODE=[^;]*process[^;]*;/g,
     (match) => `${match.slice(0, -1)}${fromFile};`);
 
