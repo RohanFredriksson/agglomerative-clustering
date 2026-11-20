@@ -30,5 +30,6 @@ export async function run() {
     const notRaw: RawImage = b;
     // @ts-expect-error an unknown option
     await quantize(raw, 4, { reserveTransparent: true });
-    void [a, b, c, d, e, g, indexed, mse, notAString, notRaw];
+    const h: RawImage = await quantize({ data: bytes, format: 'bgra' as const, width: 4 }, 4);
+    void [a, b, c, d, e, g, h, indexed, mse, notAString, notRaw];
 }

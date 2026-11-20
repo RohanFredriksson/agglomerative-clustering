@@ -70,6 +70,13 @@ export async function shapes() {
     const imageFormat: ImageFormat | undefined = imageFormats.find((f) => f === selected);
     const alpha: AlphaMode | undefined = alphaModes.find((a) => a === selected);
     void [method, fromSlider, space, imageFormat, alpha];
+    // BGRA images go in and come back as image objects in the same format.
+    const bgra: RawImage = { data: new Uint8Array(8), format: 'bgra', width: 2 };
+    const mappedBgra: RawImage = await quantizeWithPalette(bgra, [0, 0, 0]);
+    const bgraFormat: ImageFormat = 'bgra';
+    // @ts-expect-error not an image format
+    const notAFormat: ImageFormat = 'argb';
+    void [mappedBgra, bgraFormat, notAFormat];
     // UI state holding any method: steps is caught unless the method is known to be 'ordered'.
     const ui: { method: DitherMethod; strength: number; steps: DitherSteps } = { method: 'atkinson', strength: 1, steps: 16 };
     // @ts-expect-error steps with a method that may not be 'ordered'

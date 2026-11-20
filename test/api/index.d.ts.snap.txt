@@ -1,4 +1,4 @@
-export type ImageFormat = 'rgb' | 'rgba';
+export type ImageFormat = 'rgb' | 'rgba' | 'bgra';
 export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed' | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
 export type ErrorArgument = 'image' | 'k' | 'clustering' | 'palette' | 'colorSpace' | 'options' | `options.${string}`;
 export interface CodedError extends Error {

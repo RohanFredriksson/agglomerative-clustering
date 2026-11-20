@@ -1,8 +1,10 @@
 // BGRA images ({ data, format: 'bgra' }) are read and returned in their own channel order, and otherwise behave exactly
 // like the same image as RGBA: the same clusterings, palettes, swatches, info and indices, and mapped output that is the
 // RGBA output with R and B swapped.
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as ac from '../dist/index.mjs';
+import * as dropIn from '../dist/worker.mjs';
+import { createWorker } from '../dist/worker.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
 
 // Swaps bytes 0 and 2 of every 4-byte pixel: RGBA to BGRA, and back.
@@ -150,5 +152,72 @@ describe('BGRA input behaves as the same image in RGBA', () => {
         expect(twice.format).toBe('bgra');
         expect(twice.data).toEqual(once.data);
     });
+
+});
+
+describe('BGRA through the worker entry', () => {
+
+    const worker = createWorker();
+    afterAll(() => {worker.terminate(); dropIn.terminate();});
+
+    it('quantizes and indexes BGRA as the main entry does', async () => {
+        const { bgra } = images.synthetic;
+        for (const dither of ditherSets) {
+            for (const api of [worker, dropIn]) {
+                const result = await api.quantize(bgra, 8, { dither });
+                const expected = await ac.quantize(bgra, 8, { dither });
+                expect(result.format, JSON.stringify(dither)).toBe('bgra');
+                expect([result.width, result.height]).toEqual([width, height]);
+                expect(compare(result.data, expected.data), JSON.stringify(dither)).toBe(0);
+            }
+        }
+        const indexed = await worker.quantizeToIndices(bgra, 8, { transparent: true });
+        const expected = await ac.quantizeToIndices(bgra, 8, { transparent: true });
+        expect(compare(indexed.indices, expected.indices)).toBe(0);
+        expect(indexed.transparentIndex).toBe(expected.transparentIndex);
+    });
+
+    it('serves a BGRA handle as the main entry does', async () => {
+        const { bgra } = images.synthetic;
+        const handle = await worker.cluster(bgra);
+        const clustering = await ac.getClustering(bgra);
+        expect(compare(await handle.getClustering(), clustering)).toBe(0);
+        const fromHandle = await handle.quantize(8);
+        expect(fromHandle.format).toBe('bgra');
+        expect(compare(fromHandle.data, (await ac.quantizeFromClustering(bgra, clustering, 8)).data)).toBe(0);
+        const palette = await ac.getPalette(bgra, 5);
+        expect(compare((await handle.quantizeWithPalette(palette)).data, (await ac.quantizeWithPalette(bgra, palette)).data)).toBe(0);
+    });
+
+    it('moves a BGRA image with transfer: true and gives the same result', async () => {
+        const mover = createWorker({ transfer: true });
+        try {
+            const { bgra } = images.synthetic;
+            const copy = { ...bgra, data: new Uint8Array(bgra.data) };
+            const result = await mover.quantize(copy, 8);
+            expect(copy.data.byteLength).toBe(0);
+            expect(compare(result.data, (await ac.quantize(bgra, 8)).data)).toBe(0);
+        } finally {
+            mover.terminate();
+        }
+    });
+
+});
+
+describe('BGRA validation', () => {
+
+    for (const [entry, api] of [['main', ac], ['worker', dropIn]]) {
+        it(`reports bad BGRA images from the ${entry} entry`, async () => {
+            await expect(api.getPalette({ data: new Uint8Array(6), format: 'bgra' }, 2)).rejects.toMatchObject({
+                message: "Invalid image data: length must be a multiple of 4 for 'bgra'.", code: 'invalid-argument', argument: 'image',
+            });
+            await expect(api.getPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
+                message: "Invalid format: must be 'rgb', 'rgba' or 'bgra'.", code: 'invalid-argument', argument: 'image',
+            });
+            await expect(api.quantize({ data: new Uint8Array(16), format: 'bgra' }, 2, { dither: true })).rejects.toMatchObject({
+                code: 'invalid-argument', argument: 'options.width',
+            });
+        });
+    }
 
 });

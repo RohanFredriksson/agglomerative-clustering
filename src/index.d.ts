@@ -1,5 +1,9 @@
-/** How pixel bytes are laid out: `'rgb'` is 3 bytes per pixel, `'rgba'` is 4 (red, green, blue, alpha). */
-export type ImageFormat = 'rgb' | 'rgba';
+/**
+ * How pixel bytes are laid out: `'rgb'` is 3 bytes per pixel, `'rgba'` is 4 (red, green, blue, alpha), and `'bgra'` is 4
+ * in the order Windows bitmaps and Electron's `nativeImage` use (blue, green, red, alpha). Alpha is straight, not
+ * premultiplied. Palettes are RGB whatever the image's format.
+ */
+export type ImageFormat = 'rgb' | 'rgba' | 'bgra';
 
 /**
  * What went wrong, on the `code` of every error this library throws (the message is for people and may change):
@@ -60,7 +64,7 @@ export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
 
 /**
- * An image as raw bytes with an explicit layout: for RGB data, a `Uint8ClampedArray`, or Node, where there is no
+ * An image as raw bytes with an explicit layout: for RGB or BGRA data, a `Uint8ClampedArray`, or Node, where there is no
  * `ImageData`. Functions that return an image give back an object of this shape with the same `format`.
  */
 export interface RawImage {
