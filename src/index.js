@@ -2,7 +2,7 @@ import createWasmModule from './clustering.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -20,8 +20,16 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
 const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2, 'rgbx': 3, 'bgrx': 4};
-// The accepted formats as text: 'rgb', 'rgba' or 'bgra'.
-const formatNames = imageFormats.map((f) => `'${f}'`).join(', ').replace(/, ([^,]*)$/, ' or $1');
+// A hint for a format name that isn't one: the right case, the name other libraries use for the same bytes, or the nearest
+// supported layout.
+const formatHint = (format) => {
+    if (typeof format !== 'string') {return '';}
+    const lower = format.toLowerCase();
+    if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
+    if (lower === 'argb' || lower === 'xrgb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).";}
+    if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
+    return '';
+};
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
@@ -373,7 +381,7 @@ const load = (image) => {
     }
 
     if (ArrayBuffer.isView(image) && isDetached(image)) {
-        throw fail('invalid-argument', "Invalid image: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+        throw detachedError('bare');
     }
 
     if (isUint8Array(image)) {
@@ -387,7 +395,7 @@ const load = (image) => {
 
     if (isImageData(image)) {
         if (isDetached(image.data)) {
-            throw fail('invalid-argument', "Invalid image: the ImageData's pixels were transferred away (detached), for example to a worker created with transfer: true.", 'image');
+            throw detachedError('imagedata');
         }
         checkImageDataPixels(image);
         return {data: held(bytes(image.data)), format: 'rgba', width: image.width};
@@ -405,11 +413,11 @@ const load = (image) => {
         throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
     }
     if (isDetached(image.data)) {
-        throw fail('invalid-argument', "Invalid image data: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
+        throw detachedError('data');
     }
 
     if (!imageFormats.includes(image.format)) {
-        throw fail('invalid-argument', `Invalid format: must be ${formatNames}.`, 'image');
+        throw fail('invalid-argument', `Invalid format: got ${describe(image.format)}; it must be ${formatNames}.${formatHint(image.format)}`, 'image');
     }
 
     const stride = channels(image.format);

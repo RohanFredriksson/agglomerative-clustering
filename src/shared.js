@@ -15,6 +15,14 @@ export const imageFormats = Object.freeze(['rgb', 'rgba', 'bgra', 'rgbx', 'bgrx'
 export const channels = (format) => format === 'rgb' ? 3 : 4;
 // Whether an image format's fourth byte is alpha ('rgbx' and 'bgrx' have a padding byte there instead).
 export const hasAlpha = (format) => format === 'rgba' || format === 'bgra';
+// The accepted formats as text, for messages: 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'.
+export const formatNames = imageFormats.map((f) => `'${f}'`).join(', ').replace(/, ([^,]*)$/, ' or $1');
+
+// The error for an image whose pixels were transferred away (detached): `what` is 'bare' (a typed array passed as the
+// image), 'imagedata' or 'data' (a { data, format } object). Both entries report it in these words.
+export const detachedError = (what) => fail('invalid-argument', what === 'imagedata'
+    ? "Invalid image: the ImageData's pixels were transferred away (detached), for example to a worker created with transfer: true."
+    : `Invalid image${what === 'data' ? ' data' : ''}: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.`, 'image');
 export const alphaModes = Object.freeze(['weight', 'ignore']);
 export const colorSpaceName = (code) => code === 1 ? 'oklab' : 'rgb';
 
@@ -41,7 +49,7 @@ export const fail = (code, message, argument) => Object.assign(new Error(message
 // worker entry rejects them before sending, as the main entry does (from 4 GB a buffer can't even be cloned to send).
 export const maxBytes = 2 ** 31;
 export const sizeText = (bytes) => bytes >= 2 ** 30 ? `${(bytes / 2 ** 30).toFixed(2)} GB` : `${Math.round(bytes / 2 ** 20)} MB`;
-export const tooLarge = (bytes) => fail('out-of-memory', `The input is ${sizeText(bytes)}, more than the WebAssembly module can hold: it has at most 2 GB in all, for the pixels and the work on them, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels of RGBA). Scale the image down for its palette (a few megapixels give as good a one), and map a full-size image in strips with quantizeWithPalette.`);
+export const tooLarge = (bytes) => fail('out-of-memory', `The input is ${sizeText(bytes)}, more than the WebAssembly module can hold: it has at most 2 GB in all, for the pixels and the work on them, so an image's pixel data must stay under about 1.9 GB (about 480 megapixels at 4 bytes per pixel). Scale the image down for its palette (a few megapixels give as good a one), and map a full-size image in strips with quantizeWithPalette.`);
 
 // Type checks by tag rather than `instanceof`, so values from another realm (an iframe, a vm context, a test sandbox,
 // whose Uint8Array is a different constructor) are recognised. A Node Buffer is a Uint8Array by tag too.
@@ -68,7 +76,22 @@ export const isImageData = (value) => typeof value === 'object' && value !== nul
 // ImageData can hold other pixel formats than 8-bit RGBA (Chromium's pixelFormat: 'rgba-float16', with a Float16Array of
 // pixels). The library reads 8-bit RGBA only, so those are rejected, rather than read as the bytes of their floats.
 export const checkImageDataPixels = (image) => {
-    if (isUint8ClampedArray(image.data)) {return;}
+    if (isUint8ClampedArray(image.data)) {
+        // skia-canvas's ImageData can hold other layouts in the same clamped array ({ colorType: 'bgra' }, 'rgb888x',
+        // 'gray8', ...), and node-canvas's other pixel formats ('A8', 'RGB16_565') give fewer bytes: read as RGBA, they give
+        // swapped colours or the wrong pixel count, so they are rejected, with the { data, format } to pass where one fits.
+        const colorType = image.colorType;
+        if (colorType !== undefined && colorType !== 'rgba') {
+            const format = colorType === 'bgra' ? 'bgra' : colorType === 'rgb888x' ? 'rgbx' : null;
+            const instead = format ? ` Pass { data: imageData.data, format: '${format}', width, height } instead.` : " Ask for colorType 'rgba'.";
+            throw fail('invalid-argument', `Invalid image: this ImageData holds ${describe(colorType)} pixels, and an ImageData is read as 8-bit RGBA.${instead}`, 'image');
+        }
+        const needed = image.width * image.height * 4;
+        if (image.data.length !== needed) {
+            throw fail('invalid-argument', `Invalid image: this ImageData's data has ${image.data.length} bytes, but ${image.width} x ${image.height} RGBA pixels need ${needed}.`, 'image');
+        }
+        return;
+    }
     const format = typeof image.pixelFormat === 'string' ? ` (pixelFormat: '${image.pixelFormat}')` : '';
     throw fail('invalid-argument', `Invalid image: this ImageData doesn't hold 8-bit RGBA pixels${format}, and the library reads only those. Ask for 8-bit pixels with getImageData(x, y, width, height, { pixelFormat: 'rgba-unorm8' }), or draw it to a canvas with the default format and take getImageData() from that.`, 'image');
 };
@@ -94,8 +117,9 @@ export const imageHint = (image) => {
     if (isArrayBufferLike(image)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
     if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
     if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
+    if (typeof image.copyTo === 'function' && typeof image.codedWidth === 'number') {return " Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' }) and pass { data: buffer, format: 'bgra', width: frame.displayWidth, height: frame.displayHeight } (or 'BGRX' and 'bgrx' for frames without alpha).";}
     if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
-    if (image.data && !image.format) {return " It has `data` but no `format`: add format: 'rgba' (or 'rgb') to use it as a RawImage.";}
+    if (image.data && !image.format) {return ` It has \`data\` but no \`format\`: add format: 'rgba' (or another of ${formatNames}) to use it as a RawImage.`;}
     return '';
 };
 
@@ -123,7 +147,7 @@ export const ditherMethods = Object.freeze(Object.keys(ditherMethodCodes));
 export const ditherSteps = Object.freeze([2, 4, 8, 16, 32, 64]);
 
 // A short description of a value for an error message.
-const describe = (value) => typeof value === 'string' ? `'${value}'`
+export const describe = (value) => typeof value === 'string' ? `'${value}'`
     : typeof value === 'number' || typeof value === 'boolean' || value === null ? String(value)
     : Array.isArray(value) ? 'an array' : typeof value === 'object' ? `a ${Object.prototype.toString.call(value).slice(8, -1)}` : `a ${typeof value}`;
 

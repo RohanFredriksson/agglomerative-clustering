@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
+import {fail, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -187,7 +187,7 @@ const send = (image) => {
     // A detached buffer (transferred to a worker created with transfer: true, say) is reported as the main entry reports it.
     const pixels = ArrayBuffer.isView(image) ? image : image && typeof image === 'object' && ArrayBuffer.isView(image.data) ? image.data : null;
     if (pixels && isDetached(pixels)) {
-        throw fail('invalid-argument', "Invalid image: its pixels were transferred away (detached), for example to a worker created with transfer: true, so it has none left. Pass a copy if you need to keep using it.", 'image');
+        throw detachedError(ArrayBuffer.isView(image) ? 'bare' : isImageData(image) ? 'imagedata' : 'data');
     }
     // Too large for the module, as the main entry reports it, before a copy is made to send (or, from 4 GB, fails to be).
     if (pixels && pixels.byteLength >= maxBytes) {throw tooLarge(pixels.byteLength);}

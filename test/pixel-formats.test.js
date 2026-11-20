@@ -213,7 +213,7 @@ describe('BGRA validation', () => {
                 message: "Invalid image data: length must be a multiple of 4 for 'bgra'.", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.getPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
-                message: "Invalid format: must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'.", code: 'invalid-argument', argument: 'image',
+                message: "Invalid format: got 'argb'; it must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'. Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.quantize({ data: new Uint8Array(16), format: 'bgra' }, 2, { dither: true })).rejects.toMatchObject({
                 code: 'invalid-argument', argument: 'options.width',
@@ -331,6 +331,78 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
         } finally {
             worker.terminate();
         }
+    });
+
+});
+
+describe('ImageData validation and image hints', () => {
+
+    // An ImageData-like object, as skia-canvas and node-canvas make them: tagged ImageData, 8-bit clamped data.
+    class FakeImageData {
+        constructor(data, width, height, extra = {}) {Object.assign(this, { data, width, height }, extra);}
+        get [Symbol.toStringTag]() {return 'ImageData';}
+    }
+    const entries = [['main', ac], ['worker', dropIn]];
+
+    it('rejects an ImageData holding another colorType, naming the format to pass instead', async () => {
+        for (const [entry, api] of entries) {
+            const bgra = new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'bgra' });
+            await expect(api.getPalette(bgra, 2), entry).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image',
+                message: "Invalid image: this ImageData holds 'bgra' pixels, and an ImageData is read as 8-bit RGBA. Pass { data: imageData.data, format: 'bgra', width, height } instead." });
+            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgb888x' }), 2), entry)
+                .rejects.toMatchObject({ message: expect.stringContaining("format: 'rgbx'") });
+            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'gray8' }), 2), entry)
+                .rejects.toMatchObject({ message: expect.stringContaining("Ask for colorType 'rgba'.") });
+            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgba' }), 2), entry).resolves.toBeTruthy();
+        }
+    });
+
+    it('rejects an ImageData whose data does not hold width x height RGBA pixels', async () => {
+        for (const [entry, api] of entries) {
+            const a8 = new FakeImageData(new Uint8ClampedArray(4096), 64, 64);
+            await expect(api.getPalette(a8, 2), entry).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image',
+                message: "Invalid image: this ImageData's data has 4096 bytes, but 64 x 64 RGBA pixels need 16384." });
+        }
+    });
+
+    it('still accepts a real node-canvas ImageData', async () => {
+        const real = new ImageData(new Uint8ClampedArray(images.synthetic.rgba.data), width, height);
+        for (const [entry, api] of entries) {expect((await api.getPalette(real, 4)).length, entry).toBeGreaterThan(0);}
+    });
+
+    it('hints at the right format name', async () => {
+        const tries = [
+            ['BGRA', " Format names are lower case: 'bgra'."],
+            ['RGBX', " Format names are lower case: 'rgbx'."],
+            ['xrgb', "Cairo and node-canvas ARGB32 is BGRA in memory"],
+            ['bgr', " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'."],
+        ];
+        for (const [entry, api] of entries) {
+            for (const [format, hint] of tries) {
+                await expect(api.getPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({
+                    code: 'invalid-argument', argument: 'image', message: expect.stringContaining(`Invalid format: got '${format}'; it must be`),
+                });
+                await expect(api.getPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({ message: expect.stringContaining(hint) });
+            }
+        }
+    });
+
+    it('names every format when data has no format, and explains a VideoFrame', async () => {
+        await expect(ac.getPalette({ data: new Uint8Array(8) }, 2)).rejects.toMatchObject({ message: expect.stringContaining("add format: 'rgba' (or another of 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx') to use it as a RawImage") });
+        const frame = { copyTo() {}, codedWidth: 2, displayWidth: 2, displayHeight: 2, close() {} };
+        for (const [entry, api] of entries) {
+            await expect(api.getPalette(frame, 2), entry).rejects.toMatchObject({ message: expect.stringContaining("Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' })") });
+        }
+    });
+
+    it('words a detached buffer the same in both entries', async () => {
+        const messages = [];
+        for (const [, api] of entries) {
+            const data = new Uint8Array(16);
+            structuredClone(data.buffer, { transfer: [data.buffer] });
+            messages.push(await api.getPalette({ data, format: 'bgra' }, 2).catch((error) => error.message));
+        }
+        expect(messages[1]).toBe(messages[0]);
     });
 
 });
