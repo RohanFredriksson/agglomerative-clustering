@@ -74,6 +74,6 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - palette file writers;
   - a matte colour;
   - smoothing palettes across frames.
-- **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types.
+- **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.
