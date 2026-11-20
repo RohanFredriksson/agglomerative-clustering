@@ -268,7 +268,7 @@ export interface IndexOptions {
      * below the cutoff, they get an extra entry appended after the palette (black, taking no part in matching), as
      * GIFs and palette PNGs expect; its index is the result's `transparentIndex`. Every other pixel is shown fully
      * opaque in its nearest colour. `k` counts that entry, so `k = 256` gives at most 256 entries (255 colours and the
-     * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is always kept. Where
+     * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is kept when any pixel is visible (an image with none gives just the transparent entry). Where
      * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
      * `ClusteringOptions.transparent`), so its palette is `getPalette(image, k - 1, { transparent })`'s. With a palette
      * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
@@ -483,7 +483,8 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
- *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
+ *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
+ *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
@@ -492,7 +493,8 @@ export function quantizeToIndices(image: ImageLike, k: number, options?: Quantiz
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
- *     A colour is always kept besides the transparent entry, so with `transparent`, `k = 1` can give 2 entries.
+ *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
+ *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
  */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 

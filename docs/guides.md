@@ -34,7 +34,7 @@ How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (
 
 ## GIFs and palette PNGs
 
-`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`; a colour is always kept besides it, so `k = 1` can give 2 entries.
+`quantizeToIndices` returns a palette and one index per pixel, which is what these formats store. With `transparent`, pixels below an alpha cutoff share one transparent entry, which counts in `k`; a colour is kept besides it whenever the image has visible pixels, so `k = 1` can give 2 entries (an image with no visible pixels gives just the transparent entry).
 
 **A GIF** with [gifenc](https://github.com/mattdesl/gifenc), keeping a transparent background:
 

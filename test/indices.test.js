@@ -211,6 +211,9 @@ describe('edge cases and options', () => {
         }
         const withClustering = await quantizeToIndicesFromClustering(hidden, await getClustering(hidden), 4, { transparent: true });
         expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
+        // The same for BGRA, whose alpha is in the same byte.
+        const hiddenBgra = await quantizeToIndices({ data: new Uint8Array(16), format: 'bgra' }, 4, { transparent: true });
+        expect([Array.from(hiddenBgra.palette), hiddenBgra.transparentIndex, Array.from(hiddenBgra.indices)]).toEqual([[0, 0, 0], 0, [0, 0, 0, 0]]);
     });
 
     it('rejects an empty user palette when there are visible pixels to map', async () => {
