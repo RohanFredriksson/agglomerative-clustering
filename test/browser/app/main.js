@@ -59,6 +59,20 @@ async function run() {
         checks.bgraMatchesRgba = false;
         details.bgraMatchesRgba = String(error && error.message);
     }
+    // BGRX (the fourth byte padding, here 0) through the worker gives the RGB image's result, widened with 255.
+    try {
+        const rgb = image.data.filter((_, i) => i % 4 !== 3);
+        const bgrx = new Uint8Array(image.data.length);
+        for (let p = 0; p < width * height; p++) {bgrx.set([rgb[3 * p + 2], rgb[3 * p + 1], rgb[3 * p], 0], 4 * p);}
+        const fromRgb = await workerQuantize({ data: rgb, format: 'rgb', width, height }, 8, { dither: true });
+        const fromBgrx = await workerQuantize({ data: bgrx, format: 'bgrx', width, height }, 8, { dither: true });
+        const widened = new Uint8Array(bgrx.length);
+        for (let p = 0; p < width * height; p++) {widened.set([fromRgb.data[3 * p + 2], fromRgb.data[3 * p + 1], fromRgb.data[3 * p], 255], 4 * p);}
+        checks.bgrxMatchesRgb = fromBgrx.format === 'bgrx' && equal(fromBgrx.data, widened);
+    } catch (error) {
+        checks.bgrxMatchesRgb = false;
+        details.bgrxMatchesRgb = String(error && error.message);
+    }
 
     const worker = createWorker();
     const handle = await worker.cluster(image, { colorSpace: 'oklab' });
