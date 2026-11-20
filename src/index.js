@@ -2,7 +2,7 @@ import createWasmModule from './clustering.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
-    latestVersion, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
+    latestVersion, imageFormats, channels, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -19,7 +19,9 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
     && ((typeof WebAssembly !== 'undefined' && value instanceof WebAssembly.Module) || tagOf(value) === '[object WebAssembly.Module]');
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
-const codes = {'rgba': 0, 'rgb': 1};
+const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2};
+// The accepted formats as text: 'rgb', 'rgba' or 'bgra'.
+const formatNames = imageFormats.map((f) => `'${f}'`).join(', ').replace(/, ([^,]*)$/, ' or $1');
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
@@ -406,16 +408,16 @@ const load = (image) => {
         throw fail('invalid-argument', "Invalid image data: its buffer was transferred away (detached), for example to a worker created with transfer: true, so it has no pixels left. Pass a copy if you need to keep using it.", 'image');
     }
 
-    if (!Object.keys(codes).includes(image.format)) {
-        throw fail('invalid-argument', "Invalid format: must be 'rgb' or 'rgba'.", 'image');
+    if (!imageFormats.includes(image.format)) {
+        throw fail('invalid-argument', `Invalid format: must be ${formatNames}.`, 'image');
     }
 
-    const channels = image.format === 'rgb' ? 3 : 4;
-    if (image.data.length % channels !== 0) {
-        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${channels} for '${image.format}'.`, 'image');
+    const stride = channels(image.format);
+    if (image.data.length % stride !== 0) {
+        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${stride} for '${image.format}'.`, 'image');
     }
 
-    const pixels = image.data.length / channels;
+    const pixels = image.data.length / stride;
     checkSize(pixels, image.width, 'image width', 'image');
     checkSize(pixels, image.height, 'image height', 'image');
     if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
@@ -533,15 +535,15 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', `Invalid width: options.width (${options.width}) does not match the image's width (${image.width}).`, 'options.width');
     }
     if (options.width !== undefined && image) {
-        checkSize(image.data.length / (image.format === 'rgb' ? 3 : 4), options.width, 'width', 'options.width');
+        checkSize(image.data.length / channels(image.format), options.width, 'width', 'options.width');
     }
     const width = options.width !== undefined ? options.width : image ? image.width : undefined;
     if (dither > 0) {
-        const channels = image.format === 'rgb' ? 3 : 4;
+        const stride = channels(image.format);
         if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
             throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.", 'options.width');
         }
-        if ((image.data.length / channels) % width !== 0) {
+        if ((image.data.length / stride) % width !== 0) {
             throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.", 'options.width');
         }
     }
@@ -588,7 +590,7 @@ const mapIndexOptions = [...mapOptions, 'transparent'];
 const checkNotEmpty = (palette, image, cutoff) => {
     if (palette.length > 0) {return;}
     const data = image.data;
-    let visible = image.format === 'rgb' ? data.length > 0 : false;
+    let visible = channels(image.format) === 3 ? data.length > 0 : false;
     for (let i = 3; !visible && i < data.length; i += 4) {visible = data[i] >= cutoff;}
     if (visible) {throw fail('invalid-argument', "Invalid palette: it is empty, but the image has visible pixels to map to it.", 'palette');}
 };
