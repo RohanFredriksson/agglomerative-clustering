@@ -31,7 +31,7 @@ Roadmap item 2 (`format: 'bgra'`), extended after an exploratory round on the fi
   - Clusterings, palettes, swatches and indices are byte-identical to the same pixels as `'rgb'`.
 - **Results:** mapped images come back in the input's format. Palettes, clusterings and indices are always RGB.
 - **Alpha is straight in every format.** Premultiplied input is planned for 4.0 (see "Deferred"); until then the docs show the conversion.
-- **Unchanged:** the clustering format, `formatVersion`, fixtures, golden hashes, the type declarations apart from `ImageFormat`'s names, and every existing call's output except fix 3.
+- **Unchanged:** the clustering format, `formatVersion`, fixtures, golden hashes, the type declarations apart from `ImageFormat`'s names, and every existing call's output.
 
 ## Bugs fixed
 
@@ -44,9 +44,7 @@ Roadmap item 2 (`format: 'bgra'`), extended after an exploratory round on the fi
    - Exclude `"worker"` as `"renderer"` is excluded (`scripts/patch-glue.mjs`, both glues). The worker entry's own `hasNode` gets the same exclusion.
    - When a load fails on a dynamic import of a Node module, the message says so, rather than "could not be fetched".
    - Verified in a real Electron run.
-3. **Indexed output of an image with no visible pixels** (every pixel below the `transparent` cutoff) has no colour entry, only the transparent one. The docs promise at least one colour.
-   - Give it one black colour entry, then the transparent entry, as the same image without `transparent` already gets one black entry.
-   - This changes the output of that edge case, as a documented bug fix.
+3. **Indexed output of an image with no visible pixels** (every pixel below the `transparent` cutoff) has only the transparent entry, while the docs said "a colour is always kept besides the transparent entry". That output is deliberate and tested (`test/indices.test.js`: such pixels need no colour), so **the docs are fixed, not the code** (user decision): a colour is kept whenever the image has visible pixels. No output changes.
 
 ## Messages
 
@@ -89,7 +87,7 @@ Roadmap item 2 (`format: 'bgra'`), extended after an exploratory round on the fi
 - **README:** the format list, and a pointer to the pixel-source table.
 - **CHANGELOG:**
   - the formats;
-  - the three fixes, the last as a changed edge case;
+  - the two fixes, and the corrected sentence about the transparent entry;
   - the TypeScript patterns that a growing `ImageFormat` breaks (`never` switches, `Record<ImageFormat, …>`, spelled-out unions, `if rgb … else rgba`).
 - **ROADMAP:** item 2 done. The 4.0 section is extended (see "Deferred").
 
@@ -112,7 +110,7 @@ Both are recorded in the ROADMAP's 4.0 section with this round's evidence.
   - mapped output is the RGB result in that order, with 255 in the fourth byte, for all three `quantize*` functions and each dither setting;
   - the worker entry, handles and the sliced path.
 - **Validation:** the `ImageData` checks (fake skia and node-canvas `ImageData` objects, and a real node-canvas one that must still pass), and the message hints.
-- **Fix 3:** a black entry plus the transparent entry.
+- **Fix 3:** the existing test of the transparent-only palette gets a BGRA case.
 - **Fix 2:** a unit test of the patched glue's detection, and a one-off real Electron run recorded in the PR.
 - **Types** (`test/types/*`): `'bgrx'` and `'rgbx'` compile; `@ts-expect-error` for an unknown name.
 - **`test/lists.test.js`** pins the list. API snapshots are updated after review. Golden is unchanged.
