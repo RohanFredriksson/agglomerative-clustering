@@ -80,7 +80,7 @@ slider.oninput = async () => {
 };
 ```
 
-Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra', width?, height? }` (BGRA for Windows bitmaps and Electron's `nativeImage`). RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use the same functions from `agglomerative-clustering/worker` (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)).
+Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx', width?, height? }`: BGRA for Electron's `nativeImage` and Windows bitmaps, and the `x` formats for buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). Alpha is straight; [where pixels come from](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#input) lists common sources, which are premultiplied, and the conversion. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use the same functions from `agglomerative-clustering/worker` (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)).
 
 ## How it works
 

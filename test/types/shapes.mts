@@ -76,7 +76,13 @@ export async function shapes() {
     const bgraFormat: ImageFormat = 'bgra';
     // @ts-expect-error not an image format
     const notAFormat: ImageFormat = 'argb';
-    void [mappedBgra, bgraFormat, notAFormat];
+    // The padding formats, in and out.
+    const bgrx: RawImage = { data: new Uint8Array(8), format: 'bgrx', width: 2 };
+    const mappedBgrx: RawImage = await quantizeWithPalette(bgrx, [0, 0, 0]);
+    const paddingFormats: ImageFormat[] = ['rgbx', 'bgrx'];
+    // @ts-expect-error a format name is lower case
+    const upperCase: ImageFormat = 'BGRX';
+    void [mappedBgra, bgraFormat, notAFormat, mappedBgrx, paddingFormats, upperCase];
     // UI state holding any method: steps is caught unless the method is known to be 'ordered'.
     const ui: { method: DitherMethod; strength: number; steps: DitherSteps } = { method: 'atkinson', strength: 1, steps: 16 };
     // @ts-expect-error steps with a method that may not be 'ordered'

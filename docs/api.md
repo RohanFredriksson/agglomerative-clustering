@@ -27,20 +27,65 @@ Every function that takes an image accepts:
 ```ts
 Uint8Array                                   // raw RGBA bytes
 ImageData                                    // from a canvas: always RGBA, width included
-{ data: Uint8Array | Uint8ClampedArray,      // explicit format, for RGB or BGRA data or clamped arrays
-  format: 'rgb' | 'rgba' | 'bgra',
+{ data: Uint8Array | Uint8ClampedArray,      // explicit format, for other layouts or clamped arrays
+  format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx',
   width?: number, height?: number }          // optional: used for dithering, copied to results
 ```
 
-`'bgra'` is the order Windows bitmaps and Electron's `nativeImage` use (blue, green, red, alpha): it is read as it is and mapped images come back in it, with no swapping on your side, while palettes are RGB as always. Alpha must be straight: `nativeImage.toBitmap()` is premultiplied, so convert partly transparent images first ([Electron](environments.md#electron) has the loop). `width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`. A Node `Buffer` (sharp's `.raw()` output) is a `Uint8Array`, so it can be passed as it is.
+| `format` | Bytes per pixel | Channel order | Fourth byte |
+|---|---|---|---|
+| `'rgb'` | 3 | red, green, blue | none |
+| `'rgba'` | 4 | red, green, blue | straight alpha |
+| `'bgra'` | 4 | blue, green, red | straight alpha |
+| `'rgbx'` | 4 | red, green, blue | padding: ignored, every pixel is opaque |
+| `'bgrx'` | 4 | blue, green, red | padding: ignored, every pixel is opaque |
+
+Each format is read as it is and mapped images come back in it, with no swapping on your side; palettes, clusterings and indices are RGB in every case. The `x` formats are for buffers whose fourth byte isn't alpha (Windows `BI_RGB` bitmaps and GDI screenshots, where it is usually 0; WebCodecs `'BGRX'`; ffmpeg `bgr0`): they behave exactly like `'rgb'`, and mapped output writes 255 in that byte. Passing such a buffer as `'bgra'` instead reads it as fully transparent, which gives an empty palette and black output. `width` and `height` must be whole numbers, and when both are given they must account for exactly the pixels in `data`. A Node `Buffer` (sharp's `.raw()` output) is a `Uint8Array`, so it can be passed as it is.
+
+**Where pixels come from**, and what to pass:
+
+| Source | Bytes | Alpha | Pass |
+|---|---|---|---|
+| `getImageData()` (browsers, node-canvas, skia-canvas, `@napi-rs/canvas`) | RGBA | straight | the `ImageData` |
+| sharp `.raw()` | RGB or RGBA | straight | `'rgb'` or `'rgba'` (its `info.channels`) |
+| skia-canvas `toBuffer('raw')`; with `{ colorType: 'bgra' }` | RGBA; BGRA | straight | `'rgba'`; `'bgra'` |
+| Electron `nativeImage.toBitmap()` (Windows, macOS, Linux) | BGRA | premultiplied | convert, then `'bgra'` |
+| node-canvas `canvas.toBuffer('raw')` (Cairo ARGB32, little-endian) | BGRA | premultiplied | convert, then `'bgra'` |
+| `@napi-rs/canvas` `canvas.data()` | RGBA | premultiplied | convert, then `'rgba'` |
+| WebGL `readPixels` (default `premultipliedAlpha: true`; rows bottom-up) | RGBA | premultiplied | convert, then `'rgba'` |
+| WebCodecs `frame.copyTo(buffer, { format: 'BGRA' })`; `'BGRX'` | BGRA; BGRX | straight for decoded video, premultiplied for frames made from a canvas | `'bgra'` (convert canvas frames); `'bgrx'` |
+| ffmpeg `-f rawvideo -pix_fmt bgra`; `bgr0` | BGRA; BGRX | straight | `'bgra'`; `'bgrx'` |
+| Windows `GetDIBits`, 32-bit `BI_RGB` BMPs (rows usually bottom-up) | BGRX | none (usually 0) | `'bgrx'` |
+| Windows WIC `32bppBGRA`; `32bppPBGRA` | BGRA | straight; premultiplied | `'bgra'`; convert, then `'bgra'` |
+
+A wrong channel order can't be detected: red and blue come out swapped (orange as blue) in palettes that otherwise look plausible, so check one pixel of a known colour when trying a new source. Premultiplied pixels are read as straight, which darkens partly transparent ones (opaque and fully transparent pixels are the same either way), so convert them first, and convert mapped output back if it goes to an API that wants premultiplied pixels again. The conversion works in either channel order:
+
+```js
+// Premultiplied to straight, in place (4 bytes a pixel, alpha last), before the call:
+const unpremultiply = (data) => {
+    for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        for (let c = i; c < i + 3; c++) {data[c] = a ? Math.min(255, Math.round(data[c] * 255 / a)) : 0;}
+    }
+};
+// Straight to premultiplied, in place, on a mapped result for an API that wants premultiplied pixels:
+const premultiply = (data) => {
+    for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        for (let c = i; c < i + 3; c++) {data[c] = Math.round(data[c] * a / 255);}
+    }
+};
+```
+
+In Node, sharp does the first: `await sharp(data, { raw: { width, height, channels: 4, premultiplied: true } }).raw().toBuffer()` gives straight pixels in the same channel order. Reading premultiplied pixels directly is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
 
 - **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
-- **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels (from some native and WebGL APIs) back to straight alpha, 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits (sharp: `.toColourspace('srgb').raw({ depth: 'uchar' })`; pngjs: `inputHasAlpha` and its 8-bit output), and gray or gray-and-alpha pixels to RGBA (sharp's `.toColourspace('srgb').ensureAlpha()`); a gray buffer passed as it is gets misread. Apply a photo's EXIF orientation (sharp's `.rotate()`) and colour profile when decoding; the library doesn't read either. An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })`.
+- **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels back to straight alpha (above), 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits (sharp: `.toColourspace('srgb').raw({ depth: 'uchar' })`; pngjs: `inputHasAlpha` and its 8-bit output), and gray or gray-and-alpha pixels to RGBA (sharp's `.toColourspace('srgb').ensureAlpha()`); a gray buffer passed as it is gets misread. Apply a photo's EXIF orientation (sharp's `.rotate()`) and colour profile when decoding; the library doesn't read either. An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
 - **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: a canvas or `createImageBitmap` in a browser, sharp or pngjs in Node. Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`. Decoding is [planned](ROADMAP.md).
 
 ## Output
 
-The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format` (and `width` and `height`). In TypeScript the result type follows the input (`ImageResult<I>`). Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects. Each pixel keeps its own alpha.
+The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format` (and `width` and `height`) whose `data` is a `Uint8Array`. In TypeScript the result type follows the kind of input (`ImageResult<I>`); for a `RawImage` it is `RawImage`, so see [TypeScript](#typescript) for passing it on. Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects. In formats with alpha each pixel keeps its own alpha (a fully transparent pixel still gets its nearest colour); the `x` formats get 255 in the fourth byte; `'rgb'` has none.
 
 ## Options
 
@@ -50,7 +95,7 @@ Every function that takes an image also takes an optional last argument of optio
 |---|---|---|---|
 | `precision` | clustering | `1`–`8`, default `8` | Groups colours that share their top `precision` bits per channel before clustering, at their mean colour. **`6` is about 3× faster on photos at practically the same quality** (−0.02 dB), and caps the work on images with huge numbers of colours. `5` is about 8× faster for a small loss. |
 | `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'rgb'` minimises squared error in sRGB (the best PSNR); `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/). Neither wins everywhere: see [Choosing a colour space](#choosing-a-colour-space). |
-| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA or BGRA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. |
+| `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA or BGRA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. Clustering only: mapping and dithering still treat alpha-0 pixels as transparent, so for a buffer whose fourth byte isn't alpha use `'rgbx'` or `'bgrx'`. |
 | `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see [Transparency](#transparency). |
 | `dither` | mapping | `false` (default), `true`, `0`–`1`, `'floyd-steinberg'`, `'atkinson'`, `'ordered'`, or `{ method, strength, steps }` | Dithering, which hides banding at low colour counts at a cost in per-pixel metrics such as PSNR. `true` or a strength from 0 to 1 is Floyd–Steinberg error diffusion; a method name picks another; the object form sets `strength` (0 to 1, default 1) and, for `'ordered'`, `steps` (2, 4, 8, 16, 32 or 64; default 64 for two colours, else 16). See [Choosing a dither method](#choosing-a-dither-method). Fully transparent pixels are left undithered, and with a strength of 0 no width is needed. |
 | `width` | mapping | integer | The image width, for dithering a `Uint8Array` or a `RawImage` without one. If the image has a width of its own, this must equal it. |
@@ -144,7 +189,7 @@ A built-in way to mix in light is on the [roadmap](ROADMAP.md).
 
 ### Transparency
 
-Alpha matters only for RGBA and BGRA input (bare `Uint8Array`s and `ImageData` are RGBA; `{ data, format: 'rgb' }` has none). Two options handle it, at different stages, and naming both is an error:
+Alpha matters only for RGBA and BGRA input (bare `Uint8Array`s and `ImageData` are RGBA). `'rgb'`, `'rgbx'` and `'bgrx'` have none: `alpha` and `transparent` are accepted for them and do nothing, so one set of options can serve images of every format. Two options handle it, at different stages, and naming both is an error:
 
 - **`alpha`** (the default, `'weight'`) weighs each pixel by its opacity when clustering, and each pixel keeps its own alpha in the output. Use it for swatches and for images that keep their alpha.
 - **`transparent`** is for destinations with one transparent colour, as GIF and palette PNG have. Pass it in the clustering step too, so the palette you cut is the one you map with. Translucent palette colours are not supported.
@@ -256,6 +301,8 @@ Both entries ship declarations, checked in CI under strict mode with `nodenext` 
 - **Image objects:** one assigned to a variable before it is passed widens `format: 'rgba'` to `string`, which no longer matches `RawImage`: write `format: 'rgba' as const`, or declare the variable as `RawImage`.
 - **Dither settings in a variable** widen the same way: `const dither = { method: 'ordered', steps: 32 }` has `method: string`. Write `as const`, or declare it as `DitherOptions`. A `steps` value from a slider is a `number`, and a method from a `<select>` a `string`: narrow them with the exported lists, `ditherSteps.find((s) => s === value)` and `ditherMethods.find((m) => m === value)` (see [Lists of names](#lists-of-names-colorspaces-imageformats-alphamodes-dithermethods-and-dithersteps)).
 - **Results narrow:** checking `result.indexBits === 8` makes `indices` a `Uint8Array`.
+- **Mapped `RawImage` results are typed as `RawImage`:** `format` is `ImageFormat` and `data` is `Uint8Array | Uint8ClampedArray`, although at run time `data` is always a `Uint8Array` and `format` is the input's. Where you need the narrower types (to write the bytes, or to pass the image to code that takes one format), cast: `const out = await quantize(image, 16) as RawImage & { data: Uint8Array; format: 'bgra' }`. Results that keep the input's types are [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
+- **`ImageFormat` grows** in minor releases (3.2 added `'bgra'`, `'rgbx'` and `'bgrx'`), so code that lists every format (an exhaustive `switch`, a `Record<ImageFormat, …>`, a union spelled out as `'rgb' | 'rgba'`) needs a new case when it does; take the names from `imageFormats`, or end a `switch` with a default branch.
 - **Palettes:** palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`). Stored bytes need `new Clustering(bytes)` to be accepted as a clustering.
 - **Errors** are `CodedError`s with `code` and `argument`.
 - **Handles** keep the image type they were made from: a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`, whose `quantize` returns the general image type.
@@ -325,7 +372,7 @@ The result is `{ palette, colors, indices, indexBits, transparentIndex }`, plus 
 - `indices`: one per pixel, a `Uint8Array` for up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`; `indexBits` (8, 16 or 32) says which.
 - `transparentIndex`: the transparent entry's index, or `null`.
 
-With `transparent`, RGBA and BGRA pixels below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })` when the image has pixels below the cutoff; when it has none there is no transparent entry, and all `k` entries are colours. At least one colour is always kept. See [Transparency](#transparency).
+With `transparent`, pixels of an RGBA or BGRA image below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })` when the image has pixels below the cutoff; when it has none there is no transparent entry, and all `k` entries are colours. At least one colour is always kept. See [Transparency](#transparency).
 
 ```js
 const { palette, colors, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
@@ -348,7 +395,7 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 `errorCodes` is a frozen array of every `code` the library's errors have (see [Errors](#errors)). `isCodedError(value)` is true when `value` has a string `message` and one of those codes; in TypeScript it narrows to `CodedError`. Both entries export both.
 
 ### Lists of names: `colorSpaces`, `imageFormats`, `alphaModes`, `ditherMethods` and `ditherSteps`
-Frozen arrays of every value of the options that take one of a fixed set of names (see [Lists of names](#options)): `colorSpaces` (`'rgb'`, `'oklab'`), `imageFormats` (`'rgb'`, `'rgba'`, `'bgra'`), `alphaModes` (`'weight'`, `'ignore'`), `ditherMethods` (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`) and `ditherSteps` (2, 4, 8, 16, 32, 64). In TypeScript each is typed as a list of its option's type, so `find` narrows a value from a form: `ditherMethods.find((m) => m === select.value)` is a `DitherMethod` or `undefined`, and `ditherSteps.find((s) => s === Number(slider.value))` a `DitherSteps`. No dithering is `dither: false`, not a method. Both entries export all of them.
+Frozen arrays of every value of the options that take one of a fixed set of names (see [Lists of names](#options)): `colorSpaces` (`'rgb'`, `'oklab'`), `imageFormats` (`'rgb'`, `'rgba'`, `'bgra'`, `'rgbx'`, `'bgrx'`), `alphaModes` (`'weight'`, `'ignore'`), `ditherMethods` (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`) and `ditherSteps` (2, 4, 8, 16, 32, 64). In TypeScript each is typed as a list of its option's type, so `find` narrows a value from a form: `ditherMethods.find((m) => m === select.value)` is a `DitherMethod` or `undefined`, and `ditherSteps.find((s) => s === Number(slider.value))` a `DitherSteps`. No dithering is `dither: false`, not a method. Both entries export all of them.
 
 ### `version: string` and `formatVersion: number`
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.

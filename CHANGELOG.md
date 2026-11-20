@@ -5,7 +5,18 @@
 Output is unchanged for every input 3.1 accepted; the golden tests pin it.
 
 ### Added
-- **BGRA images:** `{ data, format: 'bgra', width?, height? }`, the order of Windows bitmaps and Electron's `nativeImage`, is read as it is, and `quantize`, `quantizeFromClustering` and `quantizeWithPalette` return BGRA for it, so neither direction needs a channel swap in JavaScript. Clusterings, palettes, swatches and indices are the same as for the image in RGBA. `imageFormats` lists `'bgra'`, and the `ImageFormat` type includes it: TypeScript code that spells out `'rgb' | 'rgba'` for a result's `format` should use `ImageFormat` (as [the stability promise](docs/stability.md) says, lists and their types grow in minor releases). The Electron notes in docs/environments.md show the round trip, including the conversion for premultiplied alpha (`toBitmap()` is premultiplied; reading it directly is planned for 4.0).
+- **BGRA images:** `{ data, format: 'bgra', width?, height? }`, the order of Electron's `nativeImage` and Windows bitmaps, is read as it is, and `quantize`, `quantizeFromClustering` and `quantizeWithPalette` return BGRA for it, so neither direction needs a channel swap in JavaScript. Clusterings, palettes, swatches and indices are the same as for the image in RGBA.
+- **`'rgbx'` and `'bgrx'`,** for 4-byte pixels whose fourth byte isn't alpha: Windows `BI_RGB` bitmaps and GDI screenshots (where it is usually 0), WebCodecs `'BGRX'` and `'RGBX'`, ffmpeg `bgr0` and `rgb0`. They behave exactly like `'rgb'`, and mapped output writes 255 in that byte. Passed as `'bgra'`, such buffers read as fully transparent and gave an empty palette and black output, with no error.
+- **The API reference lists where pixels come from** (canvases, sharp, Electron, node-canvas, `@napi-rs/canvas`, skia-canvas, WebGL, WebCodecs, ffmpeg, Windows), with each source's channel order, whether it is premultiplied, and what to pass; and the conversion for premultiplied pixels, which node-canvas, `@napi-rs/canvas`, Electron and WebGL give. Reading premultiplied pixels directly is planned for 4.0. The guides have WebCodecs and ffmpeg recipes, and the Electron notes handle `@2x` images (the earlier snippet's sizes were wrong for them).
+- **Clearer errors:** a format error shows the value it got and says when the name is the wrong case (`'BGRA'`), what Cairo's ARGB32 is (`'argb'`) and that 24-bit BGR can be widened to `'bgrx'`. A `VideoFrame` passed as an image gets a hint to `copyTo` it.
+
+### Fixed
+- **An `ImageData` that doesn't hold 8-bit RGBA pixels is rejected** with `invalid-argument`, rather than misread: skia-canvas's `colorType: 'bgra'` gave red for blue, and node-canvas's `A8` or skia's `gray8` gave the wrong number of pixels. The message names the `{ data, format }` to pass where one fits.
+- **The worker entry works in Electron Web Workers with `nodeIntegrationInWorker`.** The glue took them for Node and failed to load the module (`wasm-load-failed`), even with `wasm` bytes given. A load that fails this way now says so, rather than that the file couldn't be fetched.
+- **Docs:** indexed output keeps a colour besides the transparent entry when the image has visible pixels; an image with none gives just the transparent entry (as it always has).
+
+### TypeScript
+`ImageFormat` gains `'bgra'`, `'rgbx'` and `'bgrx'`. As [the stability promise](docs/stability.md) says, lists and their types grow in minor releases, so code that lists every format stops compiling until it handles the new ones: an exhaustive `switch` ending in `never`, a `Record<ImageFormat, …>` or `satisfies` one, a union spelled out as `'rgb' | 'rgba'` (for a result's `format`, use `ImageFormat`), or `if (format === 'rgb') … else /* rgba */`. Take the names from `imageFormats`, or add a default branch.
 
 ## 3.1.1
 

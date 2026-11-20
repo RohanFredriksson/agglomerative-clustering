@@ -1,9 +1,15 @@
 /**
- * How pixel bytes are laid out: `'rgb'` is 3 bytes per pixel, `'rgba'` is 4 (red, green, blue, alpha), and `'bgra'` is 4
- * in the order Windows bitmaps and Electron's `nativeImage` use (blue, green, red, alpha). Alpha is straight, not
- * premultiplied. Palettes are RGB whatever the image's format.
+ * How pixel bytes are laid out:
+ * - `'rgb'`: 3 bytes per pixel, red, green, blue.
+ * - `'rgba'`, `'bgra'`: 4 bytes, with straight (not premultiplied) alpha last. BGRA is the order of Windows bitmaps and
+ *   Electron's `nativeImage`, whose `toBitmap()` is premultiplied: convert it first (see Input in docs/api.md).
+ * - `'rgbx'`, `'bgrx'`: 4 bytes whose last is padding, not alpha (Windows `BI_RGB` bitmaps, WebCodecs `'BGRX'`, ffmpeg
+ *   `bgr0`): every pixel is opaque, and mapped output writes 255 there.
+ *
+ * Mapped images come back in the input's format; palettes are RGB whatever it is. New formats can come in a minor release,
+ * so take the names from `imageFormats` rather than spelling them out.
  */
-export type ImageFormat = 'rgb' | 'rgba' | 'bgra';
+export type ImageFormat = 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx';
 
 /**
  * What went wrong, on the `code` of every error this library throws (the message is for people and may change):
@@ -193,7 +199,8 @@ export interface ClusteringOptions extends ProgressOptions {
     precision?: number | undefined;
     /**
      * How pixels of an image with alpha (RGBA or BGRA) count. `'weight'` (default): in proportion to their opacity, so fully transparent pixels are
-     * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x.
+     * ignored and semi-transparent ones count partially. `'ignore'`: every pixel counts fully, as in 1.x. Clustering only:
+     * mapping still treats alpha-0 pixels as transparent, so for bytes whose fourth byte isn't alpha use `'rgbx'`/`'bgrx'`.
      */
     alpha?: AlphaMode | undefined;
     /**
