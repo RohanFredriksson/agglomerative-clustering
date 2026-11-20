@@ -12,7 +12,7 @@ Output is unchanged for every input 3.1 read correctly; the golden tests pin it.
 
 ### Fixed
 - **An `ImageData` that doesn't hold 8-bit RGBA pixels is rejected** with `invalid-argument`, rather than misread: skia-canvas's `colorType: 'bgra'` gave red for blue, and node-canvas's `A8` or skia's `gray8` gave the wrong number of pixels. The message names the `{ data, format }` to pass where one fits.
-- **The worker entry works in Electron Web Workers with `nodeIntegrationInWorker`.** The glue took them for Node and failed to load the module (`wasm-load-failed`), even with `wasm` bytes given. A load that fails this way now says so, rather than that the file couldn't be fetched.
+- **The worker entry works in Electron Web Workers with `nodeIntegrationInWorker`.** The glue took them for Node and failed to load the module (`wasm-load-failed`), even with `wasm` bytes given. Electron's service-worker preload realms take the same path. A load that fails this way now says so, with the original error, rather than that the file couldn't be fetched.
 - **Docs:** indexed output keeps a colour besides the transparent entry when the image has visible pixels; an image with none gives just the transparent entry (as it always has).
 
 ### TypeScript

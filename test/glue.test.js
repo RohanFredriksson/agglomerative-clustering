@@ -27,6 +27,7 @@ describe('the glue', () => {
             const proc = (type) => ({ versions: { node: '22.0.0' }, type, getBuiltinModule: () => ({}) });
             expect(isNode(proc('renderer'))).toBe(false);
             expect(isNode(proc('worker'))).toBe(false);
+            expect(isNode(proc('service-worker'))).toBe(false);   // Electron's service-worker preload realm
             expect(isNode(proc(undefined))).toBe(true);    // Node, and its worker_threads
             expect(isNode(proc('browser'))).toBe(true);    // Electron's main process
             expect(isNode(proc('utility'))).toBe(true);    // Electron's utilityProcess

@@ -124,7 +124,7 @@ const wasmLoadFailed = (cause, given) => {
         }
     } else if (/dynamically imported module|node:module/i.test(text)) {
         // The glue took its Node path somewhere that has Node's globals but not Node's module loader.
-        reason = "Node's module loader isn't available here (a page or worker with Node's globals but not its loader)";
+        reason = `Node's module loader isn't available here, in a page or worker with Node's globals but not its loader (${reason})`;
         advice = "Load the package where it can take its browser path, or report this environment as an issue.";
     } else if (isNodeLike && typeof given === 'string' && /^https?:/i.test(given)) {
         // Node fetches an http(s) URL itself (see nodeWasmFile), so the server or the network failed, not a path.

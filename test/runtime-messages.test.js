@@ -27,6 +27,21 @@ const runScript = (source, wrap = (file) => [process.execPath, [file]]) => {
 
 describe('load failures in other runtimes', () => {
 
+    it("keeps the original reason when Node's module loader is missing", () => {
+        const output = runScript(`
+            const refuse = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module: node:module'));
+            WebAssembly.instantiate = refuse; WebAssembly.instantiateStreaming = refuse; WebAssembly.compile = refuse;
+            const { init } = await import(${JSON.stringify(entry)});
+            const { readFileSync } = await import('node:fs');
+            const error = await init({ wasm: readFileSync(${JSON.stringify(join(dist, 'clustering.wasm'))}) }).catch((caught) => caught);
+            console.log(JSON.stringify({ code: error.code, message: error.message }));
+        `);
+        const { code, message } = JSON.parse(output.trim().split('\n').pop());
+        expect(code).toBe('wasm-load-failed');
+        expect(message).toContain("Node's module loader isn't available here");
+        expect(message).toContain('Failed to fetch dynamically imported module: node:module');
+    });
+
     it('tells an edge runtime that refuses to compile WebAssembly to import the module', () => {
         const output = runScript(`
             Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'Edge Runtime' }, configurable: true });

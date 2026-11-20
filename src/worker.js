@@ -17,8 +17,9 @@ export const formatVersion = latestVersion;
 // bundlers don't take this for a use of Node's `process` and add a polyfill (Parcel installs one).
 const runtime = globalThis.process;
 const scriptUrl = typeof import.meta.url === 'string' ? import.meta.url : '';
-// Electron's pages and their Web Workers (process.type 'renderer' and 'worker') have Node's globals but no worker_threads.
-const hasNode = !!(runtime && runtime.versions && runtime.versions.node) && runtime.type !== 'renderer' && runtime.type !== 'worker'
+// Electron's pages, their Web Workers and service-worker preload realms (process.type 'renderer', 'worker' and
+// 'service-worker') have Node's globals but no worker_threads.
+const hasNode = !!(runtime && runtime.versions && runtime.versions.node) && !['renderer', 'worker', 'service-worker'].includes(runtime.type)
     && (typeof window === 'undefined' || typeof Worker !== 'function');
 const isNode = hasNode && scriptUrl.startsWith('file:');
 // Node itself (or Bun) with this script bundled into CommonJS, where import.meta.url is gone: worker_threads still works, with
