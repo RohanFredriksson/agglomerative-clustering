@@ -80,9 +80,11 @@ export const checkImageDataPixels = (image) => {
         // skia-canvas's ImageData can hold other layouts in the same clamped array ({ colorType: 'bgra' }, 'rgb888x',
         // 'gray8', ...), and node-canvas's other pixel formats ('A8', 'RGB16_565') give fewer bytes: read as RGBA, they give
         // swapped colours or the wrong pixel count, so they are rejected, with the { data, format } to pass where one fits.
+        // skia-canvas stores short and canonical spellings ('rgba' or 'RGBA8888', 'bgra' or 'BGRA8888', 'rgb' or 'RGB888x').
         const colorType = image.colorType;
-        if (colorType !== undefined && colorType !== 'rgba') {
-            const format = colorType === 'bgra' ? 'bgra' : colorType === 'rgb888x' ? 'rgbx' : null;
+        const kind = typeof colorType === 'string' ? colorType.toLowerCase() : colorType;
+        if (kind !== undefined && kind !== 'rgba' && kind !== 'rgba8888') {
+            const format = kind === 'bgra' || kind === 'bgra8888' ? 'bgra' : kind === 'rgb' || kind === 'rgb888x' ? 'rgbx' : null;
             const instead = format ? ` Pass { data: imageData.data, format: '${format}', width, height } instead.` : " Ask for colorType 'rgba'.";
             throw fail('invalid-argument', `Invalid image: this ImageData holds ${describe(colorType)} pixels, and an ImageData is read as 8-bit RGBA.${instead}`, 'image');
         }
@@ -117,7 +119,7 @@ export const imageHint = (image) => {
     if (isArrayBufferLike(image)) {return " Got an ArrayBuffer, which has no pixel layout: wrap it, new Uint8Array(buffer) for RGBA bytes (if it holds an encoded image file, decode it first).";}
     if (typeof image.getContext === 'function') {return " Got a canvas: pass its pixels, canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).";}
     if (typeof image.arrayBuffer === 'function' && typeof image.type === 'string') {return " Got a Blob or File, which is an encoded image:" + decode + " (createImageBitmap(blob), draw it to a canvas, then getImageData()).";}
-    if (typeof image.copyTo === 'function' && typeof image.codedWidth === 'number') {return " Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' }) and pass { data: buffer, format: 'bgra', width: frame.displayWidth, height: frame.displayHeight } (or 'BGRX' and 'bgrx' for frames without alpha).";}
+    if (typeof image.copyTo === 'function' && typeof image.codedWidth === 'number') {return " Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' }) and pass { data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height } (or 'BGRX' and 'bgrx' for frames without alpha).";}
     if (typeof image.close === 'function' || typeof image.nodeName === 'string') {return " Got an image element or ImageBitmap: draw it to a canvas (or OffscreenCanvas) and pass getImageData().";}
     if (image.data && !image.format) {return ` It has \`data\` but no \`format\`: add format: 'rgba' (or another of ${formatNames}) to use it as a RawImage.`;}
     return '';

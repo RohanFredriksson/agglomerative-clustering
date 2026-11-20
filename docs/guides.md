@@ -164,7 +164,7 @@ video.requestVideoFrameCallback(onFrame);
     }
   }
   ```
-- **WebCodecs frames** copy straight into a format the library reads, cheaper than drawing to a canvas: `frame.copyTo(buffer, { format: 'BGRA' })` gives BGRA whatever the frame holds (decoders give I420), sized by `frame.allocationSize({ format: 'BGRA' })`. Pass `{ data: buffer, format: 'bgra', width: frame.displayWidth, height: frame.displayHeight }`, and call `frame.close()` once copied. Ask for `'BGRA'`, not `'BGRX'`: in a `'BGRX'` copy the fourth byte isn't reliably 255 (frames made from a canvas carry their alpha into it), and if you do get `'BGRX'` frames pass them as `'bgrx'`. Frames made from a canvas copy out premultiplied; decoded video is opaque, so it is the same either way.
+- **WebCodecs frames** copy straight into a format the library reads, cheaper than drawing to a canvas: `frame.copyTo(buffer, { format: 'BGRA' })` gives BGRA whatever the frame holds (decoders give I420), sized by `frame.allocationSize({ format: 'BGRA' })`. Pass `{ data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }`, which is what `copyTo` copies (`displayWidth` differs for video with non-square pixels), and call `frame.close()` once copied. Ask for `'BGRA'`, not `'BGRX'`: in a `'BGRX'` copy the fourth byte isn't reliably 255 (frames made from a canvas carry their alpha into it), and if you do get `'BGRX'` frames pass them as `'bgrx'`. Frames made from a canvas copy out premultiplied; decoded video is opaque, so it is the same either way.
 
 ## Workers
 

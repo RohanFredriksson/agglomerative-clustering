@@ -2,7 +2,7 @@
 
 ## 3.2.0
 
-Output is unchanged for every input 3.1 accepted; the golden tests pin it.
+Output is unchanged for every input 3.1 read correctly; the golden tests pin it. `ImageData` that 3.1 misread (see Fixed) is now rejected.
 
 ### Added
 - **BGRA images:** `{ data, format: 'bgra', width?, height? }`, the order of Electron's `nativeImage` and Windows bitmaps, is read as it is, and `quantize`, `quantizeFromClustering` and `quantizeWithPalette` return BGRA for it, so neither direction needs a channel swap in JavaScript. Clusterings, palettes, swatches and indices are the same as for the image in RGBA.

@@ -349,8 +349,16 @@ describe('ImageData validation and image hints', () => {
             const bgra = new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'bgra' });
             await expect(api.getPalette(bgra, 2), entry).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image',
                 message: "Invalid image: this ImageData holds 'bgra' pixels, and an ImageData is read as 8-bit RGBA. Pass { data: imageData.data, format: 'bgra', width, height } instead." });
-            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgb888x' }), 2), entry)
-                .rejects.toMatchObject({ message: expect.stringContaining("format: 'rgbx'") });
+            // skia-canvas stores its canonical spellings ('RGBA8888', 'BGRA8888', 'RGB888x') as well as the short ones.
+            for (const colorType of ['RGB888x', 'rgb'])  {
+                await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`)
+                    .rejects.toMatchObject({ message: expect.stringContaining("format: 'rgbx'") });
+            }
+            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'BGRA8888' }), 2), entry)
+                .rejects.toMatchObject({ message: expect.stringContaining("format: 'bgra'") });
+            for (const colorType of ['RGBA8888', 'rgba8888', 'RGBA']) {
+                await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`).resolves.toBeTruthy();
+            }
             await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'gray8' }), 2), entry)
                 .rejects.toMatchObject({ message: expect.stringContaining("Ask for colorType 'rgba'.") });
             await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgba' }), 2), entry).resolves.toBeTruthy();
@@ -374,7 +382,8 @@ describe('ImageData validation and image hints', () => {
         const tries = [
             ['BGRA', " Format names are lower case: 'bgra'."],
             ['RGBX', " Format names are lower case: 'rgbx'."],
-            ['xrgb', "Cairo and node-canvas ARGB32 is BGRA in memory"],
+            ['argb', "Cairo and node-canvas ARGB32 is BGRA in memory"],
+            ['xrgb', "Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'."],
             ['bgr', " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'."],
         ];
         for (const [entry, api] of entries) {
@@ -391,7 +400,7 @@ describe('ImageData validation and image hints', () => {
         await expect(ac.getPalette({ data: new Uint8Array(8) }, 2)).rejects.toMatchObject({ message: expect.stringContaining("add format: 'rgba' (or another of 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx') to use it as a RawImage") });
         const frame = { copyTo() {}, codedWidth: 2, displayWidth: 2, displayHeight: 2, close() {} };
         for (const [entry, api] of entries) {
-            await expect(api.getPalette(frame, 2), entry).rejects.toMatchObject({ message: expect.stringContaining("Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' })") });
+            await expect(api.getPalette(frame, 2), entry).rejects.toMatchObject({ message: expect.stringContaining("Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' }) and pass { data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }") });
         }
     });
 
