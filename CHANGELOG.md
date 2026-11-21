@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Docs
-- **Choosing N colours from a fixed palette** (threads, bricks, inks) has a second step in the guides: `improveThreads` swaps colours in and out of the first choice while that brings the image closer. On the Kodak photos it improved 22 to 24 of 24 photos by about 0.4 dB at 6 to 12 threads of a 584-colour chart and made none worse. It uses only the public API, so there is no new function; the ROADMAP records the measurements and what a built-in would look like. `test/recipes.test.js` runs both functions and checks that they match the guides.
+- **Choosing N colours from a fixed palette** (threads, bricks, inks) has a second step in the guides: `improveThreads` swaps colours in and out of the first choice while that brings the image closer. On the Kodak photos it improved 22 to 24 of 24 photos by about 0.4 dB PSNR at 6 to 12 threads of a 584-colour chart and made none worse. It uses only the public API, so there is no new function; the ROADMAP records the measurements and what a built-in would look like. `test/recipes.test.js` runs both functions and checks that they match the guides.
 
 ## 3.2.0
 
