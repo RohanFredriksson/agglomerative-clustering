@@ -249,7 +249,7 @@ const receive = (name, receiver, image) => {
     readHeader(receiver);
     if (image !== undefined) {checkImageFirst(name, image.value);}
     if (engine === null) {
-        throw fail('wasm-load-failed', `Could not use the WebAssembly module: clustering.${name} runs on the calling thread with the main entry, 'agglomerative-clustering', which isn't loaded here (this clustering came from the worker entry, or from the other module system's copy of the package). Import the main entry in this thread (and call its init({ wasm }) if you set where the module comes from), or call ${form} from 'agglomerative-clustering/worker', which runs in the worker.`);
+        throw fail('wasm-load-failed', `clustering.${name} can't run here: a clustering's methods run on the calling thread with the main entry, 'agglomerative-clustering', of the copy of the package that made it, and that entry isn't loaded on this thread (this clustering came from the worker entry, or from another copy, such as the other module system's build). Import 'agglomerative-clustering' in this thread (and call its init({ wasm }) if you set where the module comes from), wrap the bytes with new Clustering(bytes) from the main entry you use, or call ${form} from 'agglomerative-clustering/worker', which runs in the worker.`);
     }
     return engine;
 };

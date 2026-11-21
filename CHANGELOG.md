@@ -13,6 +13,8 @@ Output is unchanged; the golden tests pin it.
 - **4.0 renames `getClustering`, `getPalette` and `getSwatches`:** from 4.0, `get…` names only calls that read or cut what they already hold, and the functions that cluster an image get verb names. The new names arrive in 3.4.0, with the old ones deprecated and working through 3.x (ROADMAP).
 
 ### Docs
+- **Copies of the package** (the ES-module and CommonJS builds, a bundler's duplicate, a dependency's own copy) of the same version recognise each other's palettes and clusterings and take them in each other's functions; the stability promise now says so. The API reference says how methods behave across copies, and that `init({ wasm })` applies to one copy.
+- **A "Storing clusterings" recipe** in the guides, and a function-to-method table in the API reference.
 - **Choosing N colours from a fixed palette** (threads, bricks, inks) has a second step in the guides: `improveThreads` swaps colours in and out of the first choice while that brings the image closer. On the Kodak photos it improved 22 to 24 of 24 photos by about 0.4 dB PSNR at 6 to 12 threads of a 584-colour chart and made none worse. It uses only the public API, so there is no new function; the ROADMAP records the measurements and what a built-in would look like. `test/recipes.test.js` runs both functions and checks that they match the guides.
 
 ## 3.2.0

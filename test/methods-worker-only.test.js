@@ -28,7 +28,7 @@ describe('methods on Clustering without the main entry', () => {
             expect(error, name).not.toBeNull();
             expect(error.code).toBe('wasm-load-failed');
             expect(error.argument).toBeUndefined();
-            expect(error.message).toContain(`clustering.${name} runs on the calling thread with the main entry, 'agglomerative-clustering'`);
+            expect(error.message).toMatch(new RegExp(`^clustering\\.${name} can't run here: a clustering's methods run on the calling thread with the main entry, 'agglomerative-clustering'`));
             expect(error.message).toContain(`call ${form} from 'agglomerative-clustering/worker'`);
         }
     });
