@@ -219,7 +219,7 @@ palette.slice(0, 3) instanceof Palette;                           // false: slic
 
 `slice`, `subarray`, `structuredClone`, `postMessage` and storage give plain, untagged `Uint8Array`s (the worker entry carries the tags across for you). In Node, `console.log` shows the tag: `Palette(oklab) Uint8Array(6) [ … ]`.
 
-**Storing a clustering.** A clustering of a 768×512 photo is 0.3 to 1.5 MB, typically 0.7 MB (0.2 MB with `precision: 6`). Its format is versioned and its colour space is in its bytes, so `new Clustering(bytes)` is all it needs when read back.
+**Storing a clustering.** A clustering of a 768×512 photo is 0.3 to 1.5 MB, typically 0.7 MB (0.2 MB with `precision: 6`). Its format is versioned and its colour space is in its bytes, so `new Clustering(bytes)` is all it needs when read back. The guides have a [recipe](guides.md#storing-clusterings) with the errors to expect.
 
 **Storing a palette.** Storage keeps a palette's bytes but not its colour space, and plain bytes are matched in RGB. So an OKLab palette that you store and read back maps differently from the one you stored, without an error. Store the colour space with it and give it back:
 
@@ -231,7 +231,7 @@ const restored = new Palette(bytes, colorSpace);   // maps exactly as the palett
 
 ## Clustering methods
 
-A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results and defaults, and the same errors, with messages that name the method. (The receiver is checked first, as it is written first.)
+A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results, defaults and errors, with the same `code` and `argument`. Three messages name the method instead, because the mistake is in how it was called: a method called without its clustering, `clustering.quantize(16)` (the image goes first), and options passed to a cut. The receiver is checked first, as it is written first.
 
 ```js
 import { getClustering, Clustering } from 'agglomerative-clustering';
@@ -247,6 +247,18 @@ const restored = new Clustering(await db.get('clustering'));               // st
 - **Where they are:** on every clustering the library returns (from either entry, and from a worker handle's `getClustering()`), and on `new Clustering(bytes)`. `slice`, `subarray`, clones and storage give plain bytes without them, as they drop the tags: wrap stored bytes with `new Clustering(bytes)`, or pass them to the function form, which takes plain bytes.
 - **Where they run:** on the calling thread, with the main entry. With only the worker entry imported, they reject with `wasm-load-failed` (see [Worker entry](#worker-entry)).
 - **They are async,** like the functions. Once the module is loaded, a cut settles at once, so a slider can call `getPalette` on every input event.
+- **Only clusterings made by 3.3 or later have them.** A clustering from an older copy of the package (say a dependency that still pins 3.2) is tagged but has no methods, so `clustering.getPalette` is `undefined` there; wrap it with this copy's `new Clustering(bytes)`, or use the function form.
+- **In tests,** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on the method itself, on a real clustering: `vi.spyOn(clustering, 'getPalette')` (or `jest.spyOn`).
+
+| Method | Function form | Arguments of the function form |
+|---|---|---|
+| `clustering.getPalette(k)` | `getPaletteFromClustering` | `(clustering, k)` |
+| `clustering.getSwatches(k)` | `getSwatchesFromClustering` | `(clustering, k)` |
+| `clustering.getClusteringInfo()` | `getClusteringInfo` | `(clustering)` |
+| `clustering.quantize(image, k, options?)` | `quantizeFromClustering` | `(image, clustering, k, options?)`: the image comes first |
+| `clustering.quantizeToIndices(image, k, options?)` | `quantizeToIndicesFromClustering` | `(image, clustering, k, options?)`: the image comes first |
+
+Moving existing code to the methods is optional: nothing is deprecated in 3.x, and the two forms give the same results.
 
 ### `clustering.getPalette(k): Promise<Palette>`
 `getPaletteFromClustering(clustering, k)` as a method. Takes no options.

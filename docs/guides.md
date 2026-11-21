@@ -7,6 +7,7 @@ Recipes by task. For what each function and option does, see the [API reference]
 - [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images)
 - [Live video and camera frames](#live-video-and-camera-frames)
 - [Workers](#workers)
+- [Storing clusterings](#storing-clusterings)
 - [Fixed palettes: e-ink, thread, bricks](#fixed-palettes-e-ink-thread-bricks)
 - [Batches of images](#batches-of-images)
 - [Converting the output](#converting-the-output)
@@ -168,7 +169,7 @@ video.requestVideoFrameCallback(onFrame);
 
 ## Workers
 
-Clustering a photo takes about 70 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node):
+Clustering a photo takes about 70 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node). A `Clustering`'s methods (`clustering.getPalette(k)`) are the exception: they run on the thread that calls them, so with this entry, re-cut through a handle (below) or the function forms.
 
 ```js
 import { quantize } from 'agglomerative-clustering/worker';   // same API, one shared worker
@@ -222,6 +223,40 @@ slider.oninput = () => {wanted = Number(slider.value); render();};
 - **TypeScript:** a handle keeps the image type it was made from, so a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`.
 
 The rest is in the [worker entry reference](api.md#worker-entry).
+
+## Storing clusterings
+
+Cluster an image once, keep the clustering, and cut it on later visits without clustering again. Storage keeps the bytes but drops the type, so give them back their type with `new Clustering(bytes)`, which also checks them:
+
+```js
+import { getClustering, Clustering, isCodedError } from 'agglomerative-clustering';
+import { get, set } from 'idb-keyval';   // IndexedDB; any store that keeps a Uint8Array works the same way
+
+// The clustering of `image` with `options`, from storage if a good copy is there.
+async function clusteringFor(key, image, options) {
+  const stored = await get(key);          // a plain Uint8Array, or undefined
+  if (stored) {
+    try {
+      return new Clustering(stored);      // the type and its methods back, after checking the bytes
+    } catch (error) {
+      // 'invalid-clustering': damaged or truncated; 'unsupported-version': written by a newer release. Either way, cluster again.
+      if (!isCodedError(error) || (error.code !== 'invalid-clustering' && error.code !== 'unsupported-version')) {throw error;}
+    }
+  }
+  const clustering = await getClustering(image, options);
+  await set(key, clustering);             // stores the bytes
+  return clustering;
+}
+
+const options = { precision: 6 };
+const clustering = await clusteringFor(`${imageId}:${JSON.stringify(options)}`, imageData, options);
+const palette = await clustering.getPalette(8);
+```
+
+- **Key it by the image and the options.** A clustering doesn't record which image it came from, so a stored one stays valid after the image changes; put what it depends on in the key (an id and a version of the image, and the options).
+- **Use the bytes as they come back.** A value read from storage is a plain `Uint8Array`: it has no methods until `new Clustering(bytes)`, and in TypeScript a cast (`stored as Clustering`) compiles but leaves it without them. The function forms (`getPaletteFromClustering(stored, 8)`) take plain bytes too.
+- **Text stores** (`localStorage`, JSON): `JSON.stringify(clustering)` gives an object keyed by index, not bytes. Store base64 instead: in Node `Buffer.from(clustering).toString('base64')`, read back with `new Clustering(Buffer.from(text, 'base64'))`, and in browsers that have them, `clustering.toBase64()` and `Uint8Array.fromBase64(text)`.
+- **Size:** 0.3 to 1.5 MB for a 768×512 photo, and about a third of that with `precision: 6` (see [Storing a clustering](api.md#palette-and-clustering)).
 
 ## Fixed palettes: e-ink, thread, bricks
 
