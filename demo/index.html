@@ -106,7 +106,7 @@
 </main>
 
 <script type="module">
-import { getClustering, getPaletteFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { getClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 const $ = (id) => document.getElementById(id);
 const original = $('original'), result = $('result');
@@ -157,7 +157,7 @@ async function remap() {
     $('kValue').textContent = k;
     $('ditherValue').textContent = dither ? `${Math.round(dither * 100)}%` : 'off';
     const start = performance.now();
-    const palette = await getPaletteFromClustering(clustering, k);
+    const palette = await clustering.getPalette(k);
     const output = await quantizeWithPalette(image, palette, { colorSpace: $('colorSpace').value, dither });
     if (ticket !== mapping) {return;}
     $('statMap').textContent = ms(performance.now() - start);

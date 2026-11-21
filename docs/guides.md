@@ -7,6 +7,7 @@ Recipes by task. For what each function and option does, see the [API reference]
 - [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images)
 - [Live video and camera frames](#live-video-and-camera-frames)
 - [Workers](#workers)
+- [Storing clusterings](#storing-clusterings)
 - [Fixed palettes: e-ink, thread, bricks](#fixed-palettes-e-ink-thread-bricks)
 - [Batches of images](#batches-of-images)
 - [Converting the output](#converting-the-output)
@@ -15,7 +16,7 @@ Recipes by task. For what each function and option does, see the [API reference]
 ## Swatches and choosing a palette size
 
 ```js
-import { getSwatches, getClustering, getSwatchesFromClustering, getClusteringInfo } from 'agglomerative-clustering';
+import { getSwatches, getClustering } from 'agglomerative-clustering';
 
 // Colours with their share of the image, in one call
 const { palette, weights, shares } = await getSwatches(image, 8);
@@ -23,10 +24,10 @@ const { palette, weights, shares } = await getSwatches(image, 8);
 
 // Or cluster once and cut it as often as you like (well under a millisecond each)
 const clustering = await getClustering(image);
-const eight = await getSwatchesFromClustering(clustering, 8);
+const eight = await clustering.getSwatches(8);
 
 // The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
-const { explained } = await getClusteringInfo(clustering);
+const { explained } = await clustering.getClusteringInfo();
 const k = explained.findIndex((share) => share >= 0.99) + 1;
 ```
 
@@ -77,7 +78,7 @@ const png = encode({
 One palette for a whole animation (or a set of images that should share colours) keeps colours from flickering between frames. Cluster a sample of the frames as one image, by putting their pixels end to end, then map every frame with that clustering:
 
 ```js
-import { getClustering, getPaletteFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+import { getClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
 // `frames` are { data, format: 'rgba', width, height }. Every 5th one, end to end, is one image to cluster.
 const sample = frames.filter((_, i) => i % 5 === 0);
@@ -85,7 +86,7 @@ const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length,
 let offset = 0;
 for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
 const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
-const shared = await getPaletteFromClustering(clustering, 255);   // 255 colours, and room for the transparent entry
+const shared = await clustering.getPalette(255);   // 255 colours, and room for the transparent entry
 
 for (const frame of frames) {
   // The same colours at the same indices in every frame, and the transparent entry (when a frame has transparent pixels)
@@ -96,7 +97,7 @@ for (const frame of frames) {
 }
 ```
 
-- **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`quantizeToIndicesFromClustering(frame, clustering, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
+- **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`clustering.quantizeToIndices(frame, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
 - **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `shared.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
@@ -168,7 +169,7 @@ video.requestVideoFrameCallback(onFrame);
 
 ## Workers
 
-Clustering a photo takes about 70 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node):
+Clustering a photo takes about 70 ms, too long to run on a page's main thread while someone drags a slider. The worker entry has the same functions, run in a Web Worker (or a worker thread in Node). A `Clustering`'s methods (`clustering.getPalette(k)`) are the exception: they run on the thread that calls them, so with this entry, re-cut through a handle (below) or the function forms.
 
 ```js
 import { quantize } from 'agglomerative-clustering/worker';   // same API, one shared worker
@@ -223,6 +224,40 @@ slider.oninput = () => {wanted = Number(slider.value); render();};
 
 The rest is in the [worker entry reference](api.md#worker-entry).
 
+## Storing clusterings
+
+Cluster an image once, keep the clustering, and cut it on later visits without clustering again. Storage keeps the bytes but drops the type, so give them back their type with `new Clustering(bytes)`, which also checks them:
+
+```js
+import { getClustering, Clustering, isCodedError } from 'agglomerative-clustering';
+import { get, set } from 'idb-keyval';   // IndexedDB; any store that keeps a Uint8Array works the same way
+
+// The clustering of `image` with `options`, from storage if a good copy is there.
+async function clusteringFor(key, image, options) {
+  const stored = await get(key);          // a plain Uint8Array, or undefined
+  if (stored) {
+    try {
+      return new Clustering(stored);      // the type and its methods back, after checking the bytes
+    } catch (error) {
+      // 'invalid-clustering': damaged or truncated; 'unsupported-version': written by a newer release. Either way, cluster again.
+      if (!isCodedError(error) || (error.code !== 'invalid-clustering' && error.code !== 'unsupported-version')) {throw error;}
+    }
+  }
+  const clustering = await getClustering(image, options);
+  await set(key, clustering);             // stores the bytes
+  return clustering;
+}
+
+const options = { precision: 6 };
+const clustering = await clusteringFor(`${imageId}:${JSON.stringify(options)}`, imageData, options);
+const palette = await clustering.getPalette(8);
+```
+
+- **Key it by the image and the options.** A clustering doesn't record which image it came from, so a stored one stays valid after the image changes; put what it depends on in the key (an id and a version of the image, and the options).
+- **Use the bytes as they come back.** A value read from storage is a plain `Uint8Array`: it has no methods until `new Clustering(bytes)`, and in TypeScript a cast (`stored as Clustering`) compiles but leaves it without them. The function forms (`getPaletteFromClustering(stored, 8)`) take plain bytes too.
+- **Text stores** (`localStorage`, JSON): `JSON.stringify(clustering)` gives an object keyed by index, not bytes. Store base64 instead: in Node `Buffer.from(clustering).toString('base64')`, read back with `new Clustering(Buffer.from(text, 'base64'))`, and in browsers that have them, `clustering.toBase64()` and `Uint8Array.fromBase64(text)`.
+- **Size:** 0.3 to 1.5 MB for a 768×512 photo, and about a third of that with `precision: 6` (see [Storing a clustering](api.md#palette-and-clustering)).
+
 ## Fixed palettes: e-ink, thread, bricks
 
 Hardware, craft and print often have a palette you didn't choose. `quantizeToIndicesWithPalette(image, palette, options?)` maps to it and gives indices in *your* palette's order (what firmware, thread charts and parts lists need):
@@ -240,7 +275,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
   - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image; it grows with the number of threads times N: about 50 ms for 6 of 584 threads, 150 ms for 12 and 350 ms for 24, and up to 1.5 s for 40 of 1000. The loop is your own code, so the library's worker entry can't move it off the main thread: for large charts in a browser, run both functions in a Web Worker of your own that imports the main entry. Skip it when `chooseThreads` is good enough.
 
   ```js
-  import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+  import { getClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
   const clustering = await getClustering(image);
   const chosen = await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 12));
@@ -250,7 +285,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
   async function chooseThreads(clustering, threads, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-      const cut = await getPaletteFromClustering(clustering, k);
+      const cut = await clustering.getPalette(k);
       // The cut palette as an image of one pixel per colour, mapped to the threads.
       const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
       // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
@@ -261,7 +296,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 
   // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
   async function improveThreads(clustering, threads, chosen) {
-    const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+    const { palette: colors, weights } = await clustering.getSwatches(1024);
     const m = weights.length, t = threads.length / 3;
     const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
     for (let j = 0; j < t; j++) {

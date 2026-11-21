@@ -179,7 +179,7 @@ describe('recipes in the guides', () => {
     async function chooseThreads(clustering, threads, n) {
       let chosen = [];
       for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-        const cut = await getPaletteFromClustering(clustering, k);
+        const cut = await clustering.getPalette(k);
         // The cut palette as an image of one pixel per colour, mapped to the threads.
         const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
         // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
@@ -190,7 +190,7 @@ describe('recipes in the guides', () => {
 
     // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
     async function improveThreads(clustering, threads, chosen) {
-      const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+      const { palette: colors, weights } = await clustering.getSwatches(1024);
       const m = weights.length, t = threads.length / 3;
       const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
       for (let j = 0; j < t; j++) {
@@ -233,8 +233,10 @@ describe('recipes in the guides', () => {
         const source = (text, name) => {
             const lines = text.split('\n');
             const start = lines.findIndex((line) => line.trim().startsWith(`async function ${name}(`));
+            expect(start, `${name} is in the file`).toBeGreaterThanOrEqual(0);
             const indent = lines[start].match(/^ */)[0];
             const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+            expect(end, `${name} has a closing brace at its indentation`).toBeGreaterThan(start);
             return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);

@@ -131,6 +131,12 @@ export class Palette extends Uint8Array {
  * `Clustering` given as a palette is rejected, with no guessing about its bytes. Stored bytes come back as a plain
  * `Uint8Array`, which functions still accept at run time; `new Clustering(bytes)` gives them the type back (TypeScript
  * wants it) and checks they are a clustering.
+ *
+ * It has methods for the cluster-once workflow: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and
+ * so on. They run on the calling thread with the main entry, so in a worker-only app they compile but reject with
+ * `wasm-load-failed`. They exist only on values from this library or `new Clustering(bytes)`: slices and clones are plain
+ * bytes, and a cast (`bytes as Clustering`) or a `structuredClone` keeps the type without them: wrap those with
+ * `new Clustering(bytes)`.
  */
 export class Clustering extends Uint8Array {
     /**
@@ -141,6 +147,16 @@ export class Clustering extends Uint8Array {
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     /** Only a type: what makes a `Clustering` different from a palette or other bytes to the compiler. */
     readonly [clusteringBrand]: true;
+    /** The k-colour palette, as `getPaletteFromClustering(this, k)`. Takes no options. Runs on the calling thread, with the main entry. */
+    getPalette(this: Clustering, k: number): Promise<Palette>;
+    /** Palette, weights and shares, as `getSwatchesFromClustering(this, k)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    getSwatches(this: Clustering, k: number): Promise<Swatches>;
+    /** The error curve and totals, as `getClusteringInfo(this)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    getClusteringInfo(this: Clustering): Promise<ClusteringInfo>;
+    /** Maps `image` to the k-colour palette, as `quantizeFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+    /** Indexed output, as `quantizeToIndicesFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 }
 
 /** What is not a clustering: a `Clustering` is not accepted where a palette is. */

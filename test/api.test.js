@@ -226,6 +226,52 @@ describe('the API reference (docs/api.md)', () => {
 
 });
 
+describe('methods on Clustering', () => {
+
+    // The methods a clustering has at run time: its own non-index properties that are functions.
+    const runtime = Object.getOwnPropertyNames(clustering).filter((name) => !/^\d+$/.test(name) && typeof clustering[name] === 'function').sort();
+    // The methods the class declares in index.d.ts.
+    const clusteringClass = sourceOf('index.d.ts').statements.find((node) => ts.isClassDeclaration(node) && node.name?.text === 'Clustering');
+    const declared = clusteringClass.members.filter(ts.isMethodDeclaration).map((member) => member.name.getText()).sort();
+    // A method's function form: its name with `FromClustering`, or the same name when the function already says it (getClusteringInfo).
+    const functionForm = (name) => (main[`${name}FromClustering`] ? `${name}FromClustering` : name);
+
+    it('are declared exactly as they exist at run time', () => {
+        expect(runtime.length).toBeGreaterThan(0);
+        expect(declared).toEqual(runtime);
+    });
+
+    it('each have a function form in both entries, named by dropping FromClustering', () => {
+        for (const name of runtime) {
+            const form = functionForm(name);
+            expect(typeof main[form], `${name} has a function form in the main entry`).toBe('function');
+            expect(typeof worker[form], `${name} has a function form in the worker entry`).toBe('function');
+            expect(form === name || form === `${name}FromClustering`, `${name}'s function form is ${name}FromClustering`).toBe(true);
+        }
+    });
+
+    it('are each documented in docs/api.md, with the options they accept', async () => {
+        const checked = [];
+        for (const name of runtime) {
+            const section = api.match(new RegExp('^###[^\\n]*`clustering\\.' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
+            expect(section, `docs/api.md has a section for clustering.${name}`).not.toBeNull();
+            const form = functionForm(name);
+            if (!callArguments[form]) {continue;}   // the cuts take no options
+            // The method enforces exactly what its function form does, and its Options line lists that.
+            const args = callArguments[form].filter((value) => value !== clustering);
+            const error = await clustering[name](...args, { __unknown__: true }).catch((e) => e);
+            const enforced = (error.message.match(/expected one of (.*)\./) || [])[1].split(', ').sort();
+            expect(enforced, `clustering.${name} enforces ${form}'s options`).toEqual(await enforcedKeys(form));
+            const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
+            expect(line, `clustering.${name} has an Options line`).toBeDefined();
+            expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
+            checked.push(name);
+        }
+        expect(checked.sort()).toEqual(['quantize', 'quantizeToIndices']);
+    });
+
+});
+
 describe('the documentation files', () => {
 
     const docs = [...userDocs.slice(1), 'docs/migrating.md', 'docs/stability.md', 'docs/how-it-works.md', 'docs/ROADMAP.md'];

@@ -70,17 +70,17 @@ shares.forEach((share, i) => {
 **A colour-count slider:** cluster once, then cut and map as often as you like.
 
 ```js
-import { getClustering, getPaletteFromClustering, quantizeWithPalette } from 'agglomerative-clustering';
+import { getClustering, quantizeWithPalette } from 'agglomerative-clustering';
 
 const clustering = await getClustering(imageData);                   // the expensive step, done once
 
 slider.oninput = async () => {
-  const palette = await getPaletteFromClustering(clustering, Number(slider.value));   // ~0.4 ms for any k
-  ctx.putImageData(await quantizeWithPalette(imageData, palette), 0, 0);             // ~5-12 ms at 768×512
+  const palette = await clustering.getPalette(Number(slider.value));        // ~0.4 ms for any k
+  ctx.putImageData(await quantizeWithPalette(imageData, palette), 0, 0);   // ~5-12 ms at 768×512
 };
 ```
 
-Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx', width?, height? }`: BGRA for Electron's `nativeImage` and Windows bitmaps, and the `x` formats for buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). Alpha is straight; [where pixels come from](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#input) lists common sources, which are premultiplied, and the conversion. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use the same functions from `agglomerative-clustering/worker` (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)).
+Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx', width?, height? }`: BGRA for Electron's `nativeImage` and Windows bitmaps, and the `x` formats for buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). Alpha is straight; [where pixels come from](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#input) lists common sources, which are premultiplied, and the conversion. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use `agglomerative-clustering/worker`: its functions are the same, and for a slider `createWorker().cluster(image)` keeps the image and its clustering in the worker, behind a handle whose `handle.getPalette(k)` and `handle.quantize(k)` re-cut and re-map without sending the pixels again (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)). The `clustering.…` methods above run on the calling thread, so they don't move work off it.
 
 ## How it works
 
@@ -92,14 +92,19 @@ Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `
 
 The one-shot functions (`getPalette`, `quantize`, …) do every step for you. To try many palette sizes, call `getClustering` once and cut it as often as you like.
 
-| You want | from the image | from a clustering you hold | with a palette you supply |
+| You want | from the image | from a clustering you hold¹ | with a palette you supply |
 |---|---|---|---|
-| a palette (flat RGB) | `getPalette` | `getPaletteFromClustering` | |
-| a palette with each colour's share | `getSwatches` | `getSwatchesFromClustering` | |
-| the image reduced to those colours | `quantize` | `quantizeFromClustering` | `quantizeWithPalette` |
-| palette indices (GIF, PNG-8) | `quantizeToIndices` | `quantizeToIndicesFromClustering` | `quantizeToIndicesWithPalette` |
+| a palette (flat RGB) | `getPalette` | `clustering.getPalette(k)` (`getPaletteFromClustering`) | |
+| a palette with each colour's share | `getSwatches` | `clustering.getSwatches(k)` (`getSwatchesFromClustering`) | |
+| the image reduced to those colours | `quantize` | `clustering.quantize(image, k)` (`quantizeFromClustering`) | `quantizeWithPalette` |
+| palette indices (GIF, PNG-8) | `quantizeToIndices` | `clustering.quantizeToIndices(image, k)` (`quantizeToIndicesFromClustering`) | `quantizeToIndicesWithPalette` |
+| its error curve, for choosing a palette size | | `clustering.getClusteringInfo()` (`getClusteringInfo`) | |
 
-**`…FromClustering`** takes the colours from a clustering you already hold, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `getClustering` builds a clustering, `getClusteringInfo` reads one (including its error curve, for choosing a palette size), and `init` loads the WebAssembly module (optional). Most code only needs the first column.
+A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `getClustering` builds a clustering, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
+
+**Methods or functions?** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **In a worker, use a handle** (`createWorker().cluster(image)`, below) or the worker entry's function forms: the methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
+
+¹ Each method has a function form, in brackets, that does the same. The cuts take the clustering first (`getPaletteFromClustering(clustering, k)`); the mapping functions take the image first and the clustering second (`quantizeFromClustering(image, clustering, k)`). See [Clustering methods](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#clustering-methods).
 
 Palettes come in **split order**: the palette for `k + 1` is the one for `k` with one colour split in two, so entries keep their place as `k` grows (they are not sorted by share). The options are `precision` (6 is about 3× faster at practically the same quality), `colorSpace` (`'rgb'` or `'oklab'`), `alpha`, `transparent`, `dither` (Floyd–Steinberg, Atkinson, or ordered for animation, which keeps still areas still), `width`, `signal` and `onProgress`: see the [API reference](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md).
 

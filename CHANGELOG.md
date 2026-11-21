@@ -2,7 +2,19 @@
 
 ## Unreleased
 
+Output is unchanged; the golden tests pin it.
+
+### Added
+- **Methods on `Clustering`** for the cluster-once workflow: `clustering.getPalette(k)`, `clustering.getSwatches(k)`, `clustering.getClusteringInfo()`, `clustering.quantize(image, k, options?)` and `clustering.quantizeToIndices(image, k, options?)`. Each is its `…FromClustering` function with the clustering as the receiver, with the same results, defaults and errors, and the functions stay: nothing is deprecated, and moving existing code to the methods is optional (the API reference's "Clustering methods" has the function-to-method table). Every clustering the library returns has them, from either entry and from a worker handle's `getClustering()`, and so does `new Clustering(bytes)`. A clustering is still a plain `Uint8Array` (`toEqual` and `deepStrictEqual` against plain bytes pass): the methods are hidden, and `slice`, `subarray`, clones and storage give plain bytes without them, so wrap stored bytes with `new Clustering(bytes)`.
+  - **They run on the calling thread, with the main entry.** With only `agglomerative-clustering/worker` imported they reject with `wasm-load-failed` and say what to import; off the thread, use the worker entry's `…FromClustering` functions or a `worker.cluster()` handle.
+  - **TypeScript:** `Clustering` gains the five members. Only a hand-written `interface X extends Clustering` that declares its own `getPalette` or `quantize` with another signature could clash.
+
+### Planned
+- **4.0 renames `getClustering`, `getPalette` and `getSwatches`:** from 4.0, `get…` names only calls that read or cut what they already hold, and the functions that cluster an image get verb names. The new names arrive in 3.4.0, with the old ones deprecated and working through 3.x (ROADMAP).
+
 ### Docs
+- **Copies of the package** (the ES-module and CommonJS builds, a bundler's duplicate, a dependency's own copy) of the same version recognise each other's palettes and clusterings and take them in each other's functions; the stability promise now says so. The API reference says how methods behave across copies, and that `init({ wasm })` applies to one copy.
+- **A "Storing clusterings" recipe** in the guides, and a function-to-method table in the API reference.
 - **Choosing N colours from a fixed palette** (threads, bricks, inks) has a second step in the guides: `improveThreads` swaps colours in and out of the first choice while that brings the image closer. On the Kodak photos it improved 22 to 24 of 24 photos by about 0.4 dB PSNR at 6 to 12 threads of a 584-colour chart and made none worse. It uses only the public API, so there is no new function; the ROADMAP records the measurements and what a built-in would look like. `test/recipes.test.js` runs both functions and checks that they match the guides.
 
 ## 3.2.0
