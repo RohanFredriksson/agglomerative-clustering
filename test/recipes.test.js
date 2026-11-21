@@ -174,18 +174,74 @@ describe('recipes in the guides', () => {
         expect(decoded[(20 * w + 20) * 4 + 3]).toBe(255);
     });
 
-    // "Fixed palettes": choosing N colours from a fixed set (the guides' function, as written there).
-    it('chooses n threads from a fixed set, and beats the n most used threads', async () => {
-        async function chooseThreads(image, threads, n) {
-            const clustering = await getClustering(image);
-            let chosen = [];
-            for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-                const cut = await getPaletteFromClustering(clustering, k);
-                const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
-                chosen = [...new Set(indices)].slice(0, n);
-            }
-            return chosen;
+    // "Fixed palettes": choosing N colours from a fixed set. The two functions are the guides' own, and the test checks
+    // that their text matches the guides' (ignoring indentation), so the two can't drift apart.
+    async function chooseThreads(clustering, threads, n) {
+      let chosen = [];
+      for (let k = n; k <= 4 * n && chosen.length < n; k++) {
+        const cut = await getPaletteFromClustering(clustering, k);
+        // The cut palette as an image of one pixel per colour, mapped to the threads.
+        const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
+        // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
+        chosen = [...new Set(indices)].slice(0, n);
+      }
+      return chosen;   // can be fewer than n for an image with few colours
+    }
+
+    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
+    async function improveThreads(clustering, threads, chosen) {
+      const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+      const m = weights.length, t = threads.length / 3;
+      const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
+      for (let j = 0; j < t; j++) {
+        for (let i = 0; i < m; i++) {
+          const dr = threads[3 * j] - colors[3 * i], dg = threads[3 * j + 1] - colors[3 * i + 1], db = threads[3 * j + 2] - colors[3 * i + 2];
+          distance[j * m + i] = dr * dr + dg * dg + db * db;
         }
+      }
+      chosen = [...chosen];
+      for (;;) {
+        // Each swatch's nearest chosen thread (its position in `chosen`) and the distances to the nearest two.
+        const nearest = new Int32Array(m), first = new Float64Array(m).fill(Infinity), second = new Float64Array(m).fill(Infinity);
+        let current = 0;
+        for (let i = 0; i < m; i++) {
+          chosen.forEach((j, s) => {
+            const d = distance[j * m + i];
+            if (d < first[i]) {second[i] = first[i]; first[i] = d; nearest[i] = s;} else if (d < second[i]) {second[i] = d;}
+          });
+          current += weights[i] * first[i];
+        }
+        // The best swap of an unchosen thread j for the chosen thread at position s, if any is better.
+        let best = null, lowest = current * (1 - 1e-9);
+        for (let j = 0; j < t; j++) {
+          if (chosen.includes(j)) {continue;}
+          for (let s = 0; s < chosen.length; s++) {
+            let error = 0;
+            for (let i = 0; i < m; i++) {error += weights[i] * Math.min(distance[j * m + i], nearest[i] === s ? second[i] : first[i]);}
+            if (error < lowest) {lowest = error; best = [s, j];}
+          }
+        }
+        if (!best) {return chosen;}
+        chosen[best[0]] = best[1];
+      }
+    }
+
+    it('the thread-choosing functions are the ones in the guides', async () => {
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        // A function's lines, trimmed: from its declaration to the closing brace at the declaration's indentation.
+        const source = (text, name) => {
+            const lines = text.split('\n');
+            const start = lines.findIndex((line) => line.trim().startsWith(`async function ${name}(`));
+            const indent = lines[start].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+            return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
+        };
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        for (const name of ['chooseThreads', 'improveThreads']) {expect(source(test, name)).toBe(source(guides, name));}
+    });
+
+    it('chooses n threads from a fixed set, beats the n most used threads, and the swaps never make it worse', async () => {
         // A smooth photo-like image, and 120 pseudo-random threads.
         const w = 64, h = 48, photo = new Uint8Array(w * h * 4);
         for (let i = 0; i < w * h; i++) {photo.set([(i % w) * 4, Math.floor(i / w) * 5, ((i % w) * 3 + Math.floor(i / w) * 2) & 255, 255], i * 4);}
@@ -201,13 +257,31 @@ describe('recipes in the guides', () => {
         const { indices } = await quantizeToIndicesWithPalette(photo, threads);
         const used = new Uint32Array(120);
         for (const index of indices) {used[index]++;}
-        for (const n of [4, 8]) {
-            const chosen = await chooseThreads({ data: photo, format: 'rgba', width: w }, threads, n);
+        const clustering = await getClustering({ data: photo, format: 'rgba', width: w });
+        for (const n of [4, 8, 12]) {
+            const chosen = await chooseThreads(clustering, threads, n);
             expect(chosen).toHaveLength(n);
             expect(new Set(chosen).size).toBe(n);
             const top = Array.from(used.keys()).sort((a, b) => used[b] - used[a]).slice(0, n);
             expect(await error(pick(chosen))).toBeLessThan(await error(pick(top)));
+
+            const improved = await improveThreads(clustering, threads, chosen);
+            expect(improved).toHaveLength(n);
+            expect(new Set(improved).size).toBe(n);
+            expect(await error(pick(improved))).toBeLessThanOrEqual(await error(pick(chosen)));
         }
+    });
+
+    it('improveThreads handles an image with fewer colours than n, and one with none visible', async () => {
+        const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 255]);
+        const two = new Uint8Array([250, 10, 10, 255, 5, 5, 240, 255]);
+        const clustering = await getClustering(two);
+        const chosen = await chooseThreads(clustering, threads, 3);
+        expect(chosen.sort()).toEqual([2, 3]);
+        expect((await improveThreads(clustering, threads, chosen)).sort()).toEqual([2, 3]);
+        const empty = await getClustering(new Uint8Array([9, 9, 9, 0]));
+        expect(await chooseThreads(empty, threads, 2)).toEqual([]);
+        expect(await improveThreads(empty, threads, [])).toEqual([]);
     });
 
     // "Live video and camera frames": following the previous palette (the guides' function, as written there).
