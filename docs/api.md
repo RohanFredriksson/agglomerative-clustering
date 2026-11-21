@@ -198,19 +198,20 @@ The cutoff decides which side a half-transparent pixel falls on. With the defaul
 
 ## Palette and Clustering
 
-The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy four things:
+The palettes and clusterings this library returns are ordinary `Uint8Array`s with a hidden tag: what they are and, for a palette, the colour space it was made in. Anything that takes bytes takes them, and their `constructor` is `Uint8Array`, so `expect(palette).toEqual(new Uint8Array([...]))` passes in your tests. The tags buy five things:
 
 - **A palette maps in the space it was made in.** `quantizeWithPalette(image, palette)` matches an OKLab palette in OKLab without being told; name a `colorSpace` to override it. Plain bytes are matched in RGB.
 - **A clustering can't be passed as a palette**, or the other way round. TypeScript rejects it, and at run time it throws (`invalid-argument` or `invalid-clustering`), with no guessing about bytes.
 - **`new Palette(bytes, colorSpace)` and `new Clustering(bytes)` give bytes their type back**, and check them: `new Palette([300, 0, 0])` throws rather than wrapping 300 to 44, and `new Clustering(bytes)` throws `invalid-clustering` unless they are one. The functions still accept a clustering as plain bytes, so stored clusterings keep working in JavaScript; TypeScript wants the constructor.
 - **A clustering is checked before it is used.** Clusterings carry a checksum, so stored bytes that came back damaged (truncated, a changed byte, a lossy base64 round trip) are reported as `invalid-clustering` rather than cut into a wrong palette. It is checked the first time an array is used, so bytes changed in place after that aren't caught. Clusterings from 2.x have no checksum. It catches accidents, not tampering (anyone can recompute it): a clustering or palette from an untrusted user can't crash the library or make it hang, but it can describe any palette it likes.
+- **A clustering has [methods](#clustering-methods)** for cutting and mapping it: `clustering.getPalette(k)`, `clustering.quantize(image, k)` and the rest.
 
 ```js
-import { Clustering, Palette, getPaletteFromClustering } from 'agglomerative-clustering';
+import { Clustering, Palette } from 'agglomerative-clustering';
 
 const stored = new Uint8Array(await db.get('clustering'));       // what storage gives back: plain bytes
 const clustering = new Clustering(stored);                        // typed again, and checked
-const palette = await getPaletteFromClustering(clustering, 8);
+const palette = await clustering.getPalette(8);
 palette instanceof Palette;                                       // true
 palette.colorSpace;                                               // 'rgb' or 'oklab', as it was clustered
 palette.slice(0, 3) instanceof Palette;                           // false: slice, subarray and clones are plain bytes
@@ -230,7 +231,7 @@ const restored = new Palette(bytes, colorSpace);   // maps exactly as the palett
 
 ## Clustering methods
 
-A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results, defaults and errors.
+A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results and defaults, and the same errors, with messages that name the method. (The receiver is checked first, as it is written first.)
 
 ```js
 import { getClustering, Clustering } from 'agglomerative-clustering';
@@ -296,7 +297,7 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | `invalid-clustering` | Bytes that aren't a clustering this version can read, or a stored clustering that came back damaged (its checksum or its records don't fit). |
 | `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getSwatchesFromClustering`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate: an image with very many colours, or pixel data over its 2 GB (the message gives the size). |
-| `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. Also a [`Clustering` method](#clustering-methods) called where the main entry isn't loaded. |
+| `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. Also a [`Clustering` method](#clustering-methods) called where the main entry isn't loaded, with no `cause`: import the main entry on that thread. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped, failed, or a handle was released. `worker-terminated` is for calls running or waiting when `terminate()` was called, and every later call on that `createWorker()` worker, so retrying on it can't help (the shared worker starts again on the next call). After `worker-failed` (it couldn't start, crashed or exited), the next call starts a new worker. |
 
 ```js
@@ -343,7 +344,7 @@ Both entries ship declarations, checked in CI under strict mode with `nodenext` 
 - **Results narrow:** checking `result.indexBits === 8` makes `indices` a `Uint8Array`.
 - **Mapped `RawImage` results are typed as `RawImage`:** `format` is `ImageFormat` and `data` is `Uint8Array | Uint8ClampedArray`, although at run time `data` is always a `Uint8Array` and `format` is the input's. Where you need the narrower types (to write the bytes, or to pass the image to code that takes one format), cast: `const out = await quantize(image, 16) as RawImage & { data: Uint8Array; format: 'bgra' }`. Results that keep the input's types are [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
 - **`ImageFormat` grows** in minor releases (3.2 added `'bgra'`, `'rgbx'` and `'bgrx'`), so code that lists every format (an exhaustive `switch`, a `Record<ImageFormat, …>`, a union spelled out as `'rgb' | 'rgba'`) needs a new case when it does; take the names from `imageFormats`, or end a `switch` with a default branch.
-- **Clustering methods** exist only on values from the library or `new Clustering(bytes)`: a cast (`stored as Clustering`) compiles, then fails with `TypeError: … is not a function`, so give stored bytes their type with the constructor. Types can't tell whether the main entry is loaded either: in a worker-only app the methods compile, then reject with `wasm-load-failed`.
+- **Clustering methods** exist only on values from the library or `new Clustering(bytes)`: a cast (`stored as Clustering`) or a `structuredClone` of a clustering is typed `Clustering` but is plain bytes, so calling a method on it compiles, then fails with `TypeError: … is not a function`. Wrap it: `new Clustering(structuredClone(clustering))`. Types can't tell whether the main entry is loaded either: in a worker-only app the methods compile, then reject with `wasm-load-failed`.
 - **Palettes:** palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`). Stored bytes need `new Clustering(bytes)` to be accepted as a clustering.
 - **Errors** are `CodedError`s with `code` and `argument`.
 - **Handles** keep the image type they were made from: a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`, whose `quantize` returns the general image type.
@@ -420,7 +421,7 @@ const { palette, colors, indices, transparentIndex } = await quantizeToIndices(i
 ```
 
 ### `quantizeToIndicesFromClustering(image, clustering, k, options?): Promise<IndexedImage>`
-The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`getClusteringInfo(clustering).transparent`), so clustering and mapping agree unless you name another.
+The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
 
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `transparent`.
 

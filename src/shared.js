@@ -228,7 +228,9 @@ export const markPalette = (bytes, colorSpace) => {
 // entry puts nothing there, so in a worker-only app the methods reject and say what to import. Each copy of this file (the
 // ES module and the CommonJS build) has its own slot, filled by the main entry of the same module system.
 let engine = null;
-export const setEngine = (value) => {engine = value;};
+// The first main entry evaluated keeps the slot: it is the one an app loads and gives `init({ wasm })`, so a later copy
+// (a duplicated chunk, a query-string import) doesn't re-point every clustering at a module of its own that isn't set up.
+export const setEngine = (value) => {if (engine === null) {engine = value;}};
 // Each method's call shape and its function form, for messages.
 const methodNames = {
     getPalette: ['getPalette(k)', 'getPaletteFromClustering(clustering, k)'],
@@ -237,15 +239,17 @@ const methodNames = {
     quantize: ['quantize(image, k)', 'quantizeFromClustering(image, clustering, k)'],
     quantizeToIndices: ['quantizeToIndices(image, k)', 'quantizeToIndicesFromClustering(image, clustering, k)'],
 };
-// Checks the receiver (and that the main entry is loaded) before anything else, since it is written first.
-const receive = (name, receiver) => {
+// Checks the receiver before anything else, since it is written first, then (for the mapping methods) that the image isn't
+// the worker handle's `k`, then that the main entry is loaded.
+const receive = (name, receiver, image) => {
     const [shape, form] = methodNames[name];
     if (!isUint8Array(receiver)) {
         throw fail('invalid-clustering', `Invalid clustering: ${name} was called without its clustering (this is ${receiver === undefined ? 'undefined' : describe(receiver)}). Call it as clustering.${shape}, or use ${form}.`, 'clustering');
     }
     readHeader(receiver);
+    if (image !== undefined) {checkImageFirst(name, image.value);}
     if (engine === null) {
-        throw fail('wasm-load-failed', `Could not use the WebAssembly module: clustering.${name} runs on the calling thread with the main entry, 'agglomerative-clustering', which isn't loaded here (this clustering came from the worker entry, or from the other module system's copy of the package). Import the main entry in this thread, or call ${form} from 'agglomerative-clustering/worker', which runs in the worker.`);
+        throw fail('wasm-load-failed', `Could not use the WebAssembly module: clustering.${name} runs on the calling thread with the main entry, 'agglomerative-clustering', which isn't loaded here (this clustering came from the worker entry, or from the other module system's copy of the package). Import the main entry in this thread (and call its init({ wasm }) if you set where the module comes from), or call ${form} from 'agglomerative-clustering/worker', which runs in the worker.`);
     }
     return engine;
 };
@@ -268,20 +272,17 @@ const methods = {
     },
     quantize(image, k, options) {
         try {
-            const use = receive('quantize', this);
-            checkImageFirst('quantize', image);
-            return use.quantizeFromClustering(image, this, k, options);
+            return receive('quantize', this, {value: image}).quantizeFromClustering(image, this, k, options);
         } catch (error) {return Promise.reject(error);}
     },
     quantizeToIndices(image, k, options) {
         try {
-            const use = receive('quantizeToIndices', this);
-            checkImageFirst('quantizeToIndices', image);
-            return use.quantizeToIndicesFromClustering(image, this, k, options);
+            return receive('quantizeToIndices', this, {value: image}).quantizeToIndicesFromClustering(image, this, k, options);
         } catch (error) {return Promise.reject(error);}
     },
 };
-const methodDescriptors = Object.fromEntries(Object.entries(methods).map(([name, value]) => [name, {value}]));
+// Writable and configurable like any method (so `vi.spyOn(clustering, 'getPalette')` works), and not enumerable.
+const methodDescriptors = Object.fromEntries(Object.entries(methods).map(([name, value]) => [name, {value, writable: true, configurable: true}]));
 export const markClustering = (bytes) => {
     // Made by this library (or checked by `Clustering`), so its checksum needn't be checked again (see readHeader).
     checked.add(bytes);

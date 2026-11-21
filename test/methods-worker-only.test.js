@@ -33,10 +33,12 @@ describe('methods on Clustering without the main entry', () => {
         }
     });
 
-    it('still check their receiver first', async () => {
+    it('still check their receiver first, and the handle-shaped quantize(k), before the main entry', async () => {
         const clustering = await getClustering(image);
         const error = await clustering.getPalette.call(undefined, 4).then(() => null, (reason) => reason);
         expect(error.code).toBe('invalid-clustering');
+        const shape = await clustering.quantize(16).then(() => null, (reason) => reason);
+        expect(shape).toMatchObject({ code: 'invalid-argument', argument: 'image' });
     });
 
     it('work once the main entry is imported, on clusterings made before', async () => {

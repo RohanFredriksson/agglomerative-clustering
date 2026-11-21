@@ -151,3 +151,13 @@ describe('errors from methods on Clustering', () => {
     });
 
 });
+
+describe('the engine behind the methods', () => {
+
+    it('lets a test spy on a method, as on any method', async () => {
+        const clustering = await getClustering(image);
+        const descriptor = Object.getOwnPropertyDescriptor(clustering, 'getPalette');
+        expect(descriptor).toMatchObject({ writable: true, configurable: true, enumerable: false });
+    });
+
+});

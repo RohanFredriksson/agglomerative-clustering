@@ -116,7 +116,7 @@ const restored = new Clustering(await db.get('clustering'));   // has the same f
    - **One argument is checked before forwarding:** a number where the image goes (see Errors).
 6. **`Palette` gets no `quantize` method.** It is recorded in ROADMAP "Considered".
    - Fixed palettes are usually plain arrays (`PaletteLike`). A method would need a `new Palette([...])` wrap on that path, or leave two ways to map with a palette.
-   - The entry says: "palette mapping stays `…WithPalette`, unless item 5 (a prepared palette for reusing dither recipes) decides otherwise". So item 5's open question stays open.
+   - The entry says: "palette mapping stays `…WithPalette`, unless item 6 (a prepared palette for reusing dither recipes) decides otherwise". So item 5's open question stays open.
    - Clusterings are always made or wrapped by the library, so methods cost them nothing.
 
 ## Errors
@@ -175,7 +175,7 @@ All are made with `fail`. Argument names are unchanged: `'clustering'` for the r
   - **Item 4:** marked done. Its open questions are answered (async; `new Clustering(bytes)` behaves the same). Its additions are noted: `quantizeToIndices`, and `getClusteringInfo` for `getInfo`.
   - **The "Larger, later" entry** is folded into item 4. "`Clustering` is already a class" is corrected to "a tagged `Uint8Array`".
   - **"Considered":**
-    - a `Palette` method, worded to leave item 5 open (Decision 6);
+    - a `Palette` method, worded to leave item 6 open (Decision 6; numbered 5 before the verb-names item was added);
     - a lazy loader in the worker entry, and a global engine slot, each with its reasons (Decision 4).
   - **"Choosing N colours from a fixed palette, built in"** reads: "a method on `Clustering` with a verb name, sharing its function form's stem (by the naming rule)".
   - **"Swatch helpers":** a `getSwatches` option would also come to `clustering.getSwatches`, which rejects options today.

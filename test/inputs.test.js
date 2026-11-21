@@ -56,10 +56,9 @@ describe('bytes are read when the call is made', () => {
         expect(Array.from((await mapped).subarray(0, 3))).toEqual(red);
     });
 
-    // A fresh copy of the main entry fills the methods' engine slot, so the methods run through its unloaded module.
-    it('in the methods on Clustering, before the module has loaded', async () => {
+    // The methods forward to the function forms at once, so they take the bytes when called too.
+    it('in the methods on Clustering', async () => {
         const clustering = new ac.Clustering(new Uint8Array(await ac.getClustering(solid(red))));
-        await fresh();
         const image = solid(red);
         const mapped = clustering.quantize({ data: image, format: 'rgba', width: 10 }, 2, { dither: true });
         const indexed = clustering.quantizeToIndices(image, 2);

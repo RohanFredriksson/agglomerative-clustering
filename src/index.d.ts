@@ -135,7 +135,8 @@ export class Palette extends Uint8Array {
  * It has methods for the cluster-once workflow: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and
  * so on. They run on the calling thread with the main entry, so in a worker-only app they compile but reject with
  * `wasm-load-failed`. They exist only on values from this library or `new Clustering(bytes)`: slices and clones are plain
- * bytes, and a cast (`bytes as Clustering`) gives the type without them.
+ * bytes, and a cast (`bytes as Clustering`) or a `structuredClone` keeps the type without them: wrap those with
+ * `new Clustering(bytes)`.
  */
 export class Clustering extends Uint8Array {
     /**

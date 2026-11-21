@@ -233,8 +233,10 @@ describe('recipes in the guides', () => {
         const source = (text, name) => {
             const lines = text.split('\n');
             const start = lines.findIndex((line) => line.trim().startsWith(`async function ${name}(`));
+            expect(start, `${name} is in the file`).toBeGreaterThanOrEqual(0);
             const indent = lines[start].match(/^ */)[0];
             const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+            expect(end, `${name} has a closing brace at its indentation`).toBeGreaterThan(start);
             return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
