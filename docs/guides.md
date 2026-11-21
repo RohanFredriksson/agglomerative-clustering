@@ -235,14 +235,19 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 
 - **Undithered, every pixel gets its nearest entry** (ties go to the smaller RGB value, and a repeated entry gets its first index). Dithering diffuses the error to the neighbours, and keeps working when the palette can't reach the image's colours: saturated cyan with the seven e-ink inks comes out as an even mix of white, green and blue, not solid blue. With a few widely spaced inks, dithering in sRGB values makes photos come out much lighter on the panel: convert to linear light first (a few lines, in [Dithering to a few inks: mix in light](api.md#dithering-to-a-few-inks-mix-in-light)), then use error diffusion (`dither: true`) for stills, or `dither: 'ordered'` where a fixed pattern matters (an animated or partly refreshed display). See [Choosing a dither method](api.md#choosing-a-dither-method).
 - **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering; with small palettes of widely spaced inks (e-ink, grey levels), dither in `'rgb'` after converting to linear light, as [Dithering to a few inks: mix in light](api.md#dithering-to-a-few-inks-mix-in-light) shows (in OKLab the recipe's linear values would be read as sRGB). Without that conversion every method makes photos too light, and OKLab more so in black and white.
-- **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but a few lines do it: cut the clustering, snap each cut colour to its nearest thread, and cut finer until N distinct threads appear. In testing it beat "the N most used threads" by 3 to 8 dB PSNR for N up to 12; the gain shrinks as N grows (under 1 dB at 24).
+- **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but two short functions do it.
+  - **`chooseThreads`** cuts the clustering, snaps each cut colour to its nearest thread, and cuts finer until N distinct threads appear. After clustering it takes about a millisecond. On the Kodak photos with large charts it beat "the N most used threads" by about 3 to 4 dB PSNR at 6 to 12 threads; the gain shrinks as N grows.
+  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image; it grows with the number of threads times N: about 50 ms for 6 of 584 threads, 150 ms for 12 and 350 ms for 24, and up to 1.5 s for 40 of 1000. The loop is your own code, so the library's worker entry can't move it off the main thread: for large charts in a browser, run both functions in a Web Worker of your own that imports the main entry. Skip it when `chooseThreads` is good enough.
 
   ```js
-  import { getClustering, getPaletteFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+  import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
-  // The indices (into `threads`, flat RGB) of the n threads that best represent `image`.
-  async function chooseThreads(image, threads, n) {
-    const clustering = await getClustering(image);
+  const clustering = await getClustering(image);
+  const chosen = await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 12));
+  // chosen: indices into `threads` (flat RGB). Swapped-in threads take their predecessors' places, so the order is arbitrary.
+
+  // The indices of n threads that represent the clustered image well.
+  async function chooseThreads(clustering, threads, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
       const cut = await getPaletteFromClustering(clustering, k);
@@ -252,6 +257,44 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
       chosen = [...new Set(indices)].slice(0, n);
     }
     return chosen;   // can be fewer than n for an image with few colours
+  }
+
+  // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
+  async function improveThreads(clustering, threads, chosen) {
+    const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+    const m = weights.length, t = threads.length / 3;
+    const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
+    for (let j = 0; j < t; j++) {
+      for (let i = 0; i < m; i++) {
+        const dr = threads[3 * j] - colors[3 * i], dg = threads[3 * j + 1] - colors[3 * i + 1], db = threads[3 * j + 2] - colors[3 * i + 2];
+        distance[j * m + i] = dr * dr + dg * dg + db * db;
+      }
+    }
+    chosen = [...chosen];
+    for (;;) {
+      // Each swatch's nearest chosen thread (its position in `chosen`) and the distances to the nearest two.
+      const nearest = new Int32Array(m), first = new Float64Array(m).fill(Infinity), second = new Float64Array(m).fill(Infinity);
+      let current = 0;
+      for (let i = 0; i < m; i++) {
+        chosen.forEach((j, s) => {
+          const d = distance[j * m + i];
+          if (d < first[i]) {second[i] = first[i]; first[i] = d; nearest[i] = s;} else if (d < second[i]) {second[i] = d;}
+        });
+        current += weights[i] * first[i];
+      }
+      // The best swap of an unchosen thread j for the chosen thread at position s, if any is better.
+      let best = null, lowest = current * (1 - 1e-9);
+      for (let j = 0; j < t; j++) {
+        if (chosen.includes(j)) {continue;}
+        for (let s = 0; s < chosen.length; s++) {
+          let error = 0;
+          for (let i = 0; i < m; i++) {error += weights[i] * Math.min(distance[j * m + i], nearest[i] === s ? second[i] : first[i]);}
+          if (error < lowest) {lowest = error; best = [s, j];}
+        }
+      }
+      if (!best) {return chosen;}
+      chosen[best[0]] = best[1];
+    }
   }
   ```
 - **Transparent pixels** map to whichever entry is nearest their colour values (often black, as fully transparent pixels are often stored as black, but not always) unless you pass `transparent`, which appends an entry for them (so a 1- or 2-bit panel has no room for it): composite the image onto your background first.

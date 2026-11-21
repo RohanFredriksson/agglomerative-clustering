@@ -73,7 +73,8 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - a worker idle timeout;
   - palette file writers;
   - a matte colour;
-  - smoothing palettes across frames.
+  - smoothing palettes across frames;
+  - a function for choosing N colours from a fixed palette (a recipe in the guides covers it).
 - **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.
