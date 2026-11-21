@@ -31,5 +31,11 @@ export async function run() {
     // @ts-expect-error an unknown option
     await quantize(raw, 4, { reserveTransparent: true });
     const h: RawImage = await quantize({ data: bytes, format: 'bgra' as const, width: 4 }, 4);
-    void [a, b, c, d, e, g, h, indexed, mse, notAString, notRaw];
+    // Methods on Clustering, typed without the DOM lib.
+    const clustering = await getClustering(raw);
+    const m: RawImage = await clustering.quantize(raw, 4);
+    const n: Uint8Array = await clustering.quantize(buffer, 4);
+    // @ts-expect-error the result for a RawImage is not a string
+    const notAString2: string = await clustering.quantize(raw, 4);
+    void [a, b, c, d, e, g, h, m, n, indexed, mse, notAString, notRaw, notAString2];
 }

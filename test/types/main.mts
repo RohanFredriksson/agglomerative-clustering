@@ -117,4 +117,31 @@ declare const maybeDither: boolean | undefined, maybeWidth: number | undefined, 
 quantize(bytes, 4, { dither: maybeDither, width: maybeWidth, signal: maybeSignal, colorSpace: undefined, precision: undefined });
 getPalette(bytes, 4, { onProgress: undefined, alpha: undefined, transparent: undefined });
 getPalette({ data: bytes, format: 'rgba', width: maybeWidth, height: undefined }, 4);
+// Methods on Clustering: the cluster-once workflow, typed like the function forms.
+async function methods(c: Clustering) {
+    const p: Palette = await c.getPalette(8);
+    const s: Swatches = await c.getSwatches(8);
+    const i: ClusteringInfo = await c.getClusteringInfo();
+    const fromBytes: Uint8Array = await c.quantize(bytes, 8, { dither: 'atkinson', width: 4 });
+    const fromData: ImageData = await c.quantize(imageData, 8);
+    const fromRaw: RawImage = await c.quantize(raw, 8, { colorSpace: 'oklab', signal: controller.signal });
+    const indexed: IndexedImage = await c.quantizeToIndices(imageData, 8, { transparent: true });
+    const restored: Palette = await new Clustering(plainBytes).getPalette(4);
+    // @ts-expect-error a detached method has lost its clustering
+    const { getPalette: detached } = c; detached(4);
+    // @ts-expect-error the image comes first: quantize(16) is a worker handle's shape
+    c.quantize(16);
+    // @ts-expect-error a cut takes no options
+    c.getPalette(4, {});
+    // @ts-expect-error transparent is not a mapping option for quantize
+    c.quantize(bytes, 4, { transparent: true });
+    // @ts-expect-error a palette has no methods
+    p.quantize(bytes, 4);
+    void [s, i, fromBytes, fromData, fromRaw, indexed, restored];
+}
+// Code that extends the class still compiles.
+interface Mine extends Clustering { readonly label: string }
+declare const mine: Mine;
+mine.getPalette(4);
+void methods;
 void main;

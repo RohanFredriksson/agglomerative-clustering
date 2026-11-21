@@ -42,7 +42,10 @@ async function main() {
     const run: ProgressOptions = {};
     const o: InitOptions = {};
     const like: ImageLike = bytes;
-    void [stored, new Palette(bytes, 'oklab'), q, palette, mse, indexed, x, y, z, p, code, e, run, o, like];
+    // A clustering from the worker entry has the main entry's methods (they run on this thread).
+    const cut: Palette = await stored.getPalette(4);
+    const mapped: ImageData = await stored.quantize(imageData, 4);
+    void [stored, new Palette(bytes, 'oklab'), q, palette, mse, indexed, x, y, z, p, code, e, run, o, like, cut, mapped];
 }
 
 // @ts-expect-error getInfo was renamed

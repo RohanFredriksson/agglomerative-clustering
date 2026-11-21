@@ -41,6 +41,11 @@ export class Clustering extends Uint8Array {
     constructor(bytes: Uint8Array | Uint8ClampedArray | readonly number[]);
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     readonly [clusteringBrand]: true;
+    getPalette(this: Clustering, k: number): Promise<Palette>;
+    getSwatches(this: Clustering, k: number): Promise<Swatches>;
+    getClusteringInfo(this: Clustering): Promise<ClusteringInfo>;
+    quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
+    quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 }
 type NotClustering = {
     readonly [clusteringBrand]?: never;

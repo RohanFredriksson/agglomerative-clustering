@@ -11,7 +11,10 @@ import type { Palette, Clustering } from './index.js';
 /** The same class as the main entry's `Palette`: flat RGB bytes that know their colour space. */
 export { Palette } from './index.js';
 
-/** The same class as the main entry's `Clustering`: the typed bytes of a clustering. */
+/**
+ * The same class as the main entry's `Clustering`. Its methods run on the calling thread and need the main entry imported
+ * there; off the thread, use this entry's `…FromClustering` functions or `cluster()`.
+ */
 export { Clustering } from './index.js';
 
 /** The same list as the main entry's `errorCodes`: the worker entry's errors have the same codes. */
