@@ -56,6 +56,21 @@ describe('bytes are read when the call is made', () => {
         expect(Array.from((await mapped).subarray(0, 3))).toEqual(red);
     });
 
+    // A fresh copy of the main entry fills the methods' engine slot, so the methods run through its unloaded module.
+    it('in the methods on Clustering, before the module has loaded', async () => {
+        const clustering = new ac.Clustering(new Uint8Array(await ac.getClustering(solid(red))));
+        await fresh();
+        const image = solid(red);
+        const mapped = clustering.quantize({ data: image, format: 'rgba', width: 10 }, 2, { dither: true });
+        const indexed = clustering.quantizeToIndices(image, 2);
+        const cut = clustering.getPalette(2);
+        paint(image, blue);
+        clustering.fill(0);
+        expect(Array.from((await mapped).data.subarray(0, 4))).toEqual([...red, 255]);
+        expect(Array.from((await indexed).palette)).toEqual(red);
+        expect(Array.from(await cut)).toEqual(red);
+    });
+
     it.each([
         ['a new worker', () => createWorker()],
         ['a new worker with transfer: true', () => createWorker({ transfer: true })],

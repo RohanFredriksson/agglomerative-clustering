@@ -84,6 +84,11 @@ async function run() {
         cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeFromClustering(image, clustering, k)).data);
     }
     checks.handleCutsMatchMain = cuts;
+    // A clustering from the worker entry has the methods, run on this thread with the main entry (imported above).
+    const fromWorker = await worker.getClustering(image, { colorSpace: 'oklab' });
+    checks.methodsOnWorkerClustering = equal(await fromWorker.getPalette(8), await ac.getPaletteFromClustering(clustering, 8))
+        && equal((await fromWorker.quantize(image, 8)).data, (await ac.quantizeFromClustering(image, clustering, 8)).data)
+        && (await fromWorker.quantize(image, 8)) instanceof ImageData;
     // A palette made in RGB (it knows that), and the same bytes without the tag.
     const custom = await ac.getPalette(image, 5);
     const plain = new Uint8Array(custom);
