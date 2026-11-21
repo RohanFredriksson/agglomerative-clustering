@@ -1,7 +1,7 @@
 import createWasmModule from './clustering.js';
 import {
     parseDither,
-    version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, imageHint,
+    version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
     latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge,
 } from './shared.js';
 
@@ -725,9 +725,12 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
 
 // The functions that read a clustering take no options: a clustering already says how it was made. An options object passed
 // anyway (say { colorSpace: 'oklab' }, expecting it to apply) would be silently ignored, so it is an error. undefined is fine.
+// `name` is how the caller wrote the call: the function, or the method (`clustering.getPalette`), whose message points at
+// the method form of mapping.
 const noOptions = (name, extra) => {
     if (extra.some((value) => value !== undefined)) {
-        throw fail('invalid-argument', `Invalid arguments: ${name} takes no options (a clustering already records its colour space, precision and cutoff). To map pixels with other options, use quantizeFromClustering.`, 'options');
+        const alternative = name.startsWith('clustering.') ? 'clustering.quantize' : 'quantizeFromClustering';
+        throw fail('invalid-argument', `Invalid arguments: ${name} takes no options (a clustering already records its colour space, precision and cutoff). To map pixels with other options, use ${alternative}.`, 'options');
     }
 };
 
@@ -772,17 +775,20 @@ export const getPalette = async (image, k, options) => {
 
 };
 
-export const getPaletteFromClustering = async (clustering, k, ...extra) => {
+// The cuts take the name they were called by, for their messages: the functions below, or the methods on Clustering.
+const cutPalette = async (name, clustering, k, extra) => {
 
     const header = readHeader(clustering);
     k = check(k);
-    noOptions('getPaletteFromClustering', extra);
+    noOptions(name, extra);
     clustering = held(clustering);
     const wasm = Module || await acquire();
 
     return markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
 
 };
+
+export const getPaletteFromClustering = (clustering, k, ...extra) => cutPalette('getPaletteFromClustering', clustering, k, extra);
 
 // The weight of each colour in the k-colour cut, in pixels (opacity-weighted), read from the clustering's records.
 const weightsOf = (wasm, clustering, header, k) => {
@@ -802,11 +808,11 @@ const needsWeights = (header) => {
 // A palette with the weight and share of the image of each of its colours, from one cut of one clustering, so the three
 // arrays line up by construction. Weights are pixels: fully transparent pixels count 0 and partly transparent ones in
 // proportion to their opacity, as in clustering. Shares are the weights divided by their total, so they sum to 1.
-export const getSwatchesFromClustering = async (clustering, k, ...extra) => {
+const cutSwatches = async (name, clustering, k, extra) => {
 
     const header = readHeader(clustering);
     k = check(k);
-    noOptions('getSwatchesFromClustering', extra);
+    noOptions(name, extra);
     needsWeights(header);
     clustering = held(clustering);
     const wasm = Module || await acquire();
@@ -821,6 +827,8 @@ export const getSwatchesFromClustering = async (clustering, k, ...extra) => {
 
 };
 
+export const getSwatchesFromClustering = (clustering, k, ...extra) => cutSwatches('getSwatchesFromClustering', clustering, k, extra);
+
 // The same for an image: clusters it, then cuts, like getPalette.
 export const getSwatches = async (image, k, options) => {
 
@@ -834,10 +842,10 @@ export const getSwatches = async (image, k, options) => {
 // What a clustering holds, read from its header and records without the WASM module. `mse[k - 1]` is the mean
 // squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,
 // weighted as in clustering, in 8-bit RGB values (RGB) or OKLab units (OKLab).
-export const getClusteringInfo = async (clustering, ...extra) => {
+const readInfo = async (name, clustering, extra) => {
 
     const header = readHeader(clustering);
-    noOptions('getClusteringInfo', extra);
+    noOptions(name, extra);
     needsWeights(header);
     const colors = header.merges + (clustering.length >= header.headerLength + 3 ? 1 : 0);
     const info = {formatVersion: header.version, colorSpace: colorSpaceName(header.colorSpace), precision: header.precision, transparent: header.transparent === 0 ? false : header.transparent, maxColors: colors, totalWeight: 0, mse: null, explained: null};
@@ -867,6 +875,8 @@ export const getClusteringInfo = async (clustering, ...extra) => {
     return info;
 
 };
+
+export const getClusteringInfo = (clustering, ...extra) => readInfo('getClusteringInfo', clustering, extra);
 
 export const quantize = async (image, k, options) => {
 
@@ -981,3 +991,6 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     return result;
 
 };
+
+// The methods on Clustering (shared.js) run through these. Only this entry fills the slot, so the methods need it loaded.
+setEngine({cut: cutPalette, cutSwatches, info: readInfo, quantizeFromClustering, quantizeToIndicesFromClustering});

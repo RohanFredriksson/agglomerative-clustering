@@ -221,11 +221,73 @@ export const markPalette = (bytes, colorSpace) => {
     Object.defineProperty(bytes, inspect, {value: paletteView});
     return bytes;
 };
+// Methods on a clustering: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and so on. They are
+// non-enumerable own properties, added with the tags, so a clustering stays a plain Uint8Array (`toEqual` and
+// `deepStrictEqual` against plain bytes still pass), and slices and clones drop them as they drop the tags. They run on the
+// calling thread with the main entry's functions, which the main entry puts in `engine` when it is evaluated; the worker
+// entry puts nothing there, so in a worker-only app the methods reject and say what to import. Each copy of this file (the
+// ES module and the CommonJS build) has its own slot, filled by the main entry of the same module system.
+let engine = null;
+export const setEngine = (value) => {engine = value;};
+// Each method's call shape and its function form, for messages.
+const methodNames = {
+    getPalette: ['getPalette(k)', 'getPaletteFromClustering(clustering, k)'],
+    getSwatches: ['getSwatches(k)', 'getSwatchesFromClustering(clustering, k)'],
+    getClusteringInfo: ['getClusteringInfo()', 'getClusteringInfo(clustering)'],
+    quantize: ['quantize(image, k)', 'quantizeFromClustering(image, clustering, k)'],
+    quantizeToIndices: ['quantizeToIndices(image, k)', 'quantizeToIndicesFromClustering(image, clustering, k)'],
+};
+// Checks the receiver (and that the main entry is loaded) before anything else, since it is written first.
+const receive = (name, receiver) => {
+    const [shape, form] = methodNames[name];
+    if (!isUint8Array(receiver)) {
+        throw fail('invalid-clustering', `Invalid clustering: ${name} was called without its clustering (this is ${receiver === undefined ? 'undefined' : describe(receiver)}). Call it as clustering.${shape}, or use ${form}.`, 'clustering');
+    }
+    readHeader(receiver);
+    if (engine === null) {
+        throw fail('wasm-load-failed', `Could not use the WebAssembly module: clustering.${name} runs on the calling thread with the main entry, 'agglomerative-clustering', which isn't loaded here (this clustering came from the worker entry, or from the other module system's copy of the package). Import the main entry in this thread, or call ${form} from 'agglomerative-clustering/worker', which runs in the worker.`);
+    }
+    return engine;
+};
+// The worker handle's quantize(k) maps the image it holds; this one takes the image first, so a number there is that mistake.
+const checkImageFirst = (name, image) => {
+    if (typeof image === 'number') {
+        throw fail('invalid-argument', `Invalid image: got ${image}. clustering.${name} takes the image first: clustering.${name}(image, k). (A worker handle's ${name}(k) maps the image it holds.)`, 'image');
+    }
+};
+// Plain functions (they read `this`) that return a promise and never throw: errors are rejections, as from the functions.
+const methods = {
+    getPalette(k, ...extra) {
+        try {return receive('getPalette', this).cut('clustering.getPalette', this, k, extra);} catch (error) {return Promise.reject(error);}
+    },
+    getSwatches(k, ...extra) {
+        try {return receive('getSwatches', this).cutSwatches('clustering.getSwatches', this, k, extra);} catch (error) {return Promise.reject(error);}
+    },
+    getClusteringInfo(...extra) {
+        try {return receive('getClusteringInfo', this).info('clustering.getClusteringInfo', this, extra);} catch (error) {return Promise.reject(error);}
+    },
+    quantize(image, k, options) {
+        try {
+            const use = receive('quantize', this);
+            checkImageFirst('quantize', image);
+            return use.quantizeFromClustering(image, this, k, options);
+        } catch (error) {return Promise.reject(error);}
+    },
+    quantizeToIndices(image, k, options) {
+        try {
+            const use = receive('quantizeToIndices', this);
+            checkImageFirst('quantizeToIndices', image);
+            return use.quantizeToIndicesFromClustering(image, this, k, options);
+        } catch (error) {return Promise.reject(error);}
+    },
+};
+const methodDescriptors = Object.fromEntries(Object.entries(methods).map(([name, value]) => [name, {value}]));
 export const markClustering = (bytes) => {
     // Made by this library (or checked by `Clustering`), so its checksum needn't be checked again (see readHeader).
     checked.add(bytes);
     Object.defineProperty(bytes, clusteringBrand, {value: true});
     Object.defineProperty(bytes, inspect, {value: clusteringView});
+    Object.defineProperties(bytes, methodDescriptors);
     return bytes;
 };
 
