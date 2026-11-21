@@ -179,10 +179,7 @@
   - three "Considered" entries;
   - the fixed-subset and swatch-helper notes;
   - the 4.0 additions, and the 4.0 note with its three ways out.
-- [ ] **PRINCIPLES:**
-  - the fourth naming rule;
-  - "within 3.x" on the function-names decision;
-  - the new settled decision, with its rejected alternatives.
+- [ ] **PRINCIPLES:** the new settled decision on how the methods work, with its rejected alternatives. (The naming rules, the methods rule and the `get…` decisions already landed before implementation; check that nothing in this branch contradicts them.)
 - [ ] **CLAUDE.md:** in the `Palette`/`Clustering` paragraph, replace "duplicated in `src/worker.js`" with the methods and the engine slot that only `index.js` fills, and say that methods forward to the function forms (so a change to a function form changes its method).
 - [ ] **Run:** `npx vitest run test/api.test.js > $S/t6.txt 2>&1; tail -10 $S/t6.txt`. It checks the links and anchors in the docs.
 - [ ] **Commit:** "Record the Clustering methods: changelog, roadmap, principles and CLAUDE.md".

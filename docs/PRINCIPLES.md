@@ -41,10 +41,12 @@ The mechanical conventions are in `CLAUDE.md`: option shapes, lists of names, er
 - **One way to say a thing,** now and after planned changes. An additive 3.x feature that would leave 4.0 with two ways to do one thing conflicts with the roadmap, even though it breaks nothing today.
   - Example: while designing 3.2.0, format names like `'bgra-premultiplied'` were turned down because 4.0 plans a `premultiplied` property.
 - **Names follow their family:**
-  - `get…` for the functions that cluster an image;
+  - `get…` for calls that read or cut what their arguments or receiver already hold (a cut of a clustering, its info, a handle's kept data); they never cluster, map or search. A call that does that work is named with a verb (`quantize`, `cluster`). Today's `getClustering`, `getPalette` and `getSwatches` predate this rule: they get verb names in 3.4.0 and lose the old ones in 4.0 (ROADMAP).
   - `…FromClustering` for those that take a stored clustering;
   - `…WithPalette` for those that take a palette.
+  - A method takes its function form's name without the suffix that names the receiver (`clustering.getPalette(k)`), so the two always share a stem and the rule above names both. Methods that manage a live object are named for the action (`release`, `terminate`).
   - A new name should read as a sibling of the names around it.
+- **Methods go where losing them costs nothing; results stay plain data.** A method goes on a live object (a worker, a handle), or on a tagged value whose bytes are the whole value, that its constructor restores, and that its operations take only in that form (`Clustering`). A function that also accepts a plain form (`PaletteLike`) gets no method, since most callers hold the plain form. Every such method has a function form in both entries, so a method is never the smaller shape. Results the library doesn't tag (`Swatches`, `ClusteringInfo`, indexed and mapped images) get no methods. A helper over a result is an option of the call that makes it, or a function.
 - **Mistakes are errors, never silent wrong output.** Inputs are validated, unknown option keys throw, and messages say what was received and what would work. Every error has a `code`, and an `argument` when it is about one.
 - **Both entries behave alike.** The worker entry takes the same arguments and gives the same results and errors as the main entry.
 - **Types describe what happens at run time.** Strict TypeScript catches what it can, but not at the cost of breaking existing code. Conditional parameter types break generic wrappers, and narrowed result types break a `let` reused across calls (both were prototyped).
@@ -56,7 +58,8 @@ The mechanical conventions are in `CLAUDE.md`: option shapes, lists of names, er
 These were argued through and decided. Reopen one only with new evidence, and only the maintainer reopens it.
 - **Palettes are flat, opaque RGB bytes in split order.** Alpha belongs to pixels: `quantize` passes it through, and indexed output uses a transparent entry. Palette entries with alpha were spiked (`spike/rgba-4d`) and dropped (ROADMAP "Later, if asked for").
 - **A bare `Uint8Array` is RGBA.** Other layouts are given as `{ data, format }`.
-- **The function names stay:** `get…`, `…FromClustering` and `…WithPalette`. `get…` was reviewed before 3.0.0 and kept: the cheap cuts are getters, the Promise says the heavy ones do work, it matches color-thief and node-vibrant, and `getPalette` was the most-used 2.x call.
+- **The 3.0 function names keep working through 3.x:** `get…`, `…FromClustering` and `…WithPalette`. `get…` was reviewed before 3.0.0 and kept then: the cheap cuts are getters, the Promise says the heavy ones do work, it matches color-thief and node-vibrant, and `getPalette` was the most-used 2.x call. Whether `…FromClustering` is deprecated in 4.0 is open (ROADMAP 4.0).
+- **`get…` means a read, from 4.0.** Reopened by the maintainer in 3.3.0, on evidence new since 3.0: the `Clustering` methods put `clustering.getPalette(k)` (about 0.4 ms) beside `getPalette(image, k)` (about 70 ms), and a planned subset search (150 ms to 1.5 s) would have taken `get…` too. The functions that cluster an image get verb names in 3.4.0 with the old names `@deprecated`, and 4.0 removes the old names (ROADMAP). Until then, no new name that clusters, maps or searches starts with `get`.
 - **`Palette` and `Clustering` are tagged plain `Uint8Array`s, made by plain functions,** not subclasses (a subclass breaks `toEqual(new Uint8Array(…))` in users' tests) and not `class`es.
 - **The default colour space stays `'rgb'`.**
 - **Indexed output:** `transparent` is `boolean | cutoff`, and `k` counts the transparent entry.
@@ -75,6 +78,6 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - a matte colour;
   - smoothing palettes across frames;
   - a function for choosing N colours from a fixed palette (a recipe in the guides covers it).
-- **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha.
+- **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.

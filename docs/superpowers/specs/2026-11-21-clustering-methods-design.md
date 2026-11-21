@@ -80,7 +80,7 @@ const restored = new Clustering(await db.get('clustering'));   // has the same f
    - No `info` getter, since a getter would have to be sync.
 3. **The names come from the families and match the handle's.**
    - **`getClusteringInfo`, not the roadmap's `getInfo`.** It is mechanical (drop `FromClustering`) and identical in the function, the handle and the method. The roadmap's line is corrected.
-   - **Not `palette(k)`:** `get…` is settled.
+   - **Not `palette(k)`:** the cuts are reads, so `get…` (PRINCIPLES "Names follow their family": `get…` names only reads and cuts, and work gets a verb).
    - **`quantize`'s signature:** `clustering.quantize(image, k, options)` has the one-shot `quantize`'s signature. `handle.quantize(k, options)` differs because the handle holds an image. The error for `clustering.quantize(16)` points at this (see Errors).
 4. **Methods run on the calling thread, with the main entry. Without the main entry, they reject.**
    - **The mechanism:**
@@ -165,7 +165,8 @@ All are made with `fail`. Argument names are unchanged: `'clustering'` for the r
 - **CHANGELOG, 3.3.0:**
   - the methods;
   - that `slice`, `subarray` and clones give plain bytes without them;
-  - that `Clustering`'s type gained members.
+  - that `Clustering`'s type gained members;
+  - that 4.0 renames `getClustering`, `getPalette` and `getSwatches`, and the new names arrive in 3.4.0.
 - **CLAUDE.md:** the `Palette`/`Clustering` paragraph no longer says "duplicated in `src/worker.js`". It describes the methods and the engine slot in `shared.js`, which only `index.js` fills.
 
 ## Record edits, in the same change
@@ -176,14 +177,13 @@ All are made with `fail`. Argument names are unchanged: `'clustering'` for the r
   - **"Considered":**
     - a `Palette` method, worded to leave item 5 open (Decision 6);
     - a lazy loader in the worker entry, and a global engine slot, each with its reasons (Decision 4).
-  - **"Choosing N colours from a fixed palette, built in"** reads: "a method on `Clustering` (`clustering.getSubset(palette, k)`, by the naming rule)".
+  - **"Choosing N colours from a fixed palette, built in"** reads: "a method on `Clustering` with a verb name, sharing its function form's stem (by the naming rule)".
   - **"Swatch helpers":** a `getSwatches` option would also come to `clustering.getSwatches`, which rejects options today.
   - **The 4.0 section:**
     - "and the `Clustering` methods" is added to "Narrowed result types", to premultiplied output and to "`alpha` and `transparent` … throw";
     - the note below is added.
 - **PRINCIPLES:**
-  - **"Names follow their family"** gets a fourth rule: methods on `Clustering` take the function's name without `FromClustering`.
-  - **The settled decision on function names** becomes "The function names stay within 3.x: …; whether `…FromClustering` is deprecated in 4.0 is open (ROADMAP 4.0)".
+  - **Already landed, before implementation** (decided with the maintainer while designing this release, and reviewed separately): the `get…` and method naming rules in "Names follow their family", the "Methods go where losing them costs nothing" rule, the settled decisions "The 3.0 function names keep working through 3.x" and "`get…` means a read, from 4.0", and ROADMAP item 5 (verb names, 3.4.0) with its 4.0 entry.
   - **A new settled decision:** methods on `Clustering` are non-enumerable own properties, async, run on the calling thread with the main entry of the same copy, and reject with `wasm-load-failed` without it. The rejected alternatives are listed with their reasons:
     - a prototype or subclass (fails `deepStrictEqual`);
     - a `.bytes` object (breaks storing);
