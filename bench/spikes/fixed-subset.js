@@ -22,6 +22,7 @@
 import { writeFile, mkdir } from 'fs/promises';
 import { performance } from 'perf_hooks';
 import { dirname } from 'path';
+import { pathToFileURL } from 'url';
 import {
     getClustering, getPaletteFromClustering, getSwatchesFromClustering,
     quantizeToIndicesWithPalette, quantizeWithPalette,
@@ -92,7 +93,7 @@ function halton(n) {
     return out;
 }
 
-const PALETTES = [
+export const PALETTES = [
     // Thread chart: many hues, lightness and chroma levels, a grey ramp (~380 colours).
     { name: 'threads', colours: chart({ hues: 24, lightness: [0.3, 0.42, 0.54, 0.66, 0.78, 0.9], chroma: [0.04, 0.09, 0.15, 0.22], greys: 12 }), n: [6, 12, 24, 40] },
     // Brick catalogue: coarse and uneven (~60 colours).
@@ -112,7 +113,7 @@ const d2 = (a, i, b, j) => {
     const dr = a[3 * i] - b[3 * j], dg = a[3 * i + 1] - b[3 * j + 1], db = a[3 * i + 2] - b[3 * j + 2];
     return dr * dr + dg * dg + db * db;
 };
-const pick = (F, ids) => {
+export const pick = (F, ids) => {
     const out = new Uint8Array(3 * ids.length);
     ids.forEach((f, i) => out.set(F.subarray(3 * f, 3 * f + 3), 3 * i));
     return out;
@@ -131,14 +132,14 @@ function nearestF(F, r, g, b) {
 
 // ---------------------------------------------------------------- methods
 
-async function topN(image, F, n) {
+export async function topN(image, F, n) {
     const { indices } = await quantizeToIndicesWithPalette(image, F);
     const counts = new Float64Array(count(F));
     for (const i of indices) {counts[i]++;}
     return [...counts.keys()].filter((i) => counts[i] > 0).sort((a, b) => counts[b] - counts[a]).slice(0, n);
 }
 
-async function recipe(clustering, F, n) {
+export async function recipe(clustering, F, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
         const cut = await getPaletteFromClustering(clustering, k);
@@ -200,7 +201,7 @@ function snapMerge(sw, F, n) {
 }
 
 /** Weighted p-median over swatches: greedy start (or `start`), then best-improvement swaps. */
-function search(sw, F, n, start) {
+export function search(sw, F, n, start) {
     const m = sw.weights.length, nf = count(F);
     const w = Float64Array.from(sw.weights);
     const D = new Float64Array(nf * m);   // D[f*m + i]
@@ -280,54 +281,57 @@ const time = async (fn) => {
     return [value, performance.now() - t];
 };
 
-const results = [];
-for await (const img of loadImages(SETS, { kodakLimit: KODAK_LIMIT })) {
-    if (img.name.startsWith('noise')) {continue;}
-    const image = { data: img.rgba, format: 'rgba', width: img.width };
-    const [clustering, clusterMs] = await time(() => getClustering(image));
-    const [sw, swMs] = await time(() => getSwatchesFromClustering(clustering, M));
-    const swSnap = await getSwatchesFromClustering(clustering, SNAP_M);
-    for (const { name: paletteName, colours: F, n: ns } of PALETTES) {
-        for (const n of ns) {
-            const methods = {
-                'top-n': () => topN(image, F, n),
-                recipe: () => recipe(clustering, F, n),
-                'snap-merge': () => snapMerge(swSnap, F, n),
-                search: () => search(sw, F, n),
-                'recipe+swap': async () => search(sw, F, n, await recipe(clustering, F, n)),
-            };
-            const [ceiling] = await Promise.all([score(image, F, [...Array(count(F)).keys()])]);
-            const row = { image: img.name, set: img.set, palette: paletteName, size: count(F), n, clusterMs, swatchMs: swMs, all: ceiling, methods: {} };
-            for (const [method, fn] of Object.entries(methods)) {
-                const [ids, ms] = await time(fn);
-                row.methods[method] = { ms, chosen: ids.length, ...(await score(image, F, ids)) };
+// Run only when executed directly, so fixed-subset-visual.js can import the methods.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+    const results = [];
+    for await (const img of loadImages(SETS, { kodakLimit: KODAK_LIMIT })) {
+        if (img.name.startsWith('noise')) {continue;}
+        const image = { data: img.rgba, format: 'rgba', width: img.width };
+        const [clustering, clusterMs] = await time(() => getClustering(image));
+        const [sw, swMs] = await time(() => getSwatchesFromClustering(clustering, M));
+        const swSnap = await getSwatchesFromClustering(clustering, SNAP_M);
+        for (const { name: paletteName, colours: F, n: ns } of PALETTES) {
+            for (const n of ns) {
+                const methods = {
+                    'top-n': () => topN(image, F, n),
+                    recipe: () => recipe(clustering, F, n),
+                    'snap-merge': () => snapMerge(swSnap, F, n),
+                    search: () => search(sw, F, n),
+                    'recipe+swap': async () => search(sw, F, n, await recipe(clustering, F, n)),
+                };
+                const [ceiling] = await Promise.all([score(image, F, [...Array(count(F)).keys()])]);
+                const row = { image: img.name, set: img.set, palette: paletteName, size: count(F), n, clusterMs, swatchMs: swMs, all: ceiling, methods: {} };
+                for (const [method, fn] of Object.entries(methods)) {
+                    const [ids, ms] = await time(fn);
+                    row.methods[method] = { ms, chosen: ids.length, ...(await score(image, F, ids)) };
+                }
+                results.push(row);
+                const cells = Object.entries(row.methods).map(([k, v]) => `${k} ${v.psnr.toFixed(2)}/${v.deltaE.toFixed(2)}`).join('  ');
+                console.log(`${img.name.padEnd(13)} ${paletteName.padEnd(9)} N=${String(n).padEnd(3)} ${cells}  (all ${ceiling.psnr.toFixed(2)})`);
             }
-            results.push(row);
-            const cells = Object.entries(row.methods).map(([k, v]) => `${k} ${v.psnr.toFixed(2)}/${v.deltaE.toFixed(2)}`).join('  ');
-            console.log(`${img.name.padEnd(13)} ${paletteName.padEnd(9)} N=${String(n).padEnd(3)} ${cells}  (all ${ceiling.psnr.toFixed(2)})`);
         }
     }
-}
 
-await mkdir(dirname(OUT), { recursive: true });
-await writeFile(OUT, JSON.stringify({ m: M, dither: DITHER, palettes: PALETTES.map((p) => ({ name: p.name, size: count(p.colours) })), results }, null, 1));
+    await mkdir(dirname(OUT), { recursive: true });
+    await writeFile(OUT, JSON.stringify({ m: M, dither: DITHER, palettes: PALETTES.map((p) => ({ name: p.name, size: count(p.colours) })), results }, null, 1));
 
-// Summary: per palette and N, mean PSNR gain over top-n and over recipe, mean ΔE, mean time.
-const groups = new Map();
-for (const r of results) {
-    const key = `${r.set === 'kodak' ? 'kodak' : r.image}|${r.palette}|${r.n}`;
-    if (!groups.has(key)) {groups.set(key, []);}
-    groups.get(key).push(r);
-}
-const methodNames = Object.keys(results[0].methods);
-console.log(`\nMean PSNR (dB) / mean ΔE2000 / mean ms (excluding the shared clustering, ${(results.reduce((s, r) => s + r.clusterMs, 0) / results.length).toFixed(0)} ms avg)`);
-console.log(['images', 'palette', 'size', 'N', 'all of F', ...methodNames].join('\t'));
-for (const [key, rows] of groups) {
-    const [images, palette, n] = key.split('|');
-    const cells = methodNames.map((mname) => {
-        const mean = (f) => rows.reduce((s, r) => s + f(r.methods[mname]), 0) / rows.length;
-        return `${mean((v) => v.psnr).toFixed(2)} / ${mean((v) => v.deltaE).toFixed(2)} / ${mean((v) => v.ms).toFixed(0)}`;
-    });
-    const all = (f) => (rows.reduce((s, r) => s + f(r.all), 0) / rows.length).toFixed(2);
-    console.log([images, palette, rows[0].size, n, `${all((v) => v.psnr)} / ${all((v) => v.deltaE)}`, ...cells].join('\t'));
+    // Summary: per palette and N, mean PSNR gain over top-n and over recipe, mean ΔE, mean time.
+    const groups = new Map();
+    for (const r of results) {
+        const key = `${r.set === 'kodak' ? 'kodak' : r.image}|${r.palette}|${r.n}`;
+        if (!groups.has(key)) {groups.set(key, []);}
+        groups.get(key).push(r);
+    }
+    const methodNames = Object.keys(results[0].methods);
+    console.log(`\nMean PSNR (dB) / mean ΔE2000 / mean ms (excluding the shared clustering, ${(results.reduce((s, r) => s + r.clusterMs, 0) / results.length).toFixed(0)} ms avg)`);
+    console.log(['images', 'palette', 'size', 'N', 'all of F', ...methodNames].join('\t'));
+    for (const [key, rows] of groups) {
+        const [images, palette, n] = key.split('|');
+        const cells = methodNames.map((mname) => {
+            const mean = (f) => rows.reduce((s, r) => s + f(r.methods[mname]), 0) / rows.length;
+            return `${mean((v) => v.psnr).toFixed(2)} / ${mean((v) => v.deltaE).toFixed(2)} / ${mean((v) => v.ms).toFixed(0)}`;
+        });
+        const all = (f) => (rows.reduce((s, r) => s + f(r.all), 0) / rows.length).toFixed(2);
+        console.log([images, palette, rows[0].size, n, `${all((v) => v.psnr)} / ${all((v) => v.deltaE)}`, ...cells].join('\t'));
+    }
 }
