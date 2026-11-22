@@ -1,0 +1,34 @@
+
+## eink: ΔE2000 after a linear-light blur (photos: min–max, mean), mean luminance vs original; dark ramp ΔE
+FS sRGB (library today)                ΔE 19.56–21.61 mean 20.79  Y 1.81–2.17  ramp ΔE 19.80 Y 6.79
+FS sRGB, oklab (library today)         ΔE 16.32–19.89 mean 17.74  Y 1.49–1.89  ramp ΔE 24.68 Y 9.10
+FS 8-bit recipe (library)              ΔE 4.67–7.15 mean 5.62  Y 1.00–1.00  ramp ΔE 9.96 Y 0.87
+FS linear, match linear                ΔE 4.67–7.20 mean 5.63  Y 1.00–1.00  ramp ΔE 9.74 Y 0.86
+FS linear, match linear LMS            ΔE 23.07–30.63 mean 26.48  Y 0.86–0.93  ramp ΔE 15.65 Y 0.76
+FS linear, match Y+opponent            ΔE 4.74–6.07 mean 5.19  Y 1.00–1.00  ramp ΔE 3.97 Y 0.85
+FS linear, match OKLab                 ΔE 23.13–26.50 mean 24.49  Y 1.31–1.47  ramp ΔE 25.24 Y 2.03
+Atkinson sRGB (library today)          ΔE 18.04–21.25 mean 19.84  Y 1.71–1.88  ramp ΔE 9.86 Y 1.64
+Atkinson 8-bit recipe (library)        ΔE 12.71–15.82 mean 14.30  Y 0.61–0.76  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match linear          ΔE 12.72–15.83 mean 14.30  Y 0.61–0.76  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match LMS             ΔE 21.83–30.60 mean 25.86  Y 0.80–0.90  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match Y+opp           ΔE 13.12–15.79 mean 14.53  Y 0.60–0.75  ramp ΔE 5.39 Y 0.00
+Atkinson linear, drop in sRGB          ΔE 18.20–23.34 mean 21.17  Y 0.42–0.58  ramp ΔE 5.39 Y 0.00
+Atkinson linear, OKLab                 ΔE 24.18–30.27 mean 27.00  Y 1.38–1.52  ramp ΔE 12.06 Y 0.62
+Atkinson linear, OKLab, drop in sRGB   ΔE 23.71–29.54 mean 26.08  Y 1.31–1.45  ramp ΔE 8.96 Y 0.18
+
+## bw: ΔE2000 after a linear-light blur (photos: min–max, mean), mean luminance vs original; dark ramp ΔE
+FS sRGB (library today)                ΔE 21.73–25.41 mean 23.48  Y 1.90–2.39  ramp ΔE 17.67 Y 8.37
+FS sRGB, oklab (library today)         ΔE 28.33–33.00 mean 31.24  Y 2.59–3.44  ramp ΔE 33.03 Y 18.35
+FS 8-bit recipe (library)              ΔE 10.54–18.40 mean 13.44  Y 0.79–0.92  ramp ΔE 4.00 Y 0.85
+FS linear, match linear                ΔE 10.72–18.56 mean 13.58  Y 0.79–0.91  ramp ΔE 3.97 Y 0.85
+FS linear, match linear LMS            ΔE 10.61–18.47 mean 13.58  Y 0.83–0.92  ramp ΔE 3.97 Y 0.85
+FS linear, match Y+opponent            ΔE 10.32–18.44 mean 13.39  Y 1.00–1.07  ramp ΔE 3.97 Y 0.85
+FS linear, match OKLab                 ΔE 12.93–21.46 mean 15.98  Y 1.47–1.84  ramp ΔE 3.79 Y 1.40
+Atkinson sRGB (library today)          ΔE 19.76–23.89 mean 21.36  Y 1.84–2.14  ramp ΔE 5.43 Y 1.92
+Atkinson 8-bit recipe (library)        ΔE 17.24–25.20 mean 19.99  Y 0.50–0.69  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match linear          ΔE 17.26–25.73 mean 20.20  Y 0.49–0.69  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match LMS             ΔE 17.22–25.18 mean 19.99  Y 0.52–0.69  ramp ΔE 5.39 Y 0.00
+Atkinson linear, match Y+opp           ΔE 17.02–23.81 mean 19.25  Y 0.59–0.76  ramp ΔE 5.39 Y 0.00
+Atkinson linear, drop in sRGB          ΔE 21.77–28.91 mean 25.87  Y 0.25–0.47  ramp ΔE 5.39 Y 0.00
+Atkinson linear, OKLab                 ΔE 13.39–20.77 mean 16.04  Y 1.53–1.81  ramp ΔE 5.39 Y 0.00
+Atkinson linear, OKLab, drop in sRGB   ΔE 13.13–20.37 mean 15.91  Y 1.42–1.66  ramp ΔE 5.39 Y 0.00
