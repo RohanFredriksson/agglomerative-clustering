@@ -30,10 +30,10 @@ export async function agglomerative(name = 'agglomerative', distPath = 'dist/ind
     const quantizeOptions = (image) => has ? [{ ...clusterOptions, ...(dither ? { dither, width: image.width } : {}) }] : [];
     return {
         name,
-        palette: (image, k) => ac.getPalette(image.rgba, k, ...cluster),
+        palette: (image, k) => (ac.buildPalette ?? ac.getPalette)(image.rgba, k, ...cluster),
         // The point of a hierarchical clustering: cluster once, then cut it at any k.
         paletteSweep: async (image, ks) => {
-            const clustering = await ac.getClustering(image.rgba, ...cluster);
+            const clustering = await (ac.buildClustering ?? ac.getClustering)(image.rgba, ...cluster);
             const palettes = [];
             for (const k of ks) {palettes.push(await ac.getPaletteFromClustering(clustering, k));}
             return palettes;

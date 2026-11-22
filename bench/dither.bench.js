@@ -8,7 +8,7 @@
 
 import { bench, describe } from 'vitest';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
-import { getPalette, quantizeWithPalette } from '../dist/index.mjs';
+import { buildPalette, quantizeWithPalette } from '../dist/index.mjs';
 
 const options = { iterations: 9, warmupIterations: 2, time: 0, warmupTime: 0 };
 const { rgba, width } = await getImageRgba(await ensureImage(KODAK_IMAGES.find((img) => img.name === 'kodim23')));
@@ -24,7 +24,7 @@ const methods = {
 };
 
 for (const k of [16, 64]) {
-    const palette = await getPalette(image, k);
+    const palette = await buildPalette(image, k);
     describe(`kodim23, ${k} colours`, () => {
         for (const [name, dither] of Object.entries(methods)) {
             bench(name, () => quantizeWithPalette(image, palette, { dither }), options);

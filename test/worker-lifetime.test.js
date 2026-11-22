@@ -23,14 +23,14 @@ await settle();
 results.base = threads();
 
 // Dropped after its calls.
-const used = async () => {for (let i = 0; i < 10; i++) {await createWorker().getPalette(image, 4);}};
+const used = async () => {for (let i = 0; i < 10; i++) {await createWorker().buildPalette(image, 4);}};
 await used();
 await settle();
 results.afterDropped = threads();
 
 // Dropped while its call runs: only the promise is kept, and the call still finishes.
 const running = async () => {
-    const calls = Array.from({ length: 4 }, () => createWorker().getPalette(image, 4));
+    const calls = Array.from({ length: 4 }, () => createWorker().buildPalette(image, 4));
     await settle();
     return (await Promise.all(calls)).every((palette) => palette.length === 12);
 };

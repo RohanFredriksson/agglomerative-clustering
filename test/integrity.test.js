@@ -4,7 +4,7 @@
 // them the records are checked as they are replayed, so they can never give more than k colours or an error curve of NaN.
 import { describe, it, expect } from 'vitest';
 import {
-    Clustering, getClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering,
+    Clustering, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering,
     quantizeToIndicesFromClustering,
 } from '../dist/index.mjs';
 
@@ -14,7 +14,7 @@ for (let p = 0; p < width * height; p++) {
     const x = p % width, y = Math.floor(p / width);
     image.set([x * 40, y * 40, (x * y * 7) & 255, 255], p * 4);
 }
-const clustering = await getClustering(image);
+const clustering = await buildClustering(image);
 const colors = (await getClusteringInfo(clustering)).maxColors;
 
 const crc32 = (bytes) => {
@@ -43,7 +43,7 @@ const uses = (bytes, k) => [
 describe('checksums', () => {
 
     it('every clustering carries the CRC-32 of its bytes', async () => {
-        for (const made of [clustering, await getClustering(image, { colorSpace: 'oklab', precision: 5 }), await getClustering(new Uint8Array(0))]) {
+        for (const made of [clustering, await buildClustering(image, { colorSpace: 'oklab', precision: 5 }), await buildClustering(new Uint8Array(0))]) {
             expect(storedChecksum(made)).toBe(crc32(made));
         }
     });

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 // Only the worker entry: vitest gives each test file its own module graph, so the main entry isn't loaded here until the
 // last test imports it. Nothing above that import may load '../dist/index.mjs'.
-import { getClustering, terminate } from '../dist/worker.mjs';
+import { buildClustering, terminate } from '../dist/worker.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 afterAll(() => terminate());
@@ -22,7 +22,7 @@ const forms = {
 describe('methods on Clustering without the main entry', () => {
 
     it('reject with wasm-load-failed, and say what to import or call instead', async () => {
-        const clustering = await getClustering(image);
+        const clustering = await buildClustering(image);
         for (const [name, [call, form]] of Object.entries(forms)) {
             const error = await call(clustering).then(() => null, (reason) => reason);
             expect(error, name).not.toBeNull();
@@ -34,7 +34,7 @@ describe('methods on Clustering without the main entry', () => {
     });
 
     it('still check their receiver first, and the handle-shaped quantize(k), before the main entry', async () => {
-        const clustering = await getClustering(image);
+        const clustering = await buildClustering(image);
         const error = await clustering.getPalette.call(undefined, 4).then(() => null, (reason) => reason);
         expect(error.code).toBe('invalid-clustering');
         const shape = await clustering.quantize(16).then(() => null, (reason) => reason);
@@ -42,7 +42,7 @@ describe('methods on Clustering without the main entry', () => {
     });
 
     it('work once the main entry is imported, on clusterings made before', async () => {
-        const clustering = await getClustering(image);
+        const clustering = await buildClustering(image);
         const main = await import('../dist/index.mjs');
         expect(await clustering.getPalette(4)).toEqual(await main.getPaletteFromClustering(clustering, 4));
         expect(await clustering.quantize(image, 4)).toEqual(await main.quantizeFromClustering(image, clustering, 4));
@@ -64,7 +64,7 @@ describe('methods on Clustering across module systems', () => {
     it('in CommonJS: reject with only the worker entry, work once the main entry is required', () => {
         const output = run(`${prelude}
             const worker = require('./dist/worker.cjs');
-            const clustering = await worker.getClustering(image);
+            const clustering = await worker.buildClustering(image);
             const before = await outcome(clustering.getPalette(4));
             require('./dist/index.cjs');
             const after = await outcome(clustering.getPalette(4));
@@ -78,8 +78,8 @@ describe('methods on Clustering across module systems', () => {
         const output = run(`${prelude}
             const worker = require('./dist/worker.cjs');
             await import('./dist/index.mjs');
-            const fromCjs = await worker.getClustering(image);
-            const fromEsm = await (await import('./dist/worker.mjs')).getClustering(image);
+            const fromCjs = await worker.buildClustering(image);
+            const fromEsm = await (await import('./dist/worker.mjs')).buildClustering(image);
             console.log(await outcome(fromCjs.getPalette(4)), await outcome(fromEsm.getPalette(4)));
             await worker.terminate();
             await (await import('./dist/worker.mjs')).terminate();

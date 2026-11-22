@@ -5,7 +5,7 @@ import { createCanvas } from 'canvas';
 import { writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { quantize, getPalette } from '../../dist/index.mjs';
+import { quantize, buildPalette } from '../../dist/index.mjs';
 
 const OUTPUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), 'output', 'synthetic');
 mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -232,61 +232,61 @@ describe('visual — quantize outputs', () => {
 describe('visual — palette outputs', () => {
 
     it('gradient palette k=4', async () => {
-        const palette = await getPalette(gradient, 4);
+        const palette = await buildPalette(gradient, 4);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-gradient-k4', paletteToRGBA(palette, 4), 4, 64);
     });
 
     it('gradient palette k=8', async () => {
-        const palette = await getPalette(gradient, 8);
+        const palette = await buildPalette(gradient, 8);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-gradient-k8', paletteToRGBA(palette, 8), 8, 64);
     });
 
     it('gradient palette k=16', async () => {
-        const palette = await getPalette(gradient, 16);
+        const palette = await buildPalette(gradient, 16);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-gradient-k16', paletteToRGBA(palette, 16), 16, 64);
     });
 
     it('gradient palette k=32', async () => {
-        const palette = await getPalette(gradient, 32);
+        const palette = await buildPalette(gradient, 32);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-gradient-k32', paletteToRGBA(palette, 32), 32, 64);
     });
 
     it('gradient palette k=64', async () => {
-        const palette = await getPalette(gradient, 64);
+        const palette = await buildPalette(gradient, 64);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-gradient-k64', paletteToRGBA(palette, 64), 64, 64);
     });
 
     it('rainbow palette k=4', async () => {
-        const palette = await getPalette(rainbow, 4);
+        const palette = await buildPalette(rainbow, 4);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-rainbow-k4', paletteToRGBA(palette, 4), 4, 64);
     });
 
     it('rainbow palette k=8', async () => {
-        const palette = await getPalette(rainbow, 8);
+        const palette = await buildPalette(rainbow, 8);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-rainbow-k8', paletteToRGBA(palette, 8), 8, 64);
     });
 
     it('rainbow palette k=16', async () => {
-        const palette = await getPalette(rainbow, 16);
+        const palette = await buildPalette(rainbow, 16);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-rainbow-k16', paletteToRGBA(palette, 16), 16, 64);
     });
 
     it('rainbow palette k=32', async () => {
-        const palette = await getPalette(rainbow, 32);
+        const palette = await buildPalette(rainbow, 32);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-rainbow-k32', paletteToRGBA(palette, 32), 32, 64);
     });
 
     it('rainbow palette k=64', async () => {
-        const palette = await getPalette(rainbow, 64);
+        const palette = await buildPalette(rainbow, 64);
         expect(palette).toBeInstanceOf(Uint8Array);
         writeOutput('palette-rainbow-k64', paletteToRGBA(palette, 64), 64, 64);
     });

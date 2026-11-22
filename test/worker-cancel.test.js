@@ -31,22 +31,22 @@ const timed = async (promise) => {
 };
 
 // How long the whole clustering takes when nothing interrupts it.
-const whole = await timed(worker.getClustering(big));
+const whole = await timed(worker.buildClustering(big));
 
 describe('a worker call with a signal or onProgress', () => {
 
     it('gives the same results, and reports progress', async () => {
         const calls = [];
         const options = { onProgress: (value) => calls.push(value), signal: new AbortController().signal };
-        expect(await worker.getClustering(small, options)).toEqual(await ac.getClustering(small));
-        expect(await worker.getPalette(small, 4, options)).toEqual(await ac.getPalette(small, 4));
+        expect(await worker.buildClustering(small, options)).toEqual(await ac.buildClustering(small));
+        expect(await worker.buildPalette(small, 4, options)).toEqual(await ac.buildPalette(small, 4));
         expect(await worker.quantize(small, 4, { ...options, dither: true })).toEqual(await ac.quantize(small, 4, { dither: true, width: 16 }));
         expect(await worker.quantizeToIndices(small, 4, options)).toEqual(await ac.quantizeToIndices(small, 4));
         expect(calls[0]).toBe(0);
         expect(calls[calls.length - 1]).toBe(1);
 
         const bigCalls = [];
-        const clustering = await worker.getClustering(big, { onProgress: (value) => bigCalls.push(value) });
+        const clustering = await worker.buildClustering(big, { onProgress: (value) => bigCalls.push(value) });
         expect(same(clustering, whole.value)).toBe(true);
         expect(bigCalls.length).toBeGreaterThan(10);
         for (let i = 1; i < bigCalls.length; i++) {expect(bigCalls[i]).toBeGreaterThan(bigCalls[i - 1]);}
@@ -57,21 +57,21 @@ describe('a worker call with a signal or onProgress', () => {
         // The test only means something if the clustering is long enough to cancel (it takes ~1 s here).
         expect(whole.ms).toBeGreaterThan(150);
         const controller = new AbortController();
-        const running = timed(worker.getClustering(big, { signal: controller.signal, onProgress: (value) => {if (value > 0.3) {controller.abort();}} }));
+        const running = timed(worker.buildClustering(big, { signal: controller.signal, onProgress: (value) => {if (value > 0.3) {controller.abort();}} }));
         const { error } = await running;
         expect(error.name).toBe('AbortError');
         // A small call right behind it finishes long before the clustering would have.
-        const next = await timed(worker.getPalette(small, 4));
-        expect(next.value).toEqual(await ac.getPalette(small, 4));
+        const next = await timed(worker.buildPalette(small, 4));
+        expect(next.value).toEqual(await ac.buildPalette(small, 4));
         expect(next.ms).toBeLessThan(whole.ms * 0.4);
     }, 60000);
 
     it('rejects at once with the reason, and a queued call that is cancelled never runs', async () => {
         const start = performance.now();
-        const first = worker.getClustering(big);
+        const first = worker.buildClustering(big);
         const controller = new AbortController();
-        const second = worker.getClustering(big, { signal: controller.signal });
-        const third = worker.getPalette(small, 4);
+        const second = worker.buildClustering(big, { signal: controller.signal });
+        const third = worker.buildPalette(small, 4);
         const reason = new Error('no longer needed');
         controller.abort(reason);
         await expect(second).rejects.toBe(reason);
@@ -82,7 +82,7 @@ describe('a worker call with a signal or onProgress', () => {
         // The cancelled clustering never ran: the three calls took about one clustering, not two.
         expect(elapsed).toBeLessThan(whole.ms * 1.6);
         expect(same(firstResult, whole.value)).toBe(true);
-        expect(thirdResult).toEqual(await ac.getPalette(small, 4));
+        expect(thirdResult).toEqual(await ac.buildPalette(small, 4));
     }, 60000);
 
     it('skips cancelled calls queued behind mapping calls, which run in one piece', async () => {
@@ -108,7 +108,7 @@ describe('a worker call with a signal or onProgress', () => {
             const controller = new AbortController();
             controller.abort();
             const image = small.data.slice();
-            await expect(moving.getClustering(image, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+            await expect(moving.buildClustering(image, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
             expect(image.length).toBe(small.data.length);
             await expect(moving.cluster(image, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
         } finally {
@@ -121,7 +121,7 @@ describe('a worker call with a signal or onProgress', () => {
         await expect(worker.cluster(big, { signal: controller.signal, onProgress: (v) => {if (v > 0.2) {controller.abort();}} })).rejects.toMatchObject({ name: 'AbortError' });
 
         const handle = await worker.cluster(small, { signal: new AbortController().signal });
-        expect(await handle.quantize(4, { signal: new AbortController().signal })).toEqual(await worker.quantizeFromClustering(small, await ac.getClustering(small), 4));
+        expect(await handle.quantize(4, { signal: new AbortController().signal })).toEqual(await worker.quantizeFromClustering(small, await ac.buildClustering(small), 4));
         await expect(handle.quantize(4, { onProgress: () => {} })).rejects.toMatchObject({ code: 'invalid-argument' });
         const aborted = new AbortController();
         aborted.abort();
@@ -133,11 +133,11 @@ describe('a worker call with a signal or onProgress', () => {
 
     it('fails the call with the error of an onProgress that throws, and stops the worker, like the main thread', async () => {
         const start = performance.now();
-        const error = await worker.getClustering(big, { onProgress: (value) => {if (value > 0.2) {throw new Error('boom');}} }).catch((e) => e);
+        const error = await worker.buildClustering(big, { onProgress: (value) => {if (value > 0.2) {throw new Error('boom');}} }).catch((e) => e);
         expect(error.message).toBe('boom');
         // The clustering was cancelled, not run to the end: the next call is not kept waiting for it.
-        const next = await timed(worker.getPalette(small, 4));
-        expect(next.value).toEqual(await ac.getPalette(small, 4));
+        const next = await timed(worker.buildPalette(small, 4));
+        expect(next.value).toEqual(await ac.buildPalette(small, 4));
         expect(performance.now() - start).toBeLessThan(whole.ms * 0.6);
         // a clustering call's callback that throws fails the call, through a handle too
         await expect(worker.cluster(big, { onProgress: () => {throw new Error('boom again');} })).rejects.toThrow('boom again');
@@ -160,9 +160,9 @@ describe('a worker call with a signal or onProgress', () => {
     });
 
     it('validates signal and onProgress on this side', async () => {
-        await expect(worker.getClustering(small, { signal: {} })).rejects.toMatchObject({ code: 'invalid-argument' });
-        await expect(worker.getClustering(small, { signal: { aborted: false } })).rejects.toMatchObject({ code: 'invalid-argument' });
-        await expect(worker.getPalette(small, 4, { onProgress: 3 })).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(worker.buildClustering(small, { signal: {} })).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(worker.buildClustering(small, { signal: { aborted: false } })).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(worker.buildPalette(small, 4, { onProgress: 3 })).rejects.toMatchObject({ code: 'invalid-argument' });
         const handle = await worker.cluster(small);
         await expect(handle.quantize(4, { signal: 'no' })).rejects.toMatchObject({ code: 'invalid-argument' });
         await handle.release();

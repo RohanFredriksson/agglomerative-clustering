@@ -7,7 +7,7 @@
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { createCanvas } from 'canvas';
-import { getClustering, getSwatchesFromClustering, quantizeWithPalette } from '../../dist/index.mjs';
+import { buildClustering, getSwatchesFromClustering, quantizeWithPalette } from '../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../fixtures/kodak.js';
 import { measure } from '../lib/metrics.js';
 import { PALETTES, pick, topN, recipe, search } from './fixed-subset.js';
@@ -34,7 +34,7 @@ for (const c of CASES) {
     const { rgba, width, height } = await getImageRgba(await ensureImage(KODAK_IMAGES.find((k) => k.name === c.image)));
     const image = { data: rgba, format: 'rgba', width };
     const F = PALETTES.find((p) => p.name === c.palette).colours;
-    const clustering = await getClustering(image);
+    const clustering = await buildClustering(image);
     const sw = await getSwatchesFromClustering(clustering, 1024);
     const all = [...Array(F.length / 3).keys()];
     const chosen = {

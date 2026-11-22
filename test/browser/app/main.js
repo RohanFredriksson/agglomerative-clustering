@@ -78,6 +78,11 @@ async function run() {
     const handle = await worker.cluster(image, { colorSpace: 'oklab' });
     const clustering = await ac.getClustering(image, { colorSpace: 'oklab' });
     checks.handleClusteringMatchesMain = equal(await handle.getClustering(), clustering);
+    // This app also runs against published versions, so it calls the names every 3.x has. Where the version has 3.4.0's
+    // names, they must be the same functions, after bundling too.
+    checks.buildNamesAreTheSameFunctions = typeof ac.buildPalette !== 'function'
+        || (ac.buildClustering === ac.getClustering && ac.buildPalette === ac.getPalette && ac.buildSwatches === ac.getSwatches
+            && worker.buildPalette === worker.getPalette && equal(await ac.buildPalette(image, 5), await ac.getPalette(image, 5)));
     let cuts = true;
     for (const k of [2, 4, 16, 64]) {
         cuts = cuts && equal(await handle.getPalette(k), await ac.getPaletteFromClustering(clustering, k));

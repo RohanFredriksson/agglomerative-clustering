@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 // These tests cover the ImageData input path, which is polyfilled in test/setup.js
 // via the `canvas` package so it works in Node.js.
@@ -45,18 +45,18 @@ const threeColorImageData = new ImageData(threeColorData, 3, 1);
 describe('getClustering with ImageData', () => {
 
     it('accepts ImageData and returns a Uint8Array', async () => {
-        const result = await getClustering(solidRedImageData);
+        const result = await buildClustering(solidRedImageData);
         expect(result).toBeInstanceOf(Uint8Array);
         expect(result.length).toBeGreaterThan(0);
     });
 
     it('returns 25 bytes for a solid image (1 unique color): 22-byte header + root colour', async () => {
-        const result = await getClustering(solidRedImageData);
+        const result = await buildClustering(solidRedImageData);
         expect(result.length).toBe(25);
     });
 
     it('returns 52 bytes for a 2-color image: header + root + one 21-byte merge, padded to 7 more than a multiple of 9', async () => {
-        const result = await getClustering(twoColorImageData);
+        const result = await buildClustering(twoColorImageData);
         expect(result.length).toBe(52);
     });
 
@@ -65,24 +65,24 @@ describe('getClustering with ImageData', () => {
 describe('getPalette with ImageData', () => {
 
     it('accepts ImageData and returns a Uint8Array', async () => {
-        const result = await getPalette(solidRedImageData, 1);
+        const result = await buildPalette(solidRedImageData, 1);
         expect(result).toBeInstanceOf(Uint8Array);
     });
 
     it('returns 3 bytes for k = 1', async () => {
-        const result = await getPalette(solidRedImageData, 1);
+        const result = await buildPalette(solidRedImageData, 1);
         expect(result.length).toBe(3);
     });
 
     it('returns the correct color for a solid red image', async () => {
-        const result = await getPalette(solidRedImageData, 1);
+        const result = await buildPalette(solidRedImageData, 1);
         expect(result[0]).toBe(255); // R
         expect(result[1]).toBe(0);   // G
         expect(result[2]).toBe(0);   // B
     });
 
     it('returns k * 3 bytes when the image has enough unique colors', async () => {
-        const result = await getPalette(twoColorImageData, 2);
+        const result = await buildPalette(twoColorImageData, 2);
         expect(result.length).toBe(6);
     });
 
@@ -126,20 +126,20 @@ describe('quantize with ImageData', () => {
 describe('quantizeFromClustering with ImageData', () => {
 
     it('ImageData in → ImageData out', async () => {
-        const clustering = await getClustering(solidRedImageData);
+        const clustering = await buildClustering(solidRedImageData);
         const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
         expect(result).toBeInstanceOf(ImageData);
     });
 
     it('output preserves dimensions', async () => {
-        const clustering = await getClustering(solidRedImageData);
+        const clustering = await buildClustering(solidRedImageData);
         const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
         expect(result.width).toBe(solidRedImageData.width);
         expect(result.height).toBe(solidRedImageData.height);
     });
 
     it('output data is Uint8ClampedArray', async () => {
-        const clustering = await getClustering(solidRedImageData);
+        const clustering = await buildClustering(solidRedImageData);
         const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
         expect(result.data).toBeInstanceOf(Uint8ClampedArray);
     });
@@ -149,20 +149,20 @@ describe('quantizeFromClustering with ImageData', () => {
 describe('quantizeWithPalette with ImageData', () => {
 
     it('ImageData in → ImageData out', async () => {
-        const palette = await getPalette(solidRedImageData, 1);
+        const palette = await buildPalette(solidRedImageData, 1);
         const result = await quantizeWithPalette(solidRedImageData, palette);
         expect(result).toBeInstanceOf(ImageData);
     });
 
     it('output preserves dimensions', async () => {
-        const palette = await getPalette(solidRedImageData, 1);
+        const palette = await buildPalette(solidRedImageData, 1);
         const result = await quantizeWithPalette(solidRedImageData, palette);
         expect(result.width).toBe(solidRedImageData.width);
         expect(result.height).toBe(solidRedImageData.height);
     });
 
     it('output data is Uint8ClampedArray', async () => {
-        const palette = await getPalette(solidRedImageData, 1);
+        const palette = await buildPalette(solidRedImageData, 1);
         const result = await quantizeWithPalette(solidRedImageData, palette);
         expect(result.data).toBeInstanceOf(Uint8ClampedArray);
     });
@@ -202,7 +202,7 @@ describe('quantize deterministic result with ImageData', () => {
     });
 
     it('getPalette returns exactly {(5,0,0), (255,0,0)} for k=2', async () => {
-        const palette = await getPalette(threeColorImageData, 2);
+        const palette = await buildPalette(threeColorImageData, 2);
         expect(palette.length).toBe(6);
         // palette order is non-deterministic (unordered_set), so check as a set
         const colors = new Set();

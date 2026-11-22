@@ -27,17 +27,17 @@ describe('a worker gives the same results as the main entry', () => {
 
     it('for clusterings, palettes, weights and info', async () => {
         const options = { colorSpace: 'oklab', precision: 6 };
-        const clustering = await worker.getClustering(image, options);
-        expect(clustering).toEqual(await ac.getClustering(image, options));
-        expect(await worker.getPalette(image, 12, options)).toEqual(await ac.getPalette(image, 12, options));
+        const clustering = await worker.buildClustering(image, options);
+        expect(clustering).toEqual(await ac.buildClustering(image, options));
+        expect(await worker.buildPalette(image, 12, options)).toEqual(await ac.buildPalette(image, 12, options));
         expect(await worker.getPaletteFromClustering(clustering, 7)).toEqual(await ac.getPaletteFromClustering(clustering, 7));
         expect(await worker.getSwatchesFromClustering(clustering, 7)).toEqual(await ac.getSwatchesFromClustering(clustering, 7));
         expect(await worker.getClusteringInfo(clustering)).toEqual(await ac.getClusteringInfo(clustering));
     });
 
     it('for mapped images, in the type they were given', async () => {
-        const clustering = await ac.getClustering(image);
-        const palette = await ac.getPalette(image, 5);
+        const clustering = await ac.buildClustering(image);
+        const palette = await ac.buildPalette(image, 5);
         expect(await worker.quantize(image, 8)).toEqual(await ac.quantize(image, 8));
         expect(await worker.quantize(raw, 8, { dither: true })).toEqual(await ac.quantize(raw, 8, { dither: true }));
         expect(await worker.quantizeFromClustering(raw, clustering, 6)).toEqual(await ac.quantizeFromClustering(raw, clustering, 6));
@@ -51,8 +51,8 @@ describe('a worker gives the same results as the main entry', () => {
     });
 
     it('for indexed output', async () => {
-        const clustering = await ac.getClustering(image);
-        const palette = await ac.getPalette(image, 5);
+        const clustering = await ac.buildClustering(image);
+        const palette = await ac.buildPalette(image, 5);
         expect(await worker.quantizeToIndices(raw, 300, { transparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { transparent: true }));
         expect(await worker.quantizeToIndicesFromClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesFromClustering(image, clustering, 6));
         expect(await worker.quantizeToIndicesWithPalette(image, palette)).toEqual(await ac.quantizeToIndicesWithPalette(image, palette));
@@ -60,14 +60,14 @@ describe('a worker gives the same results as the main entry', () => {
 
     it('for many calls at once', async () => {
         const ks = Array.from({ length: 20 }, (_, i) => i + 1);
-        const results = await Promise.all(ks.map((k) => worker.getPalette(image, k)));
-        for (const [i, k] of ks.entries()) {expect(results[i]).toEqual(await ac.getPalette(image, k));}
+        const results = await Promise.all(ks.map((k) => worker.buildPalette(image, k)));
+        for (const [i, k] of ks.entries()) {expect(results[i]).toEqual(await ac.buildPalette(image, k));}
     });
 
     it('and the same errors', async () => {
         await expect(worker.quantize(image, 0)).rejects.toThrow('Invalid k');
-        await expect(worker.getClustering({ data: image, format: 'argb' })).rejects.toThrow('Invalid format');
-        await expect(worker.getClustering(null)).rejects.toThrow('Invalid image');
+        await expect(worker.buildClustering({ data: image, format: 'argb' })).rejects.toThrow('Invalid format');
+        await expect(worker.buildClustering(null)).rejects.toThrow('Invalid image');
         await expect(worker.getPaletteFromClustering(new Uint8Array(5), 2)).rejects.toThrow('Invalid clustering');
         await expect(worker.quantize(image, 4, { colour: 'rgb' })).rejects.toThrow("Invalid option 'colour'");
     });
@@ -78,7 +78,7 @@ describe('handles', () => {
 
     it('keep an image and its clustering in the worker', async () => {
         const handle = await worker.cluster(image, { colorSpace: 'oklab' });
-        const clustering = await ac.getClustering(image, { colorSpace: 'oklab' });
+        const clustering = await ac.buildClustering(image, { colorSpace: 'oklab' });
         expect(await handle.getClustering()).toEqual(clustering);
         expect(await handle.getPalette(9)).toEqual(await ac.getPaletteFromClustering(clustering, 9));
         expect(await handle.getSwatches(9)).toEqual(await ac.getSwatchesFromClustering(clustering, 9));
@@ -101,7 +101,7 @@ describe('handles', () => {
 
     it('map the kept image with a palette of your own', async () => {
         const handle = await worker.cluster(image);
-        const palette = await ac.getPalette(image, 6);
+        const palette = await ac.buildPalette(image, 6);
         expect(await handle.quantizeWithPalette(palette, { dither: true, width })).toEqual(await ac.quantizeWithPalette(image, palette, { dither: true, width }));
         expect(await handle.quantizeToIndicesWithPalette(palette, { transparent: true })).toEqual(await ac.quantizeToIndicesWithPalette(image, palette, { transparent: true }));
         await expect(handle.quantizeWithPalette(new Uint8Array(4))).rejects.toMatchObject({ code: 'invalid-argument' });
@@ -162,11 +162,11 @@ describe('createWorker', () => {
 
     it('copies inputs by default, and transfers them with transfer: true', async () => {
         const copy = image.slice();
-        await worker.getPalette(copy, 4);
+        await worker.buildPalette(copy, 4);
         expect(copy.length).toBe(image.length);
         const moving = createWorker({ transfer: true });
         const transferred = image.slice();
-        expect(await moving.getPalette(transferred, 4)).toEqual(await ac.getPalette(image, 4));
+        expect(await moving.buildPalette(transferred, 4)).toEqual(await ac.buildPalette(image, 4));
         expect(transferred.length).toBe(0);
         await moving.terminate();
     });
@@ -178,12 +178,12 @@ describe('createWorker', () => {
         shared.set(image);
         shared.set(image, image.length);
         const [first, second] = [shared.subarray(0, image.length), shared.subarray(image.length)];
-        expect(await moving.getPalette(first, 4)).toEqual(await ac.getPalette(image, 4));
+        expect(await moving.buildPalette(first, 4)).toEqual(await ac.buildPalette(image, 4));
         expect([first.length, second.length]).toEqual([image.length, image.length]);
         expect(second).toEqual(image);
         // Small Node Buffers share a pool that can never be transferred.
         const pooled = Buffer.from(image.subarray(0, 64));
-        expect(await moving.getPalette(pooled, 2)).toEqual(await ac.getPalette(new Uint8Array(pooled), 2));
+        expect(await moving.buildPalette(pooled, 2)).toEqual(await ac.getPalette(new Uint8Array(pooled), 2));
         expect(pooled.length).toBe(64);
         // A buffer of its own is still transferred, also when kept by a handle.
         const own = image.slice();
@@ -193,24 +193,24 @@ describe('createWorker', () => {
     });
 
     it('stops and restarts the shared worker', async () => {
-        const first = await dropIn.getPalette(image, 4);
+        const first = await dropIn.buildPalette(image, 4);
         await dropIn.terminate();
         await dropIn.terminate();
-        expect(await dropIn.getPalette(image, 4)).toEqual(first);
+        expect(await dropIn.buildPalette(image, 4)).toEqual(first);
         await dropIn.terminate();
     });
 
     it('reports arguments that cannot be sent to the worker as invalid, and keeps working', async () => {
         for (const bad of [
-            () => worker.getPalette(image, 4, { bogus: () => {} }),
-            () => worker.getPalette(image, Symbol('k')),
+            () => worker.buildPalette(image, 4, { bogus: () => {} }),
+            () => worker.buildPalette(image, Symbol('k')),
             () => worker.getPalette(Promise.resolve(image), 4),
             () => worker.quantizeWithPalette(image, class Palette {}),
             () => worker.getPaletteFromClustering({ toJSON() {}, fn() {} }, 2),
         ]) {
             await expect(bad()).rejects.toMatchObject({ code: 'invalid-argument' });
         }
-        expect(await worker.getPalette(image, 4)).toEqual(await ac.getPalette(image, 4));
+        expect(await worker.buildPalette(image, 4)).toEqual(await ac.buildPalette(image, 4));
     });
 
     it('validates its options', () => {
@@ -226,7 +226,7 @@ describe('createWorker', () => {
         process.on('warning', listen);
         try {
             const starting = createWorker();
-            const calls = Array.from({ length: 12 }, () => starting.getPalette(image, 4).catch((error) => error.code));
+            const calls = Array.from({ length: 12 }, () => starting.buildPalette(image, 4).catch((error) => error.code));
             const first = starting.terminate();
             const second = starting.terminate();
             expect(second).toBe(first);
@@ -242,10 +242,10 @@ describe('createWorker', () => {
     it('rejects calls waiting on a terminated worker, and later calls', async () => {
         const doomed = createWorker();
         await doomed.init();
-        const waiting = expect(doomed.getPalette(image, 4)).rejects.toThrow('terminated');
+        const waiting = expect(doomed.buildPalette(image, 4)).rejects.toThrow('terminated');
         await doomed.terminate();
         await waiting;
-        await expect(doomed.getPalette(image, 4)).rejects.toThrow('terminated');
+        await expect(doomed.buildPalette(image, 4)).rejects.toThrow('terminated');
     });
 
 });
@@ -261,8 +261,8 @@ describe('the drop-in module', () => {
     });
 
     it('never keeps a Node process alive while idle', async () => {
-        const script = `import { getPalette } from ${JSON.stringify(new URL('../dist/worker.mjs', import.meta.url).href)};
-            console.log((await getPalette(new Uint8Array([1, 2, 3, 255, 200, 100, 0, 255]), 2)).length);`;
+        const script = `import { buildPalette } from ${JSON.stringify(new URL('../dist/worker.mjs', import.meta.url).href)};
+            console.log((await buildPalette(new Uint8Array([1, 2, 3, 255, 200, 100, 0, 255]), 2)).length);`;
         const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { timeout: 20_000 });
         expect(stdout.trim()).toBe('6');
     }, 30_000);

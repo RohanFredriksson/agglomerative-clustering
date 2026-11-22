@@ -35,6 +35,7 @@ try {
 
     writeFileSync(join(project, 'esm.mjs'), `${pixels}
 import { version, getPalette, getSwatches, quantizeToIndices, Palette, Clustering, getClustering, init } from 'agglomerative-clustering';
+import * as all from 'agglomerative-clustering';
 await init();
 if (version !== ${JSON.stringify(installed)}) throw new Error('version is ' + version);
 const palette = await getPalette(px, 4, { colorSpace: 'oklab' });
@@ -42,6 +43,9 @@ if (!(palette instanceof Palette) || palette.colorSpace !== 'oklab' || palette.l
 const { shares } = await getSwatches(px, 4);
 if (Math.abs(shares.reduce((a, b) => a + b) - 1) > 1e-9) throw new Error('shares');
 if (!((await getClustering(px)) instanceof Clustering)) throw new Error('clustering');
+// The names before 3.4.0 work in every 3.x; where this version has the 3.4.0 names, they are the same functions.
+if (typeof all.buildPalette === 'function' && (all.buildPalette !== getPalette || all.buildClustering !== getClustering || all.buildSwatches !== getSwatches
+    || String(await all.buildPalette(px, 4)) !== String(await getPalette(px, 4)))) throw new Error('build names');
 const indexed = await quantizeToIndices(px, 4);
 console.log('version ' + version + ', ' + palette.length / 3 + ' colours, ' + indexed.indices.length + ' indices');
 `);
@@ -59,6 +63,7 @@ const worker = createWorker();
 const handle = await worker.cluster(px, { colorSpace: 'oklab' });
 const palette = await handle.getPalette(4);
 await handle.release();
+if (typeof worker.buildPalette === 'function' && worker.buildPalette !== worker.getPalette) throw new Error('worker build names');
 await worker.terminate();
 if (palette.colorSpace !== 'oklab') throw new Error('palette lost its colour space in the worker');
 console.log(palette.length / 3 + ' colours from a worker thread');
