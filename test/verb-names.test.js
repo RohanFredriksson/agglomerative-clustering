@@ -31,6 +31,14 @@ describe('each old name is the new function', () => {
         }
     });
 
+    it('in the worker entry\'s CommonJS build', () => {
+        const cjs = require('../dist/worker.cjs');
+        for (const [old, now] of pairs) {
+            expect(typeof cjs[now], now).toBe('function');
+            expect(cjs[old], old).toBe(cjs[now]);
+        }
+    });
+
     it('on a worker instance', async () => {
         const worker = workerEntry.createWorker();
         try {

@@ -12,6 +12,15 @@ test('loads the WebAssembly module and clusters', async () => {
     expect((await getPaletteFromClustering(clustering, 2)).length).toBe(6);
 });
 
+test('the 3.4.0 names are the old names, in Jest\'s module system too', async () => {
+    const ac = require('agglomerative-clustering');
+    for (const [old, now] of [['getClustering', 'buildClustering'], ['getPalette', 'buildPalette'], ['getSwatches', 'buildSwatches']]) {
+        expect(typeof ac[now]).toBe('function');
+        expect(ac[old]).toBe(ac[now]);
+    }
+    expect(Array.from(await ac.buildPalette(image, 3))).toEqual(Array.from(await ac.getPalette(image, 3)));
+});
+
 test('maps pixels', async () => {
     expect((await quantize(image, 2)).length).toBe(image.length);
     const { indices } = await quantizeToIndicesWithPalette(image, [255, 0, 0, 0, 0, 255]);
