@@ -23,6 +23,7 @@ The caller gives you:
 
 ## What to check
 
+- **Is it simple to use correctly? (Check this first; PRINCIPLES "API design", first bullet.)** From a user's seat, before reading the explanation: what would they guess each new name does, and what would they guess wrongly? List every rule a user must learn to use it: settings it forbids, settings it overrides, settings whose meaning it changes, combinations that throw. Several rules mean the shape is wrong, however consistent it is; say so, and look for a shape in which the wrong combination can't be written rather than one that rejects it. A useful feature doesn't excuse a messy API (PRINCIPLES test 6).
 - **Is each new public name needed?** List every new export, option, option value, type, error code and image field. For each, ask whether an existing one could carry it, or whether a smaller form would do (a value before an option, an option before a function).
 - **Names:**
   - Do they read as siblings of the names around them? `get…`, `…FromClustering` and `…WithPalette` are the families.
@@ -65,7 +66,7 @@ Keep it short. Start with one line, `Verdict: aligned`, `Verdict: concerns` or `
 ```
 
 - **conflict:** breaks a written convention, a settled decision or the compatibility promise.
-- **concern:** the design could be clearly better, or a misuse would pass silently.
+- **concern:** the design could be clearly better, a misuse would pass silently, or users must learn rules to use it.
 - **note:** polish.
 
 Rules:
