@@ -1,6 +1,20 @@
 # Migrating
 
-Upgrading from an earlier major version. The full list of changes in every release is in the [CHANGELOG](../CHANGELOG.md).
+Upgrading from an earlier major version, and replacing names deprecated along the way. The full list of changes in every release is in the [CHANGELOG](../CHANGELOG.md).
+
+## Deprecated in 3.4 (removed in 4.0)
+
+3.4.0 gave the three functions that cluster an image verb names, so that from 4.0 a name starting with `get` only reads or cuts what it is given. The old names keep working through 3.x and are removed in 4.0.
+
+| Before 3.4 | From 3.4 |
+|---|---|
+| `getClustering(image, options?)` | `buildClustering(image, options?)` |
+| `getPalette(image, k, options?)` | `buildPalette(image, k, options?)` |
+| `getSwatches(image, k, options?)` | `buildSwatches(image, k, options?)` |
+
+- **Find and replace; nothing else changes.** Each old name is the same function as its new one (`getPalette === buildPalette`), in both entries, both module systems and on every `createWorker()` worker, with the same arguments, options, results and errors. TypeScript marks the old names deprecated, so editors strike them through and lint rules such as `@typescript-eslint/no-deprecated` flag them.
+- **Leave the methods alone.** `clustering.getPalette(k)`, `clustering.getSwatches(k)`, `clustering.getClusteringInfo()` and a worker handle's `handle.getClustering()`, `handle.getPalette(k)` and `handle.getSwatches(k)` keep their names: they read what the clustering or handle already holds. So do `getPaletteFromClustering`, `getSwatchesFromClustering` and `getClusteringInfo`. Replace only calls that take an image first.
+- **Update mock factories and spies with the call sites.** The two names are one function, but a mock replaces only the name it lists: a `vi.mock` factory that gives `getPalette` leaves `buildPalette` undefined, so code that moves to the new name sees `undefined is not a function`.
 
 ## From 2.x to 3.0
 

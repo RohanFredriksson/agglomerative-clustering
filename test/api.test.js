@@ -57,10 +57,24 @@ const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
 const clustering = await main.getClustering(image);
 const palette = await main.getPalette(image, 3);
 const callArguments = {
+    buildClustering: [image], buildPalette: [image, 3], buildSwatches: [image, 3],
     getClustering: [image], getPalette: [image, 3], getSwatches: [image, 3], quantize: [image, 3], quantizeFromClustering: [image, clustering, 3],
     quantizeWithPalette: [image, palette], quantizeToIndices: [image, 3], quantizeToIndicesFromClustering: [image, clustering, 3],
     quantizeToIndicesWithPalette: [image, palette],
 };
+// The names the functions that cluster an image had before 3.4.0, and their new names. The old names are the same
+// functions, documented in one line of docs/api.md ("Deprecated names"), and 4.0 removes them (and this map).
+const deprecated = { getClustering: 'buildClustering', getPalette: 'buildPalette', getSwatches: 'buildSwatches' };
+const deprecatedLine = /^Deprecated names:[^\n]*$/m;
+
+// Calls of the old names in prose and examples. The methods on a clustering or a handle keep the names, so these tell the
+// functions apart by shape: a bare name (an import, a mock factory, a call), a dotted getPalette or getSwatches call with
+// two or more arguments (a worker's), or a dotted getClustering with an argument.
+const staleCalls = [/(?<![.\w])get(Clustering|Palette|Swatches)\b/, /\.get(Palette|Swatches)\([^,)]*,/, /\.getClustering\([^)\s]/];
+const staleCall = (line) => staleCalls.some((pattern) => pattern.test(line));
+// Other libraries' functions of the same name, which the guides compare with this one.
+const otherLibraries = ['color-thief `getPalette(image, n)`'];
+
 const enforcedKeys = async (name) => {
     const error = await main[name](...callArguments[name], { __unknown__: true }).catch((e) => e);
     return (error.message.match(/expected one of (.*)\./) || [])[1].split(', ').sort();
@@ -78,6 +92,18 @@ describe('the declarations', () => {
     it('declare exactly the values each entry exports at run time', () => {
         expect(valueExports('index.d.ts')).toEqual(Object.keys(main).sort());
         expect(valueExports('worker.d.ts')).toEqual(Object.keys(worker).sort());
+    });
+
+    it('mark exactly the old names deprecated, and never the methods that keep them', () => {
+        const isDeprecated = (symbol) => resolved(symbol).getJsDocTags(checker).some((tag) => tag.name === 'deprecated');
+        for (const fileName of ['index.d.ts', 'worker.d.ts']) {
+            const marked = moduleExports(fileName).filter(isDeprecated).map((symbol) => symbol.name).sort();
+            expect(marked, fileName).toEqual(Object.keys(deprecated).sort());
+        }
+        const membersMarked = (interfaceName) => checker.getPropertiesOfType(declaredType(interfaceName === 'Clustering' ? 'index.d.ts' : 'worker.d.ts', interfaceName)).filter(isDeprecated).map((p) => p.name).sort();
+        expect(membersMarked('AgglomerativeWorker')).toEqual(Object.keys(deprecated).sort());
+        expect(membersMarked('ClusteringHandle')).toEqual([]);
+        expect(membersMarked('Clustering')).toEqual([]);
     });
 
     it('document every exported declaration, so hovering shows what it does', () => {
@@ -181,7 +207,7 @@ const parameterNamesOfMember = (interfaceName, member) => {
 describe('the API reference (docs/api.md)', () => {
 
     it('documents every function', () => {
-        for (const name of [...Object.keys(worker), 'createWorker']) {
+        for (const name of [...Object.keys(worker), 'createWorker'].filter((name) => !(name in deprecated))) {
             // Functions are documented as `name(`; constants such as `version` have a heading of their own.
             const entry = typeof worker[name] === 'function' && !/^[A-Z]/.test(name) ? '`' + name + '(' : '`' + name + '`';
             expect(api.includes(entry), `docs/api.md has no entry for ${name}`).toBe(true);
@@ -190,7 +216,7 @@ describe('the API reference (docs/api.md)', () => {
 
     it('lists, for each function, exactly the options it accepts', async () => {
         const checked = [];
-        for (const name of Object.keys(callArguments)) {
+        for (const name of Object.keys(callArguments).filter((name) => !(name in deprecated))) {
             const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
             expect(section, `docs/api.md has a section for ${name}`).not.toBeNull();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
@@ -199,7 +225,34 @@ describe('the API reference (docs/api.md)', () => {
             expect(listed, `Options listed for ${name}`).toEqual(await enforcedKeys(name));
             checked.push(name);
         }
-        expect(checked).toEqual(expect.arrayContaining(['getClustering', 'getPalette', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette']));
+        expect(checked).toEqual(expect.arrayContaining(['buildClustering', 'buildPalette', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette']));
+    });
+
+    it('lists each deprecated name in its own line, as the same function as its new name', () => {
+        const line = api.match(deprecatedLine);
+        expect(line, 'docs/api.md has a "Deprecated names:" line').not.toBeNull();
+        for (const [old, now] of Object.entries(deprecated)) {
+            expect(line[0].includes('`' + old + '`'), `the line names ${old}`).toBe(true);
+            expect(line[0].includes('`' + now + '`'), `the line names ${now}`).toBe(true);
+            expect(main[old], old).toBe(main[now]);
+            expect(worker[old], `worker ${old}`).toBe(worker[now]);
+        }
+    });
+
+    it('stale-call patterns flag the old functions and spare the names that stay', () => {
+        const flagged = ['getPalette(photo, 128)', 'worker.getPalette(frame, 8, { signal })', "import { getPalette } from 'agglomerative-clustering'", '{ getPalette: vi.fn() }', 'ac.getClustering(image)', 'call getSwatches once'];
+        const spared = ['handle.getClustering()', 'clustering.getPalette(k)', 'handle.getSwatches(k)', 'getPaletteFromClustering(c, k)', 'getClusteringInfo(c)', 'worker.cluster(image)', 'buildPalette(image, k)', 'getSwatchesFromClustering(clustering, 8)'];
+        for (const line of flagged) {expect(staleCall(line), line).toBe(true);}
+        for (const line of spared) {expect(staleCall(line), line).toBe(false);}
+    });
+
+    it('call the functions that cluster by their 3.4.0 names', () => {
+        for (const file of [...userDocs, 'docs/how-it-works.md']) {
+            let text = file === 'docs/api.md' ? read(file).replace(deprecatedLine, '') : read(file);
+            for (const phrase of otherLibraries) {text = text.replaceAll(phrase, '');}
+            const stale = text.split('\n').filter(staleCall);
+            expect(stale, `${file} still calls an old name`).toEqual([]);
+        }
     });
 
     it('does not use names that no longer exist', () => {

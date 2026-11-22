@@ -106,7 +106,7 @@
 </main>
 
 <script type="module">
-import { getClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { buildClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 const $ = (id) => document.getElementById(id);
 const original = $('original'), result = $('result');
@@ -144,7 +144,7 @@ async function recluster() {
     if (!image) {return;}
     const options = { colorSpace: $('colorSpace').value, precision: Number($('precision').value) };
     const start = performance.now();
-    clustering = await getClustering(image, options);
+    clustering = await buildClustering(image, options);
     $('statCluster').textContent = ms(performance.now() - start);
     remap();
 }

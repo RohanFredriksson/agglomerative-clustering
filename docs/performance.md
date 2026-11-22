@@ -28,7 +28,7 @@ const run = async (method, ...args) => {
 // 'close' (reply.raw, or res in Express), not the request's.
 const controller = new AbortController();
 reply.raw.on('close', () => {if (!reply.raw.writableFinished) {controller.abort();}});
-const swatches = await run('getSwatches', image, 8, { precision: 6, signal: controller.signal });
+const swatches = await run('buildSwatches', image, 8, { precision: 6, signal: controller.signal });
 ```
 
 - **Small images wait behind large ones** in a shared pool. If you serve both, give large uploads a pool of their own.

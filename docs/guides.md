@@ -16,14 +16,14 @@ Recipes by task. For what each function and option does, see the [API reference]
 ## Swatches and choosing a palette size
 
 ```js
-import { getSwatches, getClustering } from 'agglomerative-clustering';
+import { buildSwatches, buildClustering } from 'agglomerative-clustering';
 
 // Colours with their share of the image, in one call
-const { palette, weights, shares } = await getSwatches(image, 8);
+const { palette, weights, shares } = await buildSwatches(image, 8);
 // palette: flat RGB bytes, weights: pixels per colour, shares: each colour's share of the image (they sum to 1)
 
 // Or cluster once and cut it as often as you like (well under a millisecond each)
-const clustering = await getClustering(image);
+const clustering = await buildClustering(image);
 const eight = await clustering.getSwatches(8);
 
 // The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
@@ -78,14 +78,14 @@ const png = encode({
 One palette for a whole animation (or a set of images that should share colours) keeps colours from flickering between frames. Cluster a sample of the frames as one image, by putting their pixels end to end, then map every frame with that clustering:
 
 ```js
-import { getClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
 // `frames` are { data, format: 'rgba', width, height }. Every 5th one, end to end, is one image to cluster.
 const sample = frames.filter((_, i) => i % 5 === 0);
 const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length, 0));
 let offset = 0;
 for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
-const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
+const clustering = await buildClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
 const shared = await clustering.getPalette(255);   // 255 colours, and room for the transparent entry
 
 for (const frame of frames) {
@@ -117,7 +117,7 @@ const onFrame = () => {
   if (!busy) {
     busy = true;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    worker.getPalette(ctx.getImageData(0, 0, canvas.width, canvas.height), 6, { precision: 6 })
+    worker.buildPalette(ctx.getImageData(0, 0, canvas.width, canvas.height), 6, { precision: 6 })
       .then(show, console.error)
       .finally(() => {busy = false;});
   }
@@ -161,7 +161,7 @@ video.requestVideoFrameCallback(onFrame);
     while (pending.length >= size) {
       const frame = { data: pending.subarray(0, size), format: 'bgrx', width: 160, height: 90 };
       pending = pending.subarray(size);
-      onPalette(await worker.getPalette(frame, 8, { precision: 6 }));
+      onPalette(await worker.buildPalette(frame, 8, { precision: 6 }));
     }
   }
   ```
@@ -229,7 +229,7 @@ The rest is in the [worker entry reference](api.md#worker-entry).
 Cluster an image once, keep the clustering, and cut it on later visits without clustering again. Storage keeps the bytes but drops the type, so give them back their type with `new Clustering(bytes)`, which also checks them:
 
 ```js
-import { getClustering, Clustering, isCodedError } from 'agglomerative-clustering';
+import { buildClustering, Clustering, isCodedError } from 'agglomerative-clustering';
 import { get, set } from 'idb-keyval';   // IndexedDB; any store that keeps a Uint8Array works the same way
 
 // The clustering of `image` with `options`, from storage if a good copy is there.
@@ -243,7 +243,7 @@ async function clusteringFor(key, image, options) {
       if (!isCodedError(error) || (error.code !== 'invalid-clustering' && error.code !== 'unsupported-version')) {throw error;}
     }
   }
-  const clustering = await getClustering(image, options);
+  const clustering = await buildClustering(image, options);
   await set(key, clustering);             // stores the bytes
   return clustering;
 }
@@ -275,9 +275,9 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
   - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image; it grows with the number of threads times N: about 50 ms for 6 of 584 threads, 150 ms for 12 and 350 ms for 24, and up to 1.5 s for 40 of 1000. The loop is your own code, so the library's worker entry can't move it off the main thread: for large charts in a browser, run both functions in a Web Worker of your own that imports the main entry. Skip it when `chooseThreads` is good enough.
 
   ```js
-  import { getClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+  import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
-  const clustering = await getClustering(image);
+  const clustering = await buildClustering(image);
   const chosen = await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 12));
   // chosen: indices into `threads` (flat RGB). Swapped-in threads take their predecessors' places, so the order is arbitrary.
 
@@ -343,11 +343,11 @@ For placeholders, theming or colour search over a site's images, one call each i
 - **Downscale first.** 512 px on the long side changes the palette by about 2% (256 px by 6%, 64 px by half) and is 3 to 8 times faster; with `precision: 6` a photo takes about 20 ms.
 - **Use a few workers, not one per image.** The main entry runs one call at a time, so throughput comes from several `createWorker()`s (the [pool](performance.md#servers)). About four is the sweet spot; more mostly adds memory.
 - **Cache palettes, not clusterings:** 1,500 palettes are about half a megabyte of JSON, and 1,500 clusterings are 0.2 to 1 GB. Key the cache by the image's content hash, the library's version and your options (a bug fix in a minor release can change a palette: see [stability](stability.md)).
-- **A dominant colour** is the heaviest swatch of `getSwatches(image, 5)` (sort by `shares`). These colours are averages of regions, so they are muted: for vivid accents, a library built for them (node-vibrant, color-thief) suits better.
+- **A dominant colour** is the heaviest swatch of `buildSwatches(image, 5)` (sort by `shares`). These colours are averages of regions, so they are muted: for vivid accents, a library built for them (node-vibrant, color-thief) suits better.
 
 ## Converting the output
 
-Palettes are flat RGB bytes, the compact form; each format an encoder or UI wants is a line or two away. Given a `palette` (and `weights` and `shares` from `getSwatches`):
+Palettes are flat RGB bytes, the compact form; each format an encoder or UI wants is a line or two away. Given a `palette` (and `weights` and `shares` from `buildSwatches`):
 
 ```js
 // [[r, g, b], …]: what gifenc, fast-png, color-thief and libimagequant use
@@ -389,11 +389,11 @@ const rankedTransparentIndex = transparentIndex === null ? null : rank[transpare
 The library answers which colours an image has and how much of each; choosing among them (a vivid accent, text that contrasts with a background) is colour arithmetic that a colour library already does well. With [culori](https://culorijs.org/):
 
 ```js
-import { getSwatches } from 'agglomerative-clustering';
+import { buildSwatches } from 'agglomerative-clustering';
 import { converter, wcagContrast, formatHex } from 'culori';
 
 const oklch = converter('oklch');
-const { palette, shares } = await getSwatches(image, 12);
+const { palette, shares } = await buildSwatches(image, 12);
 const swatches = Array.from(shares, (share, i) => {
   const color = { mode: 'rgb', r: palette[3 * i] / 255, g: palette[3 * i + 1] / 255, b: palette[3 * i + 2] / 255 };
   return { hex: formatHex(color), share, ...oklch(color) };          // l (0-1), c (chroma), h (hue)
@@ -414,11 +414,11 @@ This library takes **decoded pixels**, not files, URLs or image elements: decode
 
 | You used | Use | Notes |
 |---|---|---|
-| color-thief `getColor(image)` | `getSwatches(image, 5, { precision: 6 })`, then the entry with the largest `shares` | The heaviest cluster's average colour. |
-| color-thief `getPalette(image, n)` | `getPalette(image, n, { precision: 6 })` | Flat bytes; `[[r, g, b], …]` is one line ([Converting the output](#converting-the-output)). |
-| get-image-colors | `getSwatches(image, n)`, and hex strings from the palette | Sort by `shares` for most-used first. |
-| node-vibrant's named swatches (Vibrant, Muted, …) | `getSwatches(image, 16)`, then choose by saturation and lightness yourself ([Picking colours from swatches](#picking-colours-from-swatches)) | There are no named roles: these colours are averages, more muted than node-vibrant's picks. |
-| image-q `buildPalette` and `applyPalette` | `quantize(image, k, { dither })`, or `getPalette` then `quantizeWithPalette` | Same idea, one call; `quantizeToIndices` for indexed output. |
+| color-thief `getColor(image)` | `buildSwatches(image, 5, { precision: 6 })`, then the entry with the largest `shares` | The heaviest cluster's average colour. |
+| color-thief `getPalette(image, n)` | `buildPalette(image, n, { precision: 6 })` | Flat bytes; `[[r, g, b], …]` is one line ([Converting the output](#converting-the-output)). |
+| get-image-colors | `buildSwatches(image, n)`, and hex strings from the palette | Sort by `shares` for most-used first. |
+| node-vibrant's named swatches (Vibrant, Muted, …) | `buildSwatches(image, 16)`, then choose by saturation and lightness yourself ([Picking colours from swatches](#picking-colours-from-swatches)) | There are no named roles: these colours are averages, more muted than node-vibrant's picks. |
+| image-q `buildPalette` and `applyPalette` | `quantize(image, k, { dither })`, or `buildPalette` then `quantizeWithPalette` | Same idea, one call; `quantizeToIndices` for indexed output. |
 
 - **Expect different colours.** The palettes are the ones with the least error, not the most vivid or the most frequent, so they won't match what you had (a mean ΔE2000 of 12 to 14 between matched colours, against color-thief, get-image-colors and node-vibrant, in testing).
 - **Speed.** color-thief and node-vibrant sample pixels, so they are quick on photos; the exact default here is several times slower at photo sizes. With `precision: 6` it was level with color-thief at 12 megapixels; downscaling helps both. Against image-q it was 4 to 6 times faster.

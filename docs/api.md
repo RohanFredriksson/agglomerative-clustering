@@ -18,7 +18,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`. A `Palette` knows the colour space it was made in.
 - **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours. The one exception: indexed output always keeps a colour for the visible pixels, so `k = 1` with a transparent entry gives 2.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
-- **clustering and mapping**: "clustering" functions build a clustering (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
+- **clustering and mapping**: "clustering" functions build a clustering (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
 ## Input
 
@@ -102,7 +102,7 @@ Every function that takes an image also takes an optional last argument of optio
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see [Cancelling and progress](#cancelling-and-progress). |
 | `onProgress` | clustering | `(fraction) => void` | Reports 0 to 1 as the clustering runs; see [Cancelling and progress](#cancelling-and-progress). |
 
-Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `getClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions`, so give each call the options it takes, or keep one object per stage.
+Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `buildClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions`, so give each call the options it takes, or keep one object per stage.
 
 **Option shapes.** An option is a plain value (a boolean, a number or a string) while it has one setting. An option with several settings, or with settings that apply to only some of its values, also takes an object, and its plain values stay valid as shorthands for that object: `dither: 'ordered'` is `dither: { method: 'ordered' }`. Unknown keys inside the object are an `invalid-argument` error, as unknown options are. Options that describe the image rather than how to process it (`width`) stay top-level, and so do `signal` and `onProgress`.
 
@@ -110,7 +110,7 @@ Pass an ordinary object. It is copied once before use (its enumerable properties
 
 ```js
 // Perceptual palettes for a photo, quickly
-const palette = await getPalette(photo, 128, { colorSpace: 'oklab', precision: 6 });
+const palette = await buildPalette(photo, 128, { colorSpace: 'oklab', precision: 6 });
 
 // Retro look: 8 colours, dithered
 const retro = await quantize(imageData, 8, { dither: true });
@@ -236,9 +236,9 @@ const restored = new Palette(bytes, colorSpace);   // maps exactly as the palett
 A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results, defaults and errors, with the same `code` and `argument`. Three messages name the method instead, because the mistake is in how it was called: a method called without its clustering, `clustering.quantize(16)` (the image goes first), and options passed to a cut. The receiver is checked first, as it is written first.
 
 ```js
-import { getClustering, Clustering } from 'agglomerative-clustering';
+import { buildClustering, Clustering } from 'agglomerative-clustering';
 
-const clustering = await getClustering(image, { colorSpace: 'oklab' });   // the expensive step, done once
+const clustering = await buildClustering(image, { colorSpace: 'oklab' });   // the expensive step, done once
 const palette = await clustering.getPalette(8);                            // well under a millisecond, for any k
 const { explained } = await clustering.getClusteringInfo();
 const reduced = await clustering.quantize(image, 16, { dither: 'atkinson' });
@@ -246,11 +246,11 @@ const reduced = await clustering.quantize(image, 16, { dither: 'atkinson' });
 const restored = new Clustering(await db.get('clustering'));               // stored bytes get the methods back
 ```
 
-- **Where they are:** on every clustering the library returns (from either entry, and from a worker handle's `getClustering()`), and on `new Clustering(bytes)`. `slice`, `subarray`, clones and storage give plain bytes without them, as they drop the tags: wrap stored bytes with `new Clustering(bytes)`, or pass them to the function form, which takes plain bytes.
+- **Where they are:** on every clustering the library returns (from either entry, and from a worker's `handle.getClustering()`), and on `new Clustering(bytes)`. `slice`, `subarray`, clones and storage give plain bytes without them, as they drop the tags: wrap stored bytes with `new Clustering(bytes)`, or pass them to the function form, which takes plain bytes.
 - **Where they run:** on the calling thread, with the main entry. With only the worker entry imported, they reject with `wasm-load-failed` (see [Worker entry](#worker-entry)).
-- **They are async,** like the functions. Once the module is loaded, a cut settles at once, so a slider can call `getPalette` on every input event.
+- **They are async,** like the functions. Once the module is loaded, a cut settles at once, so a slider can call `clustering.getPalette(k)` on every input event.
 - **Only clusterings made by 3.3 or later have them.** A clustering from an older copy of the package (say a dependency that still pins 3.2) is tagged but has no methods, so `clustering.getPalette` is `undefined` there; wrap it with this copy's `new Clustering(bytes)`, or use the function form.
-- **In tests,** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on the method itself, on a real clustering: `vi.spyOn(clustering, 'getPalette')` (or `jest.spyOn`).
+- **In tests,** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on `clustering.getPalette` itself, on a real clustering, with `vi.spyOn` (or `jest.spyOn`).
 
 | Method | Function form | Arguments of the function form |
 |---|---|---|
@@ -283,11 +283,11 @@ Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal
 
 ## Cancelling and progress
 
-Every function that takes an image accepts `signal`; the ones that cluster (`getClustering`, `getPalette`, `getSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
+Every function that takes an image accepts `signal`; the ones that cluster (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
 
 ```js
 const controller = new AbortController();
-const clustering = await getClustering(image, {
+const clustering = await buildClustering(image, {
   signal: controller.signal,                       // controller.abort() cancels it
   onProgress: (fraction) => bar.value = fraction,  // 0 to 1
 });
@@ -334,7 +334,7 @@ Messages are for people and may change. The worker entry fails the same way as t
 
 `agglomerative-clustering/worker` exports every function of the main entry, run in one shared worker started on first use, plus `terminate()`, which stops it (the next call starts a new one), and `createWorker(options?)`, which starts a worker of your own. A worker has every function as a method, plus:
 
-- **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `getClustering()`, `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
+- **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `handle.getClustering()`, `handle.getPalette(k)`, `handle.getSwatches(k)`, `getClusteringInfo()`, `quantize(k, options?)`, `quantizeToIndices(k, options?)`, `quantizeWithPalette(palette, options?)` and `quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
 - **`terminate()`** stops the worker and rejects the calls still waiting. `await using worker = createWorker()` calls it at the end of the block.
 
 **A `Clustering`'s methods run on the calling thread,** using the main entry: import `agglomerative-clustering` in that thread (and call its `init({ wasm })` if you set where the module comes from), or they reject with `wasm-load-failed`. To cut or map a clustering off the thread, use this entry's functions (`getPaletteFromClustering(clustering, k)` and the rest) or a `worker.cluster()` handle.
@@ -365,26 +365,26 @@ Both entries ship declarations, checked in CI under strict mode with `nodenext` 
 
 ## Functions
 
-### `getClustering(image, options?): Promise<Clustering>`
-Builds the colour hierarchy for an image. Cut it with its [methods](#clustering-methods) (`clustering.getPalette(k)`, `clustering.quantize(image, k)`) or the `…FromClustering` functions to get any number of palettes without clustering again.
+### `buildClustering(image, options?): Promise<Clustering>`
+Builds the colour hierarchy for an image. Cut it with its [methods](#clustering-methods) (`clustering.getPalette(k)`, `clustering.quantize(image, k)`) or the `…FromClustering` functions to get any number of palettes without clustering again. In the worker entry, `buildClustering(image)` returns the clustering's bytes, as here; `worker.cluster(image)` instead keeps the image and its clustering in the worker and returns a handle.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 
 ### `getPaletteFromClustering(clustering, k): Promise<Palette>`
 The function form of `clustering.getPalette(k)`. Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too. `k` is a maximum: an image with fewer distinct colours gives fewer entries.
 
-### `getPalette(image, k, options?): Promise<Palette>`
-`getClustering` followed by `getPaletteFromClustering`.
+### `buildPalette(image, k, options?): Promise<Palette>`
+`buildClustering` followed by `getPaletteFromClustering`.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 
-### `getSwatches(image, k, options?): Promise<Swatches>`
+### `buildSwatches(image, k, options?): Promise<Swatches>`
 A palette with how much of the image each colour covers, for swatches with percentages. It returns `{ palette, weights, shares }`, three arrays from one cut of one clustering, so entry `i` of each describes the same colour:
 - `palette` is flat RGB bytes in split order (what `getPaletteFromClustering` gives).
 - `weights` are pixels per colour. Fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1.
 - `shares` are the weights divided by their total, so they sum to 1.
 
-All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `getClustering` once and `getSwatchesFromClustering`.
+All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `buildClustering` once and `getSwatchesFromClustering`.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 
@@ -428,7 +428,7 @@ The result is `{ palette, colors, indices, indexBits, transparentIndex }`, plus 
 - `indices`: one per pixel, a `Uint8Array` for up to 256 entries, `Uint16Array` up to 65536, else `Uint32Array`; `indexBits` (8, 16 or 32) says which.
 - `transparentIndex`: the transparent entry's index, or `null`.
 
-With `transparent`, pixels of an RGBA or BGRA image below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `getPalette(image, k - 1, { transparent: true })` when the image has pixels below the cutoff; when it has none there is no transparent entry, and all `k` entries are colours. At least one colour is always kept. See [Transparency](#transparency).
+With `transparent`, pixels of an RGBA or BGRA image below the cutoff get the transparent entry (appended after the colours, and counted in `k`) and every other pixel is shown fully opaque, which is all a GIF can express, so anti-aliased edges snap to one side. The colours are chosen from the visible pixels, the same as `buildPalette(image, k - 1, { transparent: true })` when the image has pixels below the cutoff; when it has none there is no transparent entry, and all `k` entries are colours. At least one colour is always kept. See [Transparency](#transparency).
 
 ```js
 const { palette, colors, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
@@ -455,3 +455,6 @@ Frozen arrays of every value of the options that take one of a fixed set of name
 
 ### `version: string` and `formatVersion: number`
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
+
+### Deprecated names
+Deprecated names: `getClustering`, `getPalette` and `getSwatches` are the same functions as `buildClustering`, `buildPalette` and `buildSwatches` (their names before 3.4.0), in both entries and on workers, and 4.0 removes them. See [Migrating](migrating.md#deprecated-in-34-removed-in-40).
