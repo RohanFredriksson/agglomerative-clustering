@@ -387,7 +387,24 @@ private:
         for (int32_t id = 0; id < grid.capacity(); id++) {rgb[id] = this->space.to_rgb(grid.coords(id));}
 
         // Merged ids increase in chain order, so breaking height ties by them keeps chain order, as a stable sort would.
-        std::sort(this->merges.begin(), this->merges.end(), [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);});
+        // The order is total (merged ids are unique), so any sort gives these bytes. A plain bottom-up merge sort, not
+        // std::sort: its unrolled instantiation for Merge was 16 KB of WebAssembly, an eighth of the module.
+        {
+            auto before = [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);};
+            std::vector<Merge>& a = this->merges;
+            std::vector<Merge> b(a.size());
+            const size_t n = a.size();
+            for (size_t width = 1; width < n; width *= 2) {
+                for (size_t left = 0; left < n; left += 2 * width) {
+                    const size_t middle = std::min(left + width, n), right = std::min(left + 2 * width, n);
+                    size_t i = left, j = middle, k = left;
+                    while (i < middle && j < right) {b[k++] = before(a[j], a[i]) ? a[j++] : a[i++];}
+                    while (i < middle) {b[k++] = a[i++];}
+                    while (j < right) {b[k++] = a[j++];}
+                }
+                a.swap(b);
+            }
+        }
 
         // Costs are converted from 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
         const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
@@ -599,8 +616,38 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 // remaining error is diffused to neighbouring pixels (serpentine Floyd-Steinberg, scaled by `dither`), which
 // needs the image's `width`. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1
 // when the palette is empty.
-template <typename Emit>
-void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, Emit emit) {
+// What map_pixels does with each pixel's index: write its colour (_quantize) or the index itself (_quantize_indices). One
+// type with a mode, not a template parameter, so the pixel loops are compiled once (they are most of the module; two
+// copies cost about 19 KB of WebAssembly). The mode test is the same for every pixel, so it predicts perfectly.
+struct PixelSink {
+    bool colours;                 // true: colours (_quantize); false: indices (_quantize_indices)
+    PixelLayout L;
+    const uint8_t* image_data;
+    uint8_t* output;
+    const uint8_t* palette;       // colours: the palette the indices point into
+    uint32_t index_bytes;         // indices: 1, 2 or 4
+    int cutoff;                   // indices: alpha below this takes transparent_index (with `transparent`)
+    bool transparent;
+    int32_t transparent_index;
+
+    void operator()(size_t p, int32_t index) const {
+        if (colours) {
+            const int increment = L.stride;
+            uint8_t* out = output + p * increment;
+            const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
+            out[L.r] = colour ? colour[0] : 0;
+            out[1] = colour ? colour[1] : 0;
+            out[L.b] = colour ? colour[2] : 0;
+            if (L.opaque) {out[3] = 255;} else if (L.alpha) {out[3] = image_data[p * increment + 3];}
+        } else {
+            if (transparent && image_data[p * 4 + 3] < cutoff) {index = transparent_index;}
+            uint8_t* out = output + p * index_bytes;
+            for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
+        }
+    }
+};
+
+void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, const PixelSink& emit) {
 
     const ColorCoordinates space(color_space);
     std::vector<AgglomerativeClustering::KDTree::Point> points;
@@ -997,14 +1044,8 @@ uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format
     const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
     uint8_t* packed = allocate_variable_size(pixels * increment);
     uint8_t* output = packed + 4;
-    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 1, [&](size_t p, int32_t index) {
-        uint8_t* out = output + p * increment;
-        const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
-        out[L.r] = colour ? colour[0] : 0;
-        out[1] = colour ? colour[1] : 0;
-        out[L.b] = colour ? colour[2] : 0;
-        if (L.opaque) {out[3] = 255;} else if (L.alpha) {out[3] = image_data[p * increment + 3];}
-    });
+    const PixelSink sink = {true, L, image_data, output, palette, 0, 0, false, -1};
+    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 1, sink);
     return packed;
 }
 
@@ -1058,11 +1099,8 @@ uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int imag
     std::memcpy(output + header, entries.data(), entries.size());
     uint8_t* indices = output + header + entries.size();
 
-    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, [&](size_t p, int32_t index) {
-        if (transparent && image_data[p * 4 + 3] < cutoff) {index = transparent_index;}
-        uint8_t* out = indices + p * index_bytes;
-        for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
-    });
+    const PixelSink sink = {false, L, image_data, indices, nullptr, index_bytes, cutoff, transparent, transparent_index};
+    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, sink);
     return packed;
 }
 
