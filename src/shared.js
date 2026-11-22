@@ -4,7 +4,7 @@
 
 // The library's version: package.json is the source, and scripts/sync-version.mjs keeps this line (and the copy the .wasm
 // is built from, src/version.hpp) in step with it. Do not edit it by hand.
-export const version = '3.3.0';
+export const version = '3.4.0';
 
 export const colorSpaceCodes = {'rgb': 0, 'oklab': 1};
 // Every option whose value is one of a fixed set of names has the set exported as a frozen list (like errorCodes,

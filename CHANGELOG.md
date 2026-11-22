@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (3.4.0)
+## 3.4.0
 
 Output is unchanged; the golden tests pin it.
 
