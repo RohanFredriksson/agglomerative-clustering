@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- **Dithering to a few inks, in light:** the recipe in the API reference is now a function, `ditherInLight`, a drop-in for `quantizeToIndicesWithPalette` when dithered photos come out too light on an e-ink panel or in black and white. Besides mixing in linear light it weighs brightness first, so greys no longer pick up coloured inks: on the 24 Kodak photos with seven e-ink inks, the colour error in light went from 19.8 (sRGB values) and 5.3 (the old recipe) to 4.3 with Floyd–Steinberg, and to 6.2 with ordered dithering (8.9 before). `test/recipes.test.js` runs it and checks it matches the docs. A built-in option was measured and not added: the ROADMAP has why.
+
 ## 3.4.0
 
 Output is unchanged; the golden tests pin it.

@@ -167,26 +167,67 @@ Measured on six Kodak photos after a slight blur (to stand in for viewing distan
 
 #### Dithering to a few inks: mix in light
 
-Every method mixes colours as sRGB values, the numbers in the image. The eye mixes light, which is not proportional to those numbers: a pattern of half black and half white pixels looks much lighter than sRGB grey 128. With a palette of many colours this hardly shows, because the colours mixed are close together. With black and white or a handful of e-ink inks it shows a lot: dithered photos come out much lighter on the panel, or at 1:1 on screen. Measured in light, on three photos with the seven e-ink inks, every method was far off (ΔE 17 to 22), and Atkinson only looked least bad because it drops part of the error.
+**If dithered photos come out too light on an e-ink panel, or in black and white, this is why.** Every method mixes colours as sRGB values, the numbers in the image (which are gamma-encoded). The eye and the panel mix light, which is not proportional to those numbers: a pattern of half black and half white pixels looks like sRGB grey 188, not 128. With a palette of many colours this hardly shows, because the colours mixed are close together. With black and white or a handful of inks it shows a lot: on the 24 Kodak photos with the seven e-ink inks, dithered photos came out 1.1 to 2.8 times too bright (up to 3.1 in black and white).
 
-To mix in light, convert the image and the palette to linear values first, and use the indices with your palette as it is:
+The function below, `ditherInLight`, mixes in linear light. It turns each colour, of the image and of the inks, into three bytes the library dithers as it always does:
+- the colour's brightness in light;
+- two colour differences (red against green, blue against yellow), counted double so that greys are made of black, white and grey inks rather than speckled with coloured ones.
+
+Since those bytes measure light, the library's averaging becomes averaging light. The function hands back your inks as the palette, so the result is used as `quantizeToIndicesWithPalette`'s would be. It is code to copy into your project, not an export of the library:
 
 ```js
-// sRGB 0-255 to linear light, scaled back to 0-255, as a table (it is called for every byte)
-const toLinear = new Uint8Array(256).map((_, v) => Math.round(v <= 10 ? v / 12.92 : 255 * ((v / 255 + 0.055) / 1.055) ** 2.4));
-const linear = data.map((v, i) => (i % 4 === 3 ? v : toLinear[v]));   // RGBA: alpha stays as it is (for RGB data, convert every byte)
-const { indices } = await quantizeToIndicesWithPalette({ data: linear, format: 'rgba', width }, eink.map((v) => toLinear[v]), { dither: true });
-// indices[i] is the entry of `eink` (in its own colours) for pixel i
+// Dithers an RGBA image ({ data, width }, or ImageData) to `inks` (flat RGB values, like `eink` above), mixing colours
+// as light. Resolves like quantizeToIndicesWithPalette(image, inks, options): indices[i] is the entry of `inks` for
+// pixel i. It dithers with Floyd–Steinberg unless `options.dither` says otherwise.
+async function ditherInLight(image, inks, options = {}) {
+    if (image.format !== undefined && image.format !== 'rgba') {throw new TypeError(`Invalid image: ditherInLight takes RGBA data, got format '${image.format}'.`);}
+    if (options.colorSpace !== undefined && options.colorSpace !== 'rgb') {throw new TypeError('Invalid options.colorSpace: ditherInLight matches in linear light; leave colorSpace out.');}
+    // sRGB 0-255 to linear light, 0-1
+    const linear = Array.from({ length: 256 }, (_, v) => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    // Writes a colour (from `source` at `i`) as three bytes: red-green difference, brightness, blue-yellow difference
+    // (BT.709 weights, on linear values). A Uint8ClampedArray `target` rounds and clamps them.
+    const inLight = (source, target, i) => {
+        const r = linear[source[i]], g = linear[source[i + 1]], b = linear[source[i + 2]];
+        const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        target[i] = 128 + 255 * (r - y) / 1.5748;
+        target[i + 1] = 127.5 * y;
+        target[i + 2] = 128 + 255 * (b - y) / 1.8556;
+    };
+    const data = new Uint8ClampedArray(image.data.length);
+    for (let i = 0; i < data.length; i += 4) {
+        inLight(image.data, data, i);
+        data[i + 3] = image.data[i + 3];   // alpha stays as it is
+    }
+    const palette = new Uint8ClampedArray(inks.length);
+    for (let i = 0; i < inks.length; i += 3) {inLight(inks, palette, i);}
+    const result = await quantizeToIndicesWithPalette({ data, format: 'rgba', width: image.width }, new Uint8Array(palette), { dither: true, ...options });
+    result.palette.set(inks);   // the inks' own colours; with `transparent`, its entry stays after them
+    return result;
+}
+
+const { indices } = await ditherInLight({ data, width }, eink);
+const ordered = await ditherInLight({ data, width }, eink, { dither: 'ordered' });
 ```
 
-On the same photos this cut the error in light from 17–22 to 5–7 with Floyd–Steinberg on the seven inks, and from 22–25 to 11–18 in black and white; ordered dithering improves a little less (7.5–11 and 11–17). Keep to these:
+Measured in light (CIEDE2000 after a slight blur in linear light, mean over the 24 Kodak photos), against dithering the sRGB values:
 
-- **Use Floyd–Steinberg or ordered dithering.** Atkinson drops a quarter of the error, which in linear values makes photos too dark (worse than not converting, on some). And undithered, linear values make every dark tone snap to black.
-- **Keep `colorSpace: 'rgb'`** (the default). In `'oklab'` the linear values are read as if they were sRGB.
+| Palette | Method | sRGB values | In light |
+|---|---|---|---|
+| Seven e-ink inks | Floyd–Steinberg | 19.8 | 4.3 |
+| | ordered | 20.6 | 6.2 |
+| Black and white | Floyd–Steinberg | 22.5 | 12.2 |
+| | ordered | 23.2 | 12.3 |
+
+Brightness comes out right: with the e-ink inks within 3% of the original's on every photo, against up to 2.8 times too bright. In black and white, ordered dithering stays within 4%; Floyd–Steinberg does on most photos, but on dark ones it loses shadows (one photo came out at 0.62 of its brightness). Converting to linear values without the brightness weighting, as this section used to show, left colour casts in grey areas (4.3 against 5.3 on e-ink with Floyd–Steinberg, 6.2 against 8.9 ordered).
+<!-- Measured by bench/spikes/linear-light/: results-recipe.txt (recipe.mjs runs this function) and results.txt. -->
+
+Keep to these:
+
+- **Use it for a few fixed inks**, not for a palette cut from the image itself. There the colours mixed are close together and sRGB mixing is already about right: at 16 extracted colours this function was slightly worse with Floyd–Steinberg (2.69 against 2.47) and slightly better with ordered (2.33 against 2.59).
+- **Use Floyd–Steinberg or ordered dithering.** Atkinson drops a quarter of the error, which in light turns shadows black. Undithered (`dither: false`), every dark tone snaps to black.
+- **Very dark gradients can band.** Brightness gets 128 levels in light, and every sRGB value below about 12 becomes black; black and white shows it most.
 - **Look at the result at 1:1, or on the panel.** A viewer that shrinks the image averages its pixels as sRGB values, so a correct result looks too dark when shown small.
-- Eight-bit linear values have few dark shades, so very dark gradients can band.
-
-A built-in way to mix in light is on the [roadmap](ROADMAP.md).
+- **It runs on the calling thread**, before the library is called: about 10 to 20 ns a pixel (8 ms for a 768×512 photo, 100 ms for 4K). With the worker entry, call it in your own worker, or accept that cost on the main thread.
 
 ### Transparency
 
