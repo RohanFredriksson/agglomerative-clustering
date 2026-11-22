@@ -183,8 +183,8 @@ export interface CancelOptions {
      * the signal's `reason` (an `AbortError` by default), like `fetch`; note that it is that reason that is thrown, so it
      * has the signal's own `name`, not an `ErrorCode`. A signal that is already aborted does no work. On the functions
      * that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms) it is checked once,
-     * before the call starts, since they take milliseconds. Pixel mapping, which follows the clustering, can't be
-     * interrupted. The call's result is the same as without a signal. In the worker entry the worker itself stops
+     * before the call starts. Pixel mapping, which follows the clustering, can't be
+     * interrupted (the guides show how to map a large image in strips, or cancel it through a worker). The call's result is the same as without a signal. In the worker entry the worker itself stops
      * working on the call, and a call still waiting its turn never starts.
      */
     signal?: AbortSignal | undefined;
@@ -257,7 +257,7 @@ export type DitherOptions =
     | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined; steps?: undefined }
     | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
 
-/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` but no `onProgress`: mapping takes milliseconds. */
+/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` (checked before mapping starts) but no `onProgress`: mapping runs in one piece. */
 export interface MappingOptions extends CancelOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. The default is the space the colours were made in:

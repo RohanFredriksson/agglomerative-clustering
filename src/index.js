@@ -521,7 +521,7 @@ const parseOptions = (options, allowed, image) => {
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {
             const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
-                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal: they finish in milliseconds, with no progress to report.' : '';
+                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal, checked before they start. See "Cancelling or showing progress while mapping a large image" in the guides.' : '';
             throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
         }
     }
@@ -590,8 +590,8 @@ const parseOptions = (options, allowed, image) => {
 const controlOptions = ['signal', 'onProgress'];
 const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
 const quantizeOptions = [...clusterOptions, 'dither', 'width'];
-// The functions that only map pixels take just `signal`: they finish in milliseconds, so there is nothing to report progress
-// on or to interrupt part way; a signal that is already aborted does no work, which is all it can mean.
+// The functions that only map pixels take just `signal`, checked before they start: mapping runs in one piece (milliseconds
+// for a photo, seconds for a large image dithered; the guides show how to map in strips or cancel through a worker).
 const mapOptions = ['colorSpace', 'dither', 'width', 'signal'];
 const quantizeIndexOptions = quantizeOptions;
 const mapIndexOptions = [...mapOptions, 'transparent'];

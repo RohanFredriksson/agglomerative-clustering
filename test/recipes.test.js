@@ -4,6 +4,7 @@ import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
 import { buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
+import { createWorker } from '../dist/worker.mjs';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -548,6 +549,157 @@ describe('recipes in the guides', () => {
             await expect(ditherInLight({ data: photo, width: w }, eink, { colorSpace: 'oklab' })).rejects.toThrow(/leave colorSpace out/);
             await expect(ditherInLight({ data: photo, format: 'rgba', width: w }, eink, { colorSpace: 'rgb' })).resolves.toBeTruthy();
         });
+    });
+
+    describe('mapping a large image: cancelling and progress', () => {
+        // quantizeToIndicesWithPalette, stopped part way when `signal` aborts: it rejects with the signal's reason.
+        async function mapCancellably(image, palette, options, signal) {
+            signal?.throwIfAborted();
+            const worker = createWorker();
+            const stop = () => worker.terminate();
+            signal?.addEventListener('abort', stop, { once: true });
+            try {
+                return await worker.quantizeToIndicesWithPalette(image, palette, options);
+            } catch (error) {
+                if (signal?.aborted) {throw signal.reason;}   // not 'worker-terminated': the caller asked for it
+                throw error;
+            } finally {
+                signal?.removeEventListener('abort', stop);
+                worker.terminate();
+            }
+        }
+
+        // quantizeToIndicesWithPalette for `image` ({ data, format: 'rgba', width, height }) in strips of rows, checking
+        // `signal` and calling `onProgress` (0 to 1) between them. Strips are a multiple of 8 rows high, so ordered
+        // dithering keeps its pattern.
+        async function mapInStrips(image, palette, options = {}, { signal, onProgress } = {}) {
+            const { data, width, height } = image;
+            const rows = Math.max(8, Math.floor(200_000 / width / 8) * 8);   // about 200,000 pixels per strip
+            let result = null, indices = null;
+            for (let top = 0; top < height; top += rows) {
+                signal?.throwIfAborted();
+                const strip = Math.min(rows, height - top);
+                const part = await quantizeToIndicesWithPalette(
+                    { data: data.subarray(top * width * 4, (top + strip) * width * 4), format: 'rgba', width, height: strip }, palette, options);
+                indices ??= new part.indices.constructor(width * height);   // 1, 2 or 4 bytes per index, as the palette needs
+                indices.set(part.indices, top * width);
+                if (result === null || part.palette.length > result.palette.length) {result = part;}   // the strip with a transparent entry, if any
+                onProgress?.((top + strip) / height);
+            }
+            return { palette: result.palette, indices, transparentIndex: result.transparentIndex, width, height };
+        }
+
+        it('are the functions printed in the guides', async () => {
+            const { readFile } = await import('fs/promises');
+            const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+            const source = (text, name) => {
+                const lines = text.split('\n');
+                const start = lines.findIndex((line) => line.trim().startsWith(`async function ${name}(`));
+                expect(start, `${name} is in the file`).toBeGreaterThanOrEqual(0);
+                const indent = lines[start].match(/^ */)[0];
+                const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+                return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
+            };
+            const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+            for (const name of ['mapCancellably', 'mapInStrips']) {expect(source(test, name), name).toBe(source(guides, name));}
+        });
+
+        // A gradient with a band of noise, `width` wide; with `holes`, a few fully transparent pixels in some rows.
+        const makeImage = (width, height, holes = []) => {
+            const data = new Uint8Array(width * height * 4);
+            let seed = 11;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const n = (seed = (seed * 16807) % 2147483647) & 63;
+                    const alpha = holes.includes(y) && x % 97 === 0 ? 0 : 255;
+                    data.set([(x * 7) & 255, (y * 5 + n) & 255, (x + y + 2 * n) & 255, alpha], (y * width + x) * 4);
+                }
+            }
+            return { data, format: 'rgba', width, height };
+        };
+
+        it('in strips gives one call\'s indices without dithering and with ordered dithering, whatever the strip count', async () => {
+            // 64-row strips (3 of them, the last short), and the 8-row minimum (3, the last short)
+            for (const image of [makeImage(3000, 150), makeImage(30000, 20)]) {
+                const few = await buildPalette(image, 16, { precision: 6 }), many = await buildPalette(image, 300, { precision: 6 });
+                // over 256 entries the indices are 2 bytes each
+                for (const [palette, dither] of [[few, false], [few, 'ordered'], [many, false], [many, { method: 'ordered', steps: 4 }]]) {
+                    const whole = await quantizeToIndicesWithPalette(image, palette, { dither });
+                    const progress = [];
+                    const got = await mapInStrips(image, palette, { dither }, { onProgress: (p) => progress.push(p) });
+                    const label = `${image.width} wide, ${palette.length / 3} colours, dither ${JSON.stringify(dither)}`;
+                    expect(got.indices.constructor, label).toBe(whole.indices.constructor);
+                    expect(got.indices.BYTES_PER_ELEMENT, label).toBe(palette === many ? 2 : 1);
+                    expect(got.indices.length).toBe(whole.indices.length);
+                    expect(got.indices.every((v, i) => v === whole.indices[i]), label).toBe(true);
+                    expect(Array.from(got.palette)).toEqual(Array.from(whole.palette));
+                    expect(progress).toHaveLength(3);
+                    expect(progress.at(-1)).toBe(1);
+                    expect(progress.every((p, i) => i === 0 || p > progress[i - 1])).toBe(true);
+                }
+            }
+        }, 60000);
+
+        it('in strips keeps the transparent entry when only some strips have transparent pixels', async () => {
+            const image = makeImage(3000, 150, [70, 71]);   // only the second strip has transparent pixels
+            const palette = await buildPalette(image, 12);
+            const whole = await quantizeToIndicesWithPalette(image, palette, { transparent: true, dither: 'ordered' });
+            const got = await mapInStrips(image, palette, { transparent: true, dither: 'ordered' });
+            expect(whole.transparentIndex).toBe(palette.length / 3);
+            expect(got.transparentIndex).toBe(whole.transparentIndex);
+            expect(Array.from(got.palette)).toEqual(Array.from(whole.palette));
+            expect(got.indices.every((v, i) => v === whole.indices[i])).toBe(true);
+        });
+
+        it('in strips stops between strips on abort, with the signal\'s reason', async () => {
+            const image = makeImage(3000, 150);
+            const palette = await buildPalette(image, 16, { precision: 6 });
+            const controller = new AbortController();
+            const progress = [];
+            const reason = new Error('superseded');
+            const run = mapInStrips(image, palette, {}, { signal: controller.signal, onProgress: (p) => {progress.push(p); controller.abort(reason);} });
+            await expect(run).rejects.toBe(reason);
+            expect(progress).toHaveLength(1);
+        });
+
+        it('in strips gives error diffusion its own output, close to one call\'s', async () => {
+            const image = makeImage(3000, 150);
+            const palette = await buildPalette(image, 16, { precision: 6 });
+            const whole = await quantizeToIndicesWithPalette(image, palette, { dither: true });
+            const got = await mapInStrips(image, palette, { dither: true });
+            // the first strip is mapped exactly as one call maps its rows; the rest start without the carried error
+            const first = 64 * image.width;
+            expect(got.indices.subarray(0, first).every((v, i) => v === whole.indices[i])).toBe(true);
+            expect(got.indices.some((v, i) => v !== whole.indices[i])).toBe(true);
+        });
+
+        it('through a worker gives the plain call\'s result, and an abort rejects at once with the signal\'s reason', async () => {
+            const image = makeImage(3000, 150, [3]);
+            const palette = await buildPalette(image, 16);
+            const options = { dither: 'atkinson', transparent: true };
+            const plain = await quantizeToIndicesWithPalette(image, palette, options);
+            const got = await mapCancellably(image, palette, options, new AbortController().signal);
+            expect(Array.from(got.indices)).toEqual(Array.from(plain.indices));
+            expect(Array.from(got.palette)).toEqual(Array.from(plain.palette));
+            expect(got.transparentIndex).toBe(plain.transparentIndex);
+            await expect(mapCancellably(image, palette, options)).resolves.toBeTruthy();   // no signal
+
+            // a mapping of several seconds (ordered dithering, 256 colours, 1 MP of noise), aborted soon after it starts
+            let seed = 5;
+            const noise = { data: new Uint8Array(1024 * 1024 * 4).map((_, i) => (i % 4 === 3 ? 255 : (seed = (seed * 16807) % 2147483647) & 255)), format: 'rgba', width: 1024, height: 1024 };
+            const many = new Uint8Array(768).map((_, i) => (i * 97) & 255);
+            const controller = new AbortController();
+            const run = mapCancellably(noise, many, { dither: 'ordered' }, controller.signal);
+            await new Promise((done) => setTimeout(done, 100));
+            const start = performance.now();
+            controller.abort();
+            await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+            expect(performance.now() - start).toBeLessThan(100);
+
+            const already = new AbortController();
+            already.abort();
+            await expect(mapCancellably(image, palette, options, already.signal)).rejects.toMatchObject({ name: 'AbortError' });
+        }, 30000);
     });
 
 });

@@ -23,7 +23,7 @@ No person. One exploratory-round agent (2026-11-23, the screen-recording extensi
 
 - **Exact for no dithering and ordered dithering** (64 rows keeps ordered's 8-row grid, the 3.x promise in docs/stability.md). Ordered pays up to 30% on photos, since each strip builds its own recipes; noise pays about 3%.
 - **Floyd–Steinberg and Atkinson give different output** (20 to 42% of pixels), since each strip starts without the error carried from above, and **slightly worse at strip edges**. After a 5×5 blur, the photo's error overall was within −2.3% to +1.4% of one call's (Floyd–Steinberg) and +0.3% to +0.6% (Atkinson); on the rows within 2 of a strip edge it was +0.6% to +4.3% (Floyd–Steinberg, except −4% at 256 colours) and +2.2% to +7.0% (Atkinson), at 4, 16 and 256 colours: a faint seam every strip, worst with Atkinson.
-- **Cancelling alone needs no strips:** run the call in the worker entry and `terminate()` the worker on abort (it restarts in 10 to 70 ms). Progress is the only gap with no recipe that keeps error diffusion exact.
+- **Cancelling alone needs no strips:** run the call in a worker of its own and `terminate()` it on abort: the call rejects within 0.3 ms, and a fresh worker costs about 40 ms before its first call (`cancel-worker.mjs`, `results-cancel-worker.txt`, Node). Progress is the only gap with no recipe that keeps error diffusion exact.
 - **Traps:** strip heights not a multiple of 8 shift ordered's pattern; the signal is checked between strips, so a strip should stay short (rows × width under about 200,000 pixels kept every strip here under 0.5 s); `quantize` and `quantizeToIndices` (cluster, then map) would need clustering through a `Clustering` and then the strips.
 
 ## What a built-in adds over it
