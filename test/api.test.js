@@ -74,8 +74,9 @@ const deprecatedSection = /^### Deprecated names\n([^\n]*)\n?/m;
 // Blind spot: an old name after another receiver (`api.getPalette` in prose) is only caught as a call.
 const staleCalls = [/(?<![.\w])get(Clustering|Palette|Swatches)\b/, /\.get(Palette|Swatches)\([^,)]*,/, /\.getClustering\([^)\s]/, /\bworker\.get(Clustering|Palette|Swatches)\b/];
 const staleCall = (line) => staleCalls.some((pattern) => pattern.test(line));
-// Other libraries' functions of the same name, which the guides compare with this one.
-const otherLibraries = ['color-thief `getPalette(image, n)`'];
+// Old names written on purpose: another library's function of the same name (the guides compare them), and the
+// feature test a wrapper supporting versions before 3.4 needs (environments.md, "Writing a package that wraps it").
+const intentional = ['color-thief `getPalette(image, n)`', "`ac.buildPalette ?? ac.getPalette`"];
 
 const enforcedKeys = async (name) => {
     const error = await main[name](...callArguments[name], { __unknown__: true }).catch((e) => e);
@@ -233,8 +234,9 @@ describe('the API reference (docs/api.md)', () => {
     it('lists each deprecated name under its own heading, as the same function as its new name', () => {
         const section = api.match(deprecatedSection);
         expect(section, 'docs/api.md has a "### Deprecated names" heading with a line under it').not.toBeNull();
+        expect(api.includes('[deprecated names](#deprecated-names)'), 'the contents at the top of docs/api.md link the section').toBe(true);
         for (const [old, now] of Object.entries(deprecated)) {
-            expect(section[1].includes('`' + old + '`'), `the line names ${old}`).toBe(true);
+            expect(section[1].includes('`' + old + '('), `the line gives ${old}'s signature`).toBe(true);
             expect(section[1].includes('`' + now + '`'), `the line names ${now}`).toBe(true);
             expect(main[old], old).toBe(main[now]);
             expect(worker[old], `worker ${old}`).toBe(worker[now]);
@@ -251,7 +253,7 @@ describe('the API reference (docs/api.md)', () => {
     it('call the functions that cluster by their 3.4.0 names', () => {
         for (const file of [...userDocs, 'docs/how-it-works.md']) {
             let text = file === 'docs/api.md' ? read(file).replace(deprecatedSection, '') : read(file);
-            for (const phrase of otherLibraries) {text = text.replaceAll(phrase, '');}
+            for (const phrase of intentional) {text = text.replaceAll(phrase, '');}
             const stale = text.split('\n').filter(staleCall);
             expect(stale, `${file} still calls an old name`).toEqual([]);
         }

@@ -16,7 +16,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread.
 - **Accurate and fast.** The lowest average error of the six JavaScript quantizers we benchmarked, at about the speed of libimagequant ([benchmarks](#benchmarks)).
-- **Small and portable.** 91 KB of WebAssembly, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
+- **Small and portable.** About 127 KB of WebAssembly (52 KB gzipped), Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
 
 ## Install
 
@@ -24,7 +24,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 npm install agglomerative-clustering
 ```
 
-Upgrading from 2.x? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md): one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
+Upgrading? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md). From 3.3, three functions have new names, and the old ones keep working until 4.0. From 2.x, one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
 
 It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
 
@@ -101,6 +101,8 @@ The one-shot functions (`buildPalette`, `quantize`, …) do every step for you. 
 | its error curve, for choosing a palette size | | `clustering.getClusteringInfo()` (`getClusteringInfo`) | |
 
 A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `buildClustering` builds a clustering, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
+
+The verb says how much work a call does. `build…` clusters an image (tens of milliseconds for a photo). `get…` reads or cuts what a clustering or a worker handle already holds (well under a millisecond). `quantize…` maps pixels. So `buildPalette(image, k)` and `clustering.getPalette(k)` give the same kind of result from different starting points. The `build…` names arrived in 3.4.0; [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md) has the old ones.
 
 **Methods or functions?** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **In a worker, use a handle** (`createWorker().cluster(image)`, below) or the worker entry's function forms: the methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
 

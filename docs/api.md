@@ -10,7 +10,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - [Errors](#errors)
 - [Worker entry](#worker-entry)
 - [TypeScript](#typescript)
-- [Functions](#functions)
+- [Functions](#functions), and [deprecated names](#deprecated-names)
 
 ## Terms
 
@@ -18,6 +18,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - **palette**: flat RGB bytes, `[r, g, b, r, g, b, …]`. A `Palette` knows the colour space it was made in.
 - **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours. The one exception: indexed output always keeps a colour for the visible pixels, so `k = 1` with a transparent entry gives 2.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
+- **build… and get…**: a name says how much work a call does. `build…` clusters an image; `get…` reads or cuts what a clustering or a worker handle already holds, so `buildPalette(image, k)` takes tens of milliseconds for a photo and `clustering.getPalette(k)` well under one. `quantize…` maps pixels, and may cluster first.
 - **clustering and mapping**: "clustering" functions build a clustering (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
 ## Input
@@ -260,7 +261,7 @@ const restored = new Clustering(await db.get('clustering'));               // st
 | `clustering.quantize(image, k, options?)` | `quantizeFromClustering` | `(image, clustering, k, options?)`: the image comes first |
 | `clustering.quantizeToIndices(image, k, options?)` | `quantizeToIndicesFromClustering` | `(image, clustering, k, options?)`: the image comes first |
 
-Moving existing code to the methods is optional: nothing is deprecated in 3.x, and the two forms give the same results.
+Moving existing code to the methods is optional: the `…FromClustering` functions are not deprecated in 3.x, and the two forms give the same results.
 
 ### `clustering.getPalette(k): Promise<Palette>`
 `getPaletteFromClustering(clustering, k)` as a method. Takes no options.
@@ -303,7 +304,7 @@ const clustering = await buildClustering(image, {
 
 Every error the library throws is an `Error` with a `code`, so you don't have to match on message text (except an abort, which rejects with the signal's own `reason`).
 
-When an error is about one argument, `error.argument` names it: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, `'colorSpace'` (from `new Palette`), or `'options.<name>'` (for example `'options.colorSpace'`), so a form can point at the right field. Arguments are checked in the order you pass them, so the error is about the first that is wrong.
+When an error is about one argument, `error.argument` names it: `'image'`, `'k'`, `'clustering'`, `'palette'`, `'options'`, `'colorSpace'` (from `new Palette`), or `'options.<name>'` (for example `'options.colorSpace'`, or `'options.dither.steps'` for a setting inside an option's object form), so a form can point at the right field. Arguments are checked in the order you pass them, so the error is about the first that is wrong.
 
 | `code` | When |
 | --- | --- |
@@ -457,4 +458,4 @@ Frozen arrays of every value of the options that take one of a fixed set of name
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
 
 ### Deprecated names
-`getClustering`, `getPalette` and `getSwatches` are the same functions as `buildClustering`, `buildPalette` and `buildSwatches` (their names before 3.4.0), in both entries and on workers, and 4.0 removes them. See [Migrating](migrating.md#deprecated-in-34-removed-in-40).
+`getClustering(image, options?)`, `getPalette(image, k, options?)` and `getSwatches(image, k, options?)` are the same functions as `buildClustering`, `buildPalette` and `buildSwatches` (their names before 3.4.0), in both entries and on workers, and 4.0 removes them. See [Migrating](migrating.md#deprecated-in-34-removed-in-40).
