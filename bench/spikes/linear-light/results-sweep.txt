@@ -1,0 +1,5 @@
+Colour-axis weight sweep: linear YCbCr (BT.709 on linear values), colour axes times w. 24 Kodak photos, mean ΔE2000 after a σ1.5 linear-light blur.
+eink fs: w1 4.75 (worse than w1 on 0) | w1.5 4.35 (worse than w1 on 2) | w2 4.43 (worse than w1 on 5) | w3 4.37 (worse than w1 on 4) | w4 4.36 (worse than w1 on 4) | w6 4.36 (worse than w1 on 3)
+eink ordered: w1 8.57 (worse than w1 on 0) | w1.5 6.39 (worse than w1 on 0) | w2 6.03 (worse than w1 on 1) | w3 5.86 (worse than w1 on 1) | w4 5.80 (worse than w1 on 1) | w6 5.75 (worse than w1 on 1)
+extracted fs: w1 2.39 (worse than w1 on 0) | w1.5 2.30 (worse than w1 on 1) | w2 2.26 (worse than w1 on 1) | w3 2.26 (worse than w1 on 2) | w4 2.31 (worse than w1 on 6) | w6 2.50 (worse than w1 on 17)
+extracted ordered: w1 2.45 (worse than w1 on 0) | w1.5 2.32 (worse than w1 on 1) | w2 2.25 (worse than w1 on 1) | w3 2.22 (worse than w1 on 1) | w4 2.26 (worse than w1 on 2) | w6 2.41 (worse than w1 on 8)

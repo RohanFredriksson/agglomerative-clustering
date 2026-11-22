@@ -1,0 +1,78 @@
+
+## eink  (24 photos: mean ΔE [min–max] · Y range · photos better than the 8-bit recipe · dark ramp ΔE)
+fs | sRGB today                   19.81 [12.52–22.67]  Y 1.14–2.55  better  0/24  ramp 19.80
+fs | 8-bit recipe                  5.25 [2.66–8.56]  Y 1.00–1.00  better  0/24  ramp 9.96
+fs | linear RGB                    5.26 [2.67–8.53]  Y 0.99–1.00  better 10/24  ramp 9.74
+fs | linear Y+opp                  4.78 [2.55–6.51]  Y 0.99–1.00  better 16/24  ramp 3.97
+fs | linear Y+opp/2                7.06 [4.72–10.32]  Y 1.00–1.00  better  0/24  ramp 10.50
+fs | linear Y+opp*2                4.51 [2.26–6.32]  Y 0.93–1.01  better 21/24  ramp 3.97
+fs | linear YCbCr                  4.75 [2.54–6.53]  Y 0.99–1.00  better 18/24  ramp 4.27
+fs | linear S-CIELAB opp          27.39 [8.02–35.29]  Y 0.70–0.98  better  0/24  ramp 14.52
+atkinson | sRGB today             19.03 [12.70–22.75]  Y 1.12–2.02  better  0/24  ramp 9.86
+atkinson | 8-bit recipe           12.88 [6.52–16.16]  Y 0.48–0.97  better  0/24  ramp 5.39
+atkinson | linear RGB             12.88 [6.53–16.15]  Y 0.48–0.97  better  9/24  ramp 5.39
+atkinson | linear Y+opp           13.24 [6.23–16.28]  Y 0.47–0.97  better  4/24  ramp 5.39
+atkinson | linear Y+opp/2         16.64 [8.32–21.44]  Y 0.60–0.99  better  0/24  ramp 5.39
+atkinson | linear Y+opp*2         14.35 [9.09–17.14]  Y 0.45–0.97  better  0/24  ramp 5.39
+atkinson | linear YCbCr           13.70 [6.77–16.71]  Y 0.48–0.97  better  1/24  ramp 5.39
+atkinson | linear S-CIELAB opp    26.76 [8.24–35.03]  Y 0.60–0.97  better  0/24  ramp 5.39
+ordered | sRGB today              20.63 [12.89–24.53]  Y 1.16–2.77  better  0/24  ramp 19.79
+ordered | 8-bit recipe             8.85 [5.38–11.46]  Y 0.96–1.00  better  0/24  ramp 5.98
+ordered | linear RGB               8.85 [5.34–11.40]  Y 0.96–1.00  better 12/24  ramp 5.78
+ordered | linear Y+opp             8.24 [5.28–10.58]  Y 0.95–1.00  better 23/24  ramp 5.39
+ordered | linear Y+opp/2           9.60 [5.58–14.48]  Y 0.96–1.00  better  4/24  ramp 8.37
+ordered | linear Y+opp*2           6.04 [3.75–7.80]  Y 0.98–1.02  better 23/24  ramp 5.39
+ordered | linear YCbCr             8.57 [5.39–11.13]  Y 0.95–1.00  better 18/24  ramp 5.46
+ordered | linear S-CIELAB opp     22.14 [7.66–27.97]  Y 0.76–0.98  better  0/24  ramp 11.21
+
+## bw  (24 photos: mean ΔE [min–max] · Y range · photos better than the 8-bit recipe · dark ramp ΔE)
+fs | sRGB today                   22.46 [14.42–31.09]  Y 1.17–2.78  better  0/24  ramp 17.67
+fs | 8-bit recipe                 12.88 [7.02–28.20]  Y 0.37–0.99  better  0/24  ramp 4.00
+fs | linear RGB                   12.96 [7.12–28.13]  Y 0.38–0.99  better  5/24  ramp 3.97
+fs | linear Y+opp                 13.04 [6.98–32.21]  Y 0.16–1.12  better 15/24  ramp 3.97
+fs | linear Y+opp/2               13.04 [6.98–32.21]  Y 0.16–1.12  better 15/24  ramp 3.97
+fs | linear Y+opp*2               13.04 [6.98–32.21]  Y 0.16–1.12  better 15/24  ramp 3.97
+fs | linear YCbCr                 13.04 [6.98–32.21]  Y 0.16–1.12  better 15/24  ramp 3.97
+fs | linear S-CIELAB opp          12.57 [6.89–26.99]  Y 0.48–1.14  better 18/24  ramp 3.97
+atkinson | sRGB today             20.51 [12.70–30.26]  Y 1.15–2.55  better  3/24  ramp 5.43
+atkinson | 8-bit recipe           18.64 [12.84–30.97]  Y 0.21–0.96  better  0/24  ramp 5.39
+atkinson | linear RGB             18.81 [12.93–32.59]  Y 0.13–0.96  better  0/24  ramp 5.39
+atkinson | linear Y+opp           18.09 [12.18–33.31]  Y 0.11–1.00  better 20/24  ramp 5.39
+atkinson | linear Y+opp/2         18.09 [12.18–33.31]  Y 0.11–1.00  better 20/24  ramp 5.39
+atkinson | linear Y+opp*2         18.09 [12.18–33.31]  Y 0.11–1.00  better 20/24  ramp 5.39
+atkinson | linear YCbCr           18.09 [12.18–33.31]  Y 0.11–1.00  better 20/24  ramp 5.39
+atkinson | linear S-CIELAB opp    17.94 [12.20–32.29]  Y 0.16–0.99  better 21/24  ramp 5.39
+ordered | sRGB today              23.20 [14.83–34.04]  Y 1.15–3.12  better  0/24  ramp 18.25
+ordered | 8-bit recipe            12.39 [6.96–24.14]  Y 0.88–1.23  better  0/24  ramp 3.68
+ordered | linear RGB              12.40 [6.96–24.14]  Y 0.88–1.23  better  6/24  ramp 3.68
+ordered | linear Y+opp            12.24 [6.91–23.95]  Y 1.00–1.00  better 24/24  ramp 3.68
+ordered | linear Y+opp/2          12.24 [6.91–23.95]  Y 1.00–1.00  better 24/24  ramp 3.68
+ordered | linear Y+opp*2          12.24 [6.91–23.95]  Y 1.00–1.00  better 24/24  ramp 3.68
+ordered | linear YCbCr            12.24 [6.91–23.95]  Y 1.00–1.00  better 24/24  ramp 3.68
+ordered | linear S-CIELAB opp     12.26 [6.91–24.18]  Y 0.99–1.27  better 23/24  ramp 3.68
+
+## extracted  (24 photos: mean ΔE [min–max] · Y range · photos better than the 8-bit recipe · dark ramp ΔE)
+fs | sRGB today                    2.47 [0.69–4.09]  Y 0.99–1.02  better 21/24
+fs | 8-bit recipe                  2.58 [0.77–4.09]  Y 0.98–1.04  better  0/24
+fs | linear RGB                    2.49 [0.79–4.41]  Y 0.98–1.00  better 19/24
+fs | linear Y+opp                  2.41 [0.77–4.34]  Y 0.98–1.00  better 21/24
+fs | linear Y+opp/2                2.66 [0.77–4.51]  Y 0.98–1.00  better  8/24
+fs | linear Y+opp*2                2.29 [0.84–4.28]  Y 0.97–1.01  better 21/24
+fs | linear YCbCr                  2.39 [0.77–4.31]  Y 0.98–1.00  better 22/24
+fs | linear S-CIELAB opp           2.98 [0.91–4.91]  Y 0.97–1.00  better  2/24
+atkinson | sRGB today              2.72 [0.68–4.34]  Y 0.99–1.00  better 12/24
+atkinson | 8-bit recipe            2.73 [0.77–4.45]  Y 0.97–1.00  better  0/24
+atkinson | linear RGB              2.71 [0.76–4.35]  Y 0.97–1.00  better 20/24
+atkinson | linear Y+opp            2.67 [0.72–4.26]  Y 0.97–1.00  better 21/24
+atkinson | linear Y+opp/2          2.98 [0.70–4.89]  Y 0.98–1.00  better  2/24
+atkinson | linear Y+opp*2          2.50 [0.95–4.01]  Y 0.96–1.01  better 23/24
+atkinson | linear YCbCr            2.65 [0.71–4.23]  Y 0.97–1.00  better 22/24
+atkinson | linear S-CIELAB opp     3.22 [0.96–5.63]  Y 0.97–1.00  better  0/24
+ordered | sRGB today               2.59 [0.78–4.21]  Y 1.00–1.02  better  8/24
+ordered | 8-bit recipe             2.58 [0.87–4.25]  Y 0.97–1.01  better  0/24
+ordered | linear RGB               2.54 [0.81–4.23]  Y 0.97–1.01  better 22/24
+ordered | linear Y+opp             2.48 [0.79–4.13]  Y 0.98–1.01  better 22/24
+ordered | linear Y+opp/2           2.79 [0.78–4.45]  Y 0.98–1.00  better  1/24
+ordered | linear Y+opp*2           2.29 [0.90–3.89]  Y 0.97–1.01  better 23/24
+ordered | linear YCbCr             2.45 [0.78–4.10]  Y 0.98–1.01  better 24/24
+ordered | linear S-CIELAB opp      3.07 [0.91–4.63]  Y 0.98–1.00  better  0/24

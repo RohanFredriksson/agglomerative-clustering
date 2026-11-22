@@ -316,4 +316,102 @@ describe('recipes in the guides', () => {
         expect(follow(Array.from(first), first.slice(0, 6))).toEqual(Array.from(first.slice(0, 6)));
     });
 
+    // "Dithering to a few inks: mix in light" (docs/api.md). The function is the docs' own, checked against their text.
+    // Dithers an RGBA image ({ data, width }, or ImageData) to `inks` (flat RGB values, like `eink` above), mixing colours
+    // as light. Resolves like quantizeToIndicesWithPalette(image, inks, options): indices[i] is the entry of `inks` for
+    // pixel i. It dithers with Floyd–Steinberg unless `options.dither` says otherwise.
+    async function ditherInLight(image, inks, options = {}) {
+        if (image.format !== undefined && image.format !== 'rgba') {throw new TypeError(`Invalid image: ditherInLight takes RGBA data, got format '${image.format}'.`);}
+        if (options.colorSpace !== undefined && options.colorSpace !== 'rgb') {throw new TypeError('Invalid options.colorSpace: ditherInLight matches in linear light; leave colorSpace out.');}
+        // sRGB 0-255 to linear light, 0-1
+        const linear = Array.from({ length: 256 }, (_, v) => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        // Writes a colour (from `source` at `i`) as three bytes: red-green difference, brightness, blue-yellow difference
+        // (BT.709 weights, on linear values). A Uint8ClampedArray `target` rounds and clamps them.
+        const inLight = (source, target, i) => {
+            const r = linear[source[i]], g = linear[source[i + 1]], b = linear[source[i + 2]];
+            const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            target[i] = 128 + 255 * (r - y) / 1.5748;
+            target[i + 1] = 127.5 * y;
+            target[i + 2] = 128 + 255 * (b - y) / 1.8556;
+        };
+        const data = new Uint8ClampedArray(image.data.length);
+        for (let i = 0; i < data.length; i += 4) {
+            inLight(image.data, data, i);
+            data[i + 3] = image.data[i + 3];   // alpha stays as it is
+        }
+        const palette = new Uint8ClampedArray(inks.length);
+        for (let i = 0; i < inks.length; i += 3) {inLight(inks, palette, i);}
+        const result = await quantizeToIndicesWithPalette({ data, format: 'rgba', width: image.width }, new Uint8Array(palette), { dither: true, ...options });
+        result.palette.set(inks);   // the inks' own colours; with `transparent`, its entry stays after them
+        return result;
+    }
+
+    describe('mixing in light', () => {
+        const eink = [0, 0, 0, 255, 255, 255, 0, 255, 0, 0, 0, 255, 255, 0, 0, 255, 255, 0, 255, 128, 0];
+        const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        // Mean brightness in light (relative luminance) of an RGBA image, or of indices into a palette.
+        const brightness = (colours) => colours.reduce((sum, [r, g, b]) => sum + 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b), 0) / colours.length;
+        const pixels = (rgba) => Array.from({ length: rgba.length / 4 }, (_, i) => [rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2]]);
+        const inks = (indices, palette) => Array.from(indices, (j) => [palette[3 * j], palette[3 * j + 1], palette[3 * j + 2]]);
+        // A smooth photo-like image: a grey ramp across, a hue wash down.
+        const w = 96, h = 64, photo = new Uint8Array(w * h * 4);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const v = (x / (w - 1)) * 255, t = y / (h - 1);
+                photo.set([v * (1 - 0.4 * t), v, v * (1 - 0.4 * (1 - t)), 255].map(Math.round), 4 * (y * w + x));
+            }
+        }
+
+        it('is the function in the API reference', async () => {
+            const { readFile } = await import('fs/promises');
+            const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+            const source = (text) => {
+                const lines = text.split('\n');
+                const start = lines.findIndex((line) => line.trim().startsWith('async function ditherInLight('));
+                expect(start, 'the function is in the file').toBeGreaterThanOrEqual(0);
+                const indent = lines[start].match(/^ */)[0];
+                const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+                return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
+            };
+            const [api, test] = await Promise.all([read('../docs/api.md'), read('./recipes.test.js')]);
+            expect(source(test)).toBe(source(api));
+        });
+
+        it('keeps the brightness that dithering sRGB values loses, with error diffusion and ordered', async () => {
+            const original = brightness(pixels(photo));
+            for (const dither of [true, 'ordered']) {
+                const srgb = await quantizeToIndicesWithPalette({ data: photo, format: 'rgba', width: w }, eink, { dither });
+                const light = await ditherInLight({ data: photo, width: w }, eink, { dither });
+                expect(brightness(inks(srgb.indices, eink)) / original, `${dither}: sRGB values come out too light`).toBeGreaterThan(1.3);
+                expect(brightness(inks(light.indices, eink)) / original, `${dither}: in light`).toBeCloseTo(1, 1);
+            }
+            // Black and white too.
+            const bw = [0, 0, 0, 255, 255, 255];
+            const light = await ditherInLight({ data: photo, width: w }, bw);
+            expect(brightness(inks(light.indices, bw)) / original).toBeCloseTo(1, 1);
+        });
+
+        it('takes ImageData, keeps the image\'s alpha, passes options on, and gives back the inks as the palette', async () => {
+            const withHole = Uint8ClampedArray.from(photo);
+            for (let i = 3; i < 4 * w * 4; i += 4) {withHole[i] = 0;}   // the first four rows are fully transparent
+            const result = await ditherInLight(new ImageData(withHole, w, h), eink, { transparent: true });
+            expect(result.transparentIndex).toBe(7);
+            expect(Array.from(result.palette.slice(0, 21))).toEqual(eink);
+            expect(result.palette.length).toBe(8 * 3);
+            expect(Array.from(result.indices.slice(0, 4 * w)).every((j) => j === 7)).toBe(true);
+            expect(Array.from(result.indices.slice(4 * w)).every((j) => j < 7)).toBe(true);
+            // Options without `dither` still dither: the same indices as asking for it.
+            const asked = await ditherInLight(new ImageData(withHole, w, h), eink, { transparent: true, dither: true });
+            expect(Array.from(result.indices)).toEqual(Array.from(asked.indices));
+            const plain = await ditherInLight(new ImageData(withHole, w, h), eink, { transparent: true, dither: false });
+            expect(Array.from(result.indices)).not.toEqual(Array.from(plain.indices));
+        });
+
+        it('rejects RGB data and another colour space rather than misreading them', async () => {
+            await expect(ditherInLight({ data: photo.slice(0, 3 * w), format: 'rgb', width: w }, eink)).rejects.toThrow(/takes RGBA data, got format 'rgb'/);
+            await expect(ditherInLight({ data: photo, width: w }, eink, { colorSpace: 'oklab' })).rejects.toThrow(/leave colorSpace out/);
+            await expect(ditherInLight({ data: photo, format: 'rgba', width: w }, eink, { colorSpace: 'rgb' })).resolves.toBeTruthy();
+        });
+    });
+
 });

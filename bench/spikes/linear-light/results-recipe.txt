@@ -1,0 +1,14 @@
+eink floyd-steinberg srgb          ΔE 19.81 Y 1.14 - 2.55
+eink floyd-steinberg light         ΔE 4.27 Y 0.99 - 1.00
+eink ordered srgb                  ΔE 20.63 Y 1.16 - 2.77
+eink ordered light                 ΔE 6.23 Y 0.97 - 1.01
+bw floyd-steinberg srgb            ΔE 22.46 Y 1.17 - 2.78
+bw floyd-steinberg light           ΔE 12.18 Y 0.62 - 1.01
+bw ordered srgb                    ΔE 23.20 Y 1.15 - 3.12
+bw ordered light                   ΔE 12.30 Y 0.96 - 0.99
+extracted16 floyd-steinberg srgb   ΔE 2.47 Y 0.99 - 1.02
+extracted16 floyd-steinberg light  ΔE 2.69 Y 1.00 - 1.06
+extracted16 ordered srgb           ΔE 2.59 Y 1.00 - 1.02
+extracted16 ordered light          ΔE 2.33 Y 0.97 - 1.02
+768x512: conversion 8 ms (19.5 ns a pixel), whole call 28 ms
+3840x2160: conversion 96 ms (11.6 ns a pixel), whole call 572 ms
