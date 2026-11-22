@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased (3.4.0)
+
+Output is unchanged; the golden tests pin it.
+
+### Added
+- **`buildClustering`, `buildPalette` and `buildSwatches`:** the functions that cluster an image now have verb names, in both entries and on `createWorker()` workers, so that a name starting with `get` reads or cuts what it is given (`clustering.getPalette(k)`, `getPaletteFromClustering`). Same arguments, options, results and errors.
+
+### Deprecated
+- **`getClustering`, `getPalette` and `getSwatches`** are the same functions under their old names (`getPalette === buildPalette`). They keep working through 3.x and are removed in 4.0; [Migrating](docs/migrating.md#deprecated-in-34-removed-in-40) has the table. The methods on clusterings and worker handles keep their names.
+  - **Lint:** rules for deprecated APIs (`@typescript-eslint/no-deprecated`, `sonarjs/deprecation`) will now flag `getPalette(image, k)` and the other two.
+  - **TypeScript:** `AgglomerativeWorker` gains `buildClustering`, `buildPalette` and `buildSwatches`, so a hand-written implementation or a typed mock must add them. [stability.md](docs/stability.md) now says that interfaces the library implements gain members when functions are added.
+  - **Mocks:** a mock replaces only the name it lists; update mock factories with the call sites.
+
 ## 3.3.0
 
 Output is unchanged; the golden tests pin it.
