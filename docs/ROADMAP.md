@@ -40,7 +40,7 @@ What was planned as 2.1 and 3.0 ships together as 3.0, since the clustering form
 - [x] **Runs where people put it:** CDNs (cross-origin workers through a `blob:` module), Deno, Bun, Cloudflare Workers, Next.js server bundles, SvelteKit and Nuxt, Electron (packaged with asar), browser extensions, Jest's CommonJS mode, jsdom; `createWorker({ script })` for bundlers that don't emit the worker script (Angular, esbuild, Rollup).
 - [x] **Tests as a consumer sees the package:** a Vite build run in headless Chromium (worker, `.wasm`, slices, aborts, `wasm` locations), strict TypeScript against the built declarations, and the full suite on Node 20, 22 and 24, in CI.
 
-## 3.x: one minor release each, in this order
+## Next: one minor release each, in this order
 
 Each item ships as its own minor release when it is ready, rather than waiting for the others. Items 1 to 4 are done; 3.4.0 is next.
 
@@ -120,7 +120,7 @@ Changes that would break code written against 3.x wait here for the next major v
   | Worker handle | `worker.cluster(image)` | — | — | — | — |
 
   A `worker.load(clustering)` handle (way out 3) keeps the handle names; its mapping methods' shape is still open.
-- **Remove the `get…` names of the functions that cluster an image** (`getClustering(image)`, `getPalette(image, k)`, `getSwatches(image, k)`, in both entries), deprecated from 3.4.0 in favour of `buildClustering`, `buildPalette` and `buildSwatches` (3.x, item 5). 4.0 also renames the worker's wire names, which stay the old ones through 3.x.
+- **Remove the `get…` names of the functions that cluster an image** (`getClustering(image)`, `getPalette(image, k)`, `getSwatches(image, k)`, in both entries), deprecated from 3.4.0 in favour of `buildClustering`, `buildPalette` and `buildSwatches` (Next, item 5). 4.0 also renames the worker's wire names, which stay the old ones through 3.x.
   - In 4.0, `get…` names only calls that read or cut what they're given; they never cluster, map or search, in function and method forms alike. The maintainer decided this in 3.3.0 (PRINCIPLES "Settled decisions").
   - The 4.0 type entries above (narrowed results, the `RawImage` union) apply to the verb functions.
   - **Unaffected:** `getPaletteFromClustering`, `getSwatchesFromClustering`, `getClusteringInfo`, and every `get…` method on `Clustering` and handles.
