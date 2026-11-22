@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## Unreleased (3.4.2)
 
-Docs and tests only: output and the API are unchanged.
+Output and the API are unchanged; the golden tests pin it.
+
+### Performance
+- **Ordered dithering with 65 to 96 colours is 10–23% faster** (RGB): recipe steps now use the exact four-wide scan up to 96 colours (it was 64), where it beats the palette index; above that the index stays faster. Measured on video frames at 480×270 and 160×90 (`bench/spikes/recipe-reuse/sizes.mjs`). New goldens at 96 colours, made before the change, pin that the output is the same.
 
 ### Docs
 - **Faster ordered dithering for animations:** the guides' "Animated GIFs" section shows how to map frames in batches (`mapFramesInBatches`): frames stacked into one call, each padded to a multiple of 8 rows, give the same indices as one call per frame, and build each colour's recipe once. Batches of 12 took 0.36 to 0.78 of the time on film clips and 0.12 to 0.29 on screen recordings and pans. `test/recipes.test.js` runs it and checks it matches the guides. It rests on a property now promised through 3.x (API reference and stability.md): with ordered dithering, for a given palette and options, a pixel's result depends only on its own colour and its position modulo 8 from the image's top-left pixel. Which colours it picks can still change between releases, like any output. A built-in (a prepared palette or frame mapper) was measured and not added: the ROADMAP has why.

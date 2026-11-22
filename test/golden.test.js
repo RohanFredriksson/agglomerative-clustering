@@ -105,8 +105,9 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         const large = await getPaletteFromClustering(await buildClustering(rgba), 400);
         check(`${name}/map/rgb/400`, await quantizeWithPalette(rgba, large));
         check(`${name}/map/oklab/400`, await quantizeWithPalette(rgba, large, { colorSpace: 'oklab' }));
-        // Ordered dithering searches small RGB palettes (up to 64 colours) its own way; these pin the other two paths, the
-        // cell index (here 400 colours) and, above 1024 colours, the k-d tree.
+        // Ordered dithering searches small RGB palettes (up to 96 colours) its own way; 96 pins that scan at its limit, and
+        // the others the other two paths, the cell index (here 400 colours) and, above 1024 colours, the k-d tree.
+        check(`${name}/quantize/rgb/96/dither-ordered`, await quantize(rgba, 96, { dither: 'ordered', width }));
         check(`${name}/map/rgb/400/dither-ordered`, await quantizeWithPalette(rgba, large, { dither: 'ordered', width }));
         const huge = await getPaletteFromClustering(await buildClustering(rgba), 1100);
         check(`${name}/map/rgb/1100/dither-ordered`, await quantizeWithPalette(rgba, huge, { dither: 'ordered', width }));
