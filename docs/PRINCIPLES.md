@@ -29,7 +29,7 @@ It takes decoded pixels in the byte layouts that real sources produce (`imageFor
 ## The test for a new feature
 
 A feature belongs in the library when all of these hold:
-1. **It needs the library.** It uses the tree, the WebAssembly heap or the pixel loops, or a user can't do it correctly and fast enough in a few lines outside. Otherwise it is a recipe in the guides.
+1. **It needs the library.** It uses the tree, the WebAssembly heap or the pixel loops, or a user can't do it correctly and fast enough in a few lines outside. Otherwise it is a recipe in the guides. This test is shown, not asserted: before a spec is written, the strongest recipe is built and measured through the published API, and the case for the feature is what the built-in adds over that recipe (the value brief, CLAUDE.md "Design review"). The linear-light dither option failed here only once that was done: a recipe matched it (ROADMAP "Considered").
 2. **Someone asked for it**, in an issue or an exploratory round, for a use case the README names or should name. A feature nobody asked for is not added.
 3. **Its policy isn't the app's.** If the right setting depends on the application (timing, queueing, weights), it stays in the application.
 4. **It doesn't change what the library is:** no state kept across calls, no second engine, no runtime dependency and no large growth of the WebAssembly, unless the feature is worth that cost on its own, and the reasons are written down.
