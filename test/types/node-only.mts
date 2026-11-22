@@ -1,6 +1,6 @@
 // A Node-only project: no DOM lib, so no global `ImageData`. The declarations must compile with `skipLibCheck` off,
 // and the types must stay precise (not fall back to `any`).
-import { quantize, quantizeToIndices, init, getClusteringInfo, getClustering } from 'agglomerative-clustering';
+import { quantize, quantizeToIndices, init, getClusteringInfo, buildClustering } from 'agglomerative-clustering';
 import { createWorker, quantize as workerQuantize } from 'agglomerative-clustering/worker';
 import type { ImageLike, RawImage } from 'agglomerative-clustering';
 
@@ -18,7 +18,7 @@ export async function run() {
     const f = await createWorker().cluster(raw);
     const g: RawImage = await f.quantize(4);
     const indexed = await quantizeToIndices(buffer, 8, { transparent: true, signal: new AbortController().signal });
-    const info = await getClusteringInfo(await getClustering(bytes));
+    const info = await getClusteringInfo(await buildClustering(bytes));
     const mse: Float64Array = info.mse;
     await init({ wasm: 'clustering.wasm' });
     await init({ wasm: new Uint8Array(8) });
@@ -32,7 +32,7 @@ export async function run() {
     await quantize(raw, 4, { reserveTransparent: true });
     const h: RawImage = await quantize({ data: bytes, format: 'bgra' as const, width: 4 }, 4);
     // Methods on Clustering, typed without the DOM lib.
-    const clustering = await getClustering(raw);
+    const clustering = await buildClustering(raw);
     const m: RawImage = await clustering.quantize(raw, 4);
     const n: Uint8Array = await clustering.quantize(buffer, 4);
     // @ts-expect-error the result for a RawImage is not a string

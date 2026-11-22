@@ -92,9 +92,18 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
 export interface AgglomerativeWorker {
     /** Loads the module in the worker. `wasm` is the only option, and `createWorker({ wasm })` does the same. */
     init(options?: InitOptions): Promise<void>;
+    /** The main entry's `buildClustering`, run in this worker. */
+    buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+    /** @deprecated Renamed {@link AgglomerativeWorker.buildClustering} in 3.4.0 (the same function). Removed in 4.0. */
     getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+    /** The main entry's `buildPalette`, run in this worker. */
+    buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
+    /** @deprecated Renamed {@link AgglomerativeWorker.buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
     getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
     getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
+    /** The main entry's `buildSwatches`, run in this worker. */
+    buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+    /** @deprecated Renamed {@link AgglomerativeWorker.buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
     getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
     getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
     getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
@@ -129,13 +138,19 @@ export function terminate(): Promise<void>;
  * shared worker's `script`, before any other call.
  */
 export function init(options?: SharedInitOptions): Promise<void>;
-/** The main entry's `getClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** The main entry's `buildClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+export const buildClustering: AgglomerativeWorker['buildClustering'];
+/** @deprecated Renamed {@link buildClustering} in 3.4.0 (the same function). Removed in 4.0. */
 export const getClustering: AgglomerativeWorker['getClustering'];
-/** The main entry's `getPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** The main entry's `buildPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
+export const buildPalette: AgglomerativeWorker['buildPalette'];
+/** @deprecated Renamed {@link buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
 export const getPalette: AgglomerativeWorker['getPalette'];
 /** The main entry's `getPaletteFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const getPaletteFromClustering: AgglomerativeWorker['getPaletteFromClustering'];
-/** The main entry's `getSwatches`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** The main entry's `buildSwatches`, run in the shared worker (see `createWorker` for a worker of your own). */
+export const buildSwatches: AgglomerativeWorker['buildSwatches'];
+/** @deprecated Renamed {@link buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
 export const getSwatches: AgglomerativeWorker['getSwatches'];
 /** The main entry's `getSwatchesFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const getSwatchesFromClustering: AgglomerativeWorker['getSwatchesFromClustering'];

@@ -125,7 +125,7 @@ export class Palette extends Uint8Array {
 }
 
 /**
- * The bytes of a clustering, as `getClustering` returns them: an opaque `Uint8Array` (tagged, like `Palette`) that you can
+ * The bytes of a clustering, as `buildClustering` returns them: an opaque `Uint8Array` (tagged, like `Palette`) that you can
  * store (a file, IndexedDB, next to the image) and cut to a palette of any size later. It is a type of its own, so a
  * clustering can't be passed where a palette goes (or the other way round): TypeScript says so, and at run time a
  * `Clustering` given as a palette is rejected, with no guessing about its bytes. Stored bytes come back as a plain
@@ -200,7 +200,7 @@ export interface ProgressOptions extends CancelOptions {
     onProgress?: ((progress: number) => void) | undefined;
 }
 
-/** Options for building the colour hierarchy: `getClustering`, `getPalette`, and the clustering half of `quantize` and `quantizeToIndices`. */
+/** Options for building the colour hierarchy: `buildClustering`, `buildPalette`, and the clustering half of `quantize` and `quantizeToIndices`. */
 export interface ClusteringOptions extends ProgressOptions {
     /**
      * `'rgb'` (default) minimises squared sRGB error, which is what MSE/PSNR measure.
@@ -223,7 +223,7 @@ export interface ClusteringOptions extends ProgressOptions {
      * `false` (default), `true`, or an alpha cutoff from 1 to 255 (`true` means 128), for images with alpha (RGBA or BGRA): pixels with alpha
      * below the cutoff don't exist as far as the palette is concerned. They are left out of clustering, and the rest count
      * whole instead of by opacity (so it replaces `alpha` for this call). That is the model of indexed output (GIF, palette
-     * PNG), and it gives the same palette everywhere: `getPalette(image, k, { transparent })` is the palette
+     * PNG), and it gives the same palette everywhere: `buildPalette(image, k, { transparent })` is the palette
      * `quantizeToIndices(image, k, { transparent })` uses, apart from that function's extra transparent entry.
      * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`). The cutoff is recorded in the
      * clustering (see `ClusteringInfo.transparent`), and `quantizeToIndicesFromClustering` uses it unless you name one.
@@ -293,7 +293,7 @@ export interface IndexOptions {
      * opaque in its nearest colour. `k` counts that entry, so `k = 256` gives at most 256 entries (255 colours and the
      * transparent one) and 8-bit indices, the limit of a GIF or palette PNG; at least one colour is kept when any pixel is visible (an image with none gives just the transparent entry). Where
      * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
-     * `ClusteringOptions.transparent`), so its palette is `getPalette(image, k - 1, { transparent })`'s. With a palette
+     * `ClusteringOptions.transparent`), so its palette is `buildPalette(image, k - 1, { transparent })`'s. With a palette
      * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
      * `quantizeToIndicesFromClustering` the default is the cutoff the clustering was made with.
      */
@@ -352,7 +352,7 @@ export interface InitOptions {
 export const version: string;
 
 /**
- * The version of the data this library stores: the format of the clusterings `getClustering` writes (`getClusteringInfo`
+ * The version of the data this library stores: the format of the clusterings `buildClustering` writes (`getClusteringInfo`
  * reports a clustering's own as its `formatVersion`). One integer for the library's stored data, unrelated to `version`: it
  * changes only when the stored format does, so a new release that keeps the format keeps this number, and a minor release
  * may raise it. Every earlier format from 2 on stays readable (see `getClusteringInfo` for what 2.x clusterings lack).
@@ -371,16 +371,20 @@ export function init(options?: InitOptions): Promise<void>;
  * cache or store next to the image. Cut it to a palette of any size with `getPaletteFromClustering`, or map pixels
  * with `quantizeFromClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
  */
+export function buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+/** @deprecated Renamed {@link buildClustering} in 3.4.0 (the same function). Removed in 4.0. */
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 
 /**
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
- * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `getClustering`
+ * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `buildClustering`
  * once and cut it.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
+export function buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
+/** @deprecated Renamed {@link buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
 
 /**
@@ -417,10 +421,12 @@ export interface Swatches {
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
+export function buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+/** @deprecated Renamed {@link buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
 export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 
 /**
- * The same as `getSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
+ * The same as `buildSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
  * Needs a clustering from 3.x; a 2.x clustering has no weights and is rejected.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
@@ -501,7 +507,7 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
 
 /**
  * Like `quantize`, but returns each pixel's palette index instead of its colour, with the palette (for palette
- * PNGs, pixel art and pattern generators). The palette is the one `getPalette` gives, except that with `transparent`
+ * PNGs, pixel art and pattern generators). The palette is the one `buildPalette` gives, except that with `transparent`
  * pixels below the cutoff are left out of it.
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
