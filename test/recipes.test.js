@@ -316,6 +316,142 @@ describe('recipes in the guides', () => {
         expect(follow(Array.from(first), first.slice(0, 6))).toEqual(Array.from(first.slice(0, 6)));
     });
 
+    // "Animated GIFs": mapping frames in batches with ordered dithering. The function is the guides' own, checked against
+    // their text; the promise it rests on is that a pixel's ordered colour depends only on its colour and its position in
+    // the 8×8 pattern, anchored at the image's top-left pixel.
+    // Maps `frames` (all the same size, { data, format: 'rgba', width, height }) with `palette`, `batch` frames per call.
+    // Returns { palette, indices, transparentIndex } for each frame. A batch's indices share one buffer: .slice() one
+// before transferring it.
+    async function mapFramesInBatches(frames, palette, batch = 12) {
+        const { width, height } = frames[0];
+        const rows = Math.ceil(height / 8) * 8;   // each frame starts on the 8×8 pattern's grid
+        const rowBytes = width * 4;
+        const results = [];
+        for (let start = 0; start < frames.length; start += batch) {
+            const group = frames.slice(start, start + batch);
+            const data = new Uint8Array(group.length * rows * rowBytes);
+            group.forEach((frame, i) => {
+                data.set(frame.data, i * rows * rowBytes);
+                // Pad by repeating the last row: it adds no colours or transparency the frame didn't have.
+                const last = frame.data.subarray((height - 1) * rowBytes, height * rowBytes);
+                for (let y = height; y < rows; y++) {data.set(last, (i * rows + y) * rowBytes);}
+            });
+            const { palette: entries, indices, transparentIndex } = await quantizeToIndicesWithPalette(
+                { data, format: 'rgba', width, height: group.length * rows }, palette, { transparent: true, dither: 'ordered' });
+            group.forEach((_, i) => {
+                results.push({ palette: entries, indices: indices.subarray(i * rows * width, (i * rows + height) * width), transparentIndex });
+            });
+        }
+        return results;
+    }
+
+    describe('mapping frames in batches', () => {
+        // Frames of a moving scene, 13 rows high (not a multiple of 8): a gradient that shifts, with a disc moving
+        // across it. In `holes`, some frames have fully transparent pixels.
+        const fw = 40, fh = 13;
+        const makeFrames = (count, holes = []) => Array.from({ length: count }, (_, f) => {
+            const frame = new Uint8Array(fw * fh * 4);
+            for (let y = 0; y < fh; y++) {
+                for (let x = 0; x < fw; x++) {
+                    const inDisc = Math.hypot(x - 3 * f, y - 6) < 5;
+                    const alpha = holes.includes(f) && x < 4 ? 0 : 255;
+                    frame.set(inDisc ? [230, 60 + 9 * f, 40, alpha] : [(x * 6 + f * 4) & 255, y * 17, 200 - x * 3, alpha], (y * fw + x) * 4);
+                }
+            }
+            return { data: frame, format: 'rgba', width: fw, height: fh };
+        });
+        const one = (frame, palette) => quantizeToIndicesWithPalette(frame, palette, { transparent: true, dither: 'ordered' });
+
+        it('is the function printed in the guides', async () => {
+            const { readFile } = await import('fs/promises');
+            const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+            const source = (text) => {
+                const lines = text.split('\n');
+                const start = lines.findIndex((line) => line.trim().startsWith('async function mapFramesInBatches('));
+                expect(start).toBeGreaterThanOrEqual(0);
+                const indent = lines[start].match(/^ */)[0];
+                const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
+                return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
+            };
+            const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+            expect(source(test)).toBe(source(guides));
+        });
+
+        it('gives every frame the indices one call per frame gives, at any batch size', async () => {
+            const frames = makeFrames(10);
+            for (const palette of [await buildPalette(makeFrames(1)[0], 12), new Uint8Array([0, 0, 0, 255, 255, 255])]) {
+                const expected = await Promise.all(frames.map((frame) => one(frame, palette)));
+                for (const batch of [1, 3, 4, 12]) {
+                    const got = await mapFramesInBatches(frames, palette, batch);
+                    expect(got).toHaveLength(frames.length);
+                    got.forEach((result, f) => {
+                        expect(Array.from(result.indices), `batch ${batch}, frame ${f}`).toEqual(Array.from(expected[f].indices));
+                        expect(Array.from(result.palette)).toEqual(Array.from(expected[f].palette));
+                        expect(result.transparentIndex).toBe(null);
+                    });
+                }
+            }
+        });
+
+        it('gives the transparent entry to every frame of a batch that has transparent pixels, with the same indices', async () => {
+            const frames = makeFrames(6, [1, 4]);
+            const palette = await buildPalette(makeFrames(1)[0], 8);
+            const expected = await Promise.all(frames.map((frame) => one(frame, palette)));
+            expect(expected[0].transparentIndex).toBe(null);
+            expect(expected[1].transparentIndex).toBe(palette.length / 3);
+            const got = await mapFramesInBatches(frames, palette, 3);
+            got.forEach((result, f) => {
+                expect(Array.from(result.indices), `frame ${f}`).toEqual(Array.from(expected[f].indices));
+                expect(result.transparentIndex).toBe(palette.length / 3);   // each batch of three has a frame with holes
+                expect(result.palette.length).toBe(palette.length + 3);
+            });
+        });
+
+        it('rests on a promise that holds for every ordered setting (api.md, stability.md)', async () => {
+            // A pixel's result depends only on its colour, its alpha against the cutoff and its position modulo 8, so
+            // frames stacked on the 8-row grid give each frame's own indices, whatever the options.
+            const frames = makeFrames(5).map((frame, f) => {
+                const data = Uint8Array.from(frame.data);
+                for (let p = 0; p < data.length / 4; p++) {if ((p + f) % 7 === 0) {data[4 * p + 3] = p % 2 ? 100 : 200;}}
+                return { ...frame, data };
+            });
+            const palette = await buildPalette(makeFrames(1)[0], 12);
+            const rows = 16;
+            const data = new Uint8Array(frames.length * rows * fw * 4);
+            frames.forEach((frame, i) => {
+                data.set(frame.data, i * rows * fw * 4);
+                for (let y = fh; y < rows; y++) {data.copyWithin((i * rows + y) * fw * 4, (i * rows + fh - 1) * fw * 4, (i * rows + fh) * fw * 4);}
+            });
+            const stacked = { data, format: 'rgba', width: fw, height: frames.length * rows };
+            const settings = [
+                { dither: 'ordered', colorSpace: 'oklab' },
+                { dither: { method: 'ordered', steps: 2 } },
+                { dither: { method: 'ordered', steps: 32 } },
+                { dither: { method: 'ordered', strength: 0.25 } },
+                { dither: 'ordered', transparent: 128 },
+            ];
+            for (const options of settings) {
+                const { indices } = await quantizeToIndicesWithPalette(stacked, palette, options);
+                for (let f = 0; f < frames.length; f++) {
+                    const own = (await quantizeToIndicesWithPalette(frames[f], palette, options)).indices;
+                    expect(Array.from(indices.subarray(f * rows * fw, (f * rows + fh) * fw)), `${JSON.stringify(options)}, frame ${f}`).toEqual(Array.from(own));
+                }
+            }
+        });
+
+        it('without the padding, later frames would get a shifted pattern', async () => {
+            // The reason for the padding, kept honest: stacking 13-row frames directly changes some frame's indices.
+            const frames = makeFrames(4);
+            const palette = await buildPalette(makeFrames(1)[0], 12);
+            const expected = await Promise.all(frames.map((frame) => one(frame, palette)));
+            const data = new Uint8Array(frames.length * fw * fh * 4);
+            frames.forEach((frame, i) => data.set(frame.data, i * fw * fh * 4));
+            const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', width: fw, height: frames.length * fh }, palette, { transparent: true, dither: 'ordered' });
+            const differs = frames.some((_, f) => Array.from(indices.subarray(f * fw * fh, (f + 1) * fw * fh)).some((v, j) => v !== expected[f].indices[j]));
+            expect(differs).toBe(true);
+        });
+    });
+
     // "Dithering to a few inks: mix in light" (docs/api.md). The function is the docs' own, checked against their text.
     // Dithers an RGBA image ({ data, width }, or ImageData) to `inks` (flat RGB values, like `eink` above), mixing colours
     // as light. Resolves like quantizeToIndicesWithPalette(image, inks, options): indices[i] is the entry of `inks` for

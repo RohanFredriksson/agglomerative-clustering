@@ -72,6 +72,7 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - the main entry if loaded, else the worker (an import would change where code runs).
 
   A lazy loader in the worker entry and one slot across copies of the package were left out, not rejected for good: both are additive later (ROADMAP "Considered").
+- **`Palette` keeps no methods:** `…WithPalette` takes a `PaletteLike` ("Methods go where losing them costs nothing"). The last open condition, ROADMAP item 6 (reusing dither recipes), ended as a recipe. A frame-mapper object is a separate question (ROADMAP "Considered").
 - **The default colour space stays `'rgb'`.**
 - **Indexed output:** `transparent` is `boolean | cutoff`, and `k` counts the transparent entry.
 - **Errors:** every error carries a `code`, and `errorCodes` and `isCodedError` are exported. There is no error class of our own: errors that cross a worker, Electron's IPC or `postMessage` arrive as plain objects, so `instanceof` would mislead.
@@ -89,7 +90,8 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - a matte colour;
   - smoothing palettes across frames;
   - a function for choosing N colours from a fixed palette (a recipe in the guides covers it);
-  - a linear-light dither option (a recipe in the API reference covers it).
+  - a linear-light dither option (a recipe in the API reference covers it);
+  - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it).
 - **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.

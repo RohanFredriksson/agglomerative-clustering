@@ -1,0 +1,36 @@
+Ordered dithering, 16 steps, RGB; 12 frames, sum of per-frame minima over 3 passes, ms. ratio = wide / released.
+(Palettes above 256 colours don't take the scan in either build: a control.)
+
+## desert-480.rgba
+colours  released    wide  ratio
+     48     140.5   136.0   0.97
+     64     153.1   151.9   0.99
+     65     182.4   153.7   0.84
+     96     193.5   180.7   0.93
+    128     210.6   214.0   1.02
+    192     239.3   269.9   1.13
+    255     258.0   332.7   1.29
+    400     303.3   307.3   1.01
+
+## girl-480.rgba
+colours  released    wide  ratio
+     48     573.4   563.2   0.98
+     64     651.7   644.7   0.99
+     65     814.6   657.6   0.81
+     96     867.8   767.4   0.88
+    128     945.6   905.5   0.96
+    192    1027.2  1161.3   1.13
+    255    1098.5  1425.9   1.30
+    400    1160.7  1158.9   1.00
+
+## pan-160.rgba
+colours  released    wide  ratio
+     48     123.9   121.5   0.98
+     64     139.7   135.9   0.97
+     65     175.6   139.5   0.79
+     96     184.7   163.6   0.89
+    128     197.1   193.3   0.98
+    192     223.8   248.3   1.11
+    255     236.6   310.8   1.31
+    400     270.0   264.4   0.98
+

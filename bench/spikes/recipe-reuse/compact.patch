@@ -1,0 +1,88 @@
+--- a/src/clustering.cpp
++++ b/src/clustering.cpp
+@@ -792,8 +792,6 @@
+         int image_bits = 1;
+         while (image_bits < recipe_bits && (size_t(1) << image_bits) < 2 * pixels) {image_bits++;}
+         recipe_bits = std::max(4, std::min(recipe_bits, image_bits));
+-        std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
+-        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * steps);
+         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
+         // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
+         std::vector<uint32_t> brightness(points.size());
+@@ -879,33 +877,52 @@
+             }
+             return scan_nearest(target);
+         };
+-        for (size_t y = 0; y < height; y++) {
+-            for (size_t x = 0; x < size_t(width); x++) {
+-                const size_t p = y * size_t(width) + x;
+-                const uint8_t* pixel = image_data + p * increment;
+-                if (L.alpha && pixel[3] < skip_below) {
+-                    emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+-                    continue;
+-                }
+-                const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
+-                const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
+-                int32_t* recipe = &recipes[size_t(slot) * steps];
+-                if (recipe_keys[slot] != key) {
+-                    recipe_keys[slot] = key;
+-                    const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
+-                    float e[3] = {0.0f, 0.0f, 0.0f};
+-                    for (size_t i = 0; i < steps; i++) {
+-                        float wanted[3];
+-                        for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
+-                        const int32_t chosen = pick_recipe(wanted);
+-                        recipe[i] = chosen;
+-                        for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
++        // SPIKE: one record per slot, the key (plus one, so a zeroed table is empty) followed by the recipe's entries in
++        // the narrowest type that holds a distinct-colour index, padded to 4 bytes. Same slot count as before.
++        const size_t slots = size_t(1) << recipe_bits;
++        auto run = [&](auto zero) {
++            using Entry = decltype(zero);
++            const size_t stride = 4 + (steps * sizeof(Entry) + 3) / 4 * 4;
++            std::vector<uint8_t> table(slots * stride, 0);
++            std::vector<int32_t> built(steps);
++            for (size_t y = 0; y < height; y++) {
++                for (size_t x = 0; x < size_t(width); x++) {
++                    const size_t p = y * size_t(width) + x;
++                    const uint8_t* pixel = image_data + p * increment;
++                    if (L.alpha && pixel[3] < skip_below) {
++                        emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
++                        continue;
++                    }
++                    const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
++                    const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
++                    uint8_t* record = &table[size_t(slot) * stride];
++                    uint32_t stored;
++                    std::memcpy(&stored, record, 4);
++                    if (stored != key + 1) {
++                        stored = key + 1;
++                        std::memcpy(record, &stored, 4);
++                        const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
++                        float e[3] = {0.0f, 0.0f, 0.0f};
++                        for (size_t i = 0; i < steps; i++) {
++                            float wanted[3];
++                            for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
++                            const int32_t chosen = pick_recipe(wanted);
++                            built[i] = chosen;
++                            for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
++                        }
++                        std::sort(built.begin(), built.end(), darker);
++                        for (size_t i = 0; i < steps; i++) {
++                            const Entry entry = Entry(built[i]);
++                            std::memcpy(record + 4 + i * sizeof(Entry), &entry, sizeof(Entry));
++                        }
+                     }
+-                    std::sort(recipe, recipe + steps, darker);
++                    Entry entry;
++                    std::memcpy(&entry, record + 4 + (size_t(bayer[y & 7][x & 7]) * steps / 64) * sizeof(Entry), sizeof(Entry));
++                    emit(p, palette_index(int32_t(entry)));
+                 }
+-                emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
+             }
+-        }
++        };
++        if (points.size() <= 256) {run(uint8_t(0));} else if (points.size() <= 65536) {run(uint16_t(0));} else {run(int32_t(0));}
+         return;
+     }
+ 

@@ -1,0 +1,31 @@
+--- a/src/clustering.cpp
++++ b/src/clustering.cpp
+@@ -789,11 +789,23 @@
+         int recipe_bits = 21;
+         for (size_t m = steps; m > 1; m >>= 1) {recipe_bits--;}
+         recipe_bits = std::max(recipe_bits, 17);
+-        int image_bits = 1;
+-        while (image_bits < recipe_bits && (size_t(1) << image_bits) < 2 * pixels) {image_bits++;}
+-        recipe_bits = std::max(4, std::min(recipe_bits, image_bits));
+-        std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
+-        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * steps);
++        // SPIKE: the table persists across calls (full size, not capped by the image) and is cleared only when the
++        // context a recipe depends on changes: the distinct palette colours in order, steps, strength, colour space.
++        struct Persisted {
++            std::vector<uint32_t> keys; std::vector<int32_t> recipes; std::vector<uint32_t> palette;
++            size_t steps = 0; float strength = -1.0f; int space = -1; int bits = 0;
++        };
++        static Persisted persisted;
++        const bool same = persisted.bits == recipe_bits && persisted.steps == steps && persisted.strength == float(internal)
++            && persisted.space == int(color_space) && persisted.palette == keys;
++        if (!same) {
++            persisted.bits = recipe_bits; persisted.steps = steps; persisted.strength = float(internal);
++            persisted.space = int(color_space); persisted.palette = keys;
++            persisted.keys.assign(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
++            persisted.recipes.resize((size_t(1) << recipe_bits) * steps);
++        }
++        std::vector<uint32_t>& recipe_keys = persisted.keys;
++        std::vector<int32_t>& recipes = persisted.recipes;
+         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
+         // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
+         std::vector<uint32_t> brightness(points.size());

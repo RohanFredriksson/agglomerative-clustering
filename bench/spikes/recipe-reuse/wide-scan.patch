@@ -1,0 +1,11 @@
+--- a/src/clustering.cpp
++++ b/src/clustering.cpp
+@@ -811,7 +811,7 @@
+         // keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the earlier
+         // position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`.
+         typedef int32_t i32x4 __attribute__((vector_size(16)));
+-        const bool scan = color_space == ColorSpace::rgb && points.size() <= 64;
++        const bool scan = color_space == ColorSpace::rgb && points.size() <= 256; // SPIKE: was 64
+         const size_t groups = scan ? (points.size() + 3) / 4 : 0;
+         std::vector<i32x4> scan_r(groups), scan_g(groups), scan_b(groups);
+         std::vector<int32_t> scan_index(groups * 4, 0);
