@@ -528,6 +528,11 @@ const makeWorker = (options, allowScript) => {
     for (const name of otherFunctions) {
         instance[name] = (...args) => invoke(name, ready() ? args : args.map(own), [], new Error());
     }
+    // 3.4.0's names for the functions that cluster an image. The old names are the same functions, and they still name the
+    // call on the wire, so a worker script copied from an older version still understands it.
+    instance.buildClustering = instance.getClustering;
+    instance.buildPalette = instance.getPalette;
+    instance.buildSwatches = instance.getSwatches;
 
     instance.init = (initArgs) => {
         const origin = new Error();
@@ -652,10 +657,13 @@ export const terminate = async () => {
 };
 
 export const init = (...args) => sharedWorker().init(...args);
-export const getClustering = (...args) => sharedWorker().getClustering(...args);
-export const getPalette = (...args) => sharedWorker().getPalette(...args);
+export const buildClustering = (...args) => sharedWorker().buildClustering(...args);
+export const getClustering = buildClustering;
+export const buildPalette = (...args) => sharedWorker().buildPalette(...args);
+export const getPalette = buildPalette;
 export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);
-export const getSwatches = (...args) => sharedWorker().getSwatches(...args);
+export const buildSwatches = (...args) => sharedWorker().buildSwatches(...args);
+export const getSwatches = buildSwatches;
 export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
 export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);

@@ -318,7 +318,7 @@ export function Clustering(...args) {
     // would coerce. A plain array must hold byte values, as for a palette.
     const isBuffer = isArrayBufferLike(source);
     if (!isUint8Array(source) && !isUint8ClampedArray(source) && !isBuffer && !Array.isArray(source)) {
-        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from getClustering.", 'clustering');
+        throw fail('invalid-clustering', "Invalid clustering: expected its bytes (a Uint8Array, or an ArrayBuffer with an optional offset and length) from buildClustering.", 'clustering');
     }
     if (Array.isArray(source) && !source.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
         throw fail('invalid-clustering', "Invalid clustering: a plain array must hold byte values, integers from 0 to 255.", 'clustering');
@@ -382,27 +382,27 @@ const crc32 = (bytes) => {
     return (crc ^ 0xFFFFFFFF) >>> 0;
 };
 const checked = new WeakSet();
-const damaged = () => fail('invalid-clustering', "Invalid clustering: its bytes are damaged (the checksum doesn't match): it was truncated, changed or mixed up with other data after getClustering made it. Cluster the image again.", 'clustering');
+const damaged = () => fail('invalid-clustering', "Invalid clustering: its bytes are damaged (the checksum doesn't match): it was truncated, changed or mixed up with other data after buildClustering made it. Cluster the image again.", 'clustering');
 
 // The message for bytes that aren't a clustering: 1.x clusterings are mentioned only for bytes that could be one (no header,
 // and a length of 0 or 3 more than a multiple of 9).
 const notAClustering = (clustering) => {
     const length = clustering.length;
     if (clustering[0] !== 0xAC && (length % 9 === 0 || length % 9 === 3)) {
-        return fail('invalid-clustering', "Invalid clustering: not a clustering from getClustering. If it was stored by agglomerative-clustering 1.x, that format is no longer read: cluster the image again.", 'clustering');
+        return fail('invalid-clustering', "Invalid clustering: not a clustering from buildClustering. If it was stored by agglomerative-clustering 1.x, that format is no longer read: cluster the image again.", 'clustering');
     }
     if (clustering[0] === 0xAC && length >= 2 && (clustering[1] === 2 || clustering[1] === 3)) {
         return fail('invalid-clustering', `Invalid clustering: it starts like a format ${clustering[1]} clustering, but its length or header doesn't fit one (${length} bytes): it was probably truncated or damaged. Cluster the image again.`, 'clustering');
     }
-    return fail('invalid-clustering', `Invalid clustering: not a clustering from getClustering (${length} bytes that don't start with a clustering header).`, 'clustering');
+    return fail('invalid-clustering', `Invalid clustering: not a clustering from buildClustering (${length} bytes that don't start with a clustering header).`, 'clustering');
 };
 
 export const readHeader = (clustering) => {
     if (isPalette(clustering)) {
-        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from getPalette and getPaletteFromClustering; a clustering comes from getClustering.", 'clustering');
+        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from buildPalette and getPaletteFromClustering; a clustering comes from buildClustering.", 'clustering');
     }
     if (!isUint8Array(clustering)) {
-        throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from getClustering.", 'clustering');
+        throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from buildClustering.", 'clustering');
     }
     const length = clustering.length;
     if (length >= 4 && clustering[0] === 0xAC) {
@@ -446,7 +446,7 @@ export const readHeader = (clustering) => {
 // image, and quantize maps such an image the same way.
 export const checkPalette = (palette) => {
     if (isClustering(palette)) {
-        throw fail('invalid-argument', "Invalid palette: this is a clustering (from getClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.", 'palette');
+        throw fail('invalid-argument', "Invalid palette: this is a clustering (from buildClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.", 'palette');
     }
     if (!isUint8Array(palette) && !isUint8ClampedArray(palette) && !Array.isArray(palette)) {
         throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.", 'palette');
