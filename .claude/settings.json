@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session-start.sh",
+            "timeout": 900,
+            "statusMessage": "Setting up Emscripten (cloud sessions only)"
+          }
+        ]
+      }
+    ]
+  }
+}

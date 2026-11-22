@@ -132,7 +132,6 @@ Changes that would break code written against 3.x wait here for the next major v
 
 - **Native build and coverage-guided fuzzing.** Sanitizers are done by hand through Emscripten's ASan/UBSan WebAssembly build (recipe in CLAUDE.md; the suite and the hostile-input fuzzers are clean), but not in CI. A native target (CMake or a short script) for the C++ would add reproducible instruction counts (callgrind) for speed work and a libFuzzer harness for `read_clustering`, `_get_palette_from_clustering` and `_get_palette_weights`: clusterings are stored by users and handed back as untrusted bytes. A CI job running the suite against the sanitized build would keep it clean.
 - **Ordered dithering: the exact scan up to 96 colours.** Recipe steps use an exact four-wide scan for RGB palettes up to 64 colours and the palette index above. Raising the limit to 96 made ordered dithering 7–21% faster at 65–96 colours, about even at 128 and slower above (`bench/spikes/recipe-reuse/sizes.mjs`, `results-sizes.txt`). Speed only, same output.
-- **Contributor setup.** Every test needs `em++`. Add a `scripts/setup-emsdk.sh` pinned to the CI version, or a devcontainer, so `npm test` works from a fresh clone, and a SessionStart hook so cloud agent sessions can build too.
 
 ## Considered, and why not (yet)
 
