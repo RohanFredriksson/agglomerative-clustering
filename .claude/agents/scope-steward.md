@@ -23,12 +23,13 @@ The caller gives you:
 ## What to check
 
 List the new capabilities in the proposal: what a user can do afterwards that they couldn't before. Bug fixes, error messages and docs for what already exists aren't new capabilities, so skip them. For each capability:
-- **Run the five tests** in "The test for a new feature":
+- **Run the six tests** in "The test for a new feature":
   - it needs the library;
   - someone asked for it;
   - its policy isn't the app's;
   - it doesn't change what the library is;
-  - it uses the smallest shape that fits.
+  - it uses the smallest shape that fits;
+  - its API is clean (judge whether a clean shape exists at all; the API steward reviews the shape itself).
 
   Say which tests pass and which fail, with the reason.
 - **The recipe alternative:** Could the user do this in a few lines outside the library, correctly and fast enough?
@@ -54,7 +55,7 @@ Keep it short. Start with one line, `Verdict: in scope`, `Verdict: trim` or `Ver
 
 ```
 - <capability>: [keep | shrink | recipe | defer | drop]
-  Tests: <which of the five pass or fail, briefly>
+  Tests: <which of the six pass or fail, briefly>
   Why: <one or two sentences, citing PRINCIPLES.md, ROADMAP or README with the words quoted; or "judgment">
   Instead: <the smaller version or the recipe, if any>
 ```
