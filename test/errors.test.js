@@ -14,9 +14,9 @@ const caught = async (promise) => {
 describe('errors carry a code', () => {
 
     it.each([
-        ['an invalid image', () => ac.getPalette('nope', 4), 'invalid-argument'],
-        ['an invalid k', () => ac.getPalette(image, 0), 'invalid-argument'],
-        ['an unknown option', () => ac.getPalette(image, 4, { dither: true }), 'invalid-argument'],
+        ['an invalid image', () => ac.buildPalette('nope', 4), 'invalid-argument'],
+        ['an invalid k', () => ac.buildPalette(image, 0), 'invalid-argument'],
+        ['an unknown option', () => ac.buildPalette(image, 4, { dither: true }), 'invalid-argument'],
         ['an invalid palette', () => ac.quantizeWithPalette(image, new Uint8Array(4)), 'invalid-argument'],
         ['bytes that are not a clustering', () => ac.getPaletteFromClustering(new Uint8Array([1, 2, 3, 4, 5]), 2), 'invalid-clustering'],
         ['a clustering from a newer format', () => ac.getPaletteFromClustering(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]), 2), 'unsupported-version'],
@@ -36,8 +36,8 @@ describe('errors carry a code', () => {
 describe('a worker fails like the main entry', () => {
 
     const cases = [
-        ['an invalid k', (api) => api.getPalette(image, 0)],
-        ['an unknown option', (api) => api.getPalette(image, 4, { dither: true })],
+        ['an invalid k', (api) => api.buildPalette(image, 0)],
+        ['an unknown option', (api) => api.buildPalette(image, 4, { dither: true })],
         ['an invalid clustering', (api) => api.getPaletteFromClustering(new Uint8Array([1, 2, 3, 4, 5]), 2)],
         ['a newer clustering', (api) => api.getClusteringInfo(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]))],
     ];
@@ -58,7 +58,7 @@ describe('a worker fails like the main entry', () => {
         expect((await caught(handle.getPalette(2))).code).toBe('invalid-handle');
         const doomed = createWorker();
         await doomed.terminate();
-        expect((await caught(doomed.getPalette(image, 4))).code).toBe('worker-terminated');
+        expect((await caught(doomed.buildPalette(image, 4))).code).toBe('worker-terminated');
         expect(() => createWorker({ transfer: 'yes' })).toThrow(expect.objectContaining({ code: 'invalid-argument' }));
     });
 
@@ -70,16 +70,16 @@ describe('which argument an error is about', () => {
 
     it('names it for programs, in every function, and through the worker', async () => {
         const { createWorker } = await import('../dist/worker.mjs');
-        const clustering = await ac.getClustering(image);
+        const clustering = await ac.buildClustering(image);
         const worker = createWorker();
         try {
             for (const entry of [ac, worker]) {
-                expect(await argumentOf(entry.getPalette('nope', 4))).toBe('image');
-                expect(await argumentOf(entry.getPalette(image, 0))).toBe('k');
-                expect(await argumentOf(entry.getPalette(image, 4, null))).toBe('options');
-                expect(await argumentOf(entry.getPalette(image, 4, { colorSpace: 'lab' }))).toBe('options.colorSpace');
-                expect(await argumentOf(entry.getPalette(image, 4, { colourSpace: 'oklab' }))).toBe('options.colourSpace');
-                expect(await argumentOf(entry.getPalette(image, 4, { precision: 9 }))).toBe('options.precision');
+                expect(await argumentOf(entry.buildPalette('nope', 4))).toBe('image');
+                expect(await argumentOf(entry.buildPalette(image, 0))).toBe('k');
+                expect(await argumentOf(entry.buildPalette(image, 4, null))).toBe('options');
+                expect(await argumentOf(entry.buildPalette(image, 4, { colorSpace: 'lab' }))).toBe('options.colorSpace');
+                expect(await argumentOf(entry.buildPalette(image, 4, { colourSpace: 'oklab' }))).toBe('options.colourSpace');
+                expect(await argumentOf(entry.buildPalette(image, 4, { precision: 9 }))).toBe('options.precision');
                 expect(await argumentOf(entry.quantize(image, 4, { dither: true }))).toBe('options.width');
                 expect(await argumentOf(entry.getPaletteFromClustering(new Uint8Array(5), 2))).toBe('clustering');
                 expect(await argumentOf(entry.quantizeWithPalette(image, [300, 0, 0]))).toBe('palette');
@@ -98,7 +98,7 @@ describe('which argument an error is about', () => {
         const { createWorker } = await import('../dist/worker.mjs');
         const worker = createWorker();
         await worker.terminate();
-        const terminated = await worker.getPalette(image, 4).catch((e) => e);
+        const terminated = await worker.buildPalette(image, 4).catch((e) => e);
         expect(terminated.code).toBe('worker-terminated');
         expect('argument' in terminated).toBe(false);
     });
@@ -118,8 +118,8 @@ describe('errorCodes and isCodedError', () => {
     });
 
     it("is true for the library's errors, from both entries, and for them after crossing IPC", async () => {
-        const main = await caught(ac.getPalette(image, 0));
-        const remote = await caught(worker.getPalette(image, 0));
+        const main = await caught(ac.buildPalette(image, 0));
+        const remote = await caught(worker.buildPalette(image, 0));
         for (const error of [main, remote, { message: remote.message, code: remote.code, argument: remote.argument }, JSON.parse(JSON.stringify({ message: 'x', code: 'worker-failed' }))]) {
             expect(ac.isCodedError(error)).toBe(true);
         }
@@ -129,7 +129,7 @@ describe('errorCodes and isCodedError', () => {
         const enoent = Object.assign(new Error('no such file'), { code: 'ENOENT' });
         const controller = new AbortController();
         controller.abort();
-        const aborted = await caught(ac.getPalette(image, 2, { signal: controller.signal }));
+        const aborted = await caught(ac.buildPalette(image, 2, { signal: controller.signal }));
         for (const value of [enoent, aborted, new Error('plain'), { code: 'invalid-argument' }, 'invalid-argument', null, undefined, 42]) {
             expect(ac.isCodedError(value)).toBe(false);
         }

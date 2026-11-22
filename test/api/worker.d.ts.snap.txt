@@ -31,9 +31,12 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
 }
 export interface AgglomerativeWorker {
     init(options?: InitOptions): Promise<void>;
+    buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
     getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+    buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
     getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
     getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
+    buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
     getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
     getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
     getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
@@ -50,9 +53,12 @@ export interface AgglomerativeWorker {
 export function createWorker(options?: WorkerOptions): AgglomerativeWorker;
 export function terminate(): Promise<void>;
 export function init(options?: SharedInitOptions): Promise<void>;
+export const buildClustering: AgglomerativeWorker['buildClustering'];
 export const getClustering: AgglomerativeWorker['getClustering'];
+export const buildPalette: AgglomerativeWorker['buildPalette'];
 export const getPalette: AgglomerativeWorker['getPalette'];
 export const getPaletteFromClustering: AgglomerativeWorker['getPaletteFromClustering'];
+export const buildSwatches: AgglomerativeWorker['buildSwatches'];
 export const getSwatches: AgglomerativeWorker['getSwatches'];
 export const getSwatchesFromClustering: AgglomerativeWorker['getSwatchesFromClustering'];
 export const getClusteringInfo: AgglomerativeWorker['getClusteringInfo'];

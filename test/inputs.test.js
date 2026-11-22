@@ -30,7 +30,7 @@ describe('bytes are read when the call is made', () => {
     ])('in the main entry, %s', async (_, entry) => {
         const lib = await entry();
         const image = solid(red);
-        const palette = lib.getPalette(image, 2);
+        const palette = lib.buildPalette(image, 2);
         const indexed = lib.quantizeToIndices({ data: image, format: 'rgba', width: 10 }, 2, { dither: true });
         paint(image, blue);
         expect(Array.from(await palette)).toEqual(red);
@@ -39,14 +39,14 @@ describe('bytes are read when the call is made', () => {
 
     it('in the main entry, with a signal (clustering in slices)', async () => {
         const image = solid(red);
-        const palette = ac.getPalette(image, 2, { signal: new AbortController().signal });
+        const palette = ac.buildPalette(image, 2, { signal: new AbortController().signal });
         paint(image, blue);
         expect(Array.from(await palette)).toEqual(red);
     });
 
     it('in the main entry, for clusterings and palettes', async () => {
         const lib = await fresh();
-        const clustering = new Uint8Array(await ac.getClustering(solid(red)));
+        const clustering = new Uint8Array(await ac.buildClustering(solid(red)));
         const palette = new Uint8Array(red);
         const cut = lib.getPaletteFromClustering(clustering, 2);
         const mapped = lib.quantizeWithPalette(solid(blue, 4), palette);
@@ -58,7 +58,7 @@ describe('bytes are read when the call is made', () => {
 
     // The methods forward to the function forms at once, so they take the bytes when called too.
     it('in the methods on Clustering', async () => {
-        const clustering = new ac.Clustering(new Uint8Array(await ac.getClustering(solid(red))));
+        const clustering = new ac.Clustering(new Uint8Array(await ac.buildClustering(solid(red))));
         const image = solid(red);
         const mapped = clustering.quantize({ data: image, format: 'rgba', width: 10 }, 2, { dither: true });
         const indexed = clustering.quantizeToIndices(image, 2);
@@ -77,11 +77,11 @@ describe('bytes are read when the call is made', () => {
         const worker = make();
         try {
             const image = solid(red);
-            const first = worker.getPalette(image, 2);
+            const first = worker.buildPalette(image, 2);
             if (image.length > 0) {paint(image, blue);}
             expect(Array.from(await first)).toEqual(red);
             const again = solid(red);
-            const second = worker.getPalette(again, 2);
+            const second = worker.buildPalette(again, 2);
             if (again.length > 0) {paint(again, blue);}
             expect(Array.from(await second)).toEqual(red);
         } finally {
@@ -94,12 +94,12 @@ describe('bytes are read when the call is made', () => {
 describe('arguments in the wrong place', () => {
 
     it('rejects a clustering or a palette passed as the image', async () => {
-        const clustering = await ac.getClustering(solid(red));
+        const clustering = await ac.buildClustering(solid(red));
         const palette = await ac.getPalette(solid(red), 2);
-        for (const call of [() => ac.getPalette(clustering, 4), () => ac.quantize(clustering, 4), () => ac.getClustering(clustering)]) {
+        for (const call of [() => ac.buildPalette(clustering, 4), () => ac.quantize(clustering, 4), () => ac.buildClustering(clustering)]) {
             await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('getPaletteFromClustering') });
         }
-        await expect(ac.getPalette(palette, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('palette') });
+        await expect(ac.buildPalette(palette, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('palette') });
     });
 
 });
@@ -112,13 +112,13 @@ describe('values from another realm', () => {
         const data = new Uint8ClampedArray(width * height * 4).map((_, i) => (i * 37) & 255);
         const foreign = runInNewContext(`({ data: new Uint8ClampedArray(bytes), width: ${width}, height: ${height}, colorSpace: 'srgb', [Symbol.toStringTag]: 'ImageData' })`, { bytes: data });
         const local = new ImageData(new Uint8ClampedArray(data), width, height);
-        expect(await ac.getPalette(foreign, 3)).toEqual(await ac.getPalette(local, 3));
+        expect(await ac.buildPalette(foreign, 3)).toEqual(await ac.buildPalette(local, 3));
         const mapped = await ac.quantize(foreign, 3, { dither: true });
         expect(mapped).toBeInstanceOf(ImageData);
         expect(mapped.data).toEqual((await ac.quantize(local, 3, { dither: true })).data);
         const worker = createWorker();
         try {
-            expect(await worker.getPalette(foreign, 3)).toEqual(await ac.getPalette(local, 3));
+            expect(await worker.buildPalette(foreign, 3)).toEqual(await ac.buildPalette(local, 3));
         } finally {
             await worker.terminate();
         }
@@ -151,7 +151,7 @@ describe('empty palettes', () => {
 
     it('still maps an image with no visible pixels, whose palette is empty', async () => {
         const clear = new Uint8Array(16);
-        const palette = await ac.getPalette(clear, 4);
+        const palette = await ac.buildPalette(clear, 4);
         expect(palette.length).toBe(0);
         expect(Array.from(await ac.quantizeWithPalette(clear, palette))).toEqual(Array.from(clear));
     });
@@ -163,7 +163,7 @@ describe('width and height', () => {
     it('checks a width or height given alone, and options.width without dithering', async () => {
         const data = new Uint8Array(4 * 6);
         for (const bad of [{ width: 4 }, { width: 500 }, { height: 4 }, { width: 0 }]) {
-            await expect(ac.getPalette({ data, format: 'rgba', ...bad }, 2), JSON.stringify(bad)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
+            await expect(ac.buildPalette({ data, format: 'rgba', ...bad }, 2), JSON.stringify(bad)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
         }
         for (const width of [4, 0, -5, 1.5]) {
             await expect(ac.quantize(data, 2, { width }), String(width)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options.width' });
@@ -182,7 +182,7 @@ describe('small things from the beta.1 testing', () => {
         try {
             const canvas = { getContext: () => null, width: 4, height: 4 };
             for (const entry of [ac, worker]) {
-                await expect(entry.getPalette(canvas, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('getImageData') });
+                await expect(entry.buildPalette(canvas, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('getImageData') });
             }
             await expect(worker.quantize({ nodeName: 'IMG', src: 'x.png' }, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('canvas') });
         } finally {
@@ -191,7 +191,7 @@ describe('small things from the beta.1 testing', () => {
     });
 
     it('rejects options passed to the functions that read a clustering, in both entries and on handles', async () => {
-        const clustering = await ac.getClustering(solid(red));
+        const clustering = await ac.buildClustering(solid(red));
         for (const call of [
             () => ac.getPaletteFromClustering(clustering, 4, { colorSpace: 'oklab' }),
             () => ac.getSwatchesFromClustering(clustering, 4, {}),
@@ -265,7 +265,7 @@ describe('ImageData from another implementation', () => {
         }
         const input = new ImageData(new Uint8ClampedArray(4 * 16).map((_, i) => (i * 53) & 255), 4, 4);
         expect(Object.prototype.toString.call(input)).toBe('[object Object]');
-        expect(await ac.getPalette(input, 3)).toEqual(await ac.getPalette({ data: input.data, format: 'rgba' }, 3));
+        expect(await ac.buildPalette(input, 3)).toEqual(await ac.buildPalette({ data: input.data, format: 'rgba' }, 3));
         expect(await ac.quantize(input, 3)).toBeInstanceOf(ImageData);
         const worker = createWorker();
         try {
@@ -287,12 +287,12 @@ describe('ImageData from another implementation', () => {
             get [Symbol.toStringTag]() {return 'ImageData';}
         }
         const input = new ImageData(2, 2);
-        for (const call of [() => ac.getPalette(input, 2), () => ac.quantize(input, 2), () => ac.quantizeToIndices(input, 2)]) {
+        for (const call of [() => ac.buildPalette(input, 2), () => ac.quantize(input, 2), () => ac.quantizeToIndices(input, 2)]) {
             await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining("pixelFormat: 'rgba-float16'") });
         }
         const worker = createWorker();
         try {
-            await expect(worker.getPalette(input, 2)).rejects.toMatchObject({ code: 'invalid-argument', message: expect.stringContaining('rgba-unorm8') });
+            await expect(worker.buildPalette(input, 2)).rejects.toMatchObject({ code: 'invalid-argument', message: expect.stringContaining('rgba-unorm8') });
             await expect(worker.quantize(input, 2)).rejects.toMatchObject({ code: 'invalid-argument' });
         } finally {
             await worker.terminate();
@@ -333,7 +333,7 @@ describe('messages', () => {
         // 2 GB and more can't be allocated (the allocator's size is 32 bits); from 4 GB it used to wrap around and throw a
         // bare RangeError. A length is enough to show it: the check comes before any copying.
         const huge = { data: new Uint8Array(2 ** 31), format: 'rgba' };
-        const error = await ac.getPalette(huge, 2).catch((caught) => caught);
+        const error = await ac.buildPalette(huge, 2).catch((caught) => caught);
         expect(error.code).toBe('out-of-memory');
         expect(error.message).toContain('2.00 GB');
         expect(error.message).toContain('1.9 GB');

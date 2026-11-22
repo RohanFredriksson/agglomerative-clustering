@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { buildClustering, buildPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
 
 // A smooth 64x64 RGBA gradient: many distinct colours, so palettes, binning and dithering all have work to do.
 const width = 64, height = 64;
@@ -31,25 +31,25 @@ const meanColour = (data) => {
 describe('options validation', () => {
 
     it('throws on a non-object', async () => {
-        await expect(getClustering(gradient, 'oklab')).rejects.toThrow('Invalid options');
+        await expect(buildClustering(gradient, 'oklab')).rejects.toThrow('Invalid options');
     });
 
     it('throws on an unknown option, naming it', async () => {
-        await expect(getClustering(gradient, { colourSpace: 'oklab' })).rejects.toThrow("Invalid option 'colourSpace'");
+        await expect(buildClustering(gradient, { colourSpace: 'oklab' })).rejects.toThrow("Invalid option 'colourSpace'");
     });
 
     it('throws on an option the function does not take', async () => {
-        await expect(getClustering(gradient, { dither: true })).rejects.toThrow("Invalid option 'dither'");
+        await expect(buildClustering(gradient, { dither: true })).rejects.toThrow("Invalid option 'dither'");
         await expect(quantizeWithPalette(gradient, new Uint8Array([0, 0, 0]), { precision: 6 })).rejects.toThrow("Invalid option 'precision'");
     });
 
     it('throws on an unknown colorSpace', async () => {
-        await expect(getClustering(gradient, { colorSpace: 'lab' })).rejects.toThrow('Invalid colorSpace');
+        await expect(buildClustering(gradient, { colorSpace: 'lab' })).rejects.toThrow('Invalid colorSpace');
     });
 
     it('throws on precision out of range or not an integer', async () => {
         for (const precision of [0, 9, 4.5, '6']) {
-            await expect(getClustering(gradient, { precision })).rejects.toThrow('Invalid precision');
+            await expect(buildClustering(gradient, { precision })).rejects.toThrow('Invalid precision');
         }
     });
 
@@ -72,9 +72,9 @@ describe('options validation', () => {
 describe('default options', () => {
 
     it('match passing no options', async () => {
-        const plain = await getClustering(gradient);
-        expect(await getClustering(gradient, {})).toEqual(plain);
-        expect(await getClustering(gradient, { colorSpace: 'rgb', precision: 8 })).toEqual(plain);
+        const plain = await buildClustering(gradient);
+        expect(await buildClustering(gradient, {})).toEqual(plain);
+        expect(await buildClustering(gradient, { colorSpace: 'rgb', precision: 8 })).toEqual(plain);
         expect(await quantize(gradient, 16, { dither: false })).toEqual(await quantize(gradient, 16));
     });
 
@@ -83,22 +83,22 @@ describe('default options', () => {
 describe('colorSpace: oklab', () => {
 
     it('gives a palette of k colours', async () => {
-        const palette = await getPalette(gradient, 16, { colorSpace: 'oklab' });
+        const palette = await buildPalette(gradient, 16, { colorSpace: 'oklab' });
         expect(palette.length).toBe(16 * 3);
     });
 
     it('is deterministic', async () => {
-        const a = await getClustering(gradient, { colorSpace: 'oklab' });
-        const b = await getClustering(gradient, { colorSpace: 'oklab' });
+        const a = await buildClustering(gradient, { colorSpace: 'oklab' });
+        const b = await buildClustering(gradient, { colorSpace: 'oklab' });
         expect(a).toEqual(b);
     });
 
     it('differs from rgb clustering', async () => {
-        expect(await getClustering(gradient, { colorSpace: 'oklab' })).not.toEqual(await getClustering(gradient));
+        expect(await buildClustering(gradient, { colorSpace: 'oklab' })).not.toEqual(await buildClustering(gradient));
     });
 
     it('quantizes to colours from its own palette', async () => {
-        const clustering = await getClustering(gradient, { colorSpace: 'oklab' });
+        const clustering = await buildClustering(gradient, { colorSpace: 'oklab' });
         const palette = paletteSet(await getPaletteFromClustering(clustering, 12));
         const result = await quantizeFromClustering(gradient, clustering, 12, { colorSpace: 'oklab' });
         for (const colour of colours(result)) {expect(palette.has(colour)).toBe(true);}
@@ -106,7 +106,7 @@ describe('colorSpace: oklab', () => {
 
     it('keeps a single colour exact', async () => {
         const red = new Uint8Array([255, 0, 0, 255, 255, 0, 0, 255]);
-        expect(Array.from(await getPalette(red, 4, { colorSpace: 'oklab' }))).toEqual([255, 0, 0]);
+        expect(Array.from(await buildPalette(red, 4, { colorSpace: 'oklab' }))).toEqual([255, 0, 0]);
     });
 
 });
@@ -115,14 +115,14 @@ describe('precision', () => {
 
     it('bounds the clustering by the number of bins', async () => {
         // 3 bits per channel leaves at most 8^3 = 512 bins, so at most 511 merges.
-        const clustering = await getClustering(gradient, { precision: 3 });
+        const clustering = await buildClustering(gradient, { precision: 3 });
         const merges = (clustering.length - 3) / 9;
         expect(merges).toBeLessThan(512);
         expect(merges).toBeLessThan(colours(gradient).size - 1);
     });
 
     it('still gives a full palette', async () => {
-        const palette = await getPalette(gradient, 32, { precision: 5 });
+        const palette = await buildPalette(gradient, 32, { precision: 5 });
         expect(palette.length).toBe(32 * 3);
     });
 
@@ -197,16 +197,16 @@ describe('empty images', () => {
     const empty = new Uint8Array(0);
 
     it('give an empty clustering (just the header) and palette', async () => {
-        const clustering = await getClustering(empty);
+        const clustering = await buildClustering(empty);
         expect(clustering.length).toBe(22);
         expect((await getPaletteFromClustering(clustering, 4)).length).toBe(0);
-        expect((await getPalette(empty, 4)).length).toBe(0);
+        expect((await buildPalette(empty, 4)).length).toBe(0);
     });
 
     it('quantize to an empty image, and leave the module usable', async () => {
         expect((await quantize(empty, 4)).length).toBe(0);
         expect((await quantize(empty, 4, { dither: true, width: 1 })).length).toBe(0);
-        expect((await getPalette(gradient, 4)).length).toBe(12);
+        expect((await buildPalette(gradient, 4)).length).toBe(12);
     });
 
 });

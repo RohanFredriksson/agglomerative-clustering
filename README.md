@@ -16,7 +16,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread.
 - **Accurate and fast.** The lowest average error of the six JavaScript quantizers we benchmarked, at about the speed of libimagequant ([benchmarks](#benchmarks)).
-- **Small and portable.** 91 KB of WebAssembly, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
+- **Small and portable.** About 127 KB of WebAssembly (52 KB gzipped), Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
 
 ## Install
 
@@ -24,7 +24,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 npm install agglomerative-clustering
 ```
 
-Upgrading from 2.x? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md): one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
+Upgrading? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md). From 3.3, three functions have new names, and the old ones keep working until 4.0. From 2.x, one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
 
 It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
 
@@ -34,12 +34,12 @@ It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome
 
 ```js
 import sharp from 'sharp';
-import { getPalette, quantize } from 'agglomerative-clustering';
+import { buildPalette, quantize } from 'agglomerative-clustering';
 
 const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const image = { data, format: 'rgba', width: info.width };   // in TypeScript: format: 'rgba' as const
 
-const palette = await getPalette(image, 8);                   // flat bytes: [r, g, b, r, g, b, ...]
+const palette = await buildPalette(image, 8);                   // flat bytes: [r, g, b, r, g, b, ...]
 const reduced = await quantize(image, 16, { dither: true });  // the image, in 16 colours
 
 await sharp(Buffer.from(reduced.data), { raw: { width: info.width, height: info.height, channels: 4 } }).toFile('photo-16.png');
@@ -59,9 +59,9 @@ ctx.putImageData(await quantize(imageData, 16, { dither: true }), 0, 0);   // Im
 **Swatches, with each colour's share of the image:**
 
 ```js
-import { getSwatches } from 'agglomerative-clustering';
+import { buildSwatches } from 'agglomerative-clustering';
 
-const { palette, shares } = await getSwatches(imageData, 6);   // six colours; the shares sum to 1
+const { palette, shares } = await buildSwatches(imageData, 6);   // six colours; the shares sum to 1
 shares.forEach((share, i) => {
   console.log(`rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`, `${(share * 100).toFixed(1)}%`);
 });
@@ -70,9 +70,9 @@ shares.forEach((share, i) => {
 **A colour-count slider:** cluster once, then cut and map as often as you like.
 
 ```js
-import { getClustering, quantizeWithPalette } from 'agglomerative-clustering';
+import { buildClustering, quantizeWithPalette } from 'agglomerative-clustering';
 
-const clustering = await getClustering(imageData);                   // the expensive step, done once
+const clustering = await buildClustering(imageData);                   // the expensive step, done once
 
 slider.oninput = async () => {
   const palette = await clustering.getPalette(Number(slider.value));        // ~0.4 ms for any k
@@ -85,22 +85,24 @@ Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `
 ## How it works
 
 ```
- image ──▶ getClustering ──▶ a clustering ──▶ cut to k colours ──▶ a palette ──▶ map the pixels ──▶ reduced image
-           once, ~70 ms      bytes you can     under 1 ms,          flat RGB       a few ms,
-                             store             any k                bytes          any palette
+ image ──▶ buildClustering ──▶ a clustering ──▶ cut to k colours ──▶ a palette ──▶ map the pixels ──▶ reduced image
+           once, ~70 ms        bytes you can     under 1 ms,          flat RGB       a few ms,
+                               store             any k                bytes          any palette
 ```
 
-The one-shot functions (`getPalette`, `quantize`, …) do every step for you. To try many palette sizes, call `getClustering` once and cut it as often as you like.
+The one-shot functions (`buildPalette`, `quantize`, …) do every step for you. To try many palette sizes, call `buildClustering` once and cut it as often as you like.
 
 | You want | from the image | from a clustering you hold¹ | with a palette you supply |
 |---|---|---|---|
-| a palette (flat RGB) | `getPalette` | `clustering.getPalette(k)` (`getPaletteFromClustering`) | |
-| a palette with each colour's share | `getSwatches` | `clustering.getSwatches(k)` (`getSwatchesFromClustering`) | |
+| a palette (flat RGB) | `buildPalette` | `clustering.getPalette(k)` (`getPaletteFromClustering`) | |
+| a palette with each colour's share | `buildSwatches` | `clustering.getSwatches(k)` (`getSwatchesFromClustering`) | |
 | the image reduced to those colours | `quantize` | `clustering.quantize(image, k)` (`quantizeFromClustering`) | `quantizeWithPalette` |
 | palette indices (GIF, PNG-8) | `quantizeToIndices` | `clustering.quantizeToIndices(image, k)` (`quantizeToIndicesFromClustering`) | `quantizeToIndicesWithPalette` |
 | its error curve, for choosing a palette size | | `clustering.getClusteringInfo()` (`getClusteringInfo`) | |
 
-A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `getClustering` builds a clustering, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
+A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `buildClustering` builds a clustering, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
+
+The verb says how much work a call does. `build…` clusters an image (tens of milliseconds for a photo). `get…` reads or cuts what a clustering or a worker handle already holds (well under a millisecond). `quantize…` maps pixels. So `buildPalette(image, k)` and `clustering.getPalette(k)` give the same kind of result from different starting points. The `build…` names arrived in 3.4.0; [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md) has the old ones.
 
 **Methods or functions?** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **In a worker, use a handle** (`createWorker().cluster(image)`, below) or the worker entry's function forms: the methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
 

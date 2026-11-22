@@ -19,7 +19,7 @@ describe('version and formatVersion', () => {
         expect(worker.version).toBe(ac.version);
         expect(ac.formatVersion).toBe(3);
         expect(worker.formatVersion).toBe(ac.formatVersion);
-        expect((await ac.getClusteringInfo(await ac.getClustering(image))).formatVersion).toBe(ac.formatVersion);
+        expect((await ac.getClusteringInfo(await ac.buildClustering(image))).formatVersion).toBe(ac.formatVersion);
     });
 
     it('are in step with the .wasm and its source: the build checks it, and so does the module', () => {
@@ -73,7 +73,7 @@ describe('a .wasm from another version', () => {
     it('is refused in a worker too', async () => {
         const w = worker.createWorker({ wasm: mismatched() });
         try {
-            const error = await w.getPalette(image, 2).catch((e) => e);
+            const error = await w.buildPalette(image, 2).catch((e) => e);
             expect(error.code).toBe('wasm-load-failed');
             expect(error.message).toContain('this script is');
         } finally {

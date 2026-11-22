@@ -1,5 +1,5 @@
 // A value typed as the union `ImageLike` must be accepted by every function that takes an image, and give back the union.
-import { quantize, quantizeWithPalette, quantizeFromClustering, quantizeToIndices, getPalette } from 'agglomerative-clustering';
+import { quantize, quantizeWithPalette, quantizeFromClustering, quantizeToIndices, buildPalette } from 'agglomerative-clustering';
 import type { ImageLike, ImageFormat, RawImage, Clustering } from 'agglomerative-clustering';
 
 declare const anything: ImageLike;
@@ -14,7 +14,7 @@ export async function helpers() {
     const reduced: ImageLike = await quantize(anything, 16, { dither: true, width: 8 });
     const mapped: ImageLike = await quantizeWithPalette(anything, palette);
     const cut: ImageLike = await quantizeFromClustering(anything, clustering, 4);
-    const swatches: Uint8Array = await getPalette(anything, 8);   // a Palette is still a Uint8Array
+    const swatches: Uint8Array = await buildPalette(anything, 8);   // a Palette is still a Uint8Array
     const indexed = await quantizeToIndices(anything, 8);
 
     // Specific inputs still give specific outputs.

@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -297,16 +297,30 @@ const takeControls = (options, progressAllowed = true, ditherAllowed = true) => 
     if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
         // One read of each setting (a getter could answer differently twice): the copy is what is checked and sent.
         const copy = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
-        parseDither(copy);
+        // A wrong setting is the worker's to report, after the image and k, as the main entry orders its checks. Only a
+        // copy that can't be sent is reported here.
+        try {parseDither(copy);} catch (error) {if (!sendable(copy)) {throw error;}}
         options.dither = copy;
     }
+    // The signal and the progress callback can't cross to the worker, so they are kept here and the worker gets its own.
+    // A wrong one (or a callback where only a signal is taken) crosses as `null` instead, which the worker's validation
+    // rejects with the main entry's error, after the image and k: the main entry checks the options last. (This relies on
+    // those messages not echoing the value: if they ever say what they got, send a stand-in that reads the same.)
     const {signal, onProgress} = options;
-    if (!progressAllowed && onProgress !== undefined) {throw fail('invalid-argument', "Invalid option 'onProgress': the functions that only map pixels take just `signal`.", 'options.onProgress');}
-    if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
-    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.", 'options.signal');}
-    if (onProgress !== undefined && typeof onProgress !== 'function') {throw fail('invalid-argument', "Invalid onProgress: must be a function.", 'options.onProgress');}
+    const badSignal = signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function');
+    const badProgress = onProgress !== undefined && (!progressAllowed || typeof onProgress !== 'function');
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
+    if (badSignal || badProgress) {
+        return {options: {...rest, ...(badSignal ? {signal: null} : {}), ...(badProgress ? {onProgress: null} : {})}, signal: undefined, onProgress: undefined};
+    }
+    if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
     return {options: rest, signal, onProgress};
+};
+
+// Whether a value survives being posted to the worker.
+const sendable = (value) => {
+    if (typeof structuredClone !== 'function') {return true;}
+    try {structuredClone(value); return true;} catch (error) {return false;}
 };
 
 // Where the options sit among a function's arguments after the image (see takeControls).
@@ -464,7 +478,7 @@ const makeWorker = (options, allowScript) => {
         return run(...args).then((value) => {settled(); return value;}, (error) => {settled(); throw error;});
     };
 
-    const post = (method, args, transferable, origin, {signal, onProgress} = {}) => {
+    const post = (method, args, transferable, origin, {signal, onProgress, check} = {}) => {
         if (terminated) {return Promise.reject(fail('worker-terminated', "Worker terminated."));}
         if (signal && signal.aborted) {return Promise.reject(abortReason(signal));}
         const id = nextId++;
@@ -485,7 +499,7 @@ const makeWorker = (options, allowScript) => {
             }
             pending.set(id, call);
             try {
-                const message = {id, method, args: args.map(mark), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined};
+                const message = {id, method, args: args.map(mark), cancellable: signal !== undefined || onProgress !== undefined, progress: onProgress !== undefined, ...(check ? {check} : {})};
                 try {
                     connection.post(message, transfer ? transferable : []);
                 } catch (error) {
@@ -514,10 +528,18 @@ const makeWorker = (options, allowScript) => {
             return (async () => {
                 const position = optionsPosition[name];
                 const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name), !clusteringOnlyFunctions.includes(name));
-                // Checked before the image is copied or transferred away, so an aborted call leaves it with the caller.
-                if (signal && signal.aborted) {throw abortReason(signal);}
                 let args = rest.slice();
                 if (position < args.length) {args[position] = options;}
+                if (signal && signal.aborted) {
+                    // The main entry reports a wrong argument before an abort, so the worker checks the arguments (a
+                    // copy, never transferred: an aborted call leaves the image with the caller) without doing the work.
+                    try {
+                        await invoke(name, [own(send(image)), ...args.map(own)], [], origin, {check: true});
+                    } catch (error) {
+                        if (isCodedError(error) && error.argument !== undefined) {throw error;}
+                    }
+                    throw abortReason(signal);
+                }
                 let sent = send(image);
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
@@ -528,6 +550,11 @@ const makeWorker = (options, allowScript) => {
     for (const name of otherFunctions) {
         instance[name] = (...args) => invoke(name, ready() ? args : args.map(own), [], new Error());
     }
+    // 3.4.0's names for the functions that cluster an image. The old names are the same functions, and they still name the
+    // call on the wire, so a worker script copied from an older version still understands it.
+    instance.buildClustering = instance.getClustering;
+    instance.buildPalette = instance.getPalette;
+    instance.buildSwatches = instance.getSwatches;
 
     instance.init = (initArgs) => {
         const origin = new Error();
@@ -652,10 +679,13 @@ export const terminate = async () => {
 };
 
 export const init = (...args) => sharedWorker().init(...args);
-export const getClustering = (...args) => sharedWorker().getClustering(...args);
-export const getPalette = (...args) => sharedWorker().getPalette(...args);
+export const buildClustering = (...args) => sharedWorker().buildClustering(...args);
+export const getClustering = buildClustering;
+export const buildPalette = (...args) => sharedWorker().buildPalette(...args);
+export const getPalette = buildPalette;
 export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);
-export const getSwatches = (...args) => sharedWorker().getSwatches(...args);
+export const buildSwatches = (...args) => sharedWorker().buildSwatches(...args);
+export const getSwatches = buildSwatches;
 export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
 export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);

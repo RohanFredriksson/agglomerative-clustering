@@ -13,7 +13,7 @@ for (let p = 0; p < 64; p++) {image.set([p * 4, 255 - p * 4, (p * 37) & 255, 255
 // Each import with a different query string is a fresh copy of the module, with its own "loaded" state.
 let copies = 0;
 const fresh = () => import(/* @vite-ignore */ `${pathToFileURL(resolve(dist, 'index.mjs')).href}?copy=${copies++}`);
-const expected = await (await fresh()).getPalette(image, 6);
+const expected = await (await fresh()).buildPalette(image, 6);
 
 const asArrayBuffer = () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
@@ -33,14 +33,14 @@ describe('init({ wasm })', () => {
     ])('loads from %s', async (_, make) => {
         const ac = await fresh();
         await ac.init({ wasm: make() });
-        expect(await ac.getPalette(image, 6)).toEqual(expected);
+        expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
     it('reports a wrong location, and a failed init can be retried', async () => {
         const ac = await fresh();
         await expect(ac.init({ wasm: resolve(dist, 'missing.wasm') })).rejects.toMatchObject({ code: 'wasm-load-failed' });
         await ac.init({ wasm: wasmPath });
-        expect(await ac.getPalette(image, 6)).toEqual(expected);
+        expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
     it('rejects garbage bytes', async () => {
@@ -51,7 +51,7 @@ describe('init({ wasm })', () => {
         expect(error.message).not.toContain('SIMD');             // and doesn't blame SIMD, which this engine has
         expect(error.message).toContain('init({ wasm })');
         expect(error.cause).toBeInstanceOf(Error);               // the engine's own error is kept
-        expect(await ac.getPalette(image, 6)).toEqual(expected);
+        expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
     // Found by the fourth round (3.0.0-beta.4): a 404 page served as the .wasm read as a bare compile error.
@@ -86,7 +86,7 @@ describe('init({ wasm })', () => {
         const error = await ac.init({ wasm: make() }).catch((e) => e);
         expect(error).toMatchObject({ code: 'wasm-load-failed' });
         await ac.init({ wasm: bytes });
-        expect(await ac.getPalette(image, 6)).toEqual(expected);
+        expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
     // Next.js Edge's `import wasm from '….wasm?module'` gives a module made by another realm's WebAssembly.Module.
@@ -96,12 +96,12 @@ describe('init({ wasm })', () => {
         expect(foreign instanceof WebAssembly.Module).toBe(false);
         const ac = await fresh();
         await ac.init({ wasm: foreign });
-        expect(await ac.getPalette(image, 6)).toEqual(expected);
+        expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
     it('shares one load between concurrent calls, and the first load wins', async () => {
         const ac = await fresh();
-        const results = await Promise.all([ac.getPalette(image, 6), ac.getPalette(image, 6), ac.init(), ac.init({ wasm: wasmPath })]);
+        const results = await Promise.all([ac.buildPalette(image, 6), ac.buildPalette(image, 6), ac.init(), ac.init({ wasm: wasmPath })]);
         expect(results[0]).toEqual(expected);
         expect(results[1]).toEqual(expected);
         // Already loaded: a later wasm option is accepted and ignored, even one that would not load.
@@ -131,7 +131,7 @@ describe('createWorker({ wasm })', () => {
     ])('starts the worker with %s', async (_, make) => {
         const worker = createWorker({ wasm: make() });
         try {
-            expect(await worker.getPalette(image, 6)).toEqual(expected);
+            expect(await worker.buildPalette(image, 6)).toEqual(expected);
             const handle = await worker.cluster(image);
             expect(await handle.getPalette(6)).toEqual(expected);
         } finally {
@@ -142,8 +142,8 @@ describe('createWorker({ wasm })', () => {
     it('reports a wrong location on the first call and on later ones, without falling back to the default', async () => {
         const worker = createWorker({ wasm: resolve(dist, 'missing.wasm') });
         try {
-            await expect(worker.getPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
-            await expect(worker.getPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
+            await expect(worker.buildPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
+            await expect(worker.buildPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed' });
         } finally {
             await worker.terminate();
         }
@@ -153,7 +153,7 @@ describe('createWorker({ wasm })', () => {
         const worker = createWorker();
         try {
             await worker.init({ wasm: asArrayBuffer() });
-            expect(await worker.getPalette(image, 6)).toEqual(expected);
+            expect(await worker.buildPalette(image, 6)).toEqual(expected);
             await expect(worker.init({ wasm: 5 })).rejects.toMatchObject({ code: 'invalid-argument' });
         } finally {
             await worker.terminate();

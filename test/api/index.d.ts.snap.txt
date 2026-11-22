@@ -110,7 +110,9 @@ export interface InitOptions {
 export const version: string;
 export const formatVersion: number;
 export function init(options?: InitOptions): Promise<void>;
+export function buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
+export function buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
 export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
 export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 export interface Swatches {
@@ -118,6 +120,7 @@ export interface Swatches {
     weights: Float64Array;
     shares: Float64Array;
 }
+export function buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 export interface ClusteringInfo {

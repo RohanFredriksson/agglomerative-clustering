@@ -2,7 +2,7 @@
 // images afterwards (the aborted call's memory is never freed, so the instance is discarded). Slow and memory-hungry
 // (about 10 s and 2 GB per case), so it runs once per Node version in CI.
 import { describe, it, expect } from 'vitest';
-import { getPalette } from '../dist/index.mjs';
+import { buildPalette } from '../dist/index.mjs';
 
 const mulberry = (seed) => () => {
     seed = (seed + 0x6D2B79F5) | 0;
@@ -27,19 +27,19 @@ const huge = () => {
 describe('running out of memory', () => {
 
     it('fails with a coded error that says what to do, and later calls still work', async () => {
-        const expected = await getPalette(normal, 16);
+        const expected = await buildPalette(normal, 16);
         const image = huge();
-        const error = await getPalette(image, 16).catch((e) => e);
+        const error = await buildPalette(image, 16).catch((e) => e);
         expect(error.code).toBe('out-of-memory');
         expect(error.message).toContain('precision: 6');
         // A large image is told to shrink first (found by the sixth round: the advice was only precision, which may already be low).
         expect(error.message).toContain('Scale the image down');
-        expect(await getPalette(normal, 16)).toEqual(expected);
+        expect(await buildPalette(normal, 16)).toEqual(expected);
 
         // The same through the sliced path used for signal and onProgress.
-        const sliced = await getPalette(image, 16, { onProgress: () => {} }).catch((e) => e);
+        const sliced = await buildPalette(image, 16, { onProgress: () => {} }).catch((e) => e);
         expect(sliced.code).toBe('out-of-memory');
-        expect(await getPalette(normal, 16)).toEqual(expected);
+        expect(await buildPalette(normal, 16)).toEqual(expected);
     }, 240000);
 
 });

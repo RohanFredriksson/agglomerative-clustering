@@ -29,17 +29,17 @@ describe('a worker that cannot start', () => {
         const broken = await import(/* @vite-ignore */ pathToFileURL(join(folder, 'worker.mjs')).href);
         const worker = broken.createWorker();
         for (let attempt = 1; attempt <= 3; attempt++) {
-            const outcome = await settle(worker.getPalette(image, 4));
+            const outcome = await settle(worker.buildPalette(image, 4));
             expect(outcome, `call ${attempt}`).not.toBe('HUNG');
             expect(outcome.code, `call ${attempt}`).toBe('worker-failed');
         }
         // Calls made together all fail, not just the first.
-        const together = await Promise.all([settle(worker.getPalette(image, 4)), settle(worker.getClustering(image)), settle(worker.cluster(image))]);
+        const together = await Promise.all([settle(worker.buildPalette(image, 4)), settle(worker.buildClustering(image)), settle(worker.cluster(image))]);
         expect(together.map((outcome) => outcome.code)).toEqual(['worker-failed', 'worker-failed', 'worker-failed']);
 
         // The problem goes away: the next call starts a fresh worker and works.
         copyFileSync(join(dist, 'worker-thread.mjs'), join(folder, 'worker-thread.mjs'));
-        expect(await worker.getPalette(image, 4)).toEqual(await broken.createWorker().getPalette(image, 4));
+        expect(await worker.buildPalette(image, 4)).toEqual(await broken.createWorker().buildPalette(image, 4));
         await worker.terminate();
     }, 60000);
 
@@ -52,7 +52,7 @@ describe('the shared worker', () => {
         await expect(dropIn.init({ wasm: join(folder, 'no-such-file.wasm') })).rejects.toBeTruthy();
         await dropIn.terminate();
         // And it still starts normally afterwards.
-        expect((await dropIn.getPalette(image, 4)).length).toBeGreaterThan(0);
+        expect((await dropIn.buildPalette(image, 4)).length).toBeGreaterThan(0);
         await dropIn.terminate();
     });
 

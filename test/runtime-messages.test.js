@@ -61,8 +61,8 @@ describe('load failures in other runtimes', () => {
     it.skipIf(process.platform !== 'linux')('says a virtual-memory limit refused the module, not a bundling problem', () => {
         // Node itself fits in 6 GB of address space; the module's reservation (about 10 GB) doesn't.
         const output = runScript(`
-            const { getPalette } = await import(${JSON.stringify(entry)});
-            const error = await getPalette(new Uint8Array(16), 2).catch((caught) => caught);
+            const { buildPalette } = await import(${JSON.stringify(entry)});
+            const error = await buildPalette(new Uint8Array(16), 2).catch((caught) => caught);
             console.log(JSON.stringify({ code: error && error.code, message: error && error.message }));
         `, (file) => ['sh', ['-c', `ulimit -v 6000000 && exec "${process.execPath}" "${file}"`]]);
         const last = output.trim().split('\n').pop();

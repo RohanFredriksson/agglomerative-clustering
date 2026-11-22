@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    getClustering, getPalette, getSwatches, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette,
+    buildClustering, buildPalette, buildSwatches, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from '../dist/index.mjs';
 
@@ -37,7 +37,7 @@ describe('indexed output matches the mapped image', () => {
         for (const k of [1, 2, 16, 200]) {
             const result = await quantizeToIndices(image, k, options);
             const clusterOptions = options.colorSpace ? { colorSpace: options.colorSpace } : {};
-            expect(result.palette).toEqual(await getPalette(image, k, clusterOptions));
+            expect(result.palette).toEqual(await buildPalette(image, k, clusterOptions));
             expect(expand(result, image)).toEqual(await quantize(image, k, options));
             expect(result.indices.length).toBe(width * height);
             expect(result.transparentIndex).toBeNull();
@@ -45,14 +45,14 @@ describe('indexed output matches the mapped image', () => {
     });
 
     it.each(cases)('quantizeToIndicesFromClustering, %s', async (_, options) => {
-        const clustering = await getClustering(image, { colorSpace: 'oklab' });
+        const clustering = await buildClustering(image, { colorSpace: 'oklab' });
         const result = await quantizeToIndicesFromClustering(image, clustering, 24, options);
         expect(result.palette).toEqual(await getPaletteFromClustering(clustering, 24));
         expect(expand(result, image)).toEqual(await quantizeFromClustering(image, clustering, 24, options));
     });
 
     it.each(cases)('quantizeToIndicesWithPalette, %s', async (_, options) => {
-        const palette = await getPalette(opaque, 40);
+        const palette = await buildPalette(opaque, 40);
         const result = await quantizeToIndicesWithPalette(image, palette, options);
         expect(result.palette).toEqual(palette);
         expect(expand(result, image)).toEqual(await quantizeWithPalette(image, palette, options));
@@ -62,7 +62,7 @@ describe('indexed output matches the mapped image', () => {
         const rgb = new Uint8Array(width * height * 3);
         for (let p = 0; p < width * height; p++) {rgb.set(opaque.subarray(p * 4, p * 4 + 3), p * 3);}
         const result = await quantizeToIndices({ data: rgb, format: 'rgb' }, 8);
-        expect(result.palette).toEqual(await getPalette(opaque, 8));
+        expect(result.palette).toEqual(await buildPalette(opaque, 8));
         expect(result.indices).toEqual((await quantizeToIndices(opaque, 8)).indices);
     });
 
@@ -131,11 +131,11 @@ describe('transparent', () => {
         for (let p = 0; p < width * height; p++) {
             if (image[p * 4 + 3] >= 128) {visible.push(image[p * 4], image[p * 4 + 1], image[p * 4 + 2], 255);}
         }
-        expect(colours(result)).toEqual(await getPalette(Uint8Array.from(visible), 7));
+        expect(colours(result)).toEqual(await buildPalette(Uint8Array.from(visible), 7));
         // and `transparent` is a clustering option too, so the palette is the same from every function that takes it
-        expect(colours(result)).toEqual(await getPalette(image, 7, { transparent: true }));
-        expect(colours(result)).toEqual((await getSwatches(image, 7, { transparent: true })).palette);
-        const clustering = await getClustering(image, { transparent: true });
+        expect(colours(result)).toEqual(await buildPalette(image, 7, { transparent: true }));
+        expect(colours(result)).toEqual((await buildSwatches(image, 7, { transparent: true })).palette);
+        const clustering = await buildClustering(image, { transparent: true });
         expect(colours(result)).toEqual(await getPaletteFromClustering(clustering, 7));
         expect(await quantizeToIndicesFromClustering(image, clustering, 8, { transparent: true })).toEqual(result);
     });
@@ -166,7 +166,7 @@ describe('transparent', () => {
     });
 
     it('needs a wider index type when the extra entry makes 257', async () => {
-        const result = await quantizeToIndicesWithPalette(image, (await getPalette(opaque, 256)), { transparent: true });
+        const result = await quantizeToIndicesWithPalette(image, (await buildPalette(opaque, 256)), { transparent: true });
         expect(result.palette.length).toBe(257 * 3);
         expect(result.indices).toBeInstanceOf(Uint16Array);
         expect(result.transparentIndex).toBe(256);
@@ -175,7 +175,7 @@ describe('transparent', () => {
     it('adds no entry when no pixel is below the cutoff, or for rgb data', async () => {
         const result = await quantizeToIndices(opaque, 8, { transparent: true });
         expect(result.transparentIndex).toBeNull();
-        expect(result.palette).toEqual(await getPalette(opaque, 8));
+        expect(result.palette).toEqual(await buildPalette(opaque, 8));
         const rgb = { data: new Uint8Array(12).fill(9), format: 'rgb' };
         expect((await quantizeToIndices(rgb, 4, { transparent: true })).transparentIndex).toBeNull();
         expect((await quantizeToIndices(image, 8, { transparent: 1 })).transparentIndex).toBe(7);
@@ -209,7 +209,7 @@ describe('edge cases and options', () => {
             expect(slotted.transparentIndex).toBe(0);
             expect(Array.from(slotted.indices)).toEqual([0, 0, 0, 0]);
         }
-        const withClustering = await quantizeToIndicesFromClustering(hidden, await getClustering(hidden), 4, { transparent: true });
+        const withClustering = await quantizeToIndicesFromClustering(hidden, await buildClustering(hidden), 4, { transparent: true });
         expect([Array.from(withClustering.palette), withClustering.transparentIndex]).toEqual([[0, 0, 0], 0]);
         // The same for BGRA, whose alpha is in the same byte.
         const hiddenBgra = await quantizeToIndices({ data: new Uint8Array(16), format: 'bgra' }, 4, { transparent: true });
@@ -241,10 +241,10 @@ describe('edge cases and options', () => {
             await expect(quantizeToIndices(image, 4, { transparent: bad })).rejects.toThrow('Invalid transparent');
         }
         // it is a clustering option too, so the functions that cluster take it, but the mapping-only ones do not
-        for (const bad of [0, 256, '128']) {await expect(getPalette(image, 4, { transparent: bad })).rejects.toThrow('Invalid transparent');}
-        await getPalette(image, 4, { transparent: 200 });
+        for (const bad of [0, 256, '128']) {await expect(buildPalette(image, 4, { transparent: bad })).rejects.toThrow('Invalid transparent');}
+        await buildPalette(image, 4, { transparent: 200 });
         await quantize(image, 4, { transparent: true });
-        const clustering = await getClustering(image);
+        const clustering = await buildClustering(image);
         await expect(quantizeFromClustering(image, clustering, 4, { transparent: true })).rejects.toThrow("Invalid option 'transparent'");
         await expect(quantizeWithPalette(image, new Uint8Array(3), { transparent: true })).rejects.toThrow("Invalid option 'transparent'");
         await expect(quantizeToIndicesWithPalette(image, new Uint8Array([0, 0]))).rejects.toThrow('Invalid palette');
@@ -259,12 +259,12 @@ describe('what k means', () => {
     for (let p = 0; p < 500; p++) {sprite.set([(p * 7) & 255, (p * 13) & 255, (p * 29) & 255, p % 5 === 0 ? 0 : 255], p * 4);}
 
     it('is the most entries returned, by every function that takes it, with and without transparent', async () => {
-        const clustering = await getClustering(sprite, { transparent: true });
+        const clustering = await buildClustering(sprite, { transparent: true });
         for (const k of [1, 2, 8, 64, 256]) {
             for (const options of [{}, { transparent: true }]) {
                 const entries = [
-                    (await getPalette(sprite, k, options)).length / 3,
-                    (await getSwatches(sprite, k, options)).palette.length / 3,
+                    (await buildPalette(sprite, k, options)).length / 3,
+                    (await buildSwatches(sprite, k, options)).palette.length / 3,
                     (await quantizeToIndices(sprite, k, options)).palette.length / 3,
                 ];
                 // k = 1 with a transparent entry keeps one colour, so it is the one case of k + 1
@@ -277,10 +277,10 @@ describe('what k means', () => {
     });
 
     it('counts the transparent entry in indexed output, so the colours there are one fewer than a flat palette of the same k', async () => {
-        const flat = await getPalette(sprite, 8, { transparent: true });
+        const flat = await buildPalette(sprite, 8, { transparent: true });
         const indexed = await quantizeToIndices(sprite, 8, { transparent: true });
         expect(flat.length / 3).toBe(8);                      // a flat palette's entries are all colours
         expect(indexed.palette.length / 3).toBe(8);           // 7 colours + the transparent entry
-        expect(indexed.colors).toEqual(await getPalette(sprite, 7, { transparent: true }));
+        expect(indexed.colors).toEqual(await buildPalette(sprite, 7, { transparent: true }));
     });
 });

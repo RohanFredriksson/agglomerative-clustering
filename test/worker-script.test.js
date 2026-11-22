@@ -9,7 +9,7 @@ import { join, resolve, dirname, relative } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { build } from 'esbuild';
 import { createWorker } from '../dist/worker.mjs';
-import { getPalette } from '../dist/index.mjs';
+import { buildPalette } from '../dist/index.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
@@ -30,11 +30,11 @@ describe('createWorker({ script })', () => {
     it('starts the script it is given (a path, or a file: URL) and gives the same results', async () => {
         const copy = join(folder, 'copy');
         cpSync(dist, copy, { recursive: true });
-        const expected = await getPalette(image, 4);
+        const expected = await buildPalette(image, 4);
         for (const script of [relative(process.cwd(), join(copy, 'worker-thread.mjs')), pathToFileURL(join(copy, 'worker-thread.mjs')), pathToFileURL(join(copy, 'worker-thread.mjs')).href]) {
             const worker = createWorker({ script });
             try {
-                expect(await worker.getPalette(image, 4)).toEqual(expected);
+                expect(await worker.buildPalette(image, 4)).toEqual(expected);
             } finally {
                 await worker.terminate();
             }
@@ -46,7 +46,7 @@ describe('createWorker({ script })', () => {
         writeFileSync(broken, "throw new Error('broken on purpose');\n");
         const worker = createWorker({ script: broken });
         try {
-            const error = await worker.getPalette(image, 4).catch((caught) => caught);
+            const error = await worker.buildPalette(image, 4).catch((caught) => caught);
             expect(error.code).toBe('worker-failed');
             expect(error.message).toContain('broken on purpose');
             expect(error.message.match(/Worker failed/g)).toHaveLength(1);
@@ -62,7 +62,7 @@ describe('createWorker({ script })', () => {
         for (const script of [join(alone, 'worker-thread.mjs'), join(folder, 'nowhere', 'worker-thread.mjs')]) {
             const worker = createWorker({ script });
             try {
-                const error = await worker.getPalette(image, 4).catch((caught) => caught);
+                const error = await worker.buildPalette(image, 4).catch((caught) => caught);
                 expect(error.code).toBe('worker-failed');
                 expect(error.message).toContain('keep dist/ together');
                 expect(error.message).toContain('createWorker({ script })');
@@ -97,7 +97,7 @@ describe('init({ script }) for the shared worker', () => {
         const { status, output } = runModule(`
             import * as ac from ${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)};
             await ac.init({ script: ${JSON.stringify(join(copy, 'worker-thread.mjs'))} });
-            const palette = await ac.getPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2);
+            const palette = await ac.buildPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2);
             const later = await ac.init({ script: ${JSON.stringify(join(dist, 'worker-thread.mjs'))} }).then(() => 'accepted', (error) => error.code + ' ' + error.argument);
             const same = await ac.init({ script: ${JSON.stringify(join(copy, 'worker-thread.mjs'))} }).then(() => 'accepted', (error) => error.code);
             console.log(palette.length, later, same);
@@ -116,8 +116,8 @@ describe('choosing worker_threads or a Web Worker', () => {
         const { status, output } = runModule(`
             globalThis.window = globalThis;
             globalThis.document = { baseURI: 'http://localhost/' };
-            const { getPalette, terminate } = await import(${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)});
-            const palette = await getPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2);
+            const { buildPalette, terminate } = await import(${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)});
+            const palette = await buildPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2);
             console.log(palette.length);
             await terminate();
         `);
@@ -129,7 +129,7 @@ describe('choosing worker_threads or a Web Worker', () => {
     // script, found from the working directory), and where it can't, the error says why.
     it('works bundled into CommonJS, and says why when it cannot find the script', async () => {
         const result = await build({
-            stdin: { contents: `const ac = require(${JSON.stringify(join(dist, 'worker.mjs'))}); ac.getPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2).then((p) => { console.log(p.length); return ac.terminate(); }, (e) => { console.log(e.code + ': ' + e.message); return ac.terminate(); });`, resolveDir: root },
+            stdin: { contents: `const ac = require(${JSON.stringify(join(dist, 'worker.mjs'))}); ac.buildPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2).then((p) => { console.log(p.length); return ac.terminate(); }, (e) => { console.log(e.code + ': ' + e.message); return ac.terminate(); });`, resolveDir: root },
             bundle: true, write: false, format: 'cjs', platform: 'node', logLevel: 'silent',
         });
         const bundle = join(folder, 'bundle.cjs');
@@ -154,10 +154,10 @@ describe('images the worker entry checks itself', () => {
         try {
             const data = new Uint8ClampedArray(4 * 16).fill(200);
             const imageData = new ImageData(data, 4, 4);
-            await worker.getPalette(imageData, 2);
+            await worker.buildPalette(imageData, 2);
             expect(imageData.data.byteLength).toBe(0);
             for (const detached of [imageData, { data: imageData.data, format: 'rgba' }]) {
-                await expect(worker.getPalette(detached, 2)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
+                await expect(worker.buildPalette(detached, 2)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
             }
         } finally {
             await worker.terminate();

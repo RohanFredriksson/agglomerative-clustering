@@ -24,7 +24,7 @@ import { performance } from 'perf_hooks';
 import { dirname } from 'path';
 import { pathToFileURL } from 'url';
 import {
-    getClustering, getPaletteFromClustering, getSwatchesFromClustering,
+    buildClustering, getPaletteFromClustering, getSwatchesFromClustering,
     quantizeToIndicesWithPalette, quantizeWithPalette,
 } from '../../dist/index.mjs';
 import { loadImages } from '../lib/images.js';
@@ -287,7 +287,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     for await (const img of loadImages(SETS, { kodakLimit: KODAK_LIMIT })) {
         if (img.name.startsWith('noise')) {continue;}
         const image = { data: img.rgba, format: 'rgba', width: img.width };
-        const [clustering, clusterMs] = await time(() => getClustering(image));
+        const [clustering, clusterMs] = await time(() => buildClustering(image));
         const [sw, swMs] = await time(() => getSwatchesFromClustering(clustering, M));
         const swSnap = await getSwatchesFromClustering(clustering, SNAP_M);
         for (const { name: paletteName, colours: F, n: ns } of PALETTES) {

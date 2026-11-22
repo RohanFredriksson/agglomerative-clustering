@@ -41,7 +41,7 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 
 ```html
 <script type="module">
-  import { getSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/index.mjs';
+  import { buildSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/index.mjs';
   import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/worker.mjs';
 </script>
 ```
@@ -52,18 +52,18 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 ## Deno, Bun and Cloudflare Workers
 
 - **Bun** needs nothing: `bun add agglomerative-clustering`, then both entries work as in Node.
-- **Deno**: `import { getPalette } from 'npm:agglomerative-clustering'`, run with `--allow-read` (the `.wasm` is read from the package). Importing from a CDN URL works too, without it. The worker entry runs on Deno's `worker_threads`, which is about 3 times slower per call than the main entry; for a few calls, use the main entry. Deno doesn't install npm versions less than a day old by default, so on the day of a release it may quietly install the previous one (`"minimumDependencyAge": 0` in `deno.json` turns that off; the exported `version` says what you got).
+- **Deno**: `import { buildPalette } from 'npm:agglomerative-clustering'`, run with `--allow-read` (the `.wasm` is read from the package). Importing from a CDN URL works too, without it. The worker entry runs on Deno's `worker_threads`, which is about 3 times slower per call than the main entry; for a few calls, use the main entry. Deno doesn't install npm versions less than a day old by default, so on the day of a release it may quietly install the previous one (`"minimumDependencyAge": 0` in `deno.json` turns that off; the exported `version` says what you got).
 - **Cloudflare Workers**: Wrangler imports a `.wasm` file as a compiled module, so give it to `init` before the first call. There are no threads, so use the main entry.
 
   ```js
-  import { init, getSwatches } from 'agglomerative-clustering';
+  import { init, buildSwatches } from 'agglomerative-clustering';
   import wasm from 'agglomerative-clustering/clustering.wasm';
 
   const ready = init({ wasm });
   export default {
     async fetch(request) {
       await ready;
-      // … decode the upload to pixels (fast-png works here), then getSwatches(pixels, 8)
+      // … decode the upload to pixels (fast-png works here), then buildSwatches(pixels, 8)
     },
   };
   ```
@@ -82,7 +82,7 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 - **The Edge runtime** can't fetch or compile a `.wasm` file itself, so import the module and pass it to `init`. The import has to be a relative path to the file (the bundler drops the `?module` query from a package path):
 
   ```ts
-  import { init, getSwatches } from 'agglomerative-clustering';
+  import { init, buildSwatches } from 'agglomerative-clustering';
   // @ts-expect-error -- `?module` gives a compiled WebAssembly.Module
   import wasm from '../../../node_modules/agglomerative-clustering/dist/clustering.wasm?module';
 
@@ -90,7 +90,7 @@ Checked with Next.js 16, under Turbopack and webpack, in production builds:
 
   export async function POST(request: Request) {
     await init({ wasm });   // loads once; later calls return at once
-    // … decode the upload to pixels, then getSwatches(pixels, 8)
+    // … decode the upload to pixels, then buildSwatches(pixels, 8)
   }
   ```
 
@@ -181,10 +181,12 @@ Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wa
 - **Jest** works in its default CommonJS mode, in the node and jsdom environments, with both entries, without transforms or `--experimental-vm-modules` (both have CommonJS builds). Mocha and `node:test` work too.
 - **jsdom and happy-dom** have no `ImageData` (install `canvas`, `@napi-rs/canvas` or `skia-canvas`, or pass `{ data, format: 'rgba', width }`) and no `Worker`: the worker entry then uses a Node worker thread, which is fine for tests. Results come back in the class of the `ImageData` you passed.
 - **Leaks.** Call `terminate()` (from `agglomerative-clustering/worker`, or on a `createWorker()`) in `afterAll`. It doesn't stop Jest from exiting, but each test file otherwise leaves a worker thread, 15 to 30 MB, in the process until the run ends.
-- **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ getPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })` (`isCodedError` accepts them).
+- **Mocking.** Mock the module with a factory (`vi.mock('agglomerative-clustering', () => ({ buildPalette: vi.fn(...) }))`), or in Vitest keep the real `Palette` with `importOriginal`. Build fake palettes with `new Palette(bytes, colorSpace)`, and fake errors as `Object.assign(new Error(message), { code: 'invalid-argument' })` (`isCodedError` accepts them).
 - **Snapshots.** Palettes (and swatches, indices, mapped pixels) are identical across platforms, Node versions and browsers, and within a major version change only for a bug fix that the changelog names: snapshot them, and expect to update a snapshot when such a fix lands. Clustering bytes are not promised to stay the same, so don't hash them. `toEqual` doesn't see a palette's `colorSpace`: compare it explicitly.
 - Fake timers don't affect it. An unawaited call still running at the end holds Jest open until it finishes.
 
 ## Writing a package that wraps it
 
 Make `agglomerative-clustering` a **`peerDependency`** and keep it **external** in your build (tsup `external`, Rollup `external`): the app's bundler then finds the worker script and `.wasm` once, with one copy in the output. Bundling it into your package leaves `./worker-thread.mjs` unresolved. Re-export `errorCodes`, `isCodedError` and the types you need (`CodedError`, `ErrorCode`, `ClusteringOptions`, …), check `version` against your supported range at run time, and let your users pass `wasm` and `script` through. Importing it on the server (SSR) doesn't run anything: only calls load the module.
+
+**A peer range that spans minor versions.** Functions gain names in minor releases (3.4.0 renamed three, keeping the old names until 4.0), so a wrapper whose range starts below such a release feature-tests at run time (`ac.buildPalette ?? ac.getPalette`) and writes its own types against names every version in its range has. Re-exporting a deprecated name hands its `@deprecated` tag to your users. Interfaces the library implements gain members in minor releases ([stability.md](stability.md)), so a class that implements `AgglomerativeWorker` in full compiles against one minor's list of members: delegate to a `createWorker()` instance and type what you take as `Pick<AgglomerativeWorker, …>` of the members you use.

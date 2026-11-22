@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClustering, getPalette, getPaletteFromClustering, quantize } from '../dist/index.mjs';
+import { buildClustering, buildPalette, getPaletteFromClustering, quantize } from '../dist/index.mjs';
 
 // 2x2 solid red RGBA — 1 unique color, each appearing 4 times.
 const solidRed2x2 = new Uint8Array([
@@ -20,19 +20,19 @@ const twoColor2x2 = new Uint8Array([
 describe('getClustering', () => {
 
     it('returns a non-empty Uint8Array', async () => {
-        const result = await getClustering(solidRed2x2);
+        const result = await buildClustering(solidRed2x2);
         expect(result).toBeInstanceOf(Uint8Array);
         expect(result.length).toBeGreaterThan(0);
     });
 
     // Clustering format: 22 + 3 + 21 * (uniqueColors - 1) bytes, padded to 7 more than a multiple of 9.
     it('returns 25 bytes for a solid image (1 unique color): 22-byte header + root colour', async () => {
-        const result = await getClustering(solidRed2x2);
+        const result = await buildClustering(solidRed2x2);
         expect(result.length).toBe(25);
     });
 
     it('returns 52 bytes for a 2-color image: header + root + one 21-byte merge, padded to 7 more than a multiple of 9', async () => {
-        const result = await getClustering(twoColor2x2);
+        const result = await buildClustering(twoColor2x2);
         expect(result.length).toBe(52);
     });
 
@@ -41,11 +41,11 @@ describe('getClustering', () => {
 describe('k larger than the colour count', () => {
 
     it('means all colours, even beyond the 32-bit range', async () => {
-        const all = await getPalette(twoColor2x2, 2);
+        const all = await buildPalette(twoColor2x2, 2);
         for (const k of [3, 2 ** 31 - 1, 2 ** 31, 2 ** 32, Number.MAX_SAFE_INTEGER]) {
-            expect(await getPalette(twoColor2x2, k)).toEqual(all);
+            expect(await buildPalette(twoColor2x2, k)).toEqual(all);
         }
-        const clustering = await getClustering(twoColor2x2);
+        const clustering = await buildClustering(twoColor2x2);
         expect((await getPaletteFromClustering(clustering, 2 ** 40)).length).toBe(all.length);
         expect(await quantize(twoColor2x2, 2 ** 40)).toEqual(await quantize(twoColor2x2, 2));
     });
@@ -55,19 +55,19 @@ describe('k larger than the colour count', () => {
 describe('getPalette', () => {
 
     it('returns 3 bytes for k = 1', async () => {
-        const result = await getPalette(solidRed2x2, 1);
+        const result = await buildPalette(solidRed2x2, 1);
         expect(result).toBeInstanceOf(Uint8Array);
         expect(result.length).toBe(3);
     });
 
     it('returns k * 3 bytes when image has enough unique colors', async () => {
         const k = 2;
-        const result = await getPalette(twoColor2x2, k);
+        const result = await buildPalette(twoColor2x2, k);
         expect(result.length).toBe(k * 3);
     });
 
     it('returns the correct color for a solid red image', async () => {
-        const result = await getPalette(solidRed2x2, 1);
+        const result = await buildPalette(solidRed2x2, 1);
         expect(result[0]).toBe(255);  // R
         expect(result[1]).toBe(0);    // G
         expect(result[2]).toBe(0);    // B
@@ -78,14 +78,14 @@ describe('getPalette', () => {
 describe('getPaletteFromClustering', () => {
 
     it('returns 3 bytes for k = 1', async () => {
-        const clustering = await getClustering(solidRed2x2);
+        const clustering = await buildClustering(solidRed2x2);
         const result = await getPaletteFromClustering(clustering, 1);
         expect(result).toBeInstanceOf(Uint8Array);
         expect(result.length).toBe(3);
     });
 
     it('returns k * 3 bytes for a 2-color clustering', async () => {
-        const clustering = await getClustering(twoColor2x2);
+        const clustering = await buildClustering(twoColor2x2);
         const result = await getPaletteFromClustering(clustering, 2);
         expect(result.length).toBe(6);
     });

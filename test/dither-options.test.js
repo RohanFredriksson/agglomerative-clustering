@@ -1,8 +1,8 @@
 // The forms the dither option takes: a boolean or a strength (Floyd-Steinberg, as in 3.0), a method name, or an object
 // { method, strength, steps }. Every form is validated the same way in both entries.
 import { describe, it, expect, afterAll } from 'vitest';
-import { quantize, getClustering, ditherMethods, ditherSteps } from '../dist/index.mjs';
-import { quantize as workerQuantize, getClustering as workerGetClustering, createWorker, terminate, ditherMethods as workerDitherMethods, ditherSteps as workerDitherSteps } from '../dist/worker.mjs';
+import { quantize, buildClustering, ditherMethods, ditherSteps } from '../dist/index.mjs';
+import { quantize as workerQuantize, buildClustering as workerGetClustering, createWorker, terminate, ditherMethods as workerDitherMethods, ditherSteps as workerDitherSteps } from '../dist/worker.mjs';
 
 afterAll(() => terminate());
 
@@ -81,7 +81,7 @@ describe('dither option forms', () => {
         const worker = createWorker();
         try {
             for (const dither of [{ method: 'bogus' }, 'ordered', () => 'ordered']) {
-                const main = await getClustering(image, { dither }).catch((error) => error);
+                const main = await buildClustering(image, { dither }).catch((error) => error);
                 expect(main).toMatchObject({ code: 'invalid-argument', argument: 'options.dither' });
                 // Both calls at once, each with its handler attached straight away: one rejecting before the other is awaited
                 // must not be an unhandled rejection.

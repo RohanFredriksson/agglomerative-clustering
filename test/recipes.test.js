@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { getClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, getPalette } from '../dist/index.mjs';
+import { buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -30,7 +30,7 @@ const toColors = (palette) => Array.from({ length: palette.length / 3 }, (_, i) 
 describe('recipes in the guides', () => {
 
     it('palette conversions and swatches with shares', async () => {
-        const clustering = await getClustering(image);
+        const clustering = await buildClustering(image);
         const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
         const colors = toColors(palette);
         const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
@@ -53,7 +53,7 @@ describe('recipes in the guides', () => {
     })();
 
     it('heaviest first for a palette and its weights', async () => {
-        const clustering = await getClustering(split);
+        const clustering = await buildClustering(split);
         const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
         const colors = toColors(palette);
         expect(Array.from(weights)).toEqual([30, 40, 30]);                       // split order: not heaviest first
@@ -157,7 +157,7 @@ describe('recipes in the guides', () => {
         const pixels = new Uint8Array(sample.reduce((n, frame) => n + frame.data.length, 0));
         let offset = 0;
         for (const frame of sample) {pixels.set(frame.data, offset); offset += frame.data.length;}
-        const clustering = await getClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
+        const clustering = await buildClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
         const gif = GIFEncoder();
         for (const frame of frames) {
             const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
@@ -259,7 +259,7 @@ describe('recipes in the guides', () => {
         const { indices } = await quantizeToIndicesWithPalette(photo, threads);
         const used = new Uint32Array(120);
         for (const index of indices) {used[index]++;}
-        const clustering = await getClustering({ data: photo, format: 'rgba', width: w });
+        const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
         for (const n of [4, 8, 12]) {
             const chosen = await chooseThreads(clustering, threads, n);
             expect(chosen).toHaveLength(n);
@@ -277,11 +277,11 @@ describe('recipes in the guides', () => {
     it('improveThreads handles an image with fewer colours than n, and one with none visible', async () => {
         const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 255]);
         const two = new Uint8Array([250, 10, 10, 255, 5, 5, 240, 255]);
-        const clustering = await getClustering(two);
+        const clustering = await buildClustering(two);
         const chosen = await chooseThreads(clustering, threads, 3);
         expect(chosen.sort()).toEqual([2, 3]);
         expect((await improveThreads(clustering, threads, chosen)).sort()).toEqual([2, 3]);
-        const empty = await getClustering(new Uint8Array([9, 9, 9, 0]));
+        const empty = await buildClustering(new Uint8Array([9, 9, 9, 0]));
         expect(await chooseThreads(empty, threads, 2)).toEqual([]);
         expect(await improveThreads(empty, threads, [])).toEqual([]);
     });
@@ -303,7 +303,7 @@ describe('recipes in the guides', () => {
             }
             return smoothed;
         };
-        const first = await getPalette(image, 3);
+        const first = await buildPalette(image, 3);
         expect(follow(null, first)).toEqual(Array.from(first));
         // The same colours in another order: each keeps its slot, and doesn't move.
         const swapped = new Uint8Array([...first.slice(3, 6), ...first.slice(0, 3), ...first.slice(6, 9)]);

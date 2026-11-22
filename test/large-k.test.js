@@ -3,13 +3,13 @@
 // k = 54469 (and the one-shot functions returned an empty palette), and 2.x's palettes there came out one colour short;
 // the palette must be exactly the distinct colours of the k clusters.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getClustering, getClusteringInfo, getPalette, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesFromClustering } from '../dist/index.mjs';
+import { buildClustering, getClusteringInfo, buildPalette, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesFromClustering } from '../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
 
 let image, clustering, maxColors;
 beforeAll(async () => {
     image = (await getImageRgba(await ensureImage(KODAK_IMAGES[13]))).rgba;
-    clustering = await getClustering(image);
+    clustering = await buildClustering(image);
     maxColors = (await getClusteringInfo(clustering)).maxColors;
 }, 120000);
 
@@ -52,7 +52,7 @@ describe('palettes at very large k (kodim14)', () => {
     it('gives the same palette from the image as from the clustering, and swatches and indices that agree', async () => {
         for (const k of [54469, maxColors]) {
             const palette = await getPaletteFromClustering(clustering, k);
-            expect(await getPalette(image, k)).toEqual(palette);
+            expect(await buildPalette(image, k)).toEqual(palette);
             const { palette: swatchPalette, shares } = await getSwatchesFromClustering(clustering, k);
             expect(swatchPalette).toEqual(palette);
             expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);

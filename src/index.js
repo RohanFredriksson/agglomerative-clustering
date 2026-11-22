@@ -380,7 +380,7 @@ const checkSize = (pixels, size, name, argument) => {
 const load = (image) => {
 
     if (isClustering(image) || isPalette(image)) {
-        const what = isClustering(image) ? 'a clustering (from getClustering)' : 'a palette';
+        const what = isClustering(image) ? 'a clustering (from buildClustering)' : 'a palette';
         const fix = isClustering(image) ? 'To cut a palette from it, use getPaletteFromClustering (or quantizeFromClustering to map an image with it).' : 'To map an image to it, use quantizeWithPalette(image, palette).';
         throw fail('invalid-argument', `Invalid image: this is ${what}, not pixels. ${fix}`, 'image');
     }
@@ -520,7 +520,8 @@ const parseOptions = (options, allowed, image) => {
     options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {
-            const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.' : '';
+            const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
+                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal: they finish in milliseconds, with no progress to report.' : '';
             throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
         }
     }
@@ -738,7 +739,7 @@ const noOptions = (name, extra) => {
 // already loaded, `Module || await acquire()` doesn't wait, and the work up to the first slice of a long clustering
 // happens before the call returns.
 
-export const getClustering = async (image, options) => {
+export const buildClustering = async (image, options) => {
 
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
@@ -754,8 +755,10 @@ export const getClustering = async (image, options) => {
     return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent), o.precision));
 
 };
+/** @deprecated The same function as buildClustering, its name before 3.4.0. Removed in 4.0. */
+export const getClustering = buildClustering;
 
-export const getPalette = async (image, k, options) => {
+export const buildPalette = async (image, k, options) => {
 
     image = load(image);
     k = check(k);
@@ -774,6 +777,8 @@ export const getPalette = async (image, k, options) => {
     return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent), o.precision), colorSpaceName(o.colorSpace));
 
 };
+/** @deprecated The same function as buildPalette, its name before 3.4.0. Removed in 4.0. */
+export const getPalette = buildPalette;
 
 // The cuts take the name they were called by, for their messages: the functions below, or the methods on Clustering.
 const cutPalette = async (name, clustering, k, extra) => {
@@ -830,14 +835,16 @@ const cutSwatches = async (name, clustering, k, extra) => {
 export const getSwatchesFromClustering = (clustering, k, ...extra) => cutSwatches('getSwatchesFromClustering', clustering, k, extra);
 
 // The same for an image: clusters it, then cuts, like getPalette.
-export const getSwatches = async (image, k, options) => {
+export const buildSwatches = async (image, k, options) => {
 
     // Arguments are checked in the order they are given (image, then k, then options), as in every other function.
     load(image);
     k = check(k);
-    return getSwatchesFromClustering(await getClustering(image, options), k);
+    return getSwatchesFromClustering(await buildClustering(image, options), k);
 
 };
+/** @deprecated The same function as buildSwatches, its name before 3.4.0. Removed in 4.0. */
+export const getSwatches = buildSwatches;
 
 // What a clustering holds, read from its header and records without the WASM module. `mse[k - 1]` is the mean
 // squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,

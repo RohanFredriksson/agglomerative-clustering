@@ -19,7 +19,7 @@ const run = async (option, name) => {
     const result = await build({
         stdin: {
             contents: `const ac = require(${JSON.stringify(resolve(root, 'dist/index.cjs'))});
-                ac.init(${option}).then(() => ac.getPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2))
+                ac.init(${option}).then(() => ac.buildPalette(new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), 2))
                     .then((p) => console.log(p.length), (e) => console.log(e.code + ': ' + e.message));`,
             resolveDir: root,
         },
