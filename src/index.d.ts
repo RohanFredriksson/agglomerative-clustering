@@ -184,8 +184,8 @@ export interface CancelOptions {
      * has the signal's own `name`, not an `ErrorCode`. A signal that is already aborted does no work. On the functions
      * that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms) it is checked once,
      * before the call starts. Pixel mapping, which follows the clustering, can't be
-     * interrupted (the guides show how to map a large image in strips, or cancel it through a worker). The call's result is the same as without a signal. In the worker entry the worker itself stops
-     * working on the call, and a call still waiting its turn never starts.
+     * interrupted (the guides show how to map a large image in strips, or cancel it through a worker). The call's result is the same as without a signal. In the worker entry the worker stops
+     * working on a call that clusters, and a call still waiting its turn never starts; a mapping already running finishes.
      */
     signal?: AbortSignal | undefined;
 }

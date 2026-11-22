@@ -275,9 +275,10 @@ Clustering takes `signal` and `onProgress`, but the functions that map pixels to
 import { createWorker } from 'agglomerative-clustering/worker';
 
 // quantizeToIndicesWithPalette, stopped part way when `signal` aborts: it rejects with the signal's reason.
-async function mapCancellably(image, palette, options, signal) {
+// `workerOptions` go to createWorker ({ wasm, script }, where your setup needs them).
+async function mapCancellably(image, palette, options, signal, workerOptions) {
   signal?.throwIfAborted();
-  const worker = createWorker();
+  const worker = createWorker(workerOptions);
   const stop = () => worker.terminate();
   signal?.addEventListener('abort', stop, { once: true });
   try {
@@ -292,38 +293,42 @@ async function mapCancellably(image, palette, options, signal) {
 }
 ```
 
-The call rejects as soon as the signal aborts (under a millisecond in Node). A fresh worker costs about 40 ms before its first call. That is small next to the mappings worth cancelling, but too much to pay for small images.
+The call rejects as soon as the signal aborts (under a millisecond in Node). A fresh worker costs about 40 ms before its first call. Pass `createWorker`'s options (`{ wasm, script }`) where your setup needs them ([Workers](#workers) has the bundlers that do). That is small next to the mappings worth cancelling, but too much to pay for small images.
 
 **To show progress**, map in strips of rows and report between them. The strips also check the signal, so this works on the calling thread too:
 
 ```js
 import { quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
-// quantizeToIndicesWithPalette for `image` ({ data, format: 'rgba', width, height }) in strips of rows, checking
-// `signal` and calling `onProgress` (0 to 1) between them. Strips are a multiple of 8 rows high, so ordered
+// quantizeToIndicesWithPalette for `image` (ImageData, or { data, format: 'rgba', width, height }) in strips of rows,
+// checking `signal` and calling `onProgress` (0 to 1) between them. Strips are a multiple of 8 rows high, so ordered
 // dithering keeps its pattern.
 async function mapInStrips(image, palette, options = {}, { signal, onProgress } = {}) {
-  const { data, width, height } = image;
+  const { data, width, height, format = 'rgba' } = image;
+  if (format !== 'rgba') {throw new TypeError("mapInStrips takes RGBA pixels: ImageData or { format: 'rgba' }.");}
+  if (!(height > 0)) {return quantizeToIndicesWithPalette(image, palette, options);}
   const rows = Math.max(8, Math.floor(200_000 / width / 8) * 8);   // about 200,000 pixels per strip
-  let result = null, indices = null;
+  const parts = [];
   for (let top = 0; top < height; top += rows) {
     signal?.throwIfAborted();
     const strip = Math.min(rows, height - top);
-    const part = await quantizeToIndicesWithPalette(
-      { data: data.subarray(top * width * 4, (top + strip) * width * 4), format: 'rgba', width, height: strip }, palette, options);
-    indices ??= new part.indices.constructor(width * height);   // 1, 2 or 4 bytes per index, as the palette needs
-    indices.set(part.indices, top * width);
-    if (result === null || part.palette.length > result.palette.length) {result = part;}   // the strip with a transparent entry, if any
+    parts.push(await quantizeToIndicesWithPalette(
+      { data: data.subarray(top * width * 4, (top + strip) * width * 4), format: 'rgba', width, height: strip }, palette, options));
     onProgress?.((top + strip) / height);
   }
-  return { palette: result.palette, indices, transparentIndex: result.transparentIndex, width, height };
+  // Only strips with transparent pixels get the transparent entry, after the palette; take the palette, `colors` and
+  // index width (1, 2 or 4 bytes) from one of them.
+  const widest = parts.reduce((a, b) => (b.palette.length > a.palette.length ? b : a));
+  const indices = new widest.indices.constructor(width * height);
+  parts.forEach((part, i) => indices.set(part.indices, i * rows * width));
+  return { ...widest, indices, width, height };
 }
 ```
 
-- **Without dithering and with ordered dithering, the indices are the same as one call's.** Ordered dithering depends only on a pixel's colour and its position in the 8×8 pattern ([Choosing a dither method](api.md#choosing-a-dither-method)), so strips must be a multiple of 8 rows high. Ordered dithering takes up to 30% longer this way on photos, because each strip rebuilds its colours' recipes. On noise it takes about 3% longer.
+- **Without dithering and with ordered dithering, the indices are the same as one call's.** Ordered dithering depends only on a pixel's colour and its position in the 8×8 pattern ([Choosing a dither method](api.md#choosing-a-dither-method)), so strips must be a multiple of 8 rows high. Ordered dithering takes up to about 40% longer this way on photos, because each strip rebuilds its colours' recipes. On noise it takes about 3% longer.
 - **Error diffusion (Floyd–Steinberg and Atkinson) gives different output.** Each strip starts without the error carried from the row above, which leaves a faint seam at every strip edge. On the photo, after a blur, the rows next to strip edges had up to 4% more error with Floyd–Steinberg and up to 7% more with Atkinson, at 4 to 256 colours, though the image as a whole stayed within 1.4%. If the seams show (few colours, smooth gradients), cancel through a worker instead and show an indeterminate progress bar.
 - **How often it checks:** the longest strip took about 0.5 s (ordered dithering, 256 colours), most of them under 0.1 s. Make the strips smaller if aborts need to land sooner. Each strip pays a call's fixed cost, mostly building the palette's lookup again, so smaller strips cost more: undithered noise at 256 colours took 0.40 s in strips against 0.16 s in one call.
-- **The transparent entry:** with `transparent`, only strips with transparent pixels get the extra entry after the palette. The other entries keep their indices, so the function returns the longest palette.
+- **The transparent entry:** with `transparent`, only strips with transparent pixels get the extra entry after the palette. The other entries keep their indices, so the function returns the palette, `colors` and index width of a strip that has it (with 256 colours the entry makes the indices 2 bytes wide). The result is otherwise what one call returns.
 - **`quantize` and `quantizeToIndices`** cluster and then map. For progress over both, cluster first (`buildClustering(image, { signal, onProgress })`), cut the palette (`clustering.getPalette(k)`), then map it in strips.
 
 ## Storing clusterings

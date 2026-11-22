@@ -553,9 +553,10 @@ describe('recipes in the guides', () => {
 
     describe('mapping a large image: cancelling and progress', () => {
         // quantizeToIndicesWithPalette, stopped part way when `signal` aborts: it rejects with the signal's reason.
-        async function mapCancellably(image, palette, options, signal) {
-            signal?.throwIfAborted();
-            const worker = createWorker();
+        // `workerOptions` go to createWorker ({ wasm, script }, where your setup needs them).
+        async function mapCancellably(image, palette, options, signal, workerOptions) {
+          signal?.throwIfAborted();
+          const worker = createWorker(workerOptions);
             const stop = () => worker.terminate();
             signal?.addEventListener('abort', stop, { once: true });
             try {
@@ -569,24 +570,28 @@ describe('recipes in the guides', () => {
             }
         }
 
-        // quantizeToIndicesWithPalette for `image` ({ data, format: 'rgba', width, height }) in strips of rows, checking
-        // `signal` and calling `onProgress` (0 to 1) between them. Strips are a multiple of 8 rows high, so ordered
+        // quantizeToIndicesWithPalette for `image` (ImageData, or { data, format: 'rgba', width, height }) in strips of rows,
+        // checking `signal` and calling `onProgress` (0 to 1) between them. Strips are a multiple of 8 rows high, so ordered
         // dithering keeps its pattern.
         async function mapInStrips(image, palette, options = {}, { signal, onProgress } = {}) {
-            const { data, width, height } = image;
-            const rows = Math.max(8, Math.floor(200_000 / width / 8) * 8);   // about 200,000 pixels per strip
-            let result = null, indices = null;
-            for (let top = 0; top < height; top += rows) {
-                signal?.throwIfAborted();
-                const strip = Math.min(rows, height - top);
-                const part = await quantizeToIndicesWithPalette(
-                    { data: data.subarray(top * width * 4, (top + strip) * width * 4), format: 'rgba', width, height: strip }, palette, options);
-                indices ??= new part.indices.constructor(width * height);   // 1, 2 or 4 bytes per index, as the palette needs
-                indices.set(part.indices, top * width);
-                if (result === null || part.palette.length > result.palette.length) {result = part;}   // the strip with a transparent entry, if any
-                onProgress?.((top + strip) / height);
-            }
-            return { palette: result.palette, indices, transparentIndex: result.transparentIndex, width, height };
+          const { data, width, height, format = 'rgba' } = image;
+          if (format !== 'rgba') {throw new TypeError("mapInStrips takes RGBA pixels: ImageData or { format: 'rgba' }.");}
+          if (!(height > 0)) {return quantizeToIndicesWithPalette(image, palette, options);}
+          const rows = Math.max(8, Math.floor(200_000 / width / 8) * 8);   // about 200,000 pixels per strip
+          const parts = [];
+          for (let top = 0; top < height; top += rows) {
+            signal?.throwIfAborted();
+            const strip = Math.min(rows, height - top);
+            parts.push(await quantizeToIndicesWithPalette(
+              { data: data.subarray(top * width * 4, (top + strip) * width * 4), format: 'rgba', width, height: strip }, palette, options));
+            onProgress?.((top + strip) / height);
+          }
+          // Only strips with transparent pixels get the transparent entry, after the palette; take the palette, `colors` and
+          // index width (1, 2 or 4 bytes) from one of them.
+          const widest = parts.reduce((a, b) => (b.palette.length > a.palette.length ? b : a));
+          const indices = new widest.indices.constructor(width * height);
+          parts.forEach((part, i) => indices.set(part.indices, i * rows * width));
+          return { ...widest, indices, width, height };
         }
 
         it('are the functions printed in the guides', async () => {
@@ -640,15 +645,33 @@ describe('recipes in the guides', () => {
             }
         }, 60000);
 
-        it('in strips keeps the transparent entry when only some strips have transparent pixels', async () => {
+        it('in strips keeps the transparent entry, its colors and its index width when only a later strip has transparent pixels', async () => {
             const image = makeImage(3000, 150, [70, 71]);   // only the second strip has transparent pixels
-            const palette = await buildPalette(image, 12);
-            const whole = await quantizeToIndicesWithPalette(image, palette, { transparent: true, dither: 'ordered' });
-            const got = await mapInStrips(image, palette, { transparent: true, dither: 'ordered' });
-            expect(whole.transparentIndex).toBe(palette.length / 3);
-            expect(got.transparentIndex).toBe(whole.transparentIndex);
-            expect(Array.from(got.palette)).toEqual(Array.from(whole.palette));
+            for (const k of [12, 256]) {   // at 256 colours the transparent entry makes the indices 2 bytes wide
+                const palette = await buildPalette(image, k, { precision: 6 });
+                expect(palette.length / 3).toBe(k);
+                for (const options of [{ transparent: true }, { transparent: true, dither: 'ordered' }]) {
+                    const whole = await quantizeToIndicesWithPalette(image, palette, options);
+                    const got = await mapInStrips(image, palette, options);
+                    expect(whole.transparentIndex).toBe(k);
+                    const { indices, ...rest } = got, { indices: expected, ...expectedRest } = whole;
+                    expect(rest).toEqual(expectedRest);   // palette, colors, indexBits, transparentIndex, width, height
+                    expect(indices.constructor).toBe(expected.constructor);
+                    expect(indices.every((v, i) => v === expected[i]), `${k} colours`).toBe(true);
+                }
+            }
+        }, 30000);
+
+        it('in strips takes ImageData and an empty image, and refuses other pixel formats', async () => {
+            const image = makeImage(3000, 150);
+            const palette = await buildPalette(image, 16, { precision: 6 });
+            const imageData = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
+            const whole = await quantizeToIndicesWithPalette(imageData, palette, { dither: 'ordered' });
+            const got = await mapInStrips(imageData, palette, { dither: 'ordered' });
             expect(got.indices.every((v, i) => v === whole.indices[i])).toBe(true);
+            expect(await mapInStrips({ data: new Uint8Array(0), format: 'rgba', width: 5, height: 0 }, palette))
+                .toEqual(await quantizeToIndicesWithPalette({ data: new Uint8Array(0), format: 'rgba', width: 5, height: 0 }, palette));
+            await expect(mapInStrips({ ...image, format: 'bgra' }, palette)).rejects.toThrow(TypeError);
         });
 
         it('in strips stops between strips on abort, with the signal\'s reason', async () => {

@@ -521,7 +521,7 @@ const parseOptions = (options, allowed, image) => {
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {
             const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
-                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal, checked before they start. See "Cancelling or showing progress while mapping a large image" in the guides.' : '';
+                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal, checked before they start: for progress, map the image in strips of rows (https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#cancelling-or-showing-progress-while-mapping-a-large-image).' : '';
             throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
         }
     }
