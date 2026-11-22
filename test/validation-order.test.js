@@ -68,6 +68,24 @@ describe('an aborted signal with nothing else wrong', () => {
         await expect(workerEntry.quantize(image, 4, { signal: controller.signal })).rejects.toBe(reason);
     });
 
+    it('settles without waiting for a long call already running in the worker', async () => {
+        const busy = workerEntry.createWorker();
+        try {
+            const noise = new Uint8Array(4 * 700 * 700).map(() => (Math.random() * 256) | 0);
+            await busy.buildPalette(image, 2);                                   // the worker is up
+            let longDone = false;
+            // A clustering run in slices (it has a progress callback), so the thread reads messages between them; one run in
+            // a single piece blocks the thread, and nothing, not even a cancel, reaches it before it ends.
+            const long = busy.buildClustering(noise, { onProgress: () => {} }).then(() => {longDone = true;});
+            await expect(busy.buildPalette(image, 0, { signal: aborted() })).rejects.toMatchObject({ argument: 'k' });
+            await expect(busy.buildPalette(image, 4, { signal: aborted() })).rejects.toMatchObject({ name: 'AbortError' });
+            expect(longDone, 'the aborted calls settled before the clustering finished').toBe(false);
+            await long;
+        } finally {
+            await busy.terminate();
+        }
+    }, 60_000);
+
     it('leaves the image with the caller, even when the worker transfers', async () => {
         const moving = workerEntry.createWorker({ transfer: true });
         try {

@@ -121,6 +121,10 @@ const onMessage = (data, post) => {
         if (controller) {controller.abort();}
         return;
     }
+    // A check runs at once, beside whatever is running: its caller has already aborted, so it must not wait for other calls.
+    // It only validates: every function checks its signal before it puts anything in the WebAssembly heap, so it can't
+    // disturb a clustering running in slices, or grow the heap.
+    if (data.check) {respond(data, post).catch(() => {}); return;}
     if (data.cancellable) {controllers.set(data.id, new AbortController());}
     // respond() answers every failure itself; this catch only keeps one unforeseen rejection (an error that can't be posted)
     // from leaving the queue rejected, which would silently stop the thread from running any later call.

@@ -304,7 +304,8 @@ const takeControls = (options, progressAllowed = true, ditherAllowed = true) => 
     }
     // The signal and the progress callback can't cross to the worker, so they are kept here and the worker gets its own.
     // A wrong one (or a callback where only a signal is taken) crosses as `null` instead, which the worker's validation
-    // rejects with the main entry's error, after the image and k: the main entry checks the options last.
+    // rejects with the main entry's error, after the image and k: the main entry checks the options last. (This relies on
+    // those messages not echoing the value: if they ever say what they got, send a stand-in that reads the same.)
     const {signal, onProgress} = options;
     const badSignal = signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function');
     const badProgress = onProgress !== undefined && (!progressAllowed || typeof onProgress !== 'function');

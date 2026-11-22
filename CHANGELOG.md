@@ -14,7 +14,7 @@ Output is unchanged; the golden tests pin it.
   - **Mocks:** a mock replaces only the name it lists; update mock factories with the call sites (Vitest names the missing export).
 
 ### Fixed
-- **The worker entry reports the same mistake as the main entry when a call has two.** It checked `signal`, `onProgress` and an object-form `dither` before the image and `k`, so `buildPalette(image, 0, { onProgress: 'x' })` gave `options.onProgress` in the worker and `k` in the main entry, and a call whose signal was already aborted rejected with the abort even when an argument was wrong. Both entries now check the image, then `k` or the palette, then the options, as the API reference says; an aborted call still leaves its image with the caller.
+- **The worker entry reports the same mistake as the main entry when a call has two.** It checked `signal`, `onProgress` and an object-form `dither` before the image and `k`, so `buildPalette(image, 0, { onProgress: 'x' })` gave `options.onProgress` in the worker and `k` in the main entry, and a call whose signal was already aborted rejected with the abort even when an argument was wrong. Both entries now check the image, then `k` or the palette, then the options, as the API reference says. A call whose signal is already aborted is checked by the worker first (starting it if it isn't running; it doesn't wait for calls in progress), and still leaves its image with the caller.
 - **`onProgress` on a function that only maps pixels** gets the same message in both entries, saying why: those functions finish in milliseconds and take just `signal`.
 
 ## 3.3.0
