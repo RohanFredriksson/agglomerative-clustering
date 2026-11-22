@@ -1,0 +1,77 @@
+Prototype: wide-scan.patch build (no persistence); 5 passes, per-frame minimum. Times in ms.
+ordered/none = ordered time over no dithering; reuse = prototype over released ordered (same output, checked).
+later = median of frames 2..n; floor = the prototype mapping frame 1 a second time (every recipe already built).
+
+## desert-160.rgba: 36 frames of 160x90
+colours per frame: median 4548; of a later frame's colours, seen in the previous frame 48%, in any earlier frame 86% (94% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        21.7   61.0  301.3  361.9 |  13.86    2.80   |   1.20   9.32  10.33   9.21
+16 RGB          7.6   29.7  111.1  108.9 |  14.66    3.92   |   0.98   2.71   3.11   2.74
+16 OKLab       16.6   42.7  153.2  153.1 |   9.22    2.57   |   1.00   4.07   4.38   4.10
+black/white     6.0   17.4  404.3  403.9 |  67.11    2.89   |   1.00  10.28  11.51  10.41
+
+## desert-480.rgba: 36 frames of 480x270
+colours per frame: median 14245; of a later frame's colours, seen in the previous frame 59%, in any earlier frame 91% (99% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        69.0  444.9  902.2 1127.0 |  13.07    6.44   |   1.25  23.17  32.87  22.91
+16 RGB         38.0  248.9  372.1  358.9 |   9.80    6.56   |   0.96   7.61  10.48   7.35
+16 OKLab       67.1  327.2  485.1  484.0 |   7.23    4.88   |   1.00  10.34  14.02  10.17
+black/white    33.3  146.8 1256.9 1261.7 |  37.76    4.41   |   1.00  26.02  37.00  26.04
+
+## dusk-160.rgba: 36 frames of 160x90
+colours per frame: median 4561; of a later frame's colours, seen in the previous frame 31%, in any earlier frame 62% (85% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        21.2   54.8  300.8  336.2 |  14.20    2.59   |   1.12  10.91  10.54  10.87
+16 RGB          7.6   27.0  107.3  105.5 |  14.13    3.56   |   0.98   3.29   3.34   3.31
+16 OKLab       16.0   52.2  166.5  166.7 |  10.40    3.26   |   1.00   5.45   5.31   5.47
+black/white     5.3   18.4  461.8  461.5 |  86.35    3.43   |   1.00  15.61  14.78  15.46
+
+## dusk-480.rgba: 36 frames of 480x270
+colours per frame: median 19272; of a later frame's colours, seen in the previous frame 41%, in any earlier frame 76% (94% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        84.6  348.4 1365.3 1576.7 |  16.14    4.12   |   1.15  35.44  46.63  35.33
+16 RGB         46.6  228.1  519.1  505.8 |  11.15    4.90   |   0.97  11.63  15.12  11.45
+16 OKLab       90.5  391.5  717.1  722.4 |   7.92    4.33   |   1.01  17.34  21.91  17.24
+black/white    37.1  169.9 2123.7 2118.8 |  57.19    4.57   |   1.00  50.59  64.48  50.81
+
+## girl-160.rgba: 36 frames of 160x90
+colours per frame: median 7603; of a later frame's colours, seen in the previous frame 14%, in any earlier frame 44% (61% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        27.4   73.1  454.6  527.3 |  16.60    2.67   |   1.16  21.24  17.00  21.22
+16 RGB          9.3   34.4  164.8  162.1 |  17.79    3.71   |   0.98   6.52   5.19   6.53
+16 OKLab       22.3   69.2  257.9  258.0 |  11.59    3.11   |   1.00  10.47   8.36  10.51
+black/white     6.5   17.2  652.8  654.4 | 100.63    2.66   |   1.00  26.74  20.28  26.59
+
+## girl-480.rgba: 36 frames of 480x270
+colours per frame: median 39375; of a later frame's colours, seen in the previous frame 31%, in any earlier frame 77% (88% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB       102.1  393.5 2107.5 2691.1 |  20.64    3.85   |   1.28 122.71  90.32 123.03
+16 RGB         56.1  253.5  853.8  831.7 |  15.23    4.52   |   0.97  37.45  27.98  37.40
+16 OKLab      124.6  430.6 1182.2 1190.6 |   9.49    3.46   |   1.01  54.00  39.75  53.88
+black/white    44.8  152.3 3352.9 3351.1 |  74.80    3.40   |   1.00 151.47 108.83 151.60
+
+## pan-160.rgba: 36 frames of 160x90
+colours per frame: median 11427; of a later frame's colours, seen in the previous frame 99%, in any earlier frame 99% (99% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB        51.5  114.6  687.3  915.3 |  13.36    2.23   |   1.33  25.24  25.51  25.24
+16 RGB         13.3   41.8  276.3  269.8 |  20.73    3.13   |   0.98   7.36   7.55   7.38
+16 OKLab       36.3   82.4  425.8  427.6 |  11.72    2.27   |   1.00  11.68  11.94  11.65
+black/white     8.8   18.9 1095.0 1092.9 | 123.98    2.14   |   1.00  30.56  30.33  30.28
+
+## pan-480.rgba: 36 frames of 480x270
+colours per frame: median 30062; of a later frame's colours, seen in the previous frame 99%, in any earlier frame 99% (100% of pixels)
+palette       none     fs  ordered  proto | ord/none fs/none | reuse  first  later  floor (proto, per frame)
+255 RGB       128.7  535.4 1903.2 2555.8 |  14.79    4.16   |   1.34  67.11  70.27  67.32
+16 RGB         61.7  296.6  832.1  801.4 |  13.49    4.81   |   0.96  21.25  22.17  21.09
+16 OKLab      129.9  453.9 1207.0 1209.0 |   9.29    3.49   |   1.00  32.26  33.39  32.01
+black/white    47.9  152.9 2988.7 2979.1 |  62.39    3.19   |   1.00  78.94  82.16  78.62
+
+## Summary: whole clip, prototype over released ordered (lower is better)
+255 RGB     160w: reuse 1.12–1.33; ordered/none 13.4–16.6 → with reuse 15.9–19.3
+255 RGB     480w: reuse 1.15–1.34; ordered/none 13.1–20.6 → with reuse 16.3–26.3
+16 RGB      160w: reuse 0.98–0.98; ordered/none 14.1–20.7 → with reuse 13.9–20.2
+16 RGB      480w: reuse 0.96–0.97; ordered/none 9.8–15.2 → with reuse 9.5–14.8
+16 OKLab    160w: reuse 1.00–1.00; ordered/none 9.2–11.7 → with reuse 9.2–11.8
+16 OKLab    480w: reuse 1.00–1.01; ordered/none 7.2–9.5 → with reuse 7.2–9.6
+black/white 160w: reuse 1.00–1.00; ordered/none 67.1–124.0 → with reuse 67.0–123.7
+black/white 480w: reuse 1.00–1.00; ordered/none 37.8–74.8 → with reuse 37.9–74.8

@@ -101,6 +101,46 @@ for (const frame of frames) {
 - **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `shared.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
+### Faster ordered dithering: map frames in batches
+
+Ordered dithering builds a recipe (a mix of palette colours) for every distinct colour in the image, on every call, and the frames of a clip share most of their colours, so mapping them one call each builds the same recipes again and again. Map several frames in one call instead: stack them into one tall image and slice the indices back. The indices are the same as the loop above gives, frame for frame:
+
+```js
+// Maps `frames` (all the same size, { data, format: 'rgba', width, height }) with `palette`, `batch` frames per call.
+// Returns { palette, indices, transparentIndex } for each frame. A batch's indices share one buffer: .slice() one
+// before transferring it.
+async function mapFramesInBatches(frames, palette, batch = 12) {
+  const { width, height } = frames[0];
+  const rows = Math.ceil(height / 8) * 8;   // each frame starts on the 8×8 pattern's grid
+  const rowBytes = width * 4;
+  const results = [];
+  for (let start = 0; start < frames.length; start += batch) {
+    const group = frames.slice(start, start + batch);
+    const data = new Uint8Array(group.length * rows * rowBytes);
+    group.forEach((frame, i) => {
+      data.set(frame.data, i * rows * rowBytes);
+      // Pad by repeating the last row: it adds no colours or transparency the frame didn't have.
+      const last = frame.data.subarray((height - 1) * rowBytes, height * rowBytes);
+      for (let y = height; y < rows; y++) {data.set(last, (i * rows + y) * rowBytes);}
+    });
+    const { palette: entries, indices, transparentIndex } = await quantizeToIndicesWithPalette(
+      { data, format: 'rgba', width, height: group.length * rows }, palette, { transparent: true, dither: 'ordered' });
+    group.forEach((_, i) => {
+      results.push({ palette: entries, indices: indices.subarray(i * rows * width, (i * rows + height) * width), transparentIndex });
+    });
+  }
+  return results;
+}
+```
+
+<!-- Measured by bench/spikes/recipe-reuse/batch-recipe.mjs; results in bench/spikes/recipe-reuse/results-batch-recipe.txt. -->
+- **How much faster:** on 36-frame clips (480×270 and 160×90; 255 colours, 16 colours, black and white), batches of 12 took 0.36 to 0.78 of the time of one call per frame on film, and 0.12 to 0.29 on clips whose pixels repeat exactly, such as screen recordings and pans. Larger batches are faster still (the whole clip in one call: 0.27 to 0.69 and 0.06 to 0.24).
+- **Why it gives the same indices:** with ordered dithering a pixel's result depends only on its own colour and its position in the 8×8 pattern, counted from the image's top-left pixel, a property that holds through 3.x ([Choosing a dither method](api.md#choosing-a-dither-method)). Padding each frame to a multiple of 8 rows keeps every frame on the same grid; without it, every frame after the first would get a shifted pattern, still valid but no longer the same from frame to frame. Only ordered dithering works this way: error diffusion would carry error from one frame into the next.
+- **Other settings:** change the options in the call (`dither: { method: 'ordered', steps: 8 }`, `colorSpace: 'oklab'`, a `transparent` cutoff), keeping the method ordered.
+- **The transparent entry comes per batch:** when any frame in a batch has transparent pixels, every frame in it gets the transparent entry, so `palette` and `transparentIndex` are the batch's. A GIF with one global palette uses the longer palette anyway.
+- **Memory:** a batch is copied once here and once more into the library, so 12 frames at 960×540 take about 50 MB. Keep batches to a few dozen frames: the library reloads its WebAssembly module after a call that leaves it above 256 MB.
+- **With workers,** give each worker whole batches: frames mapped in different calls build their recipes again.
+
 ## Live video and camera frames
 
 For a palette that follows a video or a camera (ambient light, a live theme), take each frame small and **skip frames while the worker is busy**:

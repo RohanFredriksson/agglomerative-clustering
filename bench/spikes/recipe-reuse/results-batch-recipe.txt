@@ -1,0 +1,50 @@
+Whole clip, ms (minimum of 3 passes). Ratios are against one released call per frame (lower is better).
+batch N = the recipe above with N frames per call; prepared = persist.patch, one call per frame, table kept between them.
+
+clip              palette      per-frame  batch 6  batch 12  batch all  prepared
+desert-160.rgba   255 RGB           314     0.48     0.37      0.27      0.44
+desert-160.rgba   16 RGB            116     0.53     0.41      0.32      0.33
+desert-160.rgba   black/white       424     0.52     0.41      0.30      0.30
+desert-480.rgba   255 RGB           958     0.53     0.45      0.37      0.48
+desert-480.rgba   16 RGB            398     0.57     0.49      0.44      0.42
+desert-480.rgba   black/white      1332     0.56     0.49      0.41      0.41
+dusk-160.rgba     255 RGB           315     0.62     0.53      0.44      0.59
+dusk-160.rgba     16 RGB            141     0.53     0.46      0.38      0.40
+dusk-160.rgba     black/white       494     0.63     0.54      0.43      0.44
+dusk-480.rgba     255 RGB          1400     0.65     0.59      0.53      0.59
+dusk-480.rgba     16 RGB            747     0.67     0.62      0.54      0.54
+dusk-480.rgba     black/white      2180     0.64     0.69      0.50      0.51
+elder-160.rgba    255 RGB           338     0.60     0.47      0.34      0.51
+elder-160.rgba    16 RGB            123     0.77     0.61      0.45      0.46
+elder-160.rgba    black/white       616     0.60     0.48      0.37      0.36
+elder-480.rgba    255 RGB          1409     0.57     0.48      0.38      0.46
+elder-480.rgba    16 RGB            558     0.60     0.53      0.45      0.42
+elder-480.rgba    black/white      2259     0.57     0.48      0.40      0.39
+girl-160.rgba     255 RGB           459     0.76     0.69      0.59      0.80
+girl-160.rgba     16 RGB            168     0.84     0.78      0.69      0.69
+girl-160.rgba     black/white       659     0.84     0.77      0.68      0.67
+girl-480.rgba     255 RGB          2142     0.74     0.68      0.61      0.69
+girl-480.rgba     16 RGB            869     0.75     0.69      0.63      0.62
+girl-480.rgba     black/white      3363     0.74     0.68      0.62      0.61
+pan-160.rgba      255 RGB           694     0.24     0.16      0.10      0.23
+pan-160.rgba      16 RGB            279     0.26     0.19      0.14      0.14
+pan-160.rgba      black/white      1097     0.26     0.18      0.13      0.13
+pan-480.rgba      255 RGB          1927     0.32     0.25      0.20      0.31
+pan-480.rgba      16 RGB            838     0.35     0.29      0.24      0.24
+pan-480.rgba      black/white      2989     0.34     0.27      0.22      0.22
+snow-160.rgba     255 RGB           145     0.47     0.36      0.30      0.46
+snow-160.rgba     16 RGB             49     0.51     0.42      0.35      0.39
+snow-160.rgba     black/white       203     0.50     0.39      0.33      0.33
+snow-480.rgba     255 RGB           344     0.57     0.49      0.45      0.55
+snow-480.rgba     16 RGB            136     0.65     0.59      0.55      0.54
+snow-480.rgba     black/white       494     0.56     0.49      0.47      0.45
+sprite-160.rgba   255 RGB           535     0.21     0.12      0.06      0.16
+sprite-160.rgba   16 RGB            178     0.24     0.15      0.09      0.10
+sprite-160.rgba   black/white       708     0.22     0.14      0.08      0.08
+sprite-480.rgba   255 RGB          1747     0.31     0.24      0.19      0.27
+sprite-480.rgba   16 RGB            701     0.34     0.28      0.24      0.22
+sprite-480.rgba   black/white      2686     0.32     0.25      0.20      0.20
+
+Range over clips (ratio to per-frame):
+Sintel scenes: batch 6 0.47–0.84, batch 12 0.36–0.78, batch all 0.27–0.69, prepared 0.30–0.80
+pan, sprite: batch 6 0.21–0.35, batch 12 0.12–0.29, batch all 0.06–0.24, prepared 0.08–0.31

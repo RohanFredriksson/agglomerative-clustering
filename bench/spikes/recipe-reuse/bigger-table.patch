@@ -1,0 +1,11 @@
+--- a/src/clustering.cpp
++++ b/src/clustering.cpp
+@@ -788,7 +788,7 @@
+         // changes speed only.
+         int recipe_bits = 21;
+         for (size_t m = steps; m > 1; m >>= 1) {recipe_bits--;}
+-        recipe_bits = std::max(recipe_bits, 17);
++        recipe_bits = std::max(recipe_bits, 17) + 2; // SPIKE: 4x the slots
+         int image_bits = 1;
+         while (image_bits < recipe_bits && (size_t(1) << image_bits) < 2 * pixels) {image_bits++;}
+         recipe_bits = std::max(4, std::min(recipe_bits, image_bits));
