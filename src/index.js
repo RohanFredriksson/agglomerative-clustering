@@ -520,7 +520,8 @@ const parseOptions = (options, allowed, image) => {
     options = snapshot(options);
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {
-            const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.' : '';
+            const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
+                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal: they finish in milliseconds, with no progress to report.' : '';
             throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
         }
     }

@@ -77,13 +77,17 @@ const nextTurn = typeof setImmediate === 'function' ? () => new Promise((resolve
     })()
     : () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const respond = async ({id, method, args, progress}, post) => {
-    const controller = controllers.get(id);
+// A call sent only to check its arguments (its caller's signal was aborted before it was made): it runs with a signal that
+// is already aborted, so the main entry validates the arguments, reports the first wrong one, and does no work.
+const alreadyAborted = () => {const controller = new AbortController(); controller.abort(); return controller;};
+
+const respond = async ({id, method, args, progress, check}, post) => {
+    const controller = check ? alreadyAborted() : controllers.get(id);
     try {
         // The call before this one may have run in one piece (mapping does), with no turn of the event loop for a cancel
         // of this call to arrive; take one before starting, so a call cancelled while it waited never runs.
         if (controller && !controller.signal.aborted) {await nextTurn();}
-        if (controller && controller.signal.aborted) {return;}
+        if (controller && controller.signal.aborted && !check) {return;}
         if (!Object.prototype.hasOwnProperty.call(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}
         if (controller || progress) {
             args = args.slice();
@@ -96,8 +100,8 @@ const respond = async ({id, method, args, progress}, post) => {
         const result = mark(await methods[method](...args.map(revive)));
         post({id, result}, [...new Set(buffers(result))]);
     } catch (error) {
-        // A cancelled call has already been rejected on the other side.
-        if (controller && controller.signal.aborted) {return;}
+        // A cancelled call has already been rejected on the other side (a check reports what it found).
+        if (controller && controller.signal.aborted && !check) {return;}
         // Errors cross as plain data: the caller's side rebuilds them with the same name, message and code.
         post({id, error: error instanceof Error
             ? {name: error.name, message: error.message, code: error.code, argument: error.argument, stack: error.stack}
