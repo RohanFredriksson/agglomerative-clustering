@@ -103,6 +103,8 @@
     "@babel/core": "^7.27.4",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
+    "@parcel/config-default": "^2.16.4",
+    "@parcel/core": "^2.16.4",
     "@types/node": "^22.20.5",
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",

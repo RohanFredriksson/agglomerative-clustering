@@ -72,7 +72,7 @@ jobs:
       - id: version
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
 
-  # Bundles a page with Vite and webpack and runs it in Chromium, Firefox and WebKit: the worker and the .wasm as browsers
+  # Bundles a page with Vite, webpack and Parcel and runs it in Chromium, Firefox and WebKit: the worker and the .wasm as browsers
   # get them, against the Linux job's build. In Playwright's own image, which has the browsers and their system libraries:
   # installing those libraries on the runner (playwright install --with-deps) took 15 minutes, nearly all of it fetching
   # Ubuntu packages from a slow mirror.
