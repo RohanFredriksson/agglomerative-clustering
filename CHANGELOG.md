@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (3.6.0)
+## 3.6.0
 
 Output is unchanged; one new warning, the 3.5.0 warning is reworded and catches more, cancelling stays prompt on very large images, and the WebAssembly is a fifth smaller.
 
