@@ -72,7 +72,7 @@ jobs:
       - id: version
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
 
-  # Bundles a page with Vite and webpack and runs it in Chromium, Firefox and WebKit: the worker and the .wasm as browsers
+  # Bundles a page with Vite, webpack and Parcel and runs it in Chromium, Firefox and WebKit: the worker and the .wasm as browsers
   # get them, against the Linux job's build. In Playwright's own image, which has the browsers and their system libraries:
   # installing those libraries on the runner (playwright install --with-deps) took 15 minutes, nearly all of it fetching
   # Ubuntu packages from a slow mirror.
@@ -158,3 +158,24 @@ jobs:
       - run: npm run test:browser
         env:
           BROWSERS: safari
+
+  # Native fuzzing of the C++ with ASan and UBSan (scripts/native.sh): stored clusterings come back from users as
+  # untrusted bytes, and the image functions must keep their invariants (sliced clustering equals one-shot, indices point
+  # into the palette) for every input the JavaScript lets through. Two minutes per target on each push.
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang (with libFuzzer)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang
+      - run: scripts/native.sh fuzz 120
+      - name: Keep the failing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash
+          path: |
+            crash-*
+            leak-*
+            timeout-*
+          retention-days: 14

@@ -1,0 +1,21 @@
+image             palette  dither      one call   strips(64 rows)  longest strip  same output
+photo 3072x2048        16  false          112 ms        100 ms           5 ms   yes
+photo 3072x2048        16  ordered        875 ms       1161 ms          55 ms   yes
+photo 3072x2048        16  true           421 ms        403 ms          16 ms   no: 31.74% of pixels
+photo 3072x2048       256  false          203 ms        240 ms          12 ms   yes
+photo 3072x2048       256  ordered       7510 ms      10381 ms         537 ms   yes
+photo 3072x2048       256  true          2617 ms       2293 ms         111 ms   no: 41.93% of pixels
+noise 2048x2048        16  false          113 ms        129 ms           6 ms   yes
+noise 2048x2048        16  ordered       3176 ms       3258 ms         124 ms   yes
+noise 2048x2048        16  true           240 ms        269 ms          11 ms   no: 19.91% of pixels
+noise 2048x2048       256  false          158 ms        402 ms          15 ms   yes
+noise 2048x2048       256  ordered      14747 ms      14817 ms         494 ms   yes
+noise 2048x2048       256  true           291 ms        525 ms          19 ms   no: 30.93% of pixels
+
+Error diffusion, photo: RMS error after a 5x5 box blur (lower is better), all rows / rows within 2 of a strip edge
+floyd-steinberg   4 colours: one call 20.766 / 20.436;  strips 20.785 (+0.09%) / 20.554 (+0.58%)
+floyd-steinberg  16 colours: one call 6.506 / 6.259;  strips 6.596 (+1.39%) / 6.525 (+4.25%)
+floyd-steinberg 256 colours: one call 1.589 / 1.597;  strips 1.552 (-2.34%) / 1.534 (-3.98%)
+atkinson          4 colours: one call 21.530 / 21.207;  strips 21.594 (+0.29%) / 21.679 (+2.22%)
+atkinson         16 colours: one call 7.595 / 7.423;  strips 7.623 (+0.37%) / 7.757 (+4.50%)
+atkinson        256 colours: one call 1.807 / 1.815;  strips 1.817 (+0.58%) / 1.942 (+6.99%)

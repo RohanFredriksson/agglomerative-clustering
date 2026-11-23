@@ -19,9 +19,9 @@ Most setups need nothing: Node, Vite, webpack 5, Rsbuild, SvelteKit, Nuxt and Ne
 
 ## Where it runs
 
-Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite and webpack 5 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS, loads `dist/` from another origin as a page using a CDN does, starts the worker entry from a sandboxed iframe, and runs both entries under Jest. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
+Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite, webpack 5 and Parcel 2 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS, loads `dist/` from another origin as a page using a CDN does, starts the worker entry from a sandboxed iframe, and runs both entries under Jest. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
 
-Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, the AWS Lambda Node image, pnpm and Yarn Plug'n'Play, SvelteKit, Nuxt, Astro, React Router, Angular, Next.js and Parcel 2.
+Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, the AWS Lambda Node image, pnpm and Yarn Plug'n'Play, SvelteKit, Nuxt, Astro, React Router, Angular and Next.js.
 
 ## Loading the WebAssembly module
 

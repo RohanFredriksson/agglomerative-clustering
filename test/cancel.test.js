@@ -101,7 +101,7 @@ describe('progress', () => {
             await run(onProgress);
             expect(calls[calls.length - 1]).toBe(1);
         }
-        // mapping takes milliseconds: it has a signal (checked before it starts) but no progress to report
+        // mapping runs in one piece: it has a signal (checked before it starts) but no progress to report
         const error = await quantizeWithPalette(image, new Uint8Array([1, 2, 3]), { onProgress: () => {} }).catch((e) => e);
         expect(error.code).toBe('invalid-argument');
         expect(error.message).toContain("Invalid option 'onProgress'");

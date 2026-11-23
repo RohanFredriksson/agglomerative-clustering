@@ -1,12 +1,12 @@
 // Bundler and browser smoke test: npm run test:browser (after npm run build).
-// Installs this package (by symlink) into a temporary project, bundles test/browser/app with each bundler (Vite and
-// webpack 5), serves the bundle, and runs it in a headless browser. This checks what Node tests can't: that a bundler
+// Installs this package (by symlink) into a temporary project, bundles test/browser/app with each bundler (Vite,
+// webpack 5 and Parcel 2), serves the bundle, and runs it in a headless browser. This checks what Node tests can't: that a bundler
 // follows the package's exports, emits the worker script and the .wasm, and that the worker runs in a browser.
 // Browsers: Chromium (CHROMIUM_PATH if set, else the installed Chrome, as on GitHub's Ubuntu runners, else Playwright's).
 // BROWSERS=chromium,firefox,webkit adds Playwright's Firefox (FIREFOX_PATH if set) and WebKit (WEBKIT_PATH, Playwright's
 // pw_run.sh, if set). BROWSERS=safari runs the real Safari on macOS through safaridriver (Apple's WebDriver, enabled once
 // with `sudo safaridriver --enable`); Playwright's WebKit is close to Safari but is not Safari.
-// BUNDLERS=vite or BUNDLERS=webpack runs one of them; BUNDLERS=cdn skips bundling and loads the package's dist/ from a second
+// BUNDLERS=vite, webpack or parcel runs one of them; BUNDLERS=cdn skips bundling and loads the package's dist/ from a second
 // server on another origin, as a page that imports it from a CDN does (the worker then has to start across origins). PACKAGE=agglomerative-clustering@next (any npm install spec)
 // installs that from the registry instead of linking this checkout, to check what was published.
 import { build } from 'vite';
@@ -20,7 +20,7 @@ import { join, extname, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const bundlers = (process.env.BUNDLERS || 'vite,webpack,cdn').split(',');
+const bundlers = (process.env.BUNDLERS || 'vite,webpack,parcel,cdn').split(',');
 const browsers = (process.env.BROWSERS || 'chromium').split(',');
 
 // How each bundler is run, and how the app gets the URL of the package's .wasm (each bundler spells it differently).
@@ -113,6 +113,24 @@ try {
             if (stats.hasErrors()) {throw new Error(`webpack failed:\n${stats.toString({ all: false, errors: true })}`);}
             if (stats.hasWarnings()) {console.log(`webpack warnings:\n${stats.toString({ all: false, warnings: true })}`);}
             await cp(join(project, 'app', 'index.html'), join(project, 'out', 'index.html'));
+        },
+    },
+    parcel: {
+        // Parcel reads new URL('a/b', import.meta.url) as the relative path it is, so the package's file needs its url: prefix.
+        wasmUrl: "import url from 'url:agglomerative-clustering/clustering.wasm';\nexport default url;\n",
+        run: async (project) => {
+            // Parcel follows package exports only when asked, as docs/environments.md tells its users.
+            await writeFile(join(project, 'package.json'), `${JSON.stringify({ type: 'module', '@parcel/resolver-default': { packageExports: true } }, null, 2)}\n`);
+            const { Parcel } = await import('@parcel/core');
+            const parcel = new Parcel({
+                entries: 'app/index.html', defaultConfig: fileURLToPath(import.meta.resolve('@parcel/config-default')),
+                cacheDir: '.parcel-cache', shouldDisableCache: true, mode: 'production', logLevel: 'warn',
+                defaultTargetOptions: { distDir: 'out', publicUrl: './' },
+            });
+            // Parcel resolves entries against the working directory, whatever projectRoot says.
+            const cwd = process.cwd();
+            process.chdir(project);
+            try {await parcel.run();} finally {process.chdir(cwd);}
         },
     },
 };
