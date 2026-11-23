@@ -299,7 +299,7 @@ export const looksLikeRgb = (d) => {
 };
 
 // Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).
-export const warned = new Set();
+const warned = new Set();
 
 // The warning a bare image calls for, or null. It skips everything the main entry rejects (palettes and clusterings
 // passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns about its image and

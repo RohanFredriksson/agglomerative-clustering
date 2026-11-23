@@ -2,6 +2,7 @@
 // the RGBA it is read as. The rule was measured on 2,103 real RGBA images and 1,884 harmful RGB cases in
 // bench/spikes/bare-rgb/ (results.txt); these synthetic images pin its answers so a change to it fails here.
 import { describe, it, expect } from 'vitest';
+import * as shared from '../dist/shared.mjs';
 import { looksLikeRgb, bareRgbWarning, Palette } from '../dist/shared.mjs';
 
 const hsv = (h, s, v) => {
@@ -79,6 +80,9 @@ describe('looksLikeRgb', () => {
 });
 
 describe('bareRgbWarning', () => {
+    it('keeps its record of warned codes private: only resetWarnings and silenceWarnings change it', () => {
+        expect(shared.warned).toBeUndefined();
+    });
     it('names the warning for bare RGB bytes', () => {
         expect(bareRgbWarning(gradientRgb)).toBe('rgb-as-rgba');
     });
