@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Docs only: output and the API are unchanged (one error message is reworded).
+
+### Docs
+- **Decoding image files:** a new guides section with a tested recipe for each environment, since the library takes decoded pixels and won't decode files itself (a settled decision: no decoders, no dependency on one; decoding is no longer on the roadmap): sharp in Node, `createImageBitmap` in browsers, and jsquash with omggif on edge runtimes such as Cloudflare Workers (PNG, JPEG, WebP and GIF, orientation applied). Each gives straight 8-bit RGBA whatever the file holds. It lists the traps found in testing: RGB passed bare, decoders such as fast-png that return palette indices, grey, packed or 16-bit rows as stored, animations giving their first frame, colour profiles ignored on the edge, and `createImageBitmap` options that block the page. `docs/environments.md` no longer points Workers users at fast-png, the README's sharp example applies the EXIF orientation (`.rotate()`), and the error for an encoded file names a decoder per environment.
+
 ## 3.4.2
 
 Output and the API are unchanged (one error message is reworded); the golden tests pin it.

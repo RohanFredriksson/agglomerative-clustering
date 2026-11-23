@@ -726,3 +726,133 @@ describe('recipes in the guides', () => {
     });
 
 });
+
+// The guides' "Decoding image files": the Node (sharp) and edge (jsquash + omggif) recipes, run on files of every
+// layout a decoder can return, and checked against the guides' text. The browser recipe is measured in
+// bench/spikes/decoding/ instead: reading a canvas back throws in CI's Safari (see test/browser/app/main.js).
+describe('decoding image files (guides)', () => {
+    const w = 48, h = 32;
+    const rgba = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {rgba.set([x * 5, y * 7, 255 - x * 3, x < 8 ? x * 32 : 255], (y * w + x) * 4);}
+    }
+    const opaque = rgba.map((v, i) => (i % 4 === 3 ? 255 : v));
+    const raw = () => ({ raw: { width: w, height: h, channels: 4 } });
+
+    // The guides' functions, as they appear there (the names are the same in each environment, so each is in a block).
+    let decodeWithSharp, decodeOnTheEdge;
+    const sharpReady = (async () => {
+        const { default: sharp } = await import('sharp');
+        {
+            async function decodeImage(input) {
+                const { data, info } = await sharp(input)        // a path, a Buffer or a Uint8Array
+                    .rotate()                                     // apply the EXIF orientation
+                    .ensureAlpha()                                // always 4 channels; sharp already gives 8-bit sRGB
+                    .raw()
+                    .toBuffer({ resolveWithObject: true });
+                return { data, format: 'rgba', width: info.width, height: info.height };
+            }
+            decodeWithSharp = decodeImage;
+        }
+        return sharp;
+    })();
+    const edgeReady = (async () => {
+        const { readFile } = await import('fs/promises');
+        const { createRequire } = await import('module');
+        const require = createRequire(import.meta.url);
+        const compile = async (path) => WebAssembly.compile(await readFile(require.resolve(path)));
+        const { default: decodePng, init: initPng } = await import('@jsquash/png/decode.js');
+        const { default: decodeJpeg, init: initJpeg } = await import('@jsquash/jpeg/decode.js');
+        const { default: decodeWebp, init: initWebp } = await import('@jsquash/webp/decode.js');
+        // In Node the .wasm files are compiled from their bytes; Wrangler imports them as modules (the guides' imports).
+        const ready = Promise.all([initPng(await compile('@jsquash/png/codec/pkg/squoosh_png_bg.wasm')),
+            initJpeg(await compile('@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm')), initWebp(await compile('@jsquash/webp/codec/dec/webp_dec.wasm'))]);
+        {
+            async function decodeImage(bytes) {
+                await ready;
+                const ascii = (start, text) => String.fromCharCode(...bytes.subarray(start, start + text.length)) === text;
+                let image;
+                if (ascii(1, 'PNG')) {image = await decodePng(bytes.slice().buffer);}
+                else if (bytes[0] === 0xFF && bytes[1] === 0xD8) {image = await decodeJpeg(bytes.slice().buffer, { preserveOrientation: true });}
+                else if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) {image = await decodeWebp(bytes.slice().buffer);}
+                else if (ascii(0, 'GIF')) {
+                    const gif = new GifReader(bytes);
+                    const data = new Uint8Array(gif.width * gif.height * 4);
+                    gif.decodeAndBlitFrameRGBA(0, data);
+                    return { data, format: 'rgba', width: gif.width, height: gif.height };
+                } else {throw new Error('Unsupported image format: send PNG, JPEG, WebP or GIF');}
+                return { data: new Uint8Array(image.data.buffer), format: 'rgba', width: image.width, height: image.height };
+            }
+            decodeOnTheEdge = decodeImage;
+        }
+    })();
+
+    it('the decoding functions are the ones in the guides', async () => {
+        await Promise.all([sharpReady, edgeReady]);
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        // Every decodeImage in a text, each from its declaration to the closing brace at its indentation, lines trimmed.
+        const functions = (text) => {
+            const lines = text.split('\n'), found = [];
+            lines.forEach((line, start) => {
+                if (!line.trim().startsWith('async function decodeImage(')) {return;}
+                const indent = line.match(/^ */)[0];
+                const end = lines.findIndex((other, i) => i > start && other === `${indent}}`);
+                found.push(lines.slice(start, end + 1).map((l) => l.trim()).join('\n'));
+            });
+            return found;
+        };
+        const section = guides.slice(guides.indexOf('## Decoding image files'), guides.indexOf('\n## ', guides.indexOf('## Decoding image files') + 1));
+        const [node, , edge] = functions(section);
+        expect(functions(section)).toHaveLength(3);         // Node, browser, edge
+        expect(functions(test)).toEqual([node, edge]);
+        expect(section).toContain("const ready = Promise.all([initPng(pngWasm), initJpeg(jpegWasm), initWebp(webpWasm)]);");
+    });
+
+    it('give the same straight 8-bit RGBA for every PNG layout, GIF and lossless WebP, upright for a rotated JPEG', async () => {
+        const sharp = await sharpReady;
+        await edgeReady;
+        const files = {
+            rgba: await sharp(rgba, raw()).png().toBuffer(),
+            sixteenBit: await sharp(rgba, raw()).toColourspace('rgb16').png().toBuffer(),
+            grey: await sharp(opaque, raw()).toColourspace('b-w').png().toBuffer(),
+            palette: await sharp(opaque, raw()).png({ palette: true, colours: 16 }).toBuffer(),
+            oneBit: await sharp(opaque, raw()).toColourspace('b-w').threshold(128).png({ palette: true, colours: 2 }).toBuffer(),
+            gif: await sharp(opaque, raw()).gif().toBuffer(),
+            webp: await sharp(rgba, raw()).webp({ lossless: true, exact: true }).toBuffer(),
+        };
+        for (const [name, file] of Object.entries(files)) {
+            const a = await decodeWithSharp(file), b = await decodeOnTheEdge(new Uint8Array(file));
+            expect([a.format, a.width, a.height, a.data.length], name).toEqual(['rgba', w, h, w * h * 4]);
+            expect([b.format, b.width, b.height], name).toEqual(['rgba', w, h]);
+            expect(Buffer.compare(Buffer.from(a.data), Buffer.from(b.data)), name).toBe(0);
+            await buildPalette(b, 4);
+        }
+        expect(Buffer.compare((await decodeWithSharp(files.rgba)).data, Buffer.from(rgba))).toBe(0);
+        expect(Buffer.compare((await decodeWithSharp(files.webp)).data, Buffer.from(rgba))).toBe(0);
+
+        // A phone photo: pixels stored turned, with EXIF orientation 6. Both recipes give it upright and close.
+        const turned = await sharp(opaque, raw()).rotate(-90).withMetadata({ orientation: 6 }).jpeg({ quality: 95 }).toBuffer();
+        const a = await decodeWithSharp(turned), b = await decodeOnTheEdge(new Uint8Array(turned));
+        expect([a.width, a.height, b.width, b.height]).toEqual([w, h, w, h]);
+        let difference = 0;
+        for (let i = 0; i < a.data.length; i++) {difference += Math.abs(a.data[i] - b.data[i]);}
+        expect(difference / a.data.length).toBeLessThan(2);
+
+        // Animations (the guides' "Animations give their first frame"): a second frame of solid red is never returned,
+        // and an animated WebP fails on the edge.
+        const frames = Buffer.concat([Buffer.from(opaque), Buffer.alloc(opaque.length).fill(Buffer.from([255, 0, 0, 255]))]);
+        const animation = { raw: { width: w, height: 2 * h, channels: 4, pageHeight: h } };
+        const gif = await sharp(frames, animation).gif({ loop: 0 }).toBuffer(), webp = await sharp(frames, animation).webp({ lossless: true, loop: 0 }).toBuffer();
+        for (const decoded of [await decodeWithSharp(gif), await decodeOnTheEdge(new Uint8Array(gif)), await decodeWithSharp(webp)]) {
+            expect([decoded.width, decoded.height]).toEqual([w, h]);
+            expect(Array.from(decoded.data.subarray(4 * 20, 4 * 20 + 3))).not.toEqual([255, 0, 0]);
+        }
+        await expect(decodeOnTheEdge(new Uint8Array(webp))).rejects.toThrow();
+
+        // Why the Node recipe keeps ensureAlpha: sharp's plain raw() gives a JPEG as RGB.
+        expect((await sharp(turned).raw().toBuffer({ resolveWithObject: true })).info.channels).toBe(3);
+        await expect(decodeOnTheEdge(new Uint8Array([0x42, 0x4D, 0, 0]))).rejects.toThrow('Unsupported image format');
+    });
+});

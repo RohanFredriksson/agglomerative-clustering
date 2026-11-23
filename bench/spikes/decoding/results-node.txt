@@ -1,0 +1,91 @@
+
+photo.png (768×512, 798 KB): buildPalette(k=16) 143.9 ms, reference mapping MSE 152.8
+  sharp                      decode     7.5 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 152.8 (1.00× reference)
+  sharp, naive               decode     6.4 ms  bare array                   palette 16 colours, mapping MSE 268.0 (1.75× reference)
+  pngjs + jpeg-js + omggif   decode    15.9 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 152.8 (1.00× reference)
+  fast-png, as returned      decode    25.3 ms  rgb, Uint8Array              palette 16 colours, mapping MSE 152.8 (1.00× reference)
+  jsquash (WebAssembly)      decode    11.9 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 152.8 (1.00× reference)
+
+photo.jpg (768×512, 74 KB): buildPalette(k=16) 187.1 ms, reference mapping MSE 149.6
+  sharp                      decode     4.3 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 149.6 (1.00× reference)
+  sharp, naive               decode     3.6 ms  bare array                   palette 16 colours, mapping MSE 250.6 (1.68× reference)
+  pngjs + jpeg-js + omggif   decode    28.6 ms  mean |Δ| 0.66                palette 16 colours, mapping MSE 145.8 (0.97× reference)
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode     4.4 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 149.6 (1.00× reference)
+
+rotated.jpg (768×512, 75 KB): buildPalette(k=16) 194.5 ms, reference mapping MSE 144.1
+  sharp                      decode    10.1 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 144.1 (1.00× reference)
+  sharp, naive               decode     7.1 ms  bare array                   palette 16 colours, mapping MSE 229.2 (1.59× reference)
+  pngjs + jpeg-js + omggif   decode    21.9 ms  512×768, reference 768×512   palette 16 colours, mapping MSE 145.1 (1.01× reference)
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode     4.0 ms  512×768, reference 768×512   palette 16 colours, mapping MSE 144.1 (1.00× reference)
+
+p3.jpg (768×512, 73 KB): buildPalette(k=16) 155.6 ms, reference mapping MSE 147.9
+  sharp                      decode    11.5 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 147.9 (1.00× reference)
+  sharp, naive               decode     9.8 ms  bare array                   palette 16 colours, mapping MSE 265.2 (1.79× reference)
+  pngjs + jpeg-js + omggif   decode    20.9 ms  mean |Δ| 3.43                palette 16 colours, mapping MSE 213.3 (1.44× reference)
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode     3.5 ms  mean |Δ| 3.38                palette 16 colours, mapping MSE 217.8 (1.47× reference)
+
+indexed.png (768×512, 161 KB): buildPalette(k=16) 2.6 ms, reference mapping MSE 140.0
+  sharp                      decode     4.1 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 140.0 (1.00× reference)
+  sharp, naive               decode     3.6 ms  bare array                   palette 16 colours, mapping MSE 241.4 (1.72× reference)
+  pngjs + jpeg-js + omggif   decode     9.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 140.0 (1.00× reference)
+  fast-png, as returned      decode     5.1 ms  rgb, Uint8Array              library error: Invalid image width: 768 does not divide the image's 131072 pixels into whole ro
+  jsquash (WebAssembly)      decode     5.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 140.0 (1.00× reference)
+
+grey.png (768×512, 290 KB): buildPalette(k=16) 2.5 ms, reference mapping MSE 16.0
+  sharp                      decode     6.4 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 16.0 (1.00× reference)
+  sharp, naive               decode     4.4 ms  bare array                   palette 16 colours, mapping MSE 19.8 (1.24× reference)
+  pngjs + jpeg-js + omggif   decode     6.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 16.0 (1.00× reference)
+  fast-png, as returned      decode     7.5 ms  rgb, Uint8Array              library error: Invalid image width: 768 does not divide the image's 131072 pixels into whole ro
+  jsquash (WebAssembly)      decode     4.3 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 16.0 (1.00× reference)
+
+deep.png (768×512, 895 KB): buildPalette(k=16) 143.9 ms, reference mapping MSE 152.8
+  sharp                      decode    12.3 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 152.8 (1.00× reference)
+  sharp, naive               decode     9.8 ms  bare array                   palette 16 colours, mapping MSE 268.0 (1.75× reference)
+  pngjs + jpeg-js + omggif   decode    46.0 ms  mean |Δ| 0.36                palette 16 colours, mapping MSE 151.0 (0.99× reference)
+  fast-png, as returned      decode    32.2 ms  rgb, Uint16Array             library error: Invalid image data: must be Uint8Array or Uint8ClampedArray.
+  jsquash (WebAssembly)      decode    16.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 152.8 (1.00× reference)
+
+alpha.png (768×512, 1303 KB): buildPalette(k=16) 536.3 ms, reference mapping MSE 126.0
+  sharp                      decode     8.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 126.0 (1.00× reference)
+  sharp, naive               decode     8.3 ms  bare array                   palette 16 colours, mapping MSE 126.0 (1.00× reference)
+  pngjs + jpeg-js + omggif   decode    17.9 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 126.0 (1.00× reference)
+  fast-png, as returned      decode    34.0 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 126.0 (1.00× reference)
+  jsquash (WebAssembly)      decode    14.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 126.0 (1.00× reference)
+
+onebit.png (768×512, 8 KB): buildPalette(k=16) 2.7 ms, reference mapping MSE 0.0
+  sharp                      decode     2.6 ms  mean |Δ| 0.00                palette 2 colours, mapping MSE 0.0 (NaN× reference)
+  sharp, naive               decode     2.4 ms  bare array                   palette 4 colours, mapping MSE 0.0 (NaN× reference)
+  pngjs + jpeg-js + omggif   decode    23.2 ms  mean |Δ| 0.00                palette 2 colours, mapping MSE 0.0 (NaN× reference)
+  fast-png, as returned      decode     0.7 ms  rgb, Uint8Array              library error: Invalid image width: 768 does not divide the image's 16384 pixels into whole row
+  jsquash (WebAssembly)      decode     2.3 ms  mean |Δ| 0.00                palette 2 colours, mapping MSE 0.0 (NaN× reference)
+
+photo.gif (768×512, 194 KB): buildPalette(k=16) 2.8 ms, reference mapping MSE 141.0
+  sharp                      decode     5.0 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 141.0 (1.00× reference)
+  sharp, naive               decode     4.4 ms  bare array                   palette 16 colours, mapping MSE 255.6 (1.81× reference)
+  pngjs + jpeg-js + omggif   decode     6.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 141.0 (1.00× reference)
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode fails: format not supported by this recipe
+
+photo.webp (768×512, 55 KB): buildPalette(k=16) 151.8 ms, reference mapping MSE 149.2
+  sharp                      decode    12.4 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 149.2 (1.00× reference)
+  sharp, naive               decode    11.5 ms  bare array                   palette 16 colours, mapping MSE 242.5 (1.63× reference)
+  pngjs + jpeg-js + omggif   decode fails: format not supported by this recipe
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode    10.0 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 149.2 (1.00× reference)
+
+photo.avif (768×512, 33 KB): buildPalette(k=16) 180.2 ms, reference mapping MSE 151.6
+  sharp                      decode    20.2 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 151.6 (1.00× reference)
+  sharp, naive               decode    19.5 ms  bare array                   palette 16 colours, mapping MSE 260.6 (1.72× reference)
+  pngjs + jpeg-js + omggif   decode fails: format not supported by this recipe
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode    54.3 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 151.6 (1.00× reference)
+
+large.jpg (4240×2832, 887 KB): buildPalette(k=16) 2385.7 ms, reference mapping MSE 143.9
+  sharp                      decode    52.4 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 143.9 (1.00× reference)
+  sharp, naive               decode    48.3 ms  bare array                   palette 16 colours, mapping MSE 249.4 (1.73× reference)
+  pngjs + jpeg-js + omggif   decode   534.6 ms  mean |Δ| 0.42                palette 16 colours, mapping MSE 146.4 (1.02× reference)
+  fast-png, as returned      decode fails: PNG only
+  jsquash (WebAssembly)      decode   103.4 ms  mean |Δ| 0.00                palette 16 colours, mapping MSE 143.9 (1.00× reference)

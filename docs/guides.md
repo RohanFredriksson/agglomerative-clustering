@@ -2,6 +2,7 @@
 
 Recipes by task. For what each function and option does, see the [API reference](api.md); for setting up a bundler, framework or runtime, see [Environments](environments.md).
 
+- [Decoding image files](#decoding-image-files)
 - [Swatches and choosing a palette size](#swatches-and-choosing-a-palette-size)
 - [GIFs and palette PNGs](#gifs-and-palette-pngs)
 - [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images)
@@ -12,6 +13,93 @@ Recipes by task. For what each function and option does, see the [API reference]
 - [Batches of images](#batches-of-images)
 - [Converting the output](#converting-the-output)
 - [Moving from color-thief, node-vibrant, image-q or get-image-colors](#moving-from-color-thief-node-vibrant-image-q-or-get-image-colors)
+
+## Decoding image files
+
+The library takes decoded pixels, not files: the bytes of a PNG or JPEG are rejected with an error that names the format. Decoding is left to the tools that do it well, so the library has no decoder and no dependency on one. Use the one for your environment:
+
+<!-- Measured in bench/spikes/decoding/ (results-node.txt, results-browser.txt, results-browser-worker.txt, results-edge.txt, results-guide-recipes.txt) on photos as PNG, JPEG, WebP, AVIF and GIF, an EXIF-rotated JPEG, a Display P3 JPEG, palette, grey, 1-bit and 16-bit PNGs, an alpha ramp, a 12 MP JPEG and two-frame GIF and WebP animations. The sharp and edge recipes are also tested in test/recipes.test.js; the browser recipe is measured in Chromium only, not tested. -->
+
+| Where | Decoder | Handles |
+|---|---|---|
+| Node | [sharp](https://sharp.pixelplumbing.com/) | everything below, including orientation and colour profiles |
+| Browsers | `createImageBitmap` | what the browser can show, including orientation and colour profiles (measured in Chromium) |
+| Edge runtimes such as Cloudflare Workers | [jsquash](https://github.com/jamsinclair/jSquash) (the Squoosh app's decoders, in WebAssembly) and [omggif](https://github.com/deanm/omggif) | PNG, JPEG, WebP and GIF, including orientation; not colour profiles |
+
+Each gives straight 8-bit RGBA whenever it decodes the file, so `format: 'rgba'` is right whatever the file holds (grey, palette, 1-bit or 16-bit PNGs). BMP, TIFF and HEIC files, which the library's error also recognises, weren't measured here: check your decoder's documentation (Chromium can't decode HEIC).
+
+**In Node**, with sharp:
+
+```js
+import sharp from 'sharp';
+import { buildSwatches } from 'agglomerative-clustering';
+
+async function decodeImage(input) {
+    const { data, info } = await sharp(input)        // a path, a Buffer or a Uint8Array
+        .rotate()                                     // apply the EXIF orientation
+        .ensureAlpha()                                // always 4 channels; sharp already gives 8-bit sRGB
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+    return { data, format: 'rgba', width: info.width, height: info.height };
+}
+
+const swatches = await buildSwatches(await decodeImage('photo.jpg'), 6);
+```
+
+**In a browser**, from a `File`, a `Blob` or a `fetch` response's `blob()`. It runs in a worker too, where `OffscreenCanvas` also exists:
+
+```js
+async function decodeImage(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+```
+
+The `ImageData` it returns goes straight to any function. On the page, decoding a 12-megapixel JPEG this way blocked it for up to 75 ms in Chromium; in a worker, for no task over 50 ms. So for large images, decode in a worker of your own that imports the main entry and does the clustering there too, and the pixels never cross to the page. Leave out `premultiplyAlpha: 'none'`: the canvas premultiplies anyway, and it added about 25 ms.
+
+**On edge runtimes**, which have neither native modules nor a canvas. This is written for Cloudflare Workers, where Wrangler imports a `.wasm` file as a compiled module; other runtimes import them as they do the library's own ([Environments](environments.md#deno-bun-and-cloudflare-workers)):
+
+```js
+import decodePng, { init as initPng } from '@jsquash/png/decode.js';
+import decodeJpeg, { init as initJpeg } from '@jsquash/jpeg/decode.js';
+import decodeWebp, { init as initWebp } from '@jsquash/webp/decode.js';
+import pngWasm from '@jsquash/png/codec/pkg/squoosh_png_bg.wasm';
+import jpegWasm from '@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm';
+import webpWasm from '@jsquash/webp/codec/dec/webp_dec.wasm';
+import { GifReader } from 'omggif';
+
+const ready = Promise.all([initPng(pngWasm), initJpeg(jpegWasm), initWebp(webpWasm)]);
+
+async function decodeImage(bytes) {
+    await ready;
+    const ascii = (start, text) => String.fromCharCode(...bytes.subarray(start, start + text.length)) === text;
+    let image;
+    if (ascii(1, 'PNG')) {image = await decodePng(bytes.slice().buffer);}
+    else if (bytes[0] === 0xFF && bytes[1] === 0xD8) {image = await decodeJpeg(bytes.slice().buffer, { preserveOrientation: true });}
+    else if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) {image = await decodeWebp(bytes.slice().buffer);}
+    else if (ascii(0, 'GIF')) {
+        const gif = new GifReader(bytes);
+        const data = new Uint8Array(gif.width * gif.height * 4);
+        gif.decodeAndBlitFrameRGBA(0, data);
+        return { data, format: 'rgba', width: gif.width, height: gif.height };
+    } else {throw new Error('Unsupported image format: send PNG, JPEG, WebP or GIF');}
+    return { data: new Uint8Array(image.data.buffer), format: 'rgba', width: image.width, height: image.height };
+}
+```
+
+Under `wrangler dev`, a 768×512 image decoded in 4–20 ms, and a 12-megapixel JPEG in 139 ms (`buildSwatches(image, 5, { precision: 6 })` then took about 400 ms more). The worker, with the library, came to 290 KB gzipped. Leave out the decoders you don't need; AVIF is `@jsquash/avif`, about 330 KB more gzipped.
+
+**What to watch for:**
+- **RGB bytes passed bare are misread with no error.** sharp's plain `.raw()` gives RGB for a JPEG; a bare `Uint8Array` is read as RGBA, and the palette comes out wrong whenever the length happens to be a multiple of 4. Keep `.ensureAlpha()`, or pass `{ data, format: 'rgb', width }`.
+- **Decoders that return the file's own layout.** fast-png (good for writing palette PNGs, [below](#gifs-and-palette-pngs)) returns palette indices, 1 or 2 channels, 16-bit `Uint16Array`s and 1-, 2- and 4-bit rows still packed, as the file stores them. None of these is RGBA, and passed without `width`, some are accepted with no error. To read PNGs, use a decoder that expands them: the ones above, or pngjs in Node.
+- **Animations give their first frame** with sharp and in Chromium, and with omggif for a GIF on the edge; an animated WebP fails to decode on the edge (jsquash's "Decoding error"). For one palette across the frames, see [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images).
+- **Colour profiles on the edge.** jsquash ignores a file's embedded profile, so a Display P3 photo (from recent iPhones and Macs) gives somewhat duller colours: its palette fitted the photo 1.47 times worse in mean squared error. sharp and browsers convert to sRGB.
+- **Partly transparent pixels in browsers** are stored premultiplied inside the canvas, so their colours are rounded on the way out: a pixel of alpha 3 can come back noticeably off. They count by their opacity, so palettes barely change (1.01 times the error on an alpha ramp), but mapped output shows it at faint edges. sharp and jsquash return them exactly.
+- **Cap the size before decoding untrusted uploads** ([Performance](performance.md)): sharp's `limitInputPixels`, or the width and height in the file's header.
 
 ## Swatches and choosing a palette size
 
@@ -518,7 +606,7 @@ The colours come back as sRGB bytes whatever `colorSpace` they were clustered in
 
 ## Moving from color-thief, node-vibrant, image-q or get-image-colors
 
-This library takes **decoded pixels**, not files, URLs or image elements: decode first (sharp or pngjs in Node, a canvas or `createImageBitmap` in a browser), and see [Input](api.md#input) for the formats.
+This library takes **decoded pixels**, not files, URLs or image elements: decode first ([Decoding image files](#decoding-image-files)), and see [Input](api.md#input) for the formats.
 
 | You used | Use | Notes |
 |---|---|---|

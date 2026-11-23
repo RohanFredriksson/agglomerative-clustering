@@ -10,7 +10,7 @@ Every error has a `code` (see [Errors](api.md#errors)), and its message says wha
 | `wasm-load-failed`: "is not WebAssembly" | An error page (a 404, or a server's fallback page) was served in place of `clustering.wasm`. | Open the `.wasm` URL in the browser; copy the file where it is expected, or say where it is with `init({ wasm })`. |
 | `wasm-load-failed` in an edge runtime ("disallowed by embedder") | Edge runtimes compile WebAssembly only at build time. | Import the module and pass it to `init`: see [Cloudflare Workers](environments.md#deno-bun-and-cloudflare-workers) and [Next.js](environments.md#nextjs). |
 | `wasm-load-failed` under `ulimit -v` | Each instance reserves about 10 GB of address space. | Limit resident memory instead (see [Memory](performance.md#memory)). |
-| `invalid-argument` naming a PNG, JPEG, … | You passed an image file's bytes, not pixels. | Decode it first (canvas or `createImageBitmap` in a browser, sharp in Node). |
+| `invalid-argument` naming a PNG, JPEG, … | You passed an image file's bytes, not pixels. | Decode it first: `createImageBitmap` in a browser, sharp in Node, jsquash on edge runtimes ([Decoding image files](guides.md#decoding-image-files)). |
 | `invalid-argument` for a canvas, `Blob` or `ImageBitmap` | Those aren't pixels. | Draw to a canvas and pass `getImageData()`. |
 | A palette of nonsense, no error | RGB bytes were passed bare, so they were read as RGBA. | Pass `{ data, format: 'rgb', width }`, or add an alpha channel (`sharp(...).ensureAlpha()`). |
 | The palette isn't sorted by how much of the image each colour covers | Palettes come in split order, so they nest. | Sort by `shares` (see [Heaviest first](guides.md#heaviest-first)), or accept the order. |

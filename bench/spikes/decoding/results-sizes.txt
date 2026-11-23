@@ -1,0 +1,9 @@
+agglomerative-clustering .wasm              93.4 KB raw    43.9 KB gzipped
+@jsquash/png decoder .wasm                 176.8 KB raw    81.8 KB gzipped
+@jsquash/jpeg decoder .wasm                162.6 KB raw    61.9 KB gzipped
+@jsquash/webp decoder .wasm                134.7 KB raw    48.4 KB gzipped
+@jsquash/avif decoder .wasm               1143.5 KB raw   331.7 KB gzipped
+fast-png (bundled for the browser, minified)    32.8 KB raw    11.3 KB gzipped
+jpeg-js (bundled for the browser, minified)    20.6 KB raw     8.6 KB gzipped
+omggif (bundled for the browser, minified)     6.9 KB raw     2.9 KB gzipped
+pngjs                                    doesn't bundle for the browser: Could not resolve "util"

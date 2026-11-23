@@ -21,7 +21,7 @@ It takes decoded pixels in the byte layouts that real sources produce (`imageFor
 ## What it leaves to others
 
 - **Encoding files:** palette PNG and GIF writers (fast-png, gifenc). The guides show how to use them.
-- **Decoding files:** an open roadmap item ("Larger, later"). Today an encoded file is recognised and rejected with a message.
+- **Decoding files:** sharp, the browser (`createImageBitmap`) and squoosh's codecs do it; the guides have a recipe for each environment. An encoded file passed as pixels is recognised and rejected with a message (Settled decisions).
 - **Image processing that isn't quantization:** resizing, compositing onto a background, colour management. Converting premultiplied pixels is a recipe until 4.0, where it is planned.
 - **Application policy:** worker pools and their queueing, smoothing palettes across video frames, picking a palette size for the user. These depend on the app, so they are recipes.
 - **Neighbouring jobs that other tools do better:** compression-tuned PNG pipelines (libimagequant, pngquant), a few vivid "dominant" UI colours (color-thief, node-vibrant), palettes with translucent entries.
@@ -59,6 +59,7 @@ The mechanical conventions are in `CLAUDE.md`: option shapes, lists of names, er
 ## Settled decisions
 
 These were argued through and decided. Reopen one only with new evidence, and only the maintainer reopens it.
+- **The library doesn't decode image files.** It takes decoded pixels, adds no decoders and no dependency on one; decoding is the job of sharp, the browser and squoosh's codecs, which do it better than a copy would. The guides give a tested recipe per environment. Decided by the maintainer on 2026-11-23, after a value brief (`docs/superpowers/briefs/2026-11-23-decoding-brief.md`) found a built-in would add no quality or speed over those recipes (ROADMAP "Considered").
 - **Palettes are flat, opaque RGB bytes in split order.** Alpha belongs to pixels: `quantize` passes it through, and indexed output uses a transparent entry. Palette entries with alpha were spiked (`spike/rgba-4d`) and dropped (ROADMAP "Later, if asked for").
 - **A bare `Uint8Array` is RGBA.** Other layouts are given as `{ data, format }`.
 - **The 3.0 function names keep working through 3.x:** `get…`, `…FromClustering` and `…WithPalette`. `get…` was reviewed before 3.0.0 and kept then: the cheap cuts are getters, the Promise says the heavy ones do work, it matches color-thief and node-vibrant, and `getPalette` was the most-used 2.x call. Whether `…FromClustering` is deprecated in 4.0 is open (ROADMAP 4.0). In 3.4.0 the three `get…` functions that cluster an image became deprecated names of the `build…` functions (below).

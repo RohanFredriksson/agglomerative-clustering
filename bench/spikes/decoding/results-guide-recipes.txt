@@ -1,0 +1,8 @@
+sharp, the guide's chain, p3.jpg: 768×512, mean |Δ| from .toColourspace('srgb').raw({ depth: 'uchar' }) 0.000
+sharp, the guide's chain, deep.png: 768×512, mean |Δ| from .toColourspace('srgb').raw({ depth: 'uchar' }) 0.000
+sharp, the guide's chain, grey.png: 768×512, mean |Δ| from .toColourspace('srgb').raw({ depth: 'uchar' }) 0.000
+sharp, the guide's chain, rotated.jpg: 768×512, mean |Δ| from .toColourspace('srgb').raw({ depth: 'uchar' }) 0.000
+sharp, animated.gif: 768×512, the first frame
+edge, animated.gif: 768×512, the first frame
+sharp, animated.webp: 768×512, the first frame
+edge, animated.webp: fails: Decoding error
