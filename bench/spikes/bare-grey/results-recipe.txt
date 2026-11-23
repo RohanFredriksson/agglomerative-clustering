@@ -1,0 +1,9 @@
+768×512            grey          expand 2.1 ms; buildPalette 12 ms; palette all grey: true
+768×512            grey + alpha  expand 1.4 ms; buildPalette 3 ms; palette all grey: true
+12 MP (4240×2832)  grey          expand 44.3 ms; buildPalette 83 ms; palette all grey: true
+12 MP (4240×2832)  grey + alpha  expand 51.5 ms; buildPalette 74 ms; palette all grey: true
+rgba (channels 4)    palette identical to the image passed correctly: true
+rgb (channels 3)     palette identical to the image passed correctly: true
+palette PNG          refused: needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)
+16-bit grey          refused: needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)
+1-bit grey           refused: needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)

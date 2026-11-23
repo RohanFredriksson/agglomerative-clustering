@@ -2,7 +2,7 @@ import createWasmModule from './clustering.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareRgbWarning, warnOnce,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -332,13 +332,13 @@ const checkSize = (pixels, size, name, argument) => {
     }
 };
 
-// The rgb-as-rgba warning for an image, decided before load() and given only once the call's own checks have passed,
+// The bare-image warning (rgb-as-rgba, gray-as-rgba) for an image, decided before load() and given only once the call's own checks have passed,
 // just before it starts work, so the one warning isn't spent on a call that fails anyway (PRINCIPLES "Warnings").
 const noWarning = () => {};
 // A call whose signal is already aborted fails before any work, so it doesn't use the warning up either.
 const warningFor = (image) => {
-    const code = bareRgbWarning(image);
-    return code ? (signal) => {if (!(signal && signal.aborted)) {warnOnce(code, image.byteLength);}} : noWarning;
+    const warning = bareImageWarning(image);
+    return warning ? (signal) => {if (!(signal && signal.aborted)) {warnOnce(warning, image.byteLength);}} : noWarning;
 };
 
 const load = (image) => {

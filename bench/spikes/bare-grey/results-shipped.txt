@@ -1,0 +1,20 @@
+Shipped bareLayout (jittered windows), by kind; "spike" is the RGB check then check.mjs, as measured before the jitter
+  rgba: 2984: none 2984 | at 64×64 and above: none 2864
+  rgb: 1834: rgb 1785, none 48, grey 1 | at 64×64 and above: rgb 1714
+  grey1 (harmful): 1029: grey 228, none 186, grey-alpha 4, rgb 611 | at 64×64 and above: grey 194, none 105, grey-alpha 4, rgb 608
+  grey2 (harmful): 1075: grey-alpha 1000, none 75 | at 64×64 and above: grey-alpha 953, none 2
+
+Decided differently from the spike (before the jitter), by group:
+  grey1 kodak: grey dithered to 2 (floyd-steinberg): none → grey-alpha: 1
+  grey1 kodak: grey dithered to 8 (ordered): none → grey-alpha: 3
+  grey1 kodak: grey dithered to 8 (floyd-steinberg): grey → none: 1
+  grey1 kodak: grey dithered to 8 (floyd-steinberg): grey-alpha → none: 1
+  grey1 kodak: grey dithered to 8 (ordered): grey-alpha → none: 1
+  grey1 kodak: grey dithered to 2 (floyd-steinberg): grey-alpha → none: 2
+
+New cases with a flat margin (not in the spike):
+  kodak: rgb cutout on black: rgb 24 of 24
+  kodak: grey + alpha, cutout, transparent zeroed: grey-alpha 24 of 24
+
+Real RGBA flagged: 0 of 2984
+RGB called grey: 1 of 1834

@@ -937,3 +937,67 @@ describe('decoding image files (guides)', () => {
         await expect(decodeOnTheEdge(new Uint8Array([0x42, 0x4D, 0, 0]))).rejects.toThrow('Unsupported image format');
     });
 });
+
+// The guides' "Keeping fast-png" recipe: every fast-png result the library takes becomes an image, and the rest is refused
+// (bench/spikes/bare-grey/results-palette.txt: fast-png gives an 8-bit palette PNG as channels 1, depth 8, plus a palette).
+describe('fastPngToImage', () => {
+    function fastPngToImage({ data, width, height, channels, depth, palette }) {
+        if (palette || depth !== 8) throw new Error('needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)');
+        if (channels === 4) return { data, format: 'rgba', width, height };
+        if (channels === 3) return { data, format: 'rgb', width, height };
+        const out = new Uint8Array(width * height * 4);
+        for (let p = 0; p < width * height; p++) {
+            out[4 * p] = out[4 * p + 1] = out[4 * p + 2] = data[p * channels];
+            out[4 * p + 3] = channels === 2 ? data[p * 2 + 1] : 255;
+        }
+        return { data: out, format: 'rgba', width, height };
+    }
+
+    it('matches the guides', async () => {
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        const source = (text) => {
+            const lines = text.split('\n');
+            const first = lines.findIndex((line) => line.trim().startsWith('function fastPngToImage('));
+            const indent = lines[first].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+            return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
+        };
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        expect(source(test)).toBe(source(guides));
+    });
+
+    // The logo above, as each kind of PNG fast-png writes
+    const rgb = new Uint8Array(width * height * 3), grey = new Uint8Array(width * height), greyAlpha = new Uint8Array(width * height * 2);
+    for (let p = 0; p < width * height; p++) {
+        rgb.set(data.subarray(4 * p, 4 * p + 3), 3 * p);
+        grey[p] = Math.round(0.2126 * data[4 * p] + 0.7152 * data[4 * p + 1] + 0.0722 * data[4 * p + 2]);
+        greyAlpha[2 * p] = grey[p];
+        greyAlpha[2 * p + 1] = data[4 * p + 3];
+    }
+    const roundTrip = (png) => decodePng(encodePng({ width, height, depth: 8, ...png }));
+    const expandGrey = (alpha) => {
+        const out = new Uint8Array(width * height * 4);
+        for (let p = 0; p < width * height; p++) {out.fill(grey[p], 4 * p, 4 * p + 3); out[4 * p + 3] = alpha ? data[4 * p + 3] : 255;}
+        return out;
+    };
+
+    it('takes RGBA, RGB, grey and grey with alpha, giving the palette of the image passed correctly', async () => {
+        const cases = [
+            [roundTrip({ data, channels: 4 }), { data, format: 'rgba' }],
+            [roundTrip({ data: rgb, channels: 3 }), { data: rgb, format: 'rgb' }],
+            [roundTrip({ data: grey, channels: 1 }), { data: expandGrey(false), format: 'rgba' }],
+            [roundTrip({ data: greyAlpha, channels: 2 }), { data: expandGrey(true), format: 'rgba' }],
+        ];
+        for (const [decoded, truth] of cases) {
+            expect(await buildPalette(fastPngToImage(decoded), 6)).toEqual(await buildPalette({ ...truth, width, height }, 6));
+        }
+    });
+
+    it('refuses palette, 16-bit and packed PNGs', () => {
+        const indexed = decodePng(encodePng({ width, height, depth: 8, channels: 1, data: new Uint8Array(width * height), palette: [[0, 0, 0], [255, 255, 255]] }));
+        const deep = decodePng(encodePng({ width, height, depth: 16, channels: 1, data: new Uint16Array(width * height) }));
+        const packed = decodePng(encodePng({ width, height, depth: 1, channels: 1, data: new Uint8Array(Math.ceil(width / 8) * height) }));
+        for (const png of [indexed, deep, packed]) {expect(() => fastPngToImage(png)).toThrow('needs a decoder that expands');}
+    });
+});

@@ -95,11 +95,32 @@ Under `wrangler dev`, a 768×512 image decoded in 4–20 ms, and a 12-megapixel 
 
 **What to watch for:**
 - **RGB bytes passed bare are misread with no error.** sharp's plain `.raw()` gives RGB for a JPEG; a bare `Uint8Array` is read as RGBA, and the palette comes out wrong whenever the length happens to be a multiple of 4. Keep `.ensureAlpha()`, or pass `{ data, format: 'rgb', width }`. The library [warns](api.md#warnings) when it sees this (an error from 4.0).
-- **Decoders that return the file's own layout.** fast-png (good for writing palette PNGs, [below](#gifs-and-palette-pngs)) returns palette indices, 1 or 2 channels, 16-bit `Uint16Array`s and 1-, 2- and 4-bit rows still packed, as the file stores them. None of these is RGBA, and passed without `width`, some are accepted with no error. To read PNGs, use a decoder that expands them: the ones above, or pngjs in Node.
+- **Decoders that return the file's own layout.** fast-png (good for writing palette PNGs, [below](#gifs-and-palette-pngs)) returns palette indices, 1 or 2 channels, 16-bit `Uint16Array`s and 1-, 2- and 4-bit rows still packed, as the file stores them. None of these is RGBA, and passed without `width`, some are accepted with no error. To read PNGs, use a decoder that expands them: the ones above, or pngjs in Node. To keep fast-png, see [below](#keeping-fast-png). The library [warns](api.md#warnings) when it sees grey bytes passed bare (an error from 4.0).
 - **Animations give their first frame** with sharp and in Chromium, and with omggif for a GIF on the edge; an animated WebP fails to decode on the edge (jsquash's "Decoding error"). For one palette across the frames, see [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images).
 - **Colour profiles on the edge.** jsquash ignores a file's embedded profile, so a Display P3 photo (from recent iPhones and Macs) gives somewhat duller colours: its palette fitted the photo 1.47 times worse in mean squared error. sharp and browsers convert to sRGB.
 - **Partly transparent pixels in browsers** are stored premultiplied inside the canvas, so their colours are rounded on the way out: a pixel of alpha 3 can come back noticeably off. They count by their opacity, so palettes barely change (1.01 times the error on an alpha ramp), but mapped output shows it at faint edges. sharp and jsquash return them exactly.
 - **Cap the size before decoding untrusted uploads** ([Performance](performance.md)): sharp's `limitInputPixels`, or the width and height in the file's header.
+
+### Keeping fast-png
+
+To keep fast-png's `decode()`, turn its result into an image the library takes, and refuse what that can't cover (palette PNGs, which come back as indices plus a `palette`, 16-bit files, and grey rows below 8 bits):
+
+```js
+function fastPngToImage({ data, width, height, channels, depth, palette }) {
+  if (palette || depth !== 8) throw new Error('needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)');
+  if (channels === 4) return { data, format: 'rgba', width, height };
+  if (channels === 3) return { data, format: 'rgb', width, height };
+  const out = new Uint8Array(width * height * 4);
+  for (let p = 0; p < width * height; p++) {
+    out[4 * p] = out[4 * p + 1] = out[4 * p + 2] = data[p * channels];
+    out[4 * p + 3] = channels === 2 ? data[p * 2 + 1] : 255;
+  }
+  return { data: out, format: 'rgba', width, height };
+}
+```
+
+<!-- bench/spikes/bare-grey/recipe.mjs → results-recipe.txt -->
+Expanding grey takes about 45–52 ms at 12 megapixels. There is no grey format to pass instead.
 
 ## Swatches and choosing a palette size
 

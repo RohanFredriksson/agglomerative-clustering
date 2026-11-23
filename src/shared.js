@@ -252,31 +252,44 @@ export const sniffImageFormat = (bytes) => {
     return null;
 };
 
-// ----- RGB bytes passed bare ----------------------------------------------------------------------------------------
-// The other common way to get a bare array wrong is RGB bytes (sharp's plain .raw()): read as RGBA, every pixel takes
-// colour bytes from its neighbours and a colour value as its alpha, and nothing fails while the length divides by 4. They
-// are never reinterpreted (a bare array is RGBA, PRINCIPLES), only reported: a warning in 3.x, an error from 4.0.
+// ----- RGB and grey bytes passed bare -------------------------------------------------------------------------------
+// The other common way to get a bare array wrong is bytes of another layout: RGB (sharp's plain .raw()), or grey and grey
+// with alpha (fast-png's decode() of a grey PNG). Read as RGBA, every pixel takes bytes from its neighbours and one of them
+// as its alpha, and nothing fails while the length divides by 4. They are never reinterpreted (a bare array is RGBA,
+// PRINCIPLES), only reported: a warning in 3.x, an error from 4.0.
 //
-// The rule (measured in bench/spikes/bare-rgb/: no false positives on 2,103 real RGBA images, 1,833 of 1,884 harmful RGB
-// cases caught): real RGBA changes least between a byte and the one 4 before it, RGB between a byte and the one 3 before.
-// A premultiplied white mask, (a, a, a, a), also scores high, so pixels with four equal bytes overrule it. Grey RGB is
-// too smooth for that score, but where it changes its bytes come in equal triples at a step of 3 and not of 4. Units equal
-// to the one before are skipped by the grey counts, since flat areas read the same either way. It samples 512 windows of
-// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.25 ms at any size
-// (about 0.4 ms for an array it flags, which happens once).
-const rgbFloor = 192, rgbWindow = 96, rgbWindows = 512;
-export const looksLikeRgb = (d) => {
-    if (d.length < rgbFloor) {return false;}
-    const whole = d.length <= rgbWindow * rgbWindows;
-    const windows = whole ? 1 : rgbWindows, size = whole ? d.length : rgbWindow;
-    const step = whole ? 0 : Math.floor((d.length - rgbWindow) / (rgbWindows - 1) / 12) * 12;
-    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0;
+// The rules use E(k), the mean change between a byte and the one k before it (bench/spikes/bare-rgb/ and
+// bench/spikes/bare-grey/: no false positives on 2,984 real RGBA images).
+// - RGB, decided first: real RGBA changes least at a step of 4, RGB at a step of 3. A premultiplied white mask,
+//   (a, a, a, a), also scores high, so pixels with four equal bytes overrule it. Grey RGB is too smooth for that score,
+//   but where it changes its bytes come in equal triples at a step of 3 and not of 4.
+// - Grey and alpha (2 bytes a pixel): smooth at a step of 2 and rough at a step of 1, since grey and alpha bytes alternate.
+// - Grey (1 byte a pixel): smoothest at a step of 1, unless most changing pixels have four equal bytes, which is real
+//   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; it then keeps the
+//   rgb-as-rgba code, whose text covers grey too.
+// Units equal to the one before are skipped by the equal-byte counts, since flat areas read the same either way. It
+// samples 512 windows of 96 bytes (each on a multiple of 12, a pixel under every reading, one in each 512th of the
+// array), so it costs about 0.35 ms at any size. Returns 'rgb', 'grey', 'grey-alpha' or null.
+const bareFloor = 192, bareWindow = 96, bareWindows = 512;
+export const bareLayout = (d) => {
+    if (d.length < bareFloor) {return null;}
+    const whole = d.length <= bareWindow * bareWindows;
+    const windows = whole ? 1 : bareWindows, size = whole ? d.length : bareWindow;
+    const step = whole ? 0 : Math.floor((d.length - bareWindow) / (bareWindows - 1) / 12) * 12;
+    // Each window starts at a fixed pseudo-random multiple of 12 within its slot. Evenly spaced starts would alias with
+    // the image's rows (768×512 RGBA spaces them exactly one row apart), so every window would see only the left edge,
+    // and a cutout's transparent margin would hide the rest of the image.
+    const slots = step / 12, last = d.length - size;
+    const startOf = (w) => (whole ? 0 : Math.min(w * step + ((Math.imul(w + 1, 0x9E3779B1) >>> 0) % slots) * 12, last - (last % 12)));
+    let e1 = 0, e2 = 0, e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0;
     for (let w = 0; w < windows; w++) {
-        const start = w * step, end = start + size;
+        const start = startOf(w), end = start + size;
         for (let i = start + 4; i < end; i++) {
-            const v = d[i], a = v - d[i - 3], b = v - d[i - 4];
-            e3 += a < 0 ? -a : a;
-            e4 += b < 0 ? -b : b;
+            const v = d[i], a = v - d[i - 1], b = v - d[i - 2], c = v - d[i - 3], e = v - d[i - 4];
+            e1 += a < 0 ? -a : a;
+            e2 += b < 0 ? -b : b;
+            e3 += c < 0 ? -c : c;
+            e4 += e < 0 ? -e : e;
         }
         n += size - 4;
         for (let i = start + 3; i + 2 < end; i += 3) {
@@ -290,33 +303,40 @@ export const looksLikeRgb = (d) => {
             if (d[i] === d[i + 1] && d[i] === d[i + 2]) {g4++; if (d[i] === d[i + 3]) {q4++;}}
         }
     }
-    const score = (e4 / n + 0.05) / (e3 / n + 0.05);
-    const flagged = (score > 1.25 && q4 < 0.5 * Math.max(1, n4)) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4));
-    if (!flagged) {return false;}
-    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of neither kind,
-    // and score 4/3 whatever the step. Counted only for arrays about to be flagged, a second pass over the same windows,
-    // so RGBA (the usual input) doesn't pay for it.
+    const E1 = e1 / n + 0.05, E2 = e2 / n + 0.05, E3 = e3 / n + 0.05, E4 = e4 / n + 0.05;
+    const fewQuads = q4 < 0.5 * Math.max(1, n4);
+    const layout = (E4 / E3 > 1.25 && fewQuads) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4)) ? 'rgb'
+        : E4 / E2 > 1.1 && E2 / E1 < 0.5 ? 'grey-alpha'
+            : E4 / E1 > 1.5 && fewQuads ? 'grey' : null;
+    if (layout === null) {return null;}
+    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of no layout, and
+    // score 4/3 as RGB or 4 as grey whatever the step. Counted only for arrays about to be flagged, a second pass over the
+    // same windows, so RGBA (the usual input) doesn't pay for it.
     let ramp = 0;
     for (let w = 0; w < windows; w++) {
-        const start = w * step, end = start + size;
+        const start = startOf(w), end = start + size;
         for (let i = start + 4; i < end; i++) {
             const rise = (d[i] - d[i - 1]) & 255;
             if (rise !== 0 && rise === ((d[i - 1] - d[i - 2]) & 255)) {ramp++;}
         }
     }
-    return ramp <= 0.5 * n;
+    return ramp <= 0.5 * n ? layout : null;
 };
+export const looksLikeRgb = (d) => bareLayout(d) === 'rgb';
 
 // Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).
 const warned = new Set();
+const bareCodes = {rgb: 'rgb-as-rgba', grey: 'gray-as-rgba', 'grey-alpha': 'gray-as-rgba'};
 
-// The warning a bare image calls for, or null. It skips everything the main entry rejects (palettes and clusterings
-// passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns about its image and
-// rejects it, and both entries share this one order.
-export const bareRgbWarning = (image) => {
-    if (warned.has('rgb-as-rgba') || !isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
+// The warning a bare image calls for, as {code, layout}, or null. It skips everything the main entry rejects (palettes
+// and clusterings passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns
+// about its image and rejects it, and both entries share this one order. An array of one layout never takes another's
+// code because its own was already used: it is classified first, and only then is its code checked.
+export const bareImageWarning = (image) => {
+    if ((warned.has('rgb-as-rgba') && warned.has('gray-as-rgba')) || !isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
     if (sniffImageFormat(image) !== null || image.length % 4 !== 0) {return null;}
-    return looksLikeRgb(image) ? 'rgb-as-rgba' : null;
+    const layout = bareLayout(image);
+    return layout === null || warned.has(bareCodes[layout]) ? null : {code: bareCodes[layout], layout};
 };
 
 // The text of each warning. Delivered through process.emitWarning in Node, Bun and Deno (--no-warnings,
@@ -326,12 +346,17 @@ export const bareRgbWarning = (image) => {
 // keeps Parcel from adding one.
 const nodeLike = () => typeof navigator === 'undefined' || /^(Node\.js|Bun|Deno)\//.test(String(navigator.userAgent));
 const warningText = {
-    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
+    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel), or grey, passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA; format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
+    'gray-as-rgba': (byteLength, layout) => (layout === 'grey-alpha'
+        ? `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey and alpha bytes (2 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG with alpha.`
+        : `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey bytes (1 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices.`)
+        + ` Expand ${layout === 'grey-alpha' ? 'it' : '8-bit grey'} to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()). There is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
 };
-export const warnOnce = (code, byteLength) => {
+// `warning` is what bareImageWarning returned: {code, layout}.
+export const warnOnce = ({code, layout}, byteLength) => {
     if (warned.has(code)) {return;}
     warned.add(code);
-    const message = warningText[code](byteLength);
+    const message = warningText[code](byteLength, layout);
     const runtime = globalThis.process;
     if (runtime && typeof runtime.emitWarning === 'function' && nodeLike()) {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
     else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}

@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 import * as shared from '../dist/shared.mjs';
-import { looksLikeRgb, bareRgbWarning, Palette } from '../dist/shared.mjs';
+import { looksLikeRgb, bareImageWarning, Palette } from '../dist/shared.mjs';
 
 const hsv = (h, s, v) => {
     const i = Math.floor(h * 6), f = h * 6 - i;
@@ -105,29 +105,29 @@ describe('looksLikeRgb on real images (fixtures/bare-rgb/)', () => {
     });
 });
 
-describe('bareRgbWarning', () => {
+describe('bareImageWarning', () => {
     it('keeps its record of warned codes private: only resetWarnings and silenceWarnings change it', () => {
         expect(shared.warned).toBeUndefined();
     });
     it('names the warning for bare RGB bytes', () => {
-        expect(bareRgbWarning(gradientRgb)).toBe('rgb-as-rgba');
+        expect(bareImageWarning(gradientRgb)).toEqual({ code: 'rgb-as-rgba', layout: 'rgb' });
     });
     it('ignores images that say what they are', () => {
-        expect(bareRgbWarning({ data: gradientRgb, format: 'rgba' })).toBe(null);
+        expect(bareImageWarning({ data: gradientRgb, format: 'rgba' })).toBe(null);
     });
     it('ignores a palette passed as the image (flat RGB bytes, rejected anyway)', () => {
-        expect(bareRgbWarning(new Palette(gradientRgb.subarray(0, 768)))).toBe(null);
+        expect(bareImageWarning(new Palette(gradientRgb.subarray(0, 768)))).toBe(null);
     });
     it('ignores an encoded file (rejected anyway)', () => {
         const png = new Uint8Array(gradientRgb.length + 8);
         png.set([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
         png.set(gradientRgb, 8);
-        expect(bareRgbWarning(png)).toBe(null);
+        expect(bareImageWarning(png)).toBe(null);
     });
     it('ignores a length that is not a multiple of 4 (rejected anyway)', () => {
-        expect(bareRgbWarning(gradientRgb.subarray(0, gradientRgb.length - 2))).toBe(null);
+        expect(bareImageWarning(gradientRgb.subarray(0, gradientRgb.length - 2))).toBe(null);
     });
     it('ignores a bare Uint8ClampedArray (rejected anyway)', () => {
-        expect(bareRgbWarning(new Uint8ClampedArray(gradientRgb))).toBe(null);
+        expect(bareImageWarning(new Uint8ClampedArray(gradientRgb))).toBe(null);
     });
 });

@@ -1,0 +1,98 @@
+Corpus: 2984 real RGBA, 1102 grey (1 channel), 1054 grey + alpha (2 channels), lengths a multiple of 4 only
+
+=== harm: misread palette MSE / correct palette MSE (floored at 1), k = 16 ===
+grey1 kodak: grey                                      24  harmful   24  ratio min 1.40 median 2.35 max 5.01
+grey1 kodak: grey dithered to 2 (floyd-steinberg)      24  harmful    0  ratio min 0.00 median 0.00 max 0.00
+grey1 kodak: grey dithered to 8 (floyd-steinberg)      24  harmful   24  ratio min 18.31 median 64.03 max 127.68
+grey1 kodak: grey dithered to 2 (ordered)              24  harmful    0  ratio min 0.00 median 0.00 max 0.00
+grey1 kodak: grey dithered to 8 (ordered)              24  harmful   24  ratio min 15.91 median 54.54 max 131.61
+grey1 kodak: grey pixel art                            24  harmful    6  ratio min 0.00 median 0.00 max 560.33
+grey1 kodak crop 2×2: grey                             24  harmful   23  ratio min 0.42 median 24.75 max 5871.75
+grey1 kodak crop 4×4: grey                             24  harmful   24  ratio min 1.19 median 37.54 max 5093.06
+grey1 kodak crop 8×8: grey                             24  harmful   24  ratio min 1.20 median 16.13 max 232.15
+grey1 kodak crop 16×16: grey                           24  harmful   23  ratio min 0.85 median 9.98 max 80.60
+grey1 kodak crop 32×32: grey                           24  harmful   24  ratio min 1.24 median 8.01 max 32.11
+grey1 kodak crop 64×64: grey                           24  harmful   24  ratio min 2.91 median 4.81 max 11.26
+grey1 synthetic: grey                                   5  harmful    4  ratio min 1.08 median 5.90 max 38.65
+grey1 twemoji: grey on white                          410  harmful  409  ratio min 0.58 median 20.42 max 144.24
+grey1 noto: grey on white                             399  harmful  396  ratio min 0.45 median 8.77 max 360.12
+grey2 kodak: grey + alpha, alpha 255                   24  harmful   24  ratio min 274.18 median 543.77 max 1979.81
+grey2 kodak: grey + alpha, feathered cutout            24  harmful   24  ratio min 22.67 median 35.30 max 78.61
+grey2 kodak: grey + alpha, alpha ramp                  24  harmful   24  ratio min 15.16 median 20.86 max 45.39
+grey2 kodak: grey pixel art + sprite alpha             24  harmful   24  ratio min 3378.02 median 8096.65 max 15134.20
+grey2 kodak crop 2×2: grey + alpha 255                 24  harmful   24  ratio min 11.83 median 5918.67 max 16467.75
+grey2 kodak crop 4×4: grey + alpha 255                 24  harmful   24  ratio min 18.63 median 6824.50 max 14831.73
+grey2 kodak crop 8×8: grey + alpha 255                 24  harmful   24  ratio min 19.11 median 5897.70 max 13175.43
+grey2 kodak crop 16×16: grey + alpha 255               24  harmful   24  ratio min 174.32 median 2250.96 max 12917.50
+grey2 kodak crop 32×32: grey + alpha 255               24  harmful   24  ratio min 138.28 median 1283.41 max 12082.23
+grey2 kodak crop 64×64: grey + alpha 255               24  harmful   24  ratio min 202.51 median 894.54 max 9503.76
+grey2 synthetic: grey + alpha 255                       5  harmful    5  ratio min 363.76 median 372.48 max 4132.49
+grey2 twemoji: grey + alpha                           410  harmful  407  ratio min 0.00 median 454.30 max 4109.19
+grey2 noto: grey + alpha                              399  harmful  399  ratio min 1.33 median 259.16 max 6658.66
+
+=== real RGBA closest to each rule ===
+grey2 (by c21 among s2 > 1.1): kodak: grey, alpha = luma kodim03 s2 1.97 c21 1.95; kodak: premultiplied white mask kodim03 s2 1.97 c21 1.95; kodak: grey, alpha = luma kodim23 s2 1.98 c21 1.95; kodak: premultiplied white mask kodim23 s2 1.98 c21 1.95; kodak: grey, alpha = luma kodim12 s2 1.98 c21 1.95
+grey2 (by s2 among c21 < 0.5): noto: premultiplied emoji_u1f4b2.png s2 0.16 c21 0.45; noto: rgba emoji_u1f4b2.png s2 0.16 c21 0.45
+grey1 (by s1 among quad < 0.5): kodak: alpha = luma kodim08 s1 1.12 quad 0.03; twemoji: premultiplied 1f64c-1f3fb.png s1 1.10 quad 0.20; noto: grey rgba emoji_u1f64c_1f3fb.png s1 0.89 quad 0.12; kodak: alpha = luma kodim24 s1 0.77 quad 0.01; kodak: alpha = luma kodim13 s1 0.76 quad 0.01
+
+=== sweeps ===
+grey2 s2 > 1, c21 < 0.5: false positives 0 of 2984; harmful caught 977 of 1051, at 64×64 and above 929 of 931
+grey2 s2 > 1.1, c21 < 0.5: false positives 0 of 2984; harmful caught 976 of 1051, at 64×64 and above 929 of 931
+grey2 s2 > 1.1, c21 < 0.4: false positives 0 of 2984; harmful caught 975 of 1051, at 64×64 and above 928 of 931
+grey2 s2 > 1.1, c21 < 0.3: false positives 0 of 2984; harmful caught 970 of 1051, at 64×64 and above 923 of 931
+grey2 s2 > 1.2, c21 < 0.4: false positives 0 of 2984; harmful caught 974 of 1051, at 64×64 and above 928 of 931
+grey2 s2 > 1.25, c21 < 0.3: false positives 0 of 2984; harmful caught 965 of 1051, at 64×64 and above 923 of 931
+grey1 s1 > 1.15, quad < 0.5: false positives 0 of 2984; harmful caught 861 of 1029, at 64×64 and above 815 of 911
+grey1 s1 > 1.25, quad < 0.5: false positives 0 of 2984; harmful caught 854 of 1029, at 64×64 and above 809 of 911
+grey1 s1 > 1.5, quad < 0.5: false positives 0 of 2984; harmful caught 839 of 1029, at 64×64 and above 802 of 911
+grey1 s1 > 2, quad < 0.5: false positives 0 of 2984; harmful caught 800 of 1029, at 64×64 and above 780 of 911
+
+=== each rule on the other kinds (defaults: grey2 s2 > 1.1, c21 < 0.5; grey1 s1 > 1.25, quad < 0.5) ===
+grey1: grey2 rule fires on 15, grey1 rule on 857, the shipped RGB check on 613 of 1102
+grey2: grey2 rule fires on 979, grey1 rule on 0, the shipped RGB check on 0 of 1054
+
+=== harmful and missed (defaults), at 64×64 and above ===
+grey1 kodak: grey dithered to 8 (floyd-steinberg)    21 missed, ratio up to 127.68; s1 0.99 s2 1.22 c21 0.80 quad 0.18
+grey1 kodak: grey dithered to 8 (ordered)            24 missed, ratio up to 131.61; s1 0.63 s2 1.12 c21 0.57 quad 0.19
+grey1 kodak: grey pixel art                          6 missed, ratio up to 560.33; s1 3.86 s2 1.98 c21 1.95 quad 1.00
+grey1 synthetic: grey                                2 missed, ratio up to 38.65; s1 1.00 s2 1.00 c21 1.00 quad 0.00
+grey1 twemoji: grey on white                         34 missed, ratio up to 49.78; s1 3.73 s2 1.90 c21 1.96 quad 0.53
+grey1 noto: grey on white                            15 missed, ratio up to 37.07; s1 3.93 s2 1.99 c21 1.98 quad 0.55
+grey2 synthetic: grey + alpha 255                    2 missed, ratio up to 367.12; s1 0.25 s2 1.00 c21 0.25 quad 0.00
+
+=== the sampled check (check.mjs: grey2 s2 > 1.1, c21 < 0.5; grey1 s1 > 1.5, quad < 0.5; 512 windows) ===
+decides differently from the whole-array rules on 10 of 6950: grey1 kodak: grey dithered to 2 (floyd-steinberg) kodim01 → null; grey1 kodak: grey dithered to 8 (ordered) kodim04 → null; grey1 kodak: grey dithered to 8 (floyd-steinberg) kodim06 → grey; grey1 kodak: grey dithered to 8 (floyd-steinberg) kodim07 → grey-alpha; grey1 kodak: grey dithered to 8 (ordered) kodim07 → null; rgb kodak: rgb kodim08 → null; grey1 kodak: grey dithered to 8 (ordered) kodim11 → grey-alpha; grey1 kodak: grey dithered to 2 (floyd-steinberg) kodim14 → grey-alpha
+real RGBA flagged: 0 of 2984
+grey2 harmful: named right 976 of 1051 (at 64×64 and above 929 of 931); named as the other grey 0; flagged by the RGB check 0; by either 976
+grey1 harmful: named right 840 of 1029 (at 64×64 and above 803 of 911); named as the other grey 3; flagged by the RGB check 611; by either 843
+rgb (3 channels): the grey check fires on 128 of 1810 (127 of them also flagged as RGB; grey-alpha 0, grey 128)
+  kodak: grey as rgb: 24
+  kodak crop 8×8: rgb: 3
+  kodak crop 16×16: rgb: 3
+  twemoji: rgb on black: 27
+  twemoji: rgb on white: 24
+  noto: rgb on white: 25
+  noto: rgb on black: 22
+
+Order, if the RGB check runs first and the grey check only when it passes:
+  rgb (1810): rgb 1761, none 48, grey 1
+  grey1 harmful (1029): grey 229, none 186, grey-alpha 3, rgb 611
+  grey2 harmful (1051): grey-alpha 976, none 75
+Order, if the grey check runs first:
+  rgb (1810): rgb 1634, grey 128, none 48
+  grey1 harmful (1029): grey 840, none 186, grey-alpha 3
+  grey2 harmful (1051): grey-alpha 976, none 75
+
+=== one classifier (grey + alpha; grey RGB by equal triples; else the smoother of lag 1 and lag 3) ===
+grey1 threshold s1 > 1.25:
+  rgba           (2984): none 2984   | at 64×64 and above (2864): none 2864
+  rgb            (1810): rgb 1721, none 48, grey 41   | at 64×64 and above (1690): rgb 1656, grey 34
+  grey1 harmful  (1029): grey 854, none 171, grey-alpha 4   | at 64×64 and above (911): grey 809, none 98, grey-alpha 4
+  grey2 harmful  (1051): grey-alpha 976, none 75   | at 64×64 and above (931): grey-alpha 929, none 2
+grey1 threshold s1 > 1.5:
+  rgba           (2984): none 2984   | at 64×64 and above (2864): none 2864
+  rgb            (1810): rgb 1722, none 48, grey 40   | at 64×64 and above (1690): rgb 1656, grey 34
+  grey1 harmful  (1029): grey 839, none 186, grey-alpha 4   | at 64×64 and above (911): grey 802, none 105, grey-alpha 4
+  grey2 harmful  (1051): grey-alpha 976, none 75   | at 64×64 and above (931): grey-alpha 929, none 2
+rgb named grey: kodak crop 8×8: rgb kodim05; kodak crop 16×16: rgb kodim05; kodak crop 8×8: rgb kodim09; kodak crop 16×16: rgb kodim09; kodak crop 16×16: rgb kodim21; kodak crop 8×8: rgb kodim24; twemoji: rgb on black 1f43b-200d-2744-fe0f.png; twemoji: rgb on black 1f47b.png; twemoji: rgb on white 1f4b2.png; twemoji: rgb on white 1f574-1f3fd.png; twemoji: rgb on black 1f574-1f3fd.png; twemoji: rgb on white 1f574.png; twemoji: rgb on white 1f57a-1f3ff.png; twemoji: rgb on white 1f977-1f3fb.png; twemoji: rgb on white 1f99f.png; twemoji: rgb on black 1f99f.png; twemoji: rgb on white 1f9a8.png; twemoji: rgb on black 1f9a8.png; twemoji: rgb on black 1f9fb.png; twemoji: rgb on black 23f2.png; twemoji: rgb on white 265f.png; noto: rgb on white emoji_u0023.png; noto: rgb on black emoji_u0023.png; noto: rgb on white emoji_u0037.png; noto: rgb on black emoji_u0037.png; noto: rgb on white emoji_u1f3b1.png; noto: rgb on white emoji_u1f440.png; noto: rgb on black emoji_u1f440.png; noto: rgb on white emoji_u1f468_200d_1f468_200d_1f467.png; noto: rgb on black emoji_u1f468_200d_1f468_200d_1f467.png; noto: rgb on white emoji_u1f469_200d_1f469_200d_1f466_200d_1f466.png; noto: rgb on black emoji_u1f469_200d_1f469_200d_1f466_200d_1f466.png; noto: rgb on white emoji_u1f46a.png; noto: rgb on black emoji_u1f46a.png; noto: rgb on white emoji_u1f578.png; noto: rgb on black emoji_u1f578.png; noto: rgb on white emoji_u1f9d1_200d_1f9d2_200d_1f9d2.png; noto: rgb on black emoji_u1f9d1_200d_1f9d2_200d_1f9d2.png; noto: rgb on black emoji_u23f1.png; noto: rgb on black emoji_u2603.png
+harmful grey named rgb: none
