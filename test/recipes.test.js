@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
+import { Palette, buildSwatches, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
 
 
@@ -30,22 +30,73 @@ const toColors = (palette) => Array.from({ length: palette.length / 3 }, (_, i) 
 
 describe('recipes in the guides', () => {
 
-    it('palette conversions and swatches with shares', async () => {
-        const clustering = await buildClustering(image);
-        const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
-        const colors = toColors(palette);
-        const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
-        const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
-        const swatches = Array.from(shares, (share, i) => ({ color: css(i), share }));
-        expect(colors).toEqual([[220, 50, 40], [40, 110, 220], [60, 200, 90]]);
-        expect(swatches.map((s) => s.color)).toEqual(['rgb(220 50 40)', 'rgb(40 110 220)', 'rgb(60 200 90)']);
-        expect(hex(0)).toBe(0xdc3228);
-        expect(swatches.reduce((a, s) => a + s.share, 0)).toBeCloseTo(1, 12);
-        expect(swatches[0].share).toBeGreaterThan(swatches[2].share);
+    // The guides' "Converting the output" and "Heaviest first" recipes. Their functions are checked against the guides' text
+    // below, so the two can't drift apart.
+    const toHex = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+    function rankSwatches({ palette, shares }) {
+      return Array.from(shares, (share, i) => {
+        const [r, g, b] = palette.subarray(3 * i, 3 * i + 3);
+        return { color: [r, g, b], hex: toHex(r, g, b), share };
+      }).sort((a, b) => b.share - a.share);   // equal shares keep split order
+    }
+    const rankPalette = (swatches) => new Palette(rankSwatches(swatches).flatMap((s) => s.color), swatches.palette.colorSpace);
+    // The transparent entry, if there is one, stays last, so `transparentIndex` and `colors` keep their meaning.
+    function rankIndices(result) {
+      const { palette, colors, indices } = result;
+      const n = colors.length / 3;                                                       // the colour entries
+      const used = new Uint32Array(palette.length / 3);
+      for (let p = 0; p < indices.length; p++) {used[indices[p]]++;}
+      const byUse = Array.from({ length: n }, (_, i) => i).sort((a, b) => used[b] - used[a]);   // old index of the 1st, 2nd, …
+      const rank = Uint32Array.from(used.keys());
+      const ranked = Uint8Array.from(palette);
+      byUse.forEach((old, position) => {
+        rank[old] = position;
+        ranked.set(palette.subarray(3 * old, 3 * old + 3), 3 * position);
+      });
+      const rankedIndices = indices.slice();                                             // same typed-array type as `indices`
+      for (let p = 0; p < indices.length; p++) {rankedIndices[p] = rank[indices[p]];}
+      // The rest of the result (indexBits, transparentIndex, width, height) carries over.
+      return { ...result, palette: new Palette(ranked, palette.colorSpace), colors: new Palette(ranked.subarray(0, 3 * n), palette.colorSpace),
+        indices: rankedIndices };
+    }
+
+    it('the swatch-ranking recipes are the ones in the guides', async () => {
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        // A declaration's lines, trimmed: one line for a `const`, to the closing brace at its indentation for a function.
+        const source = (text, start) => {
+            const lines = text.split('\n');
+            const first = lines.findIndex((line) => line.trim().startsWith(start));
+            expect(first, `${start} is in the file`).toBeGreaterThanOrEqual(0);
+            if (start.startsWith('const')) {return lines[first].trim();}
+            const indent = lines[first].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+            expect(end, `${start} has a closing brace at its indentation`).toBeGreaterThan(first);
+            return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
+        };
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        for (const start of ['const toHex =', 'function rankSwatches(', 'const rankPalette =', 'function rankIndices(']) {
+            expect(source(test, start)).toBe(source(guides, start));
+        }
     });
 
-    // The guides' "Heaviest first" recipes. 40 red pixels and two similar blues of 30: in split order at three colours
-    // the first entry is a blue (30 pixels) and the heaviest, red, is second.
+    it('palette conversions', async () => {
+        const clustering = await buildClustering(image);
+        const { palette, shares } = await getSwatchesFromClustering(clustering, 3);
+        const colors = toColors(palette);
+        const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
+        const hexString = (i) => toHex(...palette.subarray(3 * i, 3 * i + 3));
+        const hexNumber = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
+        expect(colors).toEqual([[220, 50, 40], [40, 110, 220], [60, 200, 90]]);
+        expect(css(0)).toBe('rgb(220 50 40)');
+        expect(hexString(0)).toBe('#dc3228');
+        expect(toHex(0, 5, 255)).toBe('#0005ff');
+        expect(hexNumber(0)).toBe(0xdc3228);
+        expect(shares.reduce((a, s) => a + s, 0)).toBeCloseTo(1, 12);
+    });
+
+    // 40 red pixels and two similar blues of 30: in split order at three colours the first entry is a blue (30 pixels) and
+    // the heaviest, red, is second.
     const split = (() => {
         const px = [];
         const add = (rgb, n) => {for (let i = 0; i < n; i++) {px.push(...rgb, 255);}};
@@ -53,50 +104,80 @@ describe('recipes in the guides', () => {
         return { data: new Uint8Array(px), format: 'rgba', width: 10, height: 10 };
     })();
 
-    it('heaviest first for a palette and its weights', async () => {
+    it('ranks swatches heaviest first, as objects, and a dominant colour', async () => {
         const clustering = await buildClustering(split);
-        const { palette, weights, shares } = await getSwatchesFromClustering(clustering, 3);
-        const colors = toColors(palette);
-        expect(Array.from(weights)).toEqual([30, 40, 30]);                       // split order: not heaviest first
-
-        const order = Array.from(weights.keys()).sort((a, b) => weights[b] - weights[a]);
-        const rankedColors = order.map((i) => colors[i]);
-        const rankedShares = order.map((i) => shares[i]);
-        expect(rankedColors[0]).toEqual([255, 0, 0]);
-        expect(rankedShares).toEqual([0.4, 0.3, 0.3]);
-        expect(rankedColors.length).toBe(colors.length);
+        const swatches = await clustering.getSwatches(3);
+        expect(Array.from(swatches.weights)).toEqual([30, 40, 30]);              // split order: not heaviest first
+        const ranked = rankSwatches(swatches);
+        expect(ranked).toEqual([
+            { color: [255, 0, 0], hex: '#ff0000', share: 0.4 },
+            // Equal shares keep split order.
+            { color: toColors(swatches.palette)[0], hex: toHex(...swatches.palette.subarray(0, 3)), share: 0.3 },
+            { color: toColors(swatches.palette)[2], hex: toHex(...swatches.palette.subarray(6, 9)), share: 0.3 },
+        ]);
+        expect(rankSwatches(await buildSwatches(split, 5))[0].hex).toBe('#ff0000');
+        expect(rankSwatches(await buildSwatches({ data: new Uint8Array(0), format: 'rgba' }, 5))).toEqual([]);
     });
 
-    it('heaviest first for an indexed image, with its transparent entry', async () => {
-        for (const [source, options] of [[split, {}], [image, { transparent: true }]]) {
-            const { palette, indices, transparentIndex } = await quantizeToIndices(source, source === split ? 3 : 12, options);
-            const colors = toColors(palette);
+    it('a ranked palette keeps its colour space', async () => {
+        const clustering = await buildClustering(image, { colorSpace: 'oklab' });
+        const swatches = await clustering.getSwatches(3);
+        const ranked = rankPalette(swatches);
+        expect(ranked).toBeInstanceOf(Palette);
+        expect(ranked.colorSpace).toBe('oklab');
+        expect(toColors(ranked)).toEqual(rankSwatches(swatches).map((s) => s.color));
+    });
 
-            const used = new Uint32Array(palette.length / 3);
-            for (const index of indices) {used[index]++;}
-            const byUse = Array.from(used.keys()).sort((a, b) => used[b] - used[a]);
-            const rank = new Uint32Array(used.length);
-            byUse.forEach((old, position) => {rank[old] = position;});
-            const rankedPalette = byUse.map((old) => colors[old]);
-            const rankedIndices = indices.map((index) => rank[index]);
-            const rankedTransparentIndex = transparentIndex === null ? null : rank[transparentIndex];
+    it('heaviest first for an indexed image: by cluster weight, by mapping to the ranked palette', async () => {
+        for (const [source, k, options] of [[split, 3, {}], [image, 11, { transparent: true }], [image, 11, { transparent: true, dither: true }]]) {
+            const clustering = await buildClustering(source, { transparent: true });
+            const result = await quantizeToIndicesWithPalette(source, rankPalette(await clustering.getSwatches(k)), options);
+            const plain = await clustering.quantizeToIndices(source, options.transparent ? k + 1 : k, options);
+            // The same picture as the unranked call: every pixel has the same colour (or is transparent in both).
+            expect(result.transparentIndex === null).toBe(plain.transparentIndex === null);
+            for (let p = 0; p < result.indices.length; p++) {
+                const a = result.indices[p], b = plain.indices[p];
+                expect(a === result.transparentIndex).toBe(b === plain.transparentIndex);
+                if (a !== result.transparentIndex) {expect(toColors(result.palette)[a]).toEqual(toColors(plain.palette)[b]);}
+            }
+            // The transparent entry comes after the palette: k colours and one more.
+            if (result.transparentIndex !== null) {expect(result.transparentIndex).toBe(result.colors.length / 3);}
+            expect(result.colors.length / 3).toBeLessThanOrEqual(k);
+        }
+        // On the split image, red (the heaviest) is now entry 0.
+        const clustering = await buildClustering(split);
+        const { palette } = await quantizeToIndicesWithPalette(split, rankPalette(await clustering.getSwatches(3)));
+        expect(Array.from(palette.subarray(0, 3))).toEqual([255, 0, 0]);
+    });
+
+    it('heaviest first for an indexed image: by pixels mapped, with its transparent entry', async () => {
+        for (const [source, options] of [[split, {}], [image, { transparent: true }], [image, { transparent: true, colorSpace: 'oklab', dither: true }]]) {
+            const result = await quantizeToIndices(source, source === split ? 3 : 12, options);
+            const ranked = rankIndices(result);
+            const { palette, colors, indices, transparentIndex } = ranked;
+            const before = toColors(result.palette), after = toColors(palette);
 
             // Same picture: every pixel still has the same colour.
-            for (let p = 0; p < indices.length; p++) {expect(rankedPalette[rankedIndices[p]]).toEqual(colors[indices[p]]);}
-            // Heaviest first: usage never increases along the new order.
-            const rankedUse = new Uint32Array(used.length);
-            for (const index of rankedIndices) {rankedUse[index]++;}
-            for (let i = 1; i < rankedUse.length; i++) {expect(rankedUse[i]).toBeLessThanOrEqual(rankedUse[i - 1]);}
-            // The transparent entry is still the one the transparent pixels use.
-            if (transparentIndex !== null) {
-                for (let p = 0; p < indices.length; p++) {expect(rankedIndices[p] === rankedTransparentIndex).toBe(indices[p] === transparentIndex);}
-            }
-            expect(rankedIndices.constructor).toBe(indices.constructor);
+            for (let p = 0; p < indices.length; p++) {expect(after[indices[p]]).toEqual(before[result.indices[p]]);}
+            // Heaviest first: usage never increases along the colour entries.
+            const n = colors.length / 3;
+            const use = new Uint32Array(after.length);
+            for (const index of indices) {use[index]++;}
+            for (let i = 1; i < n; i++) {expect(use[i]).toBeLessThanOrEqual(use[i - 1]);}
+            // The transparent entry stays where it was, last, and `colors` is still the palette without it.
+            expect(transparentIndex).toBe(result.transparentIndex);
+            if (transparentIndex !== null) {expect(transparentIndex).toBe(n);}
+            expect(Array.from(colors)).toEqual(Array.from(palette.subarray(0, 3 * n)));
+            expect(palette.colorSpace).toBe(result.palette.colorSpace);
+            expect(colors.colorSpace).toBe(result.palette.colorSpace);
+            expect(indices.constructor).toBe(result.indices.constructor);
+            expect([ranked.indexBits, ranked.width, ranked.height]).toEqual([result.indexBits, result.width, result.height]);
         }
         // The split-order example really does put the heaviest colour second, so the recipe is doing something.
         const indexed = await quantizeToIndices(split, 3);
         const counts = [0, 0, 0]; for (const index of indexed.indices) {counts[index]++;}
         expect(counts[0]).toBeLessThan(Math.max(...counts));
+        expect(Array.from(rankIndices(indexed).palette.subarray(0, 3))).toEqual([255, 0, 0]);
     });
 
     it('a GIF with a transparent background', async () => {

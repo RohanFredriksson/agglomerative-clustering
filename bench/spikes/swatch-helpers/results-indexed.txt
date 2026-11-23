@@ -1,0 +1,27 @@
+kodim23 0.39 MP k=16
+  quantizeToIndices (clusters)            198.8 ms
+  A. renumber, as in the guides             7.5 ms
+  B. renumber, indexed loops                1.3 ms   same colours: true
+  clustering.quantizeToIndices (cut)        7.7 ms
+  C. ranked palette, then map to it         7.7 ms   same colours: true
+kodim23 0.39 MP k=256
+  quantizeToIndices (clusters)            201.3 ms
+  A. renumber, as in the guides             7.8 ms
+  B. renumber, indexed loops                1.2 ms   same colours: true
+  clustering.quantizeToIndices (cut)       12.2 ms
+  C. ranked palette, then map to it        12.6 ms   same colours: true
+kodim23 tiled 12.2 MP k=16
+  quantizeToIndices (clusters)            697.4 ms
+  A. renumber, as in the guides           247.5 ms
+  B. renumber, indexed loops               42.4 ms   same colours: true
+  clustering.quantizeToIndices (cut)      214.0 ms
+  C. ranked palette, then map to it       214.3 ms   same colours: true
+kodim23 tiled 12.2 MP k=256
+  quantizeToIndices (clusters)            770.2 ms
+  A. renumber, as in the guides           246.7 ms
+  B. renumber, indexed loops               38.9 ms   same colours: true
+  clustering.quantizeToIndices (cut)      291.2 ms
+  C. ranked palette, then map to it       294.1 ms   same colours: true
+
+Sorting the swatches themselves (k = 256, the guides' rankSwatches):
+  105 µs per ranking (mean of 1000)

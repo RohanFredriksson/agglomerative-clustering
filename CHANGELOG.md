@@ -6,6 +6,11 @@ Docs only: output and the API are unchanged (one error message is reworded).
 
 ### Docs
 - **Decoding image files:** a new guides section with a tested recipe for each environment, since the library takes decoded pixels and won't decode files itself (a settled decision: no decoders, no dependency on one; decoding is no longer on the roadmap): sharp in Node, `createImageBitmap` in browsers, and jsquash with omggif on edge runtimes such as Cloudflare Workers (PNG, JPEG, WebP and GIF, orientation applied). Each gives straight 8-bit RGBA whatever the file holds. It lists the traps found in testing: RGB passed bare, decoders such as fast-png that return palette indices, grey, packed or 16-bit rows as stored, animations giving their first frame, colour profiles ignored on the edge, and `createImageBitmap` options that block the page. `docs/environments.md` no longer points Workers users at fast-png, the README's sharp example applies the EXIF orientation (`.rotate()`), and the error for an encoded file names a decoder per environment.
+- **Swatches heaviest first, hex strings and a dominant colour:** the guides' "Heaviest first" now has one tested recipe, `rankSwatches`. It turns swatches into `{ color, hex, share }` objects with the largest share first, and a dominant colour is its first entry. Built-in helpers were measured and not added (ROADMAP "Considered"). The dominant colour depends on `k`: going from 5 colours to 8 changed it by more than ΔE 10 on 11 of 24 Kodak photos, and the guides now say so. Other changes in the guides:
+  - A ranked palette to map with is rebuilt as a `Palette` (`rankPalette`), because plain bytes are matched in RGB and an OKLab palette would quietly map in the wrong space.
+  - An indexed image can be ranked heaviest first in two ways. Mapping to the ranked palette costs nothing extra. Renumbering by pixels mapped (`rankIndices`) keeps the transparent entry last and `colors` correct; it now takes about 40 ms at 12 megapixels, down from 250 ms.
+  - The migration table and the README's swatches example link to the recipe.
+  - The API reference now says what `quantizeToIndicesWithPalette` already did: the result's palette is the one you give, in its order, so each index is a position in it.
 
 ## 3.4.2
 

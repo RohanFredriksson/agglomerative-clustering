@@ -539,7 +539,7 @@ For placeholders, theming or colour search over a site's images, one call each i
 - **Downscale first.** 512 px on the long side changes the palette by about 2% (256 px by 6%, 64 px by half) and is 3 to 8 times faster; with `precision: 6` a photo takes about 20 ms.
 - **Use a few workers, not one per image.** The main entry runs one call at a time, so throughput comes from several `createWorker()`s (the [pool](performance.md#servers)). About four is the sweet spot; more mostly adds memory.
 - **Cache palettes, not clusterings:** 1,500 palettes are about half a megabyte of JSON, and 1,500 clusterings are 0.2 to 1 GB. Key the cache by the image's content hash, the library's version and your options (a bug fix in a minor release can change a palette: see [stability](stability.md)).
-- **A dominant colour** is the heaviest swatch of `buildSwatches(image, 5)` (sort by `shares`). These colours are averages of regions, so they are muted: for vivid accents, a library built for them (node-vibrant, color-thief) suits better.
+- **A dominant colour** is the heaviest swatch of `buildSwatches(image, 5)` ([Heaviest first](#heaviest-first) has the one line, and why to keep `k` fixed). These colours are averages of regions, so they are muted: for vivid accents, a library built for them (node-vibrant, color-thief) suits better.
 
 ## Converting the output
 
@@ -551,34 +551,73 @@ const colors = Array.from({ length: palette.length / 3 }, (_, i) => [palette[3 *
 
 // A CSS colour, a '#rrggbb' string and a 0xRRGGBB number
 const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
-const hexString = (i) => '#' + Array.from(palette.subarray(3 * i, 3 * i + 3), (v) => v.toString(16).padStart(2, '0')).join('');
-const hex = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
-
-// Swatches with their share of the image (in split order: sort by `share` to put the biggest first)
-const swatches = Array.from(shares, (share, i) => ({ color: css(i), share }));
+const toHex = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+const hexString = (i) => toHex(...palette.subarray(3 * i, 3 * i + 3));
+const hexNumber = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | palette[3 * i + 2];
 ```
 
 ### Heaviest first
 
-Palettes come in split order, so the biggest colour isn't necessarily first. To rank them, sort; sorted palettes of different sizes no longer nest.
+Palettes come in split order, which is what makes them nest, so the biggest colour isn't necessarily first. Sort to rank them. A sorted palette of one size is no longer the start of a larger one.
+
+**Swatches as objects, heaviest first:**
 
 ```js
-// A palette and its weights, heaviest first
-const order = Array.from(weights.keys()).sort((a, b) => weights[b] - weights[a]);   // old index of the 1st, 2nd, … entry
-const rankedColors = order.map((i) => colors[i]);
-const rankedShares = order.map((i) => shares[i]);
+// `swatches` is what buildSwatches(image, k) or clustering.getSwatches(k) returns.
+function rankSwatches({ palette, shares }) {
+  return Array.from(shares, (share, i) => {
+    const [r, g, b] = palette.subarray(3 * i, 3 * i + 3);
+    return { color: [r, g, b], hex: toHex(r, g, b), share };
+  }).sort((a, b) => b.share - a.share);   // equal shares keep split order
+}
 
-// An indexed image, heaviest first: count how many pixels use each entry (that is what "heaviest" means for the image),
-// sort, and renumber the indices
-const used = new Uint32Array(palette.length / 3);
-for (const index of indices) {used[index]++;}
-const byUse = Array.from(used.keys()).sort((a, b) => used[b] - used[a]);
-const rank = new Uint32Array(used.length);
-byUse.forEach((old, position) => {rank[old] = position;});
-const rankedPalette = byUse.map((old) => colors[old]);
-const rankedIndices = indices.map((index) => rank[index]);                           // same typed-array type as `indices`
-const rankedTransparentIndex = transparentIndex === null ? null : rank[transparentIndex];
+const ranked = rankSwatches(await buildSwatches(image, 8));
+// [{ color: [r, g, b], hex: '#rrggbb', share }, …], the largest share first
 ```
+
+**A dominant colour** is the first of those: `rankSwatches(await buildSwatches(image, 5))[0]`. It depends on `k` as much as on the image. The heaviest swatch is whichever region the cut hasn't split yet, so asking for 8 colours instead of 5 changed it by more than ΔE 10 on 11 of 24 Kodak photos. <!-- bench/spikes/swatch-helpers/measure.mjs, results.txt --> Pick one `k` and keep it. And for vivid accent colours, rather than the area-weighted averages these are, see [Picking colours from swatches](#picking-colours-from-swatches).
+
+**A ranked palette to map with** must stay a `Palette`. Plain bytes are matched in RGB, so an OKLab palette rebuilt as a bare `Uint8Array` would quietly map in the wrong space. `new Palette(bytes, colorSpace)` keeps it:
+
+```js
+import { Palette } from 'agglomerative-clustering';
+
+const rankPalette = (swatches) => new Palette(rankSwatches(swatches).flatMap((s) => s.color), swatches.palette.colorSpace);
+```
+
+**An indexed image, heaviest first.** There are two ways, depending on what "heaviest" should mean:
+
+```js
+// By cluster weight, at no extra cost: map to the ranked palette (indices are positions in the palette you give).
+// Cluster with `transparent` so the transparent pixels are left out, as quantizeToIndices does. The transparent entry is
+// added after the palette when the image has transparent pixels, so cut 255 for a 256-entry GIF (an opaque image then
+// gets 255 colours, one fewer than quantizeToIndices(image, 256)).
+const clustering = await buildClustering(image, { transparent: true });
+const result = await quantizeToIndicesWithPalette(image, rankPalette(await clustering.getSwatches(255)), { transparent: true });
+
+// By pixels mapped, which can differ (most of all with dithering): count each entry's pixels, sort, and renumber.
+// The transparent entry, if there is one, stays last, so `transparentIndex` and `colors` keep their meaning.
+function rankIndices(result) {
+  const { palette, colors, indices } = result;
+  const n = colors.length / 3;                                                       // the colour entries
+  const used = new Uint32Array(palette.length / 3);
+  for (let p = 0; p < indices.length; p++) {used[indices[p]]++;}
+  const byUse = Array.from({ length: n }, (_, i) => i).sort((a, b) => used[b] - used[a]);   // old index of the 1st, 2nd, …
+  const rank = Uint32Array.from(used.keys());
+  const ranked = Uint8Array.from(palette);
+  byUse.forEach((old, position) => {
+    rank[old] = position;
+    ranked.set(palette.subarray(3 * old, 3 * old + 3), 3 * position);
+  });
+  const rankedIndices = indices.slice();                                             // same typed-array type as `indices`
+  for (let p = 0; p < indices.length; p++) {rankedIndices[p] = rank[indices[p]];}
+  // The rest of the result (indexBits, transparentIndex, width, height) carries over.
+  return { ...result, palette: new Palette(ranked, palette.colorSpace), colors: new Palette(ranked.subarray(0, 3 * n), palette.colorSpace),
+    indices: rankedIndices };
+}
+```
+
+The renumbering takes about 40 ms for a 12-megapixel image with 8-bit indices. <!-- bench/spikes/swatch-helpers/indexed.mjs, results-indexed.txt --> For a palette PNG, rank first and then do the swap in [GIFs and palette PNGs](#gifs-and-palette-pngs): `rankIndices` expects the transparent entry last, where the library puts it, and the swap moves it to the front.
 
 ### Picking colours from swatches
 
@@ -586,14 +625,11 @@ The library answers which colours an image has and how much of each; choosing am
 
 ```js
 import { buildSwatches } from 'agglomerative-clustering';
-import { converter, wcagContrast, formatHex } from 'culori';
+import { converter, wcagContrast } from 'culori';
 
 const oklch = converter('oklch');
-const { palette, shares } = await buildSwatches(image, 12);
-const swatches = Array.from(shares, (share, i) => {
-  const color = { mode: 'rgb', r: palette[3 * i] / 255, g: palette[3 * i + 1] / 255, b: palette[3 * i + 2] / 255 };
-  return { hex: formatHex(color), share, ...oklch(color) };          // l (0-1), c (chroma), h (hue)
-}).sort((a, b) => b.share - a.share);                                 // heaviest first
+// rankSwatches from "Heaviest first", with each colour's OKLCh added: l (0-1), c (chroma), h (hue)
+const swatches = rankSwatches(await buildSwatches(image, 12)).map((s) => ({ ...s, ...oklch(s.hex) }));
 
 const background = swatches[0];
 // The most colourful swatch that covers at least 2% of the image, as an accent
@@ -610,9 +646,9 @@ This library takes **decoded pixels**, not files, URLs or image elements: decode
 
 | You used | Use | Notes |
 |---|---|---|
-| color-thief `getColor(image)` | `buildSwatches(image, 5, { precision: 6 })`, then the entry with the largest `shares` | The heaviest cluster's average colour. |
+| color-thief `getColor(image)` | `rankSwatches(await buildSwatches(image, 5, { precision: 6 }))[0].color` ([Heaviest first](#heaviest-first)) | The heaviest cluster's average colour. |
 | color-thief `getPalette(image, n)` | `buildPalette(image, n, { precision: 6 })` | Flat bytes; `[[r, g, b], …]` is one line ([Converting the output](#converting-the-output)). |
-| get-image-colors | `buildSwatches(image, n)`, and hex strings from the palette | Sort by `shares` for most-used first. |
+| get-image-colors | `rankSwatches(await buildSwatches(image, n))` ([Heaviest first](#heaviest-first)) | Objects with `hex` and `share`, most-used first. |
 | node-vibrant's named swatches (Vibrant, Muted, …) | `buildSwatches(image, 16)`, then choose by saturation and lightness yourself ([Picking colours from swatches](#picking-colours-from-swatches)) | There are no named roles: these colours are averages, more muted than node-vibrant's picks. |
 | image-q `buildPalette` and `applyPalette` | `quantize(image, k, { dither })`, or `buildPalette` then `quantizeWithPalette` | Same idea, one call; `quantizeToIndices` for indexed output. |
 
