@@ -1,15 +1,21 @@
 # Changelog
 
-## Unreleased (3.4.2)
+## 3.4.2
 
 Output and the API are unchanged (one error message is reworded); the golden tests pin it.
 
 ### Performance
 - **Ordered dithering with 65 to 96 colours is 10–23% faster** (RGB): recipe steps now use the exact four-wide scan up to 96 colours (it was 64), where it beats the palette index; above that the index stays faster. Measured on video frames at 480×270 and 160×90 (`bench/spikes/recipe-reuse/sizes.mjs`). New goldens at 96 colours, made before the change, pin that the output is the same.
+- **Smaller WebAssembly:** `clustering.wasm` went from 127 KB to 96 KB (52 to 45 KB gzipped; as base64, for plugin hosts that take one file, 170 to 128 KB). Pixel mapping is compiled once instead of once per kind of output (colours or indices), and merges are sorted with a small merge sort instead of `std::sort`. Output is identical and mapping speed is unchanged.
 
 ### Docs
 - **Faster ordered dithering for animations:** the guides' "Animated GIFs" section shows how to map frames in batches (`mapFramesInBatches`): frames stacked into one call, each padded to a multiple of 8 rows, give the same indices as one call per frame, and build each colour's recipe once. Batches of 12 took 0.36 to 0.78 of the time on film clips and 0.12 to 0.29 on screen recordings and pans. `test/recipes.test.js` runs it and checks it matches the guides. It rests on a property now promised through 3.x (API reference and stability.md): with ordered dithering, for a given palette and options, a pixel's result depends only on its own colour and its position modulo 8 from the image's top-left pixel. Which colours it picks can still change between releases, like any output. A built-in (a prepared palette or frame mapper) was measured and not added: the ROADMAP has why.
 - **Cancelling or showing progress while mapping a large image:** a new guides section. The functions that map pixels run in one piece, which on a 6-megapixel photo at 256 colours is 2.6 s with Floyd–Steinberg and 7.5 s with ordered dithering. To cancel, map in a worker of its own and terminate it on abort (`mapCancellably`; exact, any dither method). To show progress, map in strips of rows (`mapInStrips`): the same indices as one call without dithering and with ordered dithering, a faint seam at strip edges with error diffusion. `test/recipes.test.js` runs both. The message for `onProgress` on a mapping function no longer says those functions finish in milliseconds; it points to the guides. A built-in (sliced mapping) is kept for later: the ROADMAP says what would bring it forward.
+
+### Internal
+- **Native fuzzing:** the C++ also builds natively (`scripts/native.sh`), and CI fuzzes it with libFuzzer, AddressSanitizer and UBSan, once on stored clusterings and once on images with random options. `scripts/native.sh profile` gives callgrind instruction counts. The first run found three `memcpy` calls on empty vectors, which is undefined behaviour though harmless in WebAssembly; they are now skipped. `scripts/asan-test.sh` runs the test suite against a sanitized WebAssembly build.
+- **Browser smoke test with Parcel 2,** alongside Vite and webpack.
+- **Contributor setup:** `scripts/setup-emsdk.sh` installs the Emscripten version CI pins, and `npm run build` says how when `em++` is missing.
 
 ## 3.4.1
 
