@@ -102,3 +102,8 @@ Also in the same change: the ROADMAP's "Larger, later" entry says no byte-level 
 Open for the spec: one warning code for both grey layouts (their fix is the same; `scope-steward` leans to one) or one each; the wording for bit-packed input.
 
 The maintainer decides: build as above, recipe only (`greyToRgba` in the guides plus the message fix), or wait.
+
+## Changed during implementation
+
+- **The sampling windows were aliased with image rows.** They were evenly spaced, and for 768×512 RGBA (and grey + alpha) the spacing is exactly one row, so every window saw only the left edge. A grey + alpha cutout with its transparent pixels zeroed went unflagged, and so did RGB with a flat left margin: 3.5.0 caught 6 of 24 RGB cutouts on black (`results-margins.txt`). Each window now starts at a fixed pseudo-random multiple of 12 within its slot. Re-measured on the whole corpus with the shipped function: 0 of 2,984 false positives, RGB decided as before, 9 dithered grey arrays near the threshold decided differently, and 24 of 24 on both flat-margin cases (`results-shipped.txt`). The bare-RGB measurement rerun against it is in `results-bare-rgb-rerun.txt`. The check now costs about 0.35 ms a call (`results-cost.txt`).
+- **The recipe became `fastPngToImage`,** because fast-png gives an 8-bit palette PNG as `channels: 1, depth: 8` plus a `palette`, and an expander that ignored it would turn indices into grey (`results-palette.txt`, found by the cold-read review).

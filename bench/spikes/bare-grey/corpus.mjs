@@ -95,6 +95,15 @@ export async function* corpus({ emoji = true, crops = [2, 4, 8, 16, 32, 64] } = 
         // 3-channel RGB passed bare (the 3.5.0 warning's case), to see which rule each kind sets off
         yield { kind: 'rgb', group: 'kodak: rgb', name: img.name, bytes: rgb };
         yield { kind: 'rgb', group: 'kodak: grey as rgb', name: img.name, bytes: grey };
+        // with a flat margin, which evenly spaced sampling windows could see alone (they started one row apart at 768×512)
+        {
+            const blackCut = new Uint8Array(rgb.length);
+            for (let p = 0; p < blackCut.length / 3; p++) {const a = featherAt(p) / 255; for (let c = 0; c < 3; c++) {blackCut[3 * p + c] = Math.round(rgb[3 * p + c] * a);}}
+            yield { kind: 'rgb', group: 'kodak: rgb cutout on black', name: img.name, bytes: blackCut };
+            const ga = new Uint8Array(g.length * 2);
+            for (let p = 0; p < g.length; p++) {const a = featherAt(p); ga[2 * p] = a ? g[p] : 0; ga[2 * p + 1] = a;}
+            yield { kind: 'grey2', group: 'kodak: grey + alpha, cutout, transparent zeroed', name: img.name, bytes: ga, flatMargin: true };
+        }
         for (const [variant, alphaAt] of Object.entries({ 'alpha 255': () => 255, 'feathered cutout': featherAt, 'alpha ramp': (p) => Math.round(255 * (p % width) / (width - 1)) })) {
             const { bytes, truth } = greyAlpha(g, alphaAt);
             yield { kind: 'grey2', group: `kodak: grey + alpha, ${variant}`, name: img.name, bytes, truth, truthFormat: 'rgba' };

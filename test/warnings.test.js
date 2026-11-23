@@ -1,4 +1,4 @@
-// The rgb-as-rgba warning (PRINCIPLES "Warnings only bridge to an error in the next major"): once per copy of the
+// The bare-image warnings, rgb-as-rgba and gray-as-rgba (PRINCIPLES "Warnings only bridge to an error in the next major"): once per copy of the
 // library, only for a call whose arguments were accepted, never changing a result.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -26,6 +26,23 @@ for (let p = 0; p < side * side; p++) {
     const colour = hsv((p % side) / side, 0.85, 0.3 + 0.7 * Math.floor(p / side) / side);
     bareRgb.set(colour, p * 3);
     bareRgba.set([...colour, 255], p * 4);
+}
+
+// Grey as a random walk: its byte differences grow like a photo's (roughly with the square root of the step), so the
+// RGB rule passes it and the grey rule takes it. A smooth synthetic gradient would be called RGB, as near-grey RGB is.
+const bareGrey = new Uint8Array(side * side);
+{
+    let s = 7, v = 128;
+    for (let p = 0; p < bareGrey.length; p++) {
+        s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+        v = Math.max(20, Math.min(235, v + Math.round((s / 2 ** 32 - 0.5) * 16)));
+        bareGrey[p] = v;
+    }
+}
+const bareGreyAlpha = new Uint8Array(side * side * 2);
+for (let p = 0; p < side * side; p++) {
+    bareGreyAlpha[2 * p] = bareGrey[p];
+    bareGreyAlpha[2 * p + 1] = Math.round(255 * Math.min(1, Math.max(0, (26 - Math.hypot(p % side - 32, Math.floor(p / side) - 32)) / 4)));
 }
 
 let seen = [];
@@ -178,6 +195,60 @@ ${childImage}
 buildPalette(rgb, 8).then(() => setImmediate(() => console.log(JSON.stringify(heard))));
 `, 'commonjs');
         expect(heard).toBe(1);
+    });
+});
+
+describe('gray-as-rgba', () => {
+    it('warns once for grey bytes passed bare, naming the layout and the fix', async () => {
+        const first = await warningsFrom(() => buildPalette(bareGrey, 8));
+        expect(first).toHaveLength(1);
+        expect(first[0].code).toBe('gray-as-rgba');
+        expect(first[0].message).toContain('This image (4,096 bytes) looks like grey bytes (1 per pixel)');
+        expect(first[0].message).toContain('There is no grey format to pass');
+        expect(first[0].message).toContain('From 4.0 this is an error');
+        expect(await warningsFrom(() => buildPalette(bareGreyAlpha, 8))).toHaveLength(0);
+    });
+
+    it('names grey and alpha bytes as such, without the packed-rows clause', async () => {
+        const [warning] = await warningsFrom(() => buildPalette(bareGreyAlpha, 8));
+        expect(warning.code).toBe('gray-as-rgba');
+        expect(warning.message).toContain('looks like grey and alpha bytes (2 per pixel)');
+        expect(warning.message).not.toContain('packed');
+    });
+
+    it('warns independently of rgb-as-rgba', async () => {
+        expect((await warningsFrom(() => buildPalette(bareRgb, 8))).map((w) => w.code)).toEqual(['rgb-as-rgba']);
+        expect((await warningsFrom(() => buildPalette(bareGrey, 8))).map((w) => w.code)).toEqual(['gray-as-rgba']);
+    });
+
+    it('never gives RGB bytes the grey code once rgb-as-rgba is used', async () => {
+        await warningsFrom(() => buildPalette(bareRgb, 8));
+        expect(await warningsFrom(() => buildPalette(bareRgb, 8))).toHaveLength(0);
+    });
+
+    it("tells grey input that format: 'rgb' would misread it too", async () => {
+        const [warning] = await warningsFrom(() => buildPalette(bareRgb, 8));
+        expect(warning.message).toContain("or grey, passed as a bare Uint8Array");
+        expect(warning.message).toContain("format: 'rgb' would misread it too");
+    });
+
+    it('stays silent for grey that says what it is, and on a rejected call', async () => {
+        const rgba = new Uint8Array(side * side * 4);
+        for (let p = 0; p < side * side; p++) {rgba.fill(bareGrey[p], 4 * p, 4 * p + 3); rgba[4 * p + 3] = 255;}
+        expect(await warningsFrom(() => buildPalette(rgba, 8))).toHaveLength(0);
+        expect(await warningsFrom(() => buildPalette({ data: bareGrey, format: 'rgba' }, 8))).toHaveLength(0);
+        await expect(buildPalette(bareGrey, 0)).rejects.toMatchObject({ code: 'invalid-argument' });
+        await tick();
+        expect(seen).toHaveLength(0);
+        expect(await warningsFrom(() => buildPalette(bareGrey, 8))).toHaveLength(1);
+    });
+
+    it("warns from the worker entry once, on the caller's side", async () => {
+        const w = createWorker();
+        try {
+            expect((await warningsFrom(() => w.buildPalette(bareGreyAlpha, 8))).map((x) => x.code)).toEqual(['gray-as-rgba']);
+            expect(await warningsFrom(() => w.buildPalette(bareGrey, 8))).toHaveLength(0);
+        } finally {await w.terminate();}
     });
 });
 
