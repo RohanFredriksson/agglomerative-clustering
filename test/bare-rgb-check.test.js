@@ -55,6 +55,11 @@ describe('looksLikeRgb', () => {
     it('passes noise, where both readings look alike (a harmless miss)', () => {
         expect(looksLikeRgb(noise(64 * 64 * 3))).toBe(false);
     });
+    it('passes byte ramps, the usual fake image in tests (not pixels of either kind)', () => {
+        expect(looksLikeRgb(new Uint8Array(20000).map((_, i) => (i * 7) & 255))).toBe(false);
+        expect(looksLikeRgb(new Uint8Array(40000).map((_, i) => i & 255))).toBe(false);
+        expect(looksLikeRgb(new Uint8Array(40000).map((_, i) => i % 251))).toBe(false);
+    });
     it('passes arrays under the 192-byte floor', () => {
         expect(looksLikeRgb(gradientRgb.subarray(0, 188))).toBe(false);
     });

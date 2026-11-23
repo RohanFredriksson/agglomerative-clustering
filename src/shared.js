@@ -269,13 +269,15 @@ export const looksLikeRgb = (d) => {
     const whole = d.length <= rgbWindow * rgbWindows;
     const windows = whole ? 1 : rgbWindows, size = whole ? d.length : rgbWindow;
     const step = whole ? 0 : Math.floor((d.length - rgbWindow) / (rgbWindows - 1) / 12) * 12;
-    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0;
+    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0, ramp = 0;
     for (let w = 0; w < windows; w++) {
         const start = w * step, end = start + size;
         for (let i = start + 4; i < end; i++) {
             const v = d[i], a = v - d[i - 3], b = v - d[i - 4];
             e3 += a < 0 ? -a : a;
             e4 += b < 0 ? -b : b;
+            const rise = (v - d[i - 1]) & 255;
+            if (rise !== 0 && rise === ((d[i - 1] - d[i - 2]) & 255)) {ramp++;}
         }
         n += size - 4;
         for (let i = start + 3; i + 2 < end; i += 3) {
@@ -289,6 +291,9 @@ export const looksLikeRgb = (d) => {
             if (d[i] === d[i + 1] && d[i] === d[i + 2]) {g4++; if (d[i] === d[i + 3]) {q4++;}}
         }
     }
+    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of neither kind,
+    // and score 4/3 whatever the step.
+    if (ramp > 0.5 * n) {return false;}
     const score = (e4 / n + 0.05) / (e3 / n + 0.05);
     return (score > 1.25 && q4 < 0.5 * Math.max(1, n4)) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4));
 };
@@ -304,6 +309,26 @@ export const bareRgbWarning = (image) => {
     if (sniffImageFormat(image) !== null || image.length % 4 !== 0) {return null;}
     return looksLikeRgb(image) ? 'rgb-as-rgba' : null;
 };
+
+// The text of each warning. Delivered through process.emitWarning where it exists (Node, Deno, Bun: --no-warnings,
+// process.on('warning') and --trace-warnings then work), else console.warn; a bundler's `process` polyfill has no
+// emitWarning, and `globalThis.process` keeps Parcel from adding one.
+const warningText = {
+    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
+};
+export const warnOnce = (code, byteLength) => {
+    if (warned.has(code)) {return;}
+    warned.add(code);
+    const message = warningText[code](byteLength);
+    const runtime = globalThis.process;
+    if (runtime && typeof runtime.emitWarning === 'function') {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
+    else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}
+};
+// The worker thread's copy: its caller's side checks and warns (PRINCIPLES), so here every code counts as warned, which
+// also skips the sampling.
+export const silenceWarnings = () => {for (const code of Object.keys(warningText)) {warned.add(code);}};
+// For tests.
+export const resetWarnings = () => {warned.clear();};
 // Node's console.log and util.inspect call this (other environments ignore it), so the tag shows when debugging:
 // `Palette(oklab) [ 12, 34, ... ]` rather than a plain `Uint8Array(…)`.
 const inspect = Symbol.for('nodejs.util.inspect.custom');

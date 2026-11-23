@@ -1,3 +1,5 @@
+(node:174930) [rgb-as-rgba] AgglomerativeClusteringWarning: This image (1,179,648 bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.
+(Use `node --trace-warnings ...` to show where the warning was created)
 
 === score s3 (sampled) ===
 group                                           n     min median    max     >1.1  >1.25   >1.5     >2     >3   harm of missed at 1.5 (max)
@@ -209,8 +211,8 @@ Rule decided differently with the whole array than with 2048 windows: 9 of 4038 
 Rule decided differently with the 512 windows than with 2048 windows: 25 of 4038 images
 
 === cost of the check ===
-768×512 RGBA   2048 windows 1.764 ms   512 windows 0.428 ms   whole array 13.81 ms   lean check 0.331 ms
-12 MP RGBA     2048 windows 1.748 ms   512 windows 0.429 ms   whole array 428.24 ms   lean check 0.351 ms
+768×512 RGBA   2048 windows 1.734 ms   512 windows 0.427 ms   whole array 13.79 ms   lean check 0.391 ms
+12 MP RGBA     2048 windows 1.730 ms   512 windows 0.423 ms   whole array 425.78 ms   lean check 0.421 ms
 4×4 RGBA       2048 windows 0.001 ms   512 windows 0.001 ms   whole array 0.00 ms   lean check 0.000 ms
-buildPalette(kodim23, 16): 199.6 ms
-quantizeWithPalette(kodim23, 16 colours), the fastest call that takes an image: 8.52 ms
+buildPalette(kodim23, 16): 200.1 ms
+quantizeWithPalette(kodim23, 16 colours), the fastest call that takes an image: 8.46 ms
