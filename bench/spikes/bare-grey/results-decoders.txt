@@ -1,0 +1,42 @@
+Source: kodim23 in grey, 768×512 (393216 pixels)
+
+== grey8.png (fast-png, colour type 0)
+  sharp(file).raw()                                1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA), info.channels 3, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       393216 bytes = 1 per pixel, a multiple of 4 (read as RGBA), channels 1, depth 8, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey-alpha.png (fast-png, colour type 4, alpha ramp)
+  sharp(file).raw()                                1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA), info.channels 4, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       786432 bytes = 2 per pixel, a multiple of 4 (read as RGBA), channels 2, depth 8, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey-opaque-alpha.png (fast-png, colour type 4, alpha 255)
+  sharp(file).raw()                                1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA), info.channels 4, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       786432 bytes = 2 per pixel, a multiple of 4 (read as RGBA), channels 2, depth 8, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey16.png (fast-png, colour type 0, 16-bit)
+  sharp(file).raw()                                1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA), info.channels 3, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       393216 bytes = 1 per pixel, a multiple of 4 (read as RGBA), channels 1, depth 16, Uint16Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey1.png (fast-png, colour type 0, 1-bit)
+  sharp(file).raw()                                1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA), info.channels 3, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       49152 bytes = 0.125 per pixel, a multiple of 4 (read as RGBA), channels 1, depth 1, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey8.png (sharp b-w)
+  sharp(file).raw()                                1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA), info.channels 3, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       393216 bytes = 1 per pixel, a multiple of 4 (read as RGBA), channels 1, depth 8, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey-alpha.png (sharp b-w)
+  sharp(file).raw()                                1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA), info.channels 4, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  fast-png decode(file).data                       786432 bytes = 2 per pixel, a multiple of 4 (read as RGBA), channels 2, depth 8, Uint8Array
+  pngjs PNG.sync.read(file).data                   1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+== grey.jpg (sharp b-w)
+  sharp(file).raw()                                1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA), info.channels 3, depth uchar
+  sharp(file).ensureAlpha().raw()                  1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  jpeg-js decode(file).data                        1572864 bytes = 4 per pixel, a multiple of 4 (read as RGBA)
+  jpeg-js decode(file, {formatAsRGBA: false}).data 1179648 bytes = 3 per pixel, a multiple of 4 (read as RGBA)
