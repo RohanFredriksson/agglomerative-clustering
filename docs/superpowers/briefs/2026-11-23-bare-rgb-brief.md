@@ -53,7 +53,7 @@ Results:
 | Harmful RGB caught (palette ≥ 1.1× worse) | **1,833 of 1,884**. At 64×64 and above, 1,762 of 1,764: the two misses are ordered-dithered photos scoring 1.20 and just under 1.25. The other misses are 2×2 and 4×4 crops (under the floor) and a few 8×8 |
 | Damage when missed today (mapping error with the misread palette ÷ with the right one, k = 16) | Kodak colour 1.75–3.48× (median 2.19), Kodak grey 1.10–3.40× (median 1.68), emoji median 5–26× (`results.txt`, "harm") |
 | The decoding round's own case (`results-evidence.txt`) | sharp's plain `.raw()` on its 15 files: two are RGBA. The check flags **12 of the 13 RGB buffers**, grey.png included (sharp gives grey PNGs 3 channels). It misses onebit.png, which is harmless: misread, it still gives a black-and-white palette, with a mapping error of 0 |
-| Cost | 0.32 ms per call at any size (768×512 and 12 MP alike). That is 4% of `quantizeWithPalette` on a 768×512 photo (8.5 ms, the fastest call that takes an image) and 0.2% of `buildPalette` (195 ms) |
+| Cost | 0.32 ms per call at any size (768×512 and 12 MP alike), 0.39–0.42 ms with the byte-ramp rule added during implementation (below). That is 4–5% of `quantizeWithPalette` on a 768×512 photo (8.5 ms, the fastest call that takes an image) and 0.2% of `buildPalette` (195 ms) |
 | Sampling | the lean check (512 windows) and the rule on 2,048 windows disagree on 1 of 4,038 images, an RGB one near the threshold. At five thresholds from 1.1 to 3, the rule decides differently on 2,048 windows than on the whole array for 9 images, and than on 512 windows for 25 |
 
 Not covered: 1- and 2-channel grey (fast-png's grey PNGs). No measured rule covers them. The score that catches them also reaches 1.41 on real RGBA (alpha = brightness), and their only reported case, fast-png's bit-packed rows, can't be repaired by a byte-level test anyway. They're left for a later brief, 2-channel first since its harm is far the largest (274–1,980×).
@@ -80,7 +80,7 @@ Not covered: 1- and 2-channel grey (fast-png's grey PNGs). No measured rule cove
 - 0 false positives in 2,103 RGBA images;
 - every harmful case at 64×64 and above caught except two;
 - 12 of 12 harmful cases in the decoding round caught;
-- 0.32 ms a call.
+- 0.32 ms a call (about 0.4 ms as built).
 
 The open question is 3.x, for the maintainer:
 - **(a) A 4.0 throw only** (`scope-steward`'s trim). 3.x keeps the docs warning, and nothing about warnings is added to the design. The warning comes back for consideration if a person reports hitting the trap.
@@ -89,3 +89,7 @@ The open question is 3.x, for the maintainer:
 I lean to (b). Whatever silent wrong output 3.x gives keeps happening until 4.0 ships, and `emitWarning` answers most of the costs. But the case is weaker than the first draft said: no one has hit the trap in testing who had read our docs.
 
 Either way the ROADMAP's 4.0 section gets the throw, and 1- and 2-channel grey get an entry under "Larger, later". The maintainer decides.
+
+## Changed during implementation
+
+The test suite's guard (any test that warns fails) found one false positive the corpus didn't have: byte ramps (`(i * k) & 255`, the usual fake image in tests) score exactly 4/3 whatever the step. The rule now skips arrays whose bytes mostly rise by one fixed non-zero step. Re-measured on the whole corpus: still 0 of 2,103 false positives, 1,833 of 1,884 caught and 12 of 12 in the decoding round; the cost went from 0.32 ms to 0.39–0.42 ms (`results.txt`).

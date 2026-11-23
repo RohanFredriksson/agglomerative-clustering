@@ -8,7 +8,7 @@ A bare `Uint8Array` is read as RGBA. RGB bytes passed bare, which is what sharp'
 
 **Goals**
 - Flag bare RGB in every function that takes an image, in both entries, on the caller's side, and at most once per copy of the library.
-- Change no result, error or type. The only cost a caller can notice is up to 0.32 ms per call, and nothing once it has warned.
+- Change no result, error or type. The only cost a caller can notice is about 0.4 ms per call (0.32 ms as first measured, before the byte-ramp rule; see the brief's "Changed during implementation"), and nothing once it has warned.
 - Make the warning teach: what was seen, both fixes, and that 4.0 rejects it.
 
 **Non-goals**

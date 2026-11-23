@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## Unreleased (3.5.0)
 
-Docs only: output and the API are unchanged (one error message is reworded).
+Output is unchanged; one new warning (and one error message is reworded).
+
+### Warning
+- **RGB bytes passed as a bare `Uint8Array` now get a warning, once** (`rgb-as-rgba`). A bare array is read as RGBA, so RGB from a decoder (sharp's plain `.raw()`, without `.ensureAlpha()`) gave a wrong palette with no error whenever its length divides by 4. The library now checks a sample of the bytes (well under a millisecond at any size) and warns through `process.emitWarning` in Node, Deno and Bun, or `console.warn` elsewhere. No result changes. To silence it, say what the bytes are: `{ data, format: 'rgb' }`, or `{ data, format: 'rgba' }` if they really are RGBA; in Node, `--no-warnings` also works, and `--trace-warnings` shows which call made it. It is shown once per copy of the library, only for a call that passes its own checks, and in the worker entry on your side after the call succeeds. From 4.0 this is an error. Tested on 2,103 real RGBA images with no false alarms; see the API reference's "Warnings". Tools that fail on console output or parse stderr (jest-fail-on-console, for example) will see it for bare RGB input, which was giving wrong colours.
 
 ### Docs
 - **Decoding image files:** a new guides section with a tested recipe for each environment, since the library takes decoded pixels and won't decode files itself (a settled decision: no decoders, no dependency on one; decoding is no longer on the roadmap): sharp in Node, `createImageBitmap` in browsers, and jsquash with omggif on edge runtimes such as Cloudflare Workers (PNG, JPEG, WebP and GIF, orientation applied). Each gives straight 8-bit RGBA whatever the file holds. It lists the traps found in testing: RGB passed bare, decoders such as fast-png that return palette indices, grey, packed or 16-bit rows as stored, animations giving their first frame, colour profiles ignored on the edge, and `createImageBitmap` options that block the page. `docs/environments.md` no longer points Workers users at fast-png, the README's sharp example applies the EXIF orientation (`.rotate()`), and the error for an encoded file names a decoder per environment.

@@ -80,7 +80,7 @@ const premultiply = (data) => {
 
 In Node, sharp does the first: `await sharp(data, { raw: { width, height, channels: 4, premultiplied: true } }).raw().toBuffer()` gives straight pixels in the same channel order. Reading premultiplied pixels directly is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
 
-- **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`).
+- **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`). When a bare array looks like RGB the library [warns](#warnings) once, and 4.0 will reject it.
 - **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels back to straight alpha (above), 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits, and gray or gray-and-alpha pixels to RGBA; a gray buffer passed as it is gets misread. Apply a photo's EXIF orientation and colour profile when decoding; the library doesn't read either. The recipes in [Decoding image files](guides.md#decoding-image-files) do all of this (sharp's `.rotate().ensureAlpha().raw()` in Node). An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
 - **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: `createImageBitmap` in a browser, sharp in Node, jsquash on edge runtimes ([Decoding image files](guides.md#decoding-image-files) has each). Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`.
 
@@ -371,6 +371,22 @@ try {
 `errorCodes` lists every code, for code that forwards them (a wrapper package re-exporting them, a bridge between processes). `isCodedError` also accepts a plain object with a known `code` and a `message`, which is what an error becomes after Electron's IPC or a `postMessage`. New codes can appear in a minor release, so switch over them with a default branch.
 
 Messages are for people and may change. The worker entry fails the same way as the main entry, with your call's stack (the worker's is on `cause`). A failure that isn't the library's own, such as a WebAssembly trap, has no `code`. For what to do about each, see [Troubleshooting](troubleshooting.md).
+
+### Warnings
+
+A warning is for a call the next major version will reject. It never changes a result, and it is shown once per code. In Node (and Deno and Bun) it goes through `process.emitWarning`, as a warning named `AgglomerativeClusteringWarning` with a `code`; elsewhere through `console.warn`, prefixed `agglomerative-clustering [code]:`. There is one:
+
+| `code` | When | What to do |
+| --- | --- | --- |
+| `rgb-as-rgba` | A bare `Uint8Array` whose bytes look like RGB (3 per pixel), which is read as RGBA (4 per pixel) and gives wrong colours. sharp's plain `.raw()` gives this. | If it is RGB, pass `{ data, format: 'rgb' }` (or add `.ensureAlpha()`). If it really is RGBA, pass `{ data, format: 'rgba' }`. From 4.0 this is an `invalid-argument` error. |
+
+<!-- bench/spikes/bare-rgb/measure.mjs → results.txt -->
+The check samples the bytes, so it costs well under a millisecond at any size. It was tested on 2,103 real RGBA images (photos, emoji, cutouts, dithered images, pixel art, premultiplied pixels) and warned on none. `ImageData` and `{ data, format }` are never inspected, so saying what the bytes are silences it.
+
+- **When:** only for a call that passes its own checks, so a call that fails for another reason (a bad `k`, an unknown option) doesn't use the warning up. In the worker entry it comes after the call succeeds, on your side, never from the worker.
+- **Once per copy of the library:** an app that loads both the ES-module and CommonJS builds can see it twice.
+- **Silencing it in Node:** `node --no-warnings` or `NODE_NO_WARNINGS=1` silence every warning; `process.on('warning', (w) => …)` sees it, with `w.code === 'rgb-as-rgba'`, if you'd rather handle it.
+- **Finding the call:** `node --trace-warnings` prints the stack, which shows the call site when a dependency makes the call.
 
 ## Worker entry
 
