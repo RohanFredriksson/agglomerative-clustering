@@ -75,7 +75,7 @@ Each item ships as its own minor release when it is ready, rather than waiting f
      - `docs/migrating.md` gets the old-to-new table then, not at 4.0;
      - the CHANGELOG warns that `no-deprecated` lint rules will flag `getPalette`, and that `AgglomerativeWorker` gains members (a hand-written implementation or typed mock must add them).
 6. [x] **Reusing ordered-dithering recipes across calls: done as a recipe, no API** ("Faster ordered dithering: map frames in batches" in docs/guides.md, `mapFramesInBatches`). Every call builds a recipe for each distinct colour, and a clip's frames share most of their colours. Measured (`bench/spikes/recipe-reuse/`, value brief `docs/superpowers/briefs/2026-11-23-recipe-reuse-brief.md`) on five film scenes and two clips whose pixels repeat exactly, 36 frames at 480×270 and 160×90:
-   - **A built-in table kept between calls** (prototype `persist.patch`) took 0.30–0.80 of the time on film and 0.08–0.31 on exact repeats. Within one call nothing else helped: a bigger or more compact table, or the exact scan for recipe steps at more than 64 colours (slower than the index at 255; see "Engineering" for 65–96).
+   - **A built-in table kept between calls** (prototype `persist.patch`) took 0.30–0.80 of the time on film and 0.08–0.31 on exact repeats. Within one call nothing else helped: a bigger or more compact table, or the exact scan for recipe steps at more than 64 colours (slower than the index at 255, faster at 65–96: the limit became 96 in 3.4.2).
    - **The recipe matches it with no API:** frames stacked into one call, each padded to a multiple of 8 rows, give the same indices (a pixel's ordered colour depends only on its colour and its position in the pattern), and took 0.36–0.78 and 0.12–0.29 in batches of 12, 0.27–0.69 and 0.06–0.24 for the whole clip. So a built-in would add only convenience and frames that arrive one at a time; see "Considered".
 7. [x] **Dithering in linear light: done as a recipe, no option** (`ditherInLight` in docs/api.md). The built-in option and its measurements are under "Considered".
 
@@ -130,7 +130,6 @@ Changes that would break code written against 3.x wait here for the next major v
 ## Engineering, alongside the releases
 
 - **The sanitized suite in CI.** `scripts/asan-test.sh` runs the suite against an ASan/UBSan build of the WebAssembly, and the native fuzzers (`scripts/native.sh`) run in CI. The sanitized suite doesn't, yet: it takes about 9 minutes, and ten tests fail for reasons of the build, not the code (the heaviest time out at their own limits, and ASan's 512 MB starting heap is above the 256 MB at which the library discards its instance after every call, which also makes every call reload the module). A threshold the tests could raise, and timeouts that scale, would let it run clean.
-- **Ordered dithering: the exact scan up to 96 colours.** Recipe steps use an exact four-wide scan for RGB palettes up to 64 colours and the palette index above. Raising the limit to 96 made ordered dithering 7–21% faster at 65–96 colours, about even at 128 and slower above (`bench/spikes/recipe-reuse/sizes.mjs`, `results-sizes.txt`). Speed only, same output.
 
 ## Considered, and why not (yet)
 

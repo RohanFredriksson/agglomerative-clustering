@@ -245,7 +245,7 @@ describe('ordered', () => {
         };
         let seed = 3;
         const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
-        const palettes = { eink, sixteen: Array.from({ length: 48 }, random), sixtyFour: Array.from({ length: 192 }, random), hundred: Array.from({ length: 300 }, random) };
+        const palettes = { eink, sixteen: Array.from({ length: 48 }, random), sixtyFour: Array.from({ length: 192 }, random), ninetySix: Array.from({ length: 288 }, random), hundred: Array.from({ length: 300 }, random) };
         for (const [name, palette] of Object.entries(palettes)) {
             for (const steps of [4, 16]) {
                 const result = await quantizeWithPalette(gradient, palette, { dither: { method: 'ordered', steps } });

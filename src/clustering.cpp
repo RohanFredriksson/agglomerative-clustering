@@ -863,12 +863,14 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
             return la != lb ? la < lb : keys[size_t(a)] < keys[size_t(b)];
         };
         // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For RGB
-        // palettes up to 64 colours a step compares the target with every colour, four at a time: squared 8-bit RGB
+        // palettes up to 96 colours a step compares the target with every colour, four at a time: squared 8-bit RGB
         // distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a group, so
         // keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the earlier
-        // position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`.
+        // position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`. The limit was
+        // measured on video frames (bench/spikes/recipe-reuse/sizes.mjs): the scan is 7-21% faster than the index from 65
+        // to 96 colours, about even at 128 and slower above (30% at 255).
         typedef int32_t i32x4 __attribute__((vector_size(16)));
-        const bool scan = color_space == ColorSpace::rgb && points.size() <= 64;
+        const bool scan = color_space == ColorSpace::rgb && points.size() <= 96;
         const size_t groups = scan ? (points.size() + 3) / 4 : 0;
         std::vector<i32x4> scan_r(groups), scan_g(groups), scan_b(groups);
         std::vector<int32_t> scan_index(groups * 4, 0);
