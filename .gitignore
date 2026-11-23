@@ -6,3 +6,6 @@ node_modules/
 test/visual/output/
 fixtures/images/
 bench/results/
+
+# Native builds and fuzz corpora (scripts/native.sh)
+build/
