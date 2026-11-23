@@ -18,6 +18,7 @@ import { buildPalette, quantize } from '../../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../../fixtures/kodak.js';
 import { syntheticImages } from '../../lib/images.js';
 import { MIN_BYTES, looksLikeRgb } from './check.mjs';
+import { looksLikeRgb as shippedLooksLikeRgb } from '../../../dist/shared.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const emojiRoot = join(here, '../../../fixtures/images/bare-rgb');
@@ -190,7 +191,7 @@ function add(kind, group, name, bytes, harmValue) {
     if (bytes.length % 4) {return;} // not a multiple of 4: rejected today, nothing to detect
     const exact = scores(bytes, false), sampled = scores(bytes, true);
     WINDOWS = 512; const small = scores(bytes, true); WINDOWS = 2048;
-    rows.push({ kind, group, name, size: bytes.length, lean: looksLikeRgb(bytes), ...sampled, exactS3: exact.s3, exactSmin: exact.smin, exactRow: { size: bytes.length, ...exact }, smallRow: { size: bytes.length, ...small }, harm: harmValue });
+    rows.push({ kind, group, name, size: bytes.length, lean: looksLikeRgb(bytes), shipped: shippedLooksLikeRgb(bytes), ...sampled, exactS3: exact.s3, exactSmin: exact.smin, exactRow: { size: bytes.length, ...exact }, smallRow: { size: bytes.length, ...small }, harm: harmValue });
 }
 
 const CROPS = [2, 4, 8, 16, 32, 64];
@@ -315,6 +316,7 @@ for (const r of rows.filter((r) => r.kind === 'other' && !r.group.includes('chan
     const neg = rows.filter((r) => r.kind === 'rgba'), harmfulPos = rows.filter((r) => r.kind === 'other' && !r.group.includes('channel') && r.harm >= 1.1);
     console.log(`Lean check: false positives ${neg.filter((r) => r.lean).length} of ${neg.length}; harmful RGB caught ${harmfulPos.filter((r) => r.lean).length} of ${harmfulPos.length}`);
 }
+console.log(`Shipped check decided differently from check.mjs: ${rows.filter((r) => r.shipped !== r.lean).length} of ${rows.length} images`);
 for (const [label, key] of [['whole array', 'exactRow'], ['512 windows', 'smallRow']]) {
     let differ = 0;
     for (const r of rows) {if (THRESHOLDS.some((t) => flagged(r, t) !== flagged(r[key], t))) {differ++;}}
