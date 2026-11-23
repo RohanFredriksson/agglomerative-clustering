@@ -11,6 +11,8 @@ import { createWorker } from '../dist/worker.mjs';
 globalThis.__acExpectWarnings = true;
 
 const dist = (file) => fileURLToPath(new URL(`../dist/${file}`, import.meta.url));
+// For `import` in a child: a file: URL, since an absolute Windows path (D:\...) isn't a valid specifier.
+const distUrl = (file) => new URL(`../dist/${file}`, import.meta.url).href;
 
 const hsv = (h, s, v) => {
     const i = Math.floor(h * 6), f = h * 6 - i;
@@ -160,7 +162,7 @@ describe('main entry', () => {
 
     it('warns once for several calls made before the module has loaded', () => {
         const heard = inChild(`
-import { buildPalette } from ${JSON.stringify(dist('index.mjs'))};
+import { buildPalette } from ${JSON.stringify(distUrl('index.mjs'))};
 ${childImage}
 await Promise.all([buildPalette(rgb, 8), buildPalette(rgb, 8), buildPalette(rgb, 8)]);
 await new Promise((resolve) => setImmediate(resolve));
@@ -218,8 +220,8 @@ describe('worker entry', () => {
 
     it('never warns from the thread, with the package script or a given one', () => {
         const { heard, stderr } = inChildWithStderr(`
-import { createWorker } from ${JSON.stringify(dist('worker.mjs'))};
-import { resetWarnings } from ${JSON.stringify(dist('shared.mjs'))};
+import { createWorker } from ${JSON.stringify(distUrl('worker.mjs'))};
+import { resetWarnings } from ${JSON.stringify(distUrl('shared.mjs'))};
 ${childImage}
 const own = createWorker();
 await own.buildPalette(rgb, 8);

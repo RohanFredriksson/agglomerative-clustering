@@ -3,6 +3,7 @@
 // bench/spikes/bare-rgb/ (results.txt); these synthetic images pin its answers so a change to it fails here.
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
+import { fileURLToPath } from 'node:url';
 import * as shared from '../dist/shared.mjs';
 import { looksLikeRgb, bareRgbWarning, Palette } from '../dist/shared.mjs';
 
@@ -81,7 +82,7 @@ describe('looksLikeRgb', () => {
 });
 
 describe('looksLikeRgb on real images (fixtures/bare-rgb/)', () => {
-    const fixture = (name) => new URL(`../fixtures/bare-rgb/${name}`, import.meta.url).pathname;
+    const fixture = (name) => fileURLToPath(new URL(`../fixtures/bare-rgb/${name}`, import.meta.url));
     const raw = async (name, alpha) => new Uint8Array(await (alpha ? sharp(fixture(name)).ensureAlpha() : sharp(fixture(name)).removeAlpha()).raw().toBuffer());
 
     it('flags a Kodak photo as RGB and passes it as RGBA', async () => {
