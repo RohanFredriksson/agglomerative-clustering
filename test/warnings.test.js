@@ -1,10 +1,11 @@
 // The rgb-as-rgba warning (PRINCIPLES "Warnings only bridge to an error in the next major"): once per copy of the
 // library, only for a call whose arguments were accepted, never changing a result.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildPalette, buildClustering, buildSwatches, quantize, quantizeWithPalette, quantizeToIndices, Palette } from '../dist/index.mjs';
 import { resetWarnings } from '../dist/shared.mjs';
+import { createWorker } from '../dist/worker.mjs';
 
 // This file expects warnings; test/setup.js fails any other file that causes one.
 globalThis.__acExpectWarnings = true;
@@ -42,6 +43,11 @@ afterEach(() => {process.off('warning', listener);});
 // A child process gets fresh copies of the library, so it shows what happens before the module has loaded and in the
 // CommonJS build; it prints the rgb-as-rgba warnings it heard.
 const inChild = (source, type = 'module') => JSON.parse(execFileSync(process.execPath, [`--input-type=${type}`, '-e', source], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n').pop());
+// The same, also returning everything the child wrote to stderr, where Node prints every warning of every thread.
+const inChildWithStderr = (source) => {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { encoding: 'utf8' });
+    return { heard: JSON.parse(result.stdout.trim().split('\n').pop()), stderr: result.stderr };
+};
 const childImage = `
 const side = 64, rgb = new Uint8Array(side * side * 3);
 for (let p = 0; p < side * side; p++) {const h = (p % side) / side; rgb.set([Math.round(255 * h), Math.round(255 * (1 - h)), Math.round(255 * Math.floor(p / side) / side)], p * 3);}
@@ -146,5 +152,60 @@ ${childImage}
 buildPalette(rgb, 8).then(() => setImmediate(() => console.log(JSON.stringify(heard))));
 `, 'commonjs');
         expect(heard).toBe(1);
+    });
+});
+
+describe('worker entry', () => {
+    const workers = [];
+    const worker = (options) => {const made = createWorker(options); workers.push(made); return made;};
+    afterEach(async () => {await Promise.all(workers.splice(0).map((made) => made.terminate()));});
+
+    it("warns once, on the caller's side, after the call succeeds", async () => {
+        const w = worker();
+        expect(await warningsFrom(() => w.buildPalette(bareRgb, 8))).toHaveLength(1);
+        expect(await warningsFrom(() => w.buildPalette(bareRgb, 8))).toHaveLength(0);
+    });
+
+    it('warns for worker.cluster(image)', async () => {
+        const w = worker();
+        expect(await warningsFrom(async () => (await w.cluster(bareRgb)).release())).toHaveLength(1);
+    });
+
+    it("doesn't spend the warning on a call the thread rejects", async () => {
+        const w = worker();
+        await expect(w.buildPalette(bareRgb, 0)).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(w.buildPalette(new Palette(bareRgb.subarray(0, 768)), 4)).rejects.toMatchObject({ code: 'invalid-argument' });
+        await tick();
+        expect(seen).toHaveLength(0);
+        expect(await warningsFrom(() => w.buildPalette(bareRgb, 8))).toHaveLength(1);
+    });
+
+    it('checks before transfer: true empties the array, naming its original size', async () => {
+        const w = worker({ transfer: true });
+        const bytes = bareRgb.slice();
+        const warnings = await warningsFrom(() => w.buildPalette(bytes, 8));
+        expect(bytes.length).toBe(0);
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0].message).toContain('(12,288 bytes)');
+    });
+
+    it('never warns from the thread, with the package script or a given one', () => {
+        const { heard, stderr } = inChildWithStderr(`
+import { createWorker } from ${JSON.stringify(dist('worker.mjs'))};
+import { resetWarnings } from ${JSON.stringify(dist('shared.mjs'))};
+${childImage}
+const own = createWorker();
+await own.buildPalette(rgb, 8);
+await own.terminate();
+await new Promise((resolve) => setImmediate(resolve));
+resetWarnings();
+const given = createWorker({ script: ${JSON.stringify(dist('worker-thread.mjs'))} });
+await given.buildPalette(rgb, 8);
+await given.terminate();
+await new Promise((resolve) => setImmediate(resolve));
+console.log(JSON.stringify(heard));
+`);
+        expect(heard).toBe(2);
+        expect(stderr.split('rgb-as-rgba').length - 1).toBe(2);
     });
 });

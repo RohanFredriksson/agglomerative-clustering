@@ -1,7 +1,10 @@
 // Runs inside the worker started by worker.js: receives calls, runs them with the main entry, and posts results
 // back, transferring every result buffer. Imports `./index.mjs`, which exists only in dist/ (like clustering.js).
 import * as ac from './index.mjs';
-import {MARK, mark, revive, isPalette} from './shared.js';
+import {MARK, mark, revive, isPalette, silenceWarnings} from './shared.js';
+
+// The caller's side checks for warnings and gives them (PRINCIPLES "Warnings"), so this copy stays quiet.
+silenceWarnings();
 
 // Images kept in the worker by `cluster`, with their clusterings, by handle id.
 const handles = new Map();
