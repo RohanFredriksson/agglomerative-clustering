@@ -195,10 +195,16 @@ The 46 ms figure carries an HTML comment naming `bench/spikes/bare-grey/results-
 
 3.6.0, a minor release:
 - stability.md allows a minor release to add a warning;
-- with the RGB rule unchanged and first, no input that warned in 3.5.0 changes code or goes quiet;
+- the RGB rule is unchanged and first, but its windows are staggered (see "Changed during implementation"): on 7,051 test arrays it decided 20 differently from 3.5.0, all RGB arrays that 3.5.0 missed, and none that 3.5.0 warned about goes quiet (`results-rgb-changes.txt`);
 - the text of a warning is not a promise (now said in api.md "Warnings").
 
 No type changes.
+
+## Changed during implementation
+
+- **Staggered sampling windows,** a deviation from "The check" above. Evenly spaced windows were one row apart at 768×512 RGBA, so they saw only the left edge: 3.5.0 caught 6 of 24 RGB cutouts on black, and a grey + alpha cutout with zeroed transparency went unflagged. Each window now starts at a fixed pseudo-random multiple of 12 in its slot. It was re-measured as stability.md requires: 0 of 2,984 false positives, and the RGB decisions changed only from silent to warning (`results-shipped.txt`, `results-margins.txt`, `results-rgb-changes.txt`). The check now costs about 0.35 ms.
+- **The packed and palette counts** were re-measured with the shipped check: packed rows 17, 18 and 17 of 24 (it was 17, 19 and 17 with the spike's windows).
+- **The 1-channel message** says "a grey PNG (rows below 8 bits stay packed)", so it doesn't read as if every grey PNG were packed (`api-steward`, final review).
 
 ## Review
 

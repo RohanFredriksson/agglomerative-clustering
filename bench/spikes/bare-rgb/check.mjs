@@ -1,3 +1,5 @@
+// 3.5.0's check, with evenly spaced windows. From 3.6.0 the shipped rule is bareLayout in dist/shared.mjs (staggered
+// windows, grey rules added; bench/spikes/bare-grey/): measure that one.
 // The candidate check, as the library would ship it (used by measure.mjs and evidence.mjs).
 export const MIN_BYTES = 192;
 

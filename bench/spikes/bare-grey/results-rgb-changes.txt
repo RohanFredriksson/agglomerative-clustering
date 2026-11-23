@@ -1,0 +1,21 @@
+7051 arrays; decided differently: 20
+  rgb dithered (ordered) kodim05: 3.5.0 silent, 3.6.0 warns
+  rgb dithered (ordered) kodim08: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim01: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim02: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim03: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim05: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim06: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim07: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim08: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim11: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim12: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim13: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim14: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim15: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim16: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim20: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim21: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim22: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim23: 3.5.0 silent, 3.6.0 warns
+  rgb kodak: rgb cutout on black kodim24: 3.5.0 silent, 3.6.0 warns

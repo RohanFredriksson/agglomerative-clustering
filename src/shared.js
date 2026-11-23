@@ -268,8 +268,8 @@ export const sniffImageFormat = (bytes) => {
 //   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; it then keeps the
 //   rgb-as-rgba code, whose text covers grey too.
 // Units equal to the one before are skipped by the equal-byte counts, since flat areas read the same either way. It
-// samples 512 windows of 96 bytes (each on a multiple of 12, a pixel under every reading, one in each 512th of the array), so it costs about 0.3 ms at
-// any size. Returns 'rgb', 'grey', 'grey-alpha' or null.
+// samples 512 windows of 96 bytes (each on a multiple of 12, a pixel under every reading, one in each 512th of the
+// array), so it costs about 0.35 ms at any size. Returns 'rgb', 'grey', 'grey-alpha' or null.
 const bareFloor = 192, bareWindow = 96, bareWindows = 512;
 export const bareLayout = (d) => {
     if (d.length < bareFloor) {return null;}
@@ -349,7 +349,7 @@ const warningText = {
     'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel), or grey, passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA; format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
     'gray-as-rgba': (byteLength, layout) => (layout === 'grey-alpha'
         ? `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey and alpha bytes (2 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG with alpha.`
-        : `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey bytes (1 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG, and for a palette PNG's indices, with rows below 8 bits still packed.`)
+        : `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey bytes (1 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices.`)
         + ` Expand ${layout === 'grey-alpha' ? 'it' : '8-bit grey'} to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()). There is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
 };
 // `warning` is what bareImageWarning returned: {code, layout}.

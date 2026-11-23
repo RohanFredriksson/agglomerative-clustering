@@ -3,7 +3,8 @@
 //   node bench/spikes/bare-grey/palette.mjs > bench/spikes/bare-grey/results-palette.txt
 import { createRequire } from 'node:module';
 import { looksLikeRgb } from '../../../dist/shared.mjs';
-import { looksLikeGrey } from './check.mjs';
+import { bareLayout } from '../../../dist/shared.mjs';
+const looksLikeGrey = (d) => {const l = bareLayout(d); return l === 'rgb' ? null : l;}; // the shipped check (3.6.0), grey answers only
 import { KODAK_IMAGES, ensureImage } from '../../../fixtures/kodak.js';
 
 const require = createRequire(new URL('../decoding/package.json', import.meta.url));

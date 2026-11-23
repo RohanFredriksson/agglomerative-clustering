@@ -120,7 +120,7 @@ function fastPngToImage({ data, width, height, channels, depth, palette }) {
 ```
 
 <!-- bench/spikes/bare-grey/recipe.mjs → results-recipe.txt -->
-Expanding grey takes about 45–50 ms at 12 megapixels. There is no grey format to pass instead.
+Expanding grey takes about 45–52 ms at 12 megapixels. There is no grey format to pass instead.
 
 ## Swatches and choosing a palette size
 
