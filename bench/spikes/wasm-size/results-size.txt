@@ -1,0 +1,2 @@
+build/dist-before 101633 bytes; 135512 as base64; 47299 gzipped; 63068 gzipped then base64
+dist 75659 bytes; 100880 as base64; 36943 gzipped; 49260 gzipped then base64

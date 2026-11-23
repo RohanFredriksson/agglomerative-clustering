@@ -589,6 +589,37 @@ public:
 
 };
 
+// Stable sorts in place of std::sort, whose instantiations were 3.3 to 3.8 KB of WebAssembly each (about a tenth of the
+// module for three). Insertion sort for the short lists (recipes of at most 64 steps, palettes of at most 96 colours),
+// which allocates nothing; a radix sort for the rest. Every caller's order is total or doesn't change results.
+template <typename T, typename Less>
+void insertion_sort(T* data, size_t n, Less less) {
+    for (size_t i = 1; i < n; i++) {
+        T value = data[i];
+        size_t j = i;
+        for (; j > 0 && less(value, data[j - 1]); j--) {data[j] = data[j - 1];}
+        data[j] = value;
+    }
+}
+// A stable sort on a 32-bit key: insertion sort up to 256 items (measured: faster than radix there at 1024 colours), else an LSD radix sort through a buffer the caller keeps,
+// skipping a pass whose byte is the same in every key. For the palette index's candidate lists.
+template <typename T, typename Key>
+void radix_sort(T* data, size_t n, Key key, std::vector<T>& buffer) {
+    if (n <= 256) {insertion_sort(data, n, [&](const T& x, const T& y) {return key(x) < key(y);}); return;}
+    if (buffer.size() < n) {buffer.resize(n);}
+    T* a = data;
+    T* b = buffer.data();
+    for (int shift = 0; shift < 32; shift += 8) {
+        size_t counts[257] = {};
+        for (size_t i = 0; i < n; i++) {counts[((key(a[i]) >> shift) & 255) + 1]++;}
+        if (counts[((key(a[0]) >> shift) & 255) + 1] == n) {continue;}
+        for (int c = 0; c < 256; c++) {counts[c + 1] += counts[c];}
+        for (size_t i = 0; i < n; i++) {b[counts[(key(a[i]) >> shift) & 255]++] = a[i];}
+        std::swap(a, b);
+    }
+    if (a != data) {std::copy(a, a + n, data);}
+}
+
 // Counts 8-bit colours, keeping them in order of first appearance.
 // An open-addressing table with linear probing: each slot packs (colour + 1) << 32 | index into one word, so a
 // probe is a single load, and 0 marks an empty slot. It grows with the number of distinct colours, not pixels.
@@ -694,6 +725,17 @@ public:
         return true;
     }
 
+    // The index of a colour already added, or -1. Not during make_room. Also serves, in place of std::unordered_map
+    // (about 3 KB of WebAssembly), as the colour-to-index table where clusterings and palettes are read.
+    int64_t find(uint32_t key) const {
+        const uint64_t tag = uint64_t(key) + 1u;
+        for (uint32_t slot = this->home(key);; slot = (slot + 1u) & this->mask) {
+            const uint64_t entry = this->slots[slot];
+            if (entry == 0u) {return -1;}
+            if ((entry >> 32) == tag) {return uint32_t(entry);}
+        }
+    }
+
     // The distinct colours (packed as in add) in order of first appearance, and the total weight of each.
     const std::vector<uint32_t>& colors() const {return this->keys;}
     const std::vector<uint64_t>& counts() const {return this->totals;}
@@ -735,6 +777,7 @@ private:
     // Each cell's candidates, by least distance to the cell, so a lookup stops at one that can't win. At most
     // (cells reached) x (palette size) entries; a few hundred KB on photos.
     std::vector<Candidate> pool;
+    std::vector<Candidate> scratch; // radix_sort's buffer, kept across cells
     std::vector<uint64_t> least;
 
     std::pair<int32_t, int32_t> build_cell(uint32_t cell, uint32_t cx, uint32_t cy, uint32_t cz) {
@@ -760,7 +803,7 @@ private:
         for (size_t i = 0; i < n; i++) {
             if (this->least[i] <= limit) {this->pool.push_back({uint32_t(this->least[i] >> this->least_shift), int32_t(i)});}
         }
-        std::sort(this->pool.begin() + start, this->pool.end(), [](const Candidate& a, const Candidate& b) {return a.least < b.least;});
+        radix_sort(this->pool.data() + start, this->pool.size() - start, [](const Candidate& c) {return c.least;}, this->scratch);
         std::pair<int32_t, int32_t> entry = {int32_t(start), int32_t(this->pool.size() - start)};
         this->cells[cell] = entry;
         return entry;

@@ -18,7 +18,6 @@ static double emscripten_get_now() {
 #include <cstring>
 #include <vector>
 #include <cmath>
-#include <unordered_map>
 #include <memory>
 #include <limits>
 
@@ -669,10 +668,21 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
     auto key = [](const Color& c) {return (uint32_t(c[0]) << 16) | (uint32_t(c[1]) << 8) | uint32_t(c[2]);};
     auto read = [&](size_t offset) {return Color{view.body[offset], view.body[offset + 1], view.body[offset + 2]};};
 
-    // Each listed colour's place in `order` and how many current clusters have it.
+    // Each colour seen so far, its place in `order` and how many current clusters have it: a colour none has is no
+    // longer listed (the table doesn't erase, so it keeps the colour with a count of 0).
     struct Entry {size_t slot; uint32_t clusters;};
     std::vector<Color> order = {read(0)};
-    std::unordered_map<uint32_t, Entry> listed = {{key(order[0]), {0, 1}}};
+    AgglomerativeClustering::AgglomerativeHistogram seen;
+    std::vector<Entry> entries;
+    auto listed = [&](const Color& c) -> Entry* {
+        const int64_t at = seen.find(key(c));
+        return at >= 0 && entries[size_t(at)].clusters > 0 ? &entries[size_t(at)] : nullptr;
+    };
+    auto list = [&](const Color& c, size_t slot) {
+        const uint32_t at = seen.add(key(c));
+        if (at == entries.size()) {entries.push_back({slot, 1});} else {entries[at] = {slot, 1};}
+    };
+    list(order[0], 0);
     const size_t splits = std::min(size_t(k - 1), view.merges);
     // From version 3, each cluster's colour by split-order index, to check the records' parent indices against.
     std::vector<uint32_t> cluster_colour;
@@ -690,34 +700,33 @@ std::vector<uint8_t> _get_palette_from_clustering(const uint8_t* clustering, siz
             cluster_colour.push_back(key(light));
         }
 
-        auto found = listed.find(key(parent));
-        if (found == listed.end()) {valid = false; return {};}
+        Entry* found = listed(parent);
+        if (found == nullptr) {valid = false; return {};}
         // Whether the parent's colour leaves the palette with this split (no other current cluster has it).
-        const size_t slot = found->second.slot;
-        const bool freed = --found->second.clusters == 0;
-        if (freed) {listed.erase(found);}
+        const size_t slot = found->slot;
+        const bool freed = --found->clusters == 0;
 
-        auto heavier = listed.find(key(heavy));
-        if (heavier != listed.end()) {
-            heavier->second.clusters++;
+        Entry* heavier = listed(heavy);
+        if (heavier != nullptr) {
+            heavier->clusters++;
             if (freed) {
                 // The parent's place empties and the heavier half's colour is listed elsewhere: close the gap. Rare, so
                 // re-indexing everything is fine.
                 order.erase(order.begin() + slot);
-                for (auto& entry : listed) {if (entry.second.slot > slot) {entry.second.slot--;}}
+                for (Entry& entry : entries) {if (entry.clusters > 0 && entry.slot > slot) {entry.slot--;}}
             }
         } else if (freed) {
             order[slot] = heavy;
-            listed[key(heavy)] = {slot, 1};
+            list(heavy, slot);
         } else {
-            listed[key(heavy)] = {order.size(), 1};
+            list(heavy, order.size());
             order.push_back(heavy);
         }
-        auto lighter = listed.find(key(light));
-        if (lighter != listed.end()) {
-            lighter->second.clusters++;
+        Entry* lighter = listed(light);
+        if (lighter != nullptr) {
+            lighter->clusters++;
         } else {
-            listed[key(light)] = {order.size(), 1};
+            list(light, order.size());
             order.push_back(light);
         }
     }
@@ -758,13 +767,14 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
         colour.push_back(key(at + 6));
     }
 
-    std::unordered_map<uint32_t, size_t> slot;
-    for (size_t j = 0; j < palette.size() / 3; j++) {slot[(uint32_t(palette[3 * j]) << 16) | (uint32_t(palette[3 * j + 1]) << 8) | uint32_t(palette[3 * j + 2])] = j;}
+    // The palette's colours are distinct, so each one's index in the table is its place in the palette.
+    AgglomerativeClustering::AgglomerativeHistogram slot;
+    for (size_t j = 0; j < palette.size() / 3; j++) {slot.add((uint32_t(palette[3 * j]) << 16) | (uint32_t(palette[3 * j + 1]) << 8) | uint32_t(palette[3 * j + 2]));}
     std::vector<double> totals(palette.size() / 3, 0.0);
     for (size_t id = 0; id < colour.size(); id++) {
-        auto found = slot.find(colour[id]);
-        if (found == slot.end()) {return weights;}
-        totals[found->second] += weight[id] * pixels;
+        const int64_t found = slot.find(colour[id]);
+        if (found < 0) {return weights;}
+        totals[size_t(found)] += weight[id] * pixels;
     }
     return totals;
 
@@ -815,12 +825,11 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
     // (a 200,000-entry palette of one colour took seconds for a thousand pixels). Equal entries tie, and ties go to
     // the first of them, so `first[u]` is the palette index of distinct colour `u`'s first occurrence.
     std::vector<int32_t> first;
-    std::unordered_map<uint32_t, int32_t> seen;
-    seen.reserve(std::min<size_t>(palette_length / 3, size_t(1) << 20));
+    AgglomerativeClustering::AgglomerativeHistogram seen;
 
     for (size_t i = 0; i + 2 < palette_length; i += 3) {
         const uint32_t key = (uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]);
-        if (!seen.emplace(key, int32_t(points.size())).second) {continue;}
+        if (seen.add(key) < points.size()) {continue;}
         points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
         keys.push_back(key);
         first.push_back(int32_t(i / 3));
@@ -1001,15 +1010,14 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         std::vector<int32_t> recipes((size_t(1) << recipe_bits) * steps);
         // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
         // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
-        std::vector<uint32_t> brightness(points.size());
+        // Both go into one 64-bit order key per entry, so a comparison is one load and one compare.
+        std::vector<uint64_t> brightness(points.size());
         for (size_t i = 0; i < points.size(); i++) {
             const auto& point = points[i];
-            brightness[i] = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
+            const uint32_t luma = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
+            brightness[i] = uint64_t(luma) << 32 | keys[i];
         }
-        auto darker = [&](int32_t a, int32_t b) {
-            const uint32_t la = brightness[size_t(a)], lb = brightness[size_t(b)];
-            return la != lb ? la < lb : keys[size_t(a)] < keys[size_t(b)];
-        };
+        auto darker = [&](int32_t a, int32_t b) {return brightness[size_t(a)] < brightness[size_t(b)];};
         // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For RGB
         // palettes up to 96 colours a step compares the target with every colour, four at a time: squared 8-bit RGB
         // distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a group, so
@@ -1025,7 +1033,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
         if (scan) {
             std::vector<int32_t> order(points.size());
             for (size_t i = 0; i < order.size(); i++) {order[i] = int32_t(i);}
-            std::sort(order.begin(), order.end(), [&](int32_t a, int32_t b) {return keys[size_t(a)] < keys[size_t(b)];});
+            AgglomerativeClustering::insertion_sort(order.data(), order.size(), [&](int32_t a, int32_t b) {return keys[size_t(a)] < keys[size_t(b)];});
             for (size_t i = 0; i < groups * 4; i++) {
                 // Unused lanes repeat the last colour: never strictly nearer than it, and later in order, so never chosen.
                 const int32_t source = order[std::min(i, order.size() - 1)];
@@ -1108,7 +1116,7 @@ void map_pixels(const uint8_t* image_data, int image_length, int image_format, c
                         recipe[i] = chosen;
                         for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
                     }
-                    std::sort(recipe, recipe + steps, darker);
+                    AgglomerativeClustering::insertion_sort(recipe, steps, darker);
                 }
                 emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
             }
