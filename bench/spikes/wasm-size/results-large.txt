@@ -1,0 +1,16 @@
+after
+12 MP photo, rgb         3370 ms
+12 MP photo, oklab      22585 ms
+4 MP noise, rgb          8948 ms
+emm
+12 MP photo, rgb         3359 ms
+12 MP photo, oklab      22414 ms
+4 MP noise, rgb          9019 ms
+after
+12 MP photo, rgb         3360 ms
+12 MP photo, oklab      22799 ms
+4 MP noise, rgb          9068 ms
+emm
+12 MP photo, rgb         3360 ms
+12 MP photo, oklab      22435 ms
+4 MP noise, rgb          9005 ms
