@@ -340,6 +340,13 @@ for (const [name, d] of [['768×512 RGBA', k23], ['12 MP RGBA', big], ['4×4 RGB
     console.log(`${name.padEnd(14)} 2048 windows ${t2048.toFixed(3)} ms   512 windows ${t512.toFixed(3)} ms   whole array ${time(() => scores(d, false), 3).toFixed(2)} ms   lean check ${time(() => looksLikeRgb(d), 2000).toFixed(3)} ms`);
 }
 const t0 = performance.now(); await buildPalette(k23, 16); const t1 = performance.now();
+{
+    const rgbOfK23 = stripAlpha(k23), rgbBig = stripAlpha(big.subarray(0, big.length - (big.length % 12)));
+    for (const [name, d] of [['768×512 RGBA', k23], ['12 MP RGBA', big], ['768×512 RGB', rgbOfK23], ['12 MP RGB', rgbBig]]) {
+        shippedLooksLikeRgb(d);
+        console.log(`shipped check (dist/shared.mjs), ${name.padEnd(13)} ${time(() => shippedLooksLikeRgb(d), 2000).toFixed(3)} ms`);
+    }
+}
 console.log(`buildPalette(kodim23, 16): ${(t1 - t0).toFixed(1)} ms`);
 const pal = await buildPalette(k23, 16);
 const { quantizeWithPalette } = await import('../../../dist/index.mjs');

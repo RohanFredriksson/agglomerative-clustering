@@ -262,22 +262,21 @@ export const sniffImageFormat = (bytes) => {
 // A premultiplied white mask, (a, a, a, a), also scores high, so pixels with four equal bytes overrule it. Grey RGB is
 // too smooth for that score, but where it changes its bytes come in equal triples at a step of 3 and not of 4. Units equal
 // to the one before are skipped by the grey counts, since flat areas read the same either way. It samples 512 windows of
-// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.4 ms at any size.
+// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.25 ms at any size
+// (about 0.4 ms for an array it flags, which happens once).
 const rgbFloor = 192, rgbWindow = 96, rgbWindows = 512;
 export const looksLikeRgb = (d) => {
     if (d.length < rgbFloor) {return false;}
     const whole = d.length <= rgbWindow * rgbWindows;
     const windows = whole ? 1 : rgbWindows, size = whole ? d.length : rgbWindow;
     const step = whole ? 0 : Math.floor((d.length - rgbWindow) / (rgbWindows - 1) / 12) * 12;
-    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0, ramp = 0;
+    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0;
     for (let w = 0; w < windows; w++) {
         const start = w * step, end = start + size;
         for (let i = start + 4; i < end; i++) {
             const v = d[i], a = v - d[i - 3], b = v - d[i - 4];
             e3 += a < 0 ? -a : a;
             e4 += b < 0 ? -b : b;
-            const rise = (v - d[i - 1]) & 255;
-            if (rise !== 0 && rise === ((d[i - 1] - d[i - 2]) & 255)) {ramp++;}
         }
         n += size - 4;
         for (let i = start + 3; i + 2 < end; i += 3) {
@@ -291,11 +290,21 @@ export const looksLikeRgb = (d) => {
             if (d[i] === d[i + 1] && d[i] === d[i + 2]) {g4++; if (d[i] === d[i + 3]) {q4++;}}
         }
     }
-    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of neither kind,
-    // and score 4/3 whatever the step.
-    if (ramp > 0.5 * n) {return false;}
     const score = (e4 / n + 0.05) / (e3 / n + 0.05);
-    return (score > 1.25 && q4 < 0.5 * Math.max(1, n4)) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4));
+    const flagged = (score > 1.25 && q4 < 0.5 * Math.max(1, n4)) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4));
+    if (!flagged) {return false;}
+    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of neither kind,
+    // and score 4/3 whatever the step. Counted only for arrays about to be flagged, a second pass over the same windows,
+    // so RGBA (the usual input) doesn't pay for it.
+    let ramp = 0;
+    for (let w = 0; w < windows; w++) {
+        const start = w * step, end = start + size;
+        for (let i = start + 4; i < end; i++) {
+            const rise = (d[i] - d[i - 1]) & 255;
+            if (rise !== 0 && rise === ((d[i - 1] - d[i - 2]) & 255)) {ramp++;}
+        }
+    }
+    return ramp <= 0.5 * n;
 };
 
 // Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).

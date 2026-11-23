@@ -209,8 +209,12 @@ Rule decided differently with the whole array than with 2048 windows: 9 of 4038 
 Rule decided differently with the 512 windows than with 2048 windows: 25 of 4038 images
 
 === cost of the check ===
-768×512 RGBA   2048 windows 1.321 ms   512 windows 0.344 ms   whole array 11.29 ms   lean check 0.286 ms
-12 MP RGBA     2048 windows 1.298 ms   512 windows 0.336 ms   whole array 320.56 ms   lean check 0.306 ms
-4×4 RGBA       2048 windows 0.001 ms   512 windows 0.001 ms   whole array 0.00 ms   lean check 0.000 ms
-buildPalette(kodim23, 16): 153.3 ms
-quantizeWithPalette(kodim23, 16 colours), the fastest call that takes an image: 6.37 ms
+768×512 RGBA   2048 windows 1.392 ms   512 windows 0.330 ms   whole array 10.09 ms   lean check 0.301 ms
+12 MP RGBA     2048 windows 1.331 ms   512 windows 0.329 ms   whole array 325.79 ms   lean check 0.322 ms
+4×4 RGBA       2048 windows 0.002 ms   512 windows 0.001 ms   whole array 0.00 ms   lean check 0.000 ms
+shipped check (dist/shared.mjs), 768×512 RGBA  0.248 ms
+shipped check (dist/shared.mjs), 12 MP RGBA    0.262 ms
+shipped check (dist/shared.mjs), 768×512 RGB   0.352 ms
+shipped check (dist/shared.mjs), 12 MP RGB     0.391 ms
+buildPalette(kodim23, 16): 156.9 ms
+quantizeWithPalette(kodim23, 16 colours), the fastest call that takes an image: 7.03 ms
