@@ -99,6 +99,14 @@ private:
     std::vector<int32_t> free_caches;
 
     size_t next_review = std::numeric_limits<size_t>::max();
+    // A review in progress (see reindex): which candidate size, how far through it, and the cells counted so far.
+    enum class Review {idle, choose, rebuild};
+    Review review = Review::idle;
+    int review_index = 0;
+    size_t review_cursor = 0;
+    size_t review_chunk = 0;
+    size_t review_occupied = 0;
+    std::vector<uint64_t> occupancy;
     // The grid has `dimension` cells per axis; a coordinate v is in cell (v * dimension) >> 16, and cell k
     // starts at boundaries[k], the smallest coordinate in it (boundaries[dimension] is 65536).
     int32_t dimension = 0;
@@ -146,34 +154,42 @@ private:
     // counting each one's occupied cells in a bitmap. The live clusters are read from the buckets, which hold
     // only those (most of `clusters` is dead by the later reviews), and at the current size the occupied cells
     // are just the non-empty buckets.
-    int32_t choose_dimension() const {
-        std::vector<uint64_t> occupancy;
-        int index = int(std::size(dimensions)) - 1;
-        while (index > 0 && dimensions[index] > this->dimension) {index--;}
-        if (this->next_review == std::numeric_limits<size_t>::max()) {index = int(std::size(dimensions)) - 1;}
-        for (; index > 0; index--) {
-            const uint32_t d = uint32_t(dimensions[index]);
-            size_t occupied = 0;
-            if (int32_t(d) == this->dimension) {
-                for (const Bucket& bucket : this->buckets) {occupied += bucket.size > 0;}
-            } else {
-                occupancy.assign((size_t(d) * d * d + 63) / 64, 0u);
-                for (const Bucket& bucket : this->buckets) {
-                    for (const Chunk& chunk : bucket.chunks) {
-                        for (int lane = 0; lane < 4; lane++) {
-                            if (chunk.id[lane] == none) {continue;}
-                            const uint32_t x = uint32_t(chunk.x[lane]), y = uint32_t(chunk.y[lane]), z = uint32_t(chunk.z[lane]);
-                            uint32_t cell = (((x * d) >> 16) * d + ((y * d) >> 16)) * d + ((z * d) >> 16);
-                            uint64_t bit = uint64_t(1) << (cell & 63u);
-                            occupied += (occupancy[cell >> 6] & bit) == 0;
-                            occupancy[cell >> 6] |= bit;
-                        }
-                    }
-                }
+    // One candidate size's occupied cells, counted from `review_cursor` on: at the current size just the non-empty
+    // buckets, else a bitmap of the cells the live clusters fall in. Returns whether the count is complete.
+    bool count_occupied(bool timed, double deadline) {
+        constexpr size_t block = 1024;  // buckets between clock checks (about 24 clusters each)
+        const uint32_t d = uint32_t(dimensions[this->review_index]);
+        if (int32_t(d) == this->dimension) {
+            while (this->review_cursor < this->buckets.size()) {
+                const size_t end = std::min(this->buckets.size(), this->review_cursor + block);
+                for (; this->review_cursor < end; this->review_cursor++) {this->review_occupied += this->buckets[this->review_cursor].size > 0;}
+                if (timed && this->review_cursor < this->buckets.size() && emscripten_get_now() >= deadline) {return false;}
             }
-            if (double(this->alive) >= target_occupancy * double(occupied)) {break;}
+            return true;
         }
-        return dimensions[index];
+        // Counted chunk by chunk (`review_chunk` within bucket `review_cursor`): at the first review every cluster is
+        // still in the size-1 grid's one bucket.
+        constexpr size_t chunks = 4096;  // chunks between clock checks (4 clusters each)
+        if (this->review_cursor == 0 && this->review_chunk == 0) {this->occupancy.assign((size_t(d) * d * d + 63) / 64, 0u);}
+        size_t counted = 0;
+        while (this->review_cursor < this->buckets.size()) {
+            const std::vector<Chunk>& list = this->buckets[this->review_cursor].chunks;
+            for (; this->review_chunk < list.size(); this->review_chunk++) {
+                const Chunk& chunk = list[this->review_chunk];
+                for (int lane = 0; lane < 4; lane++) {
+                    if (chunk.id[lane] == none) {continue;}
+                    const uint32_t x = uint32_t(chunk.x[lane]), y = uint32_t(chunk.y[lane]), z = uint32_t(chunk.z[lane]);
+                    uint32_t cell = (((x * d) >> 16) * d + ((y * d) >> 16)) * d + ((z * d) >> 16);
+                    uint64_t bit = uint64_t(1) << (cell & 63u);
+                    this->review_occupied += (this->occupancy[cell >> 6] & bit) == 0;
+                    this->occupancy[cell >> 6] |= bit;
+                }
+                if (++counted % chunks == 0 && timed && emscripten_get_now() >= deadline) {this->review_chunk++; return false;}
+            }
+            this->review_cursor++;
+            this->review_chunk = 0;
+        }
+        return true;
     }
 
     int32_t cell_of(uint16_t value) const {
@@ -219,7 +235,9 @@ private:
         chunk.id[index % 4] = id;
     }
 
-    void rebuild(int32_t dimension) {
+    // Rebuilding the grid at a new size: the arrays first, then (link_some) every live cluster linked in id order
+    // from `review_cursor` on, so it can be resumed; link_some returns whether every cluster is linked.
+    void start_rebuild(int32_t dimension) {
         this->dimension = dimension;
         this->boundaries.resize(size_t(dimension) + 1);
         for (int32_t k = 0; k <= dimension; k++) {this->boundaries[k] = uint32_t((uint64_t(k) * 65536u + uint64_t(dimension) - 1u) / uint64_t(dimension));}
@@ -228,9 +246,18 @@ private:
         this->columns.assign(size_t(this->dimension) * this->dimension * this->words, 0u);
         this->buckets.clear();
         this->bucket_bounds.clear();
-        for (int32_t id = 0; id < (int32_t) this->clusters.size(); id++) {
-            if (this->clusters[id].bucket != none) {this->link(id);}
+        this->review_cursor = 0;
+    }
+    bool link_some(bool timed, double deadline) {
+        constexpr size_t block = 16384;  // clusters between clock checks
+        while (this->review_cursor < this->clusters.size()) {
+            const size_t end = std::min(this->clusters.size(), this->review_cursor + block);
+            for (; this->review_cursor < end; this->review_cursor++) {
+                if (this->clusters[this->review_cursor].bucket != none) {this->link(int32_t(this->review_cursor));}
+            }
+            if (timed && this->review_cursor < this->clusters.size() && emscripten_get_now() >= deadline) {return false;}
         }
+        return true;
     }
 
 public:
@@ -239,7 +266,7 @@ public:
         this->clusters.reserve(2 * expected);
         this->cache_of.reserve(2 * expected);
         this->expensive.reserve(2 * expected);
-        this->rebuild(1);
+        this->start_rebuild(1);
     }
 
     int32_t add(const std::array<uint16_t, 3>& coords, uint32_t count) {
@@ -279,13 +306,44 @@ public:
     }
 
     // Re-picks the grid size (after the initial adds, then each time the cluster count halves) and rebuilds
-    // the grid if it changed.
-    void reindex() {
-        if (this->alive > this->next_review) {return;}
-        int32_t target = this->choose_dimension();
-        this->next_review = this->alive / 2;
-        if (target != this->dimension) {this->rebuild(target);}
+    // the grid if it changed. On millions of clusters that takes hundreds of milliseconds, so with `timed` it stops
+    // at `deadline` and returns false, and later calls carry on (`reviewing()` until it returns true). Nothing may
+    // query or change the grid in between. Without `timed` it finishes in one call; either way the steps and their
+    // order are the same, so the grid is too.
+    bool reindex(bool timed = false, double deadline = 0.0) {
+        if (this->review == Review::idle) {
+            if (this->alive > this->next_review) {return true;}
+            int index = int(std::size(dimensions)) - 1;
+            while (index > 0 && dimensions[index] > this->dimension) {index--;}
+            if (this->next_review == std::numeric_limits<size_t>::max()) {index = int(std::size(dimensions)) - 1;}
+            this->review_index = index;
+            this->review_cursor = 0;
+            this->review_chunk = 0;
+            this->review_occupied = 0;
+            this->review = Review::choose;
+        }
+        // The finest size from the current one down whose occupied cells hold `target_occupancy` clusters on average
+        if (this->review == Review::choose) {
+            while (this->review_index > 0) {
+                if (!this->count_occupied(timed, deadline)) {return false;}
+                if (double(this->alive) >= target_occupancy * double(this->review_occupied)) {break;}
+                this->review_index--;
+                this->review_cursor = 0;
+                this->review_chunk = 0;
+                this->review_occupied = 0;
+            }
+            this->occupancy = {};
+            const int32_t target = dimensions[this->review_index];
+            this->next_review = this->alive / 2;
+            if (target == this->dimension) {this->review = Review::idle; return true;}
+            this->start_rebuild(target);
+            this->review = Review::rebuild;
+        }
+        if (!this->link_some(timed, deadline)) {return false;}
+        this->review = Review::idle;
+        return true;
     }
+    bool reviewing() const {return this->review != Review::idle;}
 
     bool is_alive(int32_t id) const {return this->clusters[id].bucket != none;}
     size_t size() const {return this->alive;}
@@ -543,6 +601,10 @@ private:
     int shift = 0;
     std::vector<uint32_t> keys;
     std::vector<uint64_t> totals;
+    // A larger table being filled by make_room, and how many colours are in it so far.
+    std::vector<uint64_t> fresh;
+    int fresh_bits = 0;
+    size_t fresh_cursor = 0;
 
     // Fibonacci hashing: the top bits of the product spread neighbouring colours across the table.
     uint32_t home(uint32_t key) const {
@@ -584,6 +646,52 @@ public:
         // Keep the load factor at most 1/2 so probes stay short.
         if (2 * this->keys.size() > this->slots.size()) {this->resize(64 - this->shift + 1);}
         return index;
+    }
+
+    // Makes room for `extra` more distinct colours, so the next `extra` adds don't grow the table. Growing rehashes
+    // every colour, hundreds of milliseconds at millions of them, so with `timed` it stops at `deadline` and
+    // returns false, and the next call carries on; add must not be called until it returns true. Colours keep their
+    // indices, so where they sit in the table never shows in the results.
+    bool make_room(size_t extra, bool timed, double deadline) {
+        constexpr size_t most = size_t(1) << 24;  // distinct 8-bit colours: never grow for more than these
+        if (this->fresh_bits == 0) {
+            const size_t wanted = std::min(most, this->keys.size() + extra);
+            if (2 * wanted <= this->slots.size()) {return true;}
+            int bits = 64 - this->shift + 1;
+            while ((size_t(1) << bits) < 2 * wanted) {bits++;}
+            // Nothing reads the old table while growing (adds wait, and the rehash reads `keys`), so it goes first,
+            // keeping the peak memory to one table. The new one is reserved, then zeroed in parts below: at 2^25
+            // slots it is 256 MB.
+            this->slots = {};
+            this->fresh.reserve(size_t(1) << bits);
+            this->fresh_bits = bits;
+            this->fresh_cursor = 0;
+        }
+        constexpr size_t zeroed = size_t(1) << 20;  // slots zeroed between clock checks (8 MB)
+        const size_t size = size_t(1) << this->fresh_bits;
+        while (this->fresh.size() < size) {
+            this->fresh.resize(std::min(size, this->fresh.size() + zeroed));
+            if (timed && this->fresh.size() < size && emscripten_get_now() >= deadline) {return false;}
+        }
+        const uint32_t mask = (uint32_t(1) << this->fresh_bits) - 1u;
+        const int shift = 64 - this->fresh_bits;
+        constexpr size_t block = 65536;
+        while (this->fresh_cursor < this->keys.size()) {
+            const size_t end = std::min(this->keys.size(), this->fresh_cursor + block);
+            for (; this->fresh_cursor < end; this->fresh_cursor++) {
+                const uint32_t key = this->keys[this->fresh_cursor];
+                uint32_t slot = uint32_t((uint64_t(key) * 0x9E3779B97F4A7C15ULL) >> shift);
+                while (this->fresh[slot] != 0u) {slot = (slot + 1u) & mask;}
+                this->fresh[slot] = (uint64_t(key) + 1u) << 32 | uint32_t(this->fresh_cursor);
+            }
+            if (timed && this->fresh_cursor < this->keys.size() && emscripten_get_now() >= deadline) {return false;}
+        }
+        this->slots.swap(this->fresh);
+        this->fresh = {};
+        this->fresh_bits = 0;
+        this->mask = mask;
+        this->shift = shift;
+        return true;
     }
 
     // The distinct colours (packed as in add) in order of first appearance, and the total weight of each.

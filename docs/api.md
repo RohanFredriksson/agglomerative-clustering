@@ -335,7 +335,7 @@ const clustering = await buildClustering(image, {
 });
 ```
 
-- **Slices.** With either option, clustering runs in slices of about 10 ms (a large photo has a few unsliced steps of up to 150 ms in between; an image with millions of distinct colours, longer: see [Performance and limits](performance.md#large-images)), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
+- **Slices.** With either option, clustering runs in slices of about 10 ms (one can overrun to a few tens of milliseconds on a very large image: see [Performance and limits](performance.md#large-images)), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes (a `DOMException`'s `code` is a number). To tell an abort from a failure, check your signal (`signal.aborted`), not the error: a reason you gave (`controller.abort(new Error('superseded'))`) keeps its own name. An already aborted signal does no work.
 - **Mapping can't be interrupted** (for a 768×512 photo: 6 ms, 27 ms dithered, 66 ms with ordered dithering, and up to about a second for ordered dithering with 64 steps and 256 colours; seconds for a 6-megapixel photo dithered). The functions that only map check the signal before they start, and don't take `onProgress`. To cancel or show progress while mapping a large image, see [the guides](guides.md#cancelling-or-showing-progress-while-mapping-a-large-image).
 - **Progress** is approximate, never goes backwards, and ends at exactly 1.

@@ -1,0 +1,16 @@
+== before (master)
+photo 12 MP, rgb            632 slices, sliced   6858 ms, one-shot   6596 ms, longest slice  219.4 ms (progress 949 -> 1000), take  46.7 ms
+photo 12 MP, oklab         1036 slices, sliced  11321 ms, one-shot  11422 ms, longest slice  362.2 ms (progress 949 -> 1000), take  49.1 ms
+photo 12 MP, precision 6     43 slices, sliced    468 ms, one-shot    443 ms, longest slice   29.6 ms (progress 98 -> 150), take   1.7 ms
+noise 4 MP, rgb             716 slices, sliced   9092 ms, one-shot   8655 ms, longest slice  696.8 ms (progress 949 -> 1000), take 169.8 ms
+noise 4 MP, oklab           720 slices, sliced   9944 ms, one-shot   9803 ms, longest slice 1431.4 ms (progress 949 -> 1000), take 170.3 ms
+noise 4 MP, precision 6      70 slices, sliced   1071 ms, one-shot   1039 ms, longest slice  238.3 ms (progress 96 -> 150), take  12.2 ms
+noise 12 MP, precision 6    142 slices, sliced   2434 ms, one-shot   2395 ms, longest slice  507.2 ms (progress 99 -> 150), take  11.1 ms
+== after
+photo 12 MP, rgb            680 slices, sliced   6963 ms, one-shot   6703 ms, longest slice   24.9 ms (progress 950 -> 950), take   0.0 ms
+photo 12 MP, oklab         1098 slices, sliced  11456 ms, one-shot  11294 ms, longest slice   18.8 ms (progress 950 -> 950), take   0.0 ms
+photo 12 MP, precision 6     43 slices, sliced    435 ms, one-shot    436 ms, longest slice   11.7 ms (progress 39 -> 44), take   0.0 ms
+noise 4 MP, rgb             866 slices, sliced   9096 ms, one-shot   8684 ms, longest slice   37.0 ms (progress 950 -> 950), take   0.0 ms
+noise 4 MP, oklab           940 slices, sliced  10088 ms, one-shot   9881 ms, longest slice   35.4 ms (progress 950 -> 950), take   0.0 ms
+noise 4 MP, precision 6     101 slices, sliced   1065 ms, one-shot   1055 ms, longest slice   15.0 ms (progress 31 -> 37), take   0.0 ms
+noise 12 MP, precision 6    222 slices, sliced   2462 ms, one-shot   2393 ms, longest slice   18.0 ms (progress 95 -> 96), take   0.0 ms
