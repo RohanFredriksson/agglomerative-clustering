@@ -1,0 +1,23 @@
+build/dist-after distinct 8000x4000 rgb: ok, 21 s
+build/dist-emm distinct 8000x4000 rgb: ok, 20 s
+build/dist-after distinct 16000x8000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-emm distinct 16000x8000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-after distinct 16000x16000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-emm distinct 16000x16000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-after distinct 16000x16000 oklab: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-emm distinct 16000x16000 oklab: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-after photo 22000x22000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-emm photo 22000x22000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-after distinct 22000x22000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+build/dist-emm distinct 22000x22000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up to 2 GB for one image). Scale the 
+== round 2
+build/dist-after few 22000x22000 rgb: ok, 5 s
+build/dist-emm few 22000x22000 rgb: ok, 5 s
+build/dist-after photo 22000x22000 rgb p6: ok, 17 s
+build/dist-emm photo 22000x22000 rgb p6: ok, 17 s
+build/dist-after distinct 8000x6000 rgb: ok, 21 s
+build/dist-emm distinct 8000x6000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up t
+build/dist-after distinct 8000x8000 rgb: ok, 23 s
+build/dist-emm distinct 8000x8000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up t
+build/dist-after distinct 12000x8000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use u
+build/dist-emm distinct 12000x8000 rgb: out-of-memory The WebAssembly module ran out of memory (it can use up 

@@ -1,0 +1,38 @@
+== dist-after
+11 MP: ok, 115 MB clustering, 13 s
+12 MP: ok, 123 MB clustering, 14 s
+14 MP: ok, 137 MB clustering, 16 s
+16 MP: ok, 151 MB clustering, 18 s
+== dist-emm
+11 MP: ok, 115 MB clustering, 14 s
+12 MP: ok, 123 MB clustering, 15 s
+14 MP: ok, 137 MB clustering, 19 s
+16 MP: ok, 151 MB clustering, 25 s
+== dist-after
+oklab 16 MP: ok, 23 s
+== dist-emm
+oklab 16 MP: ok, 24 s
+== dist-after
+sliced 16 MP: ok, 18 s
+== dist-emm
+sliced 16 MP: ok, 18 s
+== dist-after
+quantize 16 MP: ok, 18 s
+== dist-emm
+quantize 16 MP: ok, 18 s
+== dist-after
+alpha 16 MP: ok, 194 s
+== dist-emm
+alpha 16 MP: ok, 164 s
+== rerun rgb 16 MP, alone
+== dist-after
+rgb 16 MP: ok, 18 s
+== dist-emm
+rgb 16 MP: ok, 18 s
+== dist-after
+rgb 16 MP: ok, 18 s
+== dist-emm
+rgb 16 MP: ok, 18 s
+== previous source (perf/slice-build) with emmalloc
+rgb 11 MP: ok, 13 s
+rgb 16 MP: ok, 18 s
