@@ -102,6 +102,7 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it);
   - sliced pixel mapping, with `signal` and `onProgress` taking effect while mapping (recipes in the guides, a worker of its own and strips of rows, cover it);
   - built-in swatch helpers: a ranking function, an ordering option on swatches, a one-call dominant colour (the guides' `rankSwatches` recipe covers them).
+  - a built-in palette-size suggestion or elbow heuristic (the guides' `sizeForError` and `sizeForScore` recipes cover it).
 - **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image; the bare-image warnings (`rgb-as-rgba`, `gray-as-rgba`) becoming `invalid-argument` errors.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.

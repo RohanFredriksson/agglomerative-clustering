@@ -134,13 +134,48 @@ const { palette, weights, shares } = await buildSwatches(image, 8);
 // Or cluster once and cut it as often as you like (well under a millisecond each)
 const clustering = await buildClustering(image);
 const eight = await clustering.getSwatches(8);
-
-// The smallest palette that keeps 99% of the image's colour variance (works the same in 'rgb' and 'oklab')
-const { explained } = await clustering.getClusteringInfo();
-const k = explained.findIndex((share) => share >= 0.99) + 1;
 ```
 
 How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (an accent colour, a theme), ask for 12 to 16: a small vivid area, such as a red sign in a street scene, only gets a colour of its own once the bigger areas have been split. Each colour is the average of its cluster, so it is a little less saturated than the image's most vivid pixels, and a white background comes back as a near-white such as `[254, 254, 254]` rather than exactly `#ffffff`. On a smooth single-hue photo no colour has a large share (the shares fall as `k` grows), so judge the heaviest swatch against the others, not by a fixed share. See [Picking colours from swatches](#picking-colours-from-swatches).
+
+### Choosing a palette size
+
+To let the image decide how many colours it needs, set a ceiling on the error, not on a share of the variance. `getClusteringInfo()` gives the mean squared error at every size, so the smallest palette under an error is one call away:
+
+```js
+// The smallest palette whose error is at most `rms` (root mean squared, per channel), up to `most` colours.
+async function sizeForError(clustering, rms, most = 256) {
+  const { mse } = await clustering.getClusteringInfo();
+  const k = mse.findIndex((m) => Math.sqrt(m) <= rms) + 1;   // 0 when no size gets that low
+  return Math.max(1, Math.min(k || mse.length, most));
+}
+
+const k = await sizeForError(clustering, 8);   // looks reduced, but fine
+```
+
+<!-- bench/spikes/palette-size/rules.mjs → results-rules.txt; search.mjs → results-search.txt; monotone.mjs → results-monotone.txt -->
+- **The setting is yours.** In 8-bit RGB units, 5 keeps an image close to the original (a mean ΔE2000 of 1.2 to 3.5 once mapped, about 2.5 typically) and 8 looks reduced but fine (2 to 5.2, about 4). In an OKLab clustering `mse` is in OKLab units: use about 0.008 and 0.015. On 24 Kodak photos and three synthetic images, mapped without dithering, the size it picked was on average within a factor of 1.3 to 1.5 of the smallest that reaches that ΔE, and within about 3 at worst. These settings were measured without dithering; for dithered output, judge by eye or use `sizeForScore` below.
+- **The cap** keeps the answer to what the output can hold: 256 for a GIF or palette PNG. Wide gradients can ask for more (an HSV gradient needed 286 for ΔE 2.5). With `precision` below 8 the error never reaches 0, so a setting too low for the image gives the largest size: `maxColors` or the cap, whichever is smaller.
+- **`explained` is a different measure.** It is the share of the image's own variance, so one target asks a smooth photo for far more colours than it needs and a busy one for too few: `explained ≥ 0.99` gave one Kodak photo 83 colours where 7 reach ΔE 2.5, and was up to 28 times off. An elbow in the curve does worse: it picked 2 to 9 colours whatever the image held.
+
+To reach a target on the mapped image itself, by a score you choose, search the sizes. Each step maps the image once:
+
+```js
+// The smallest palette whose mapped image scores at most `target`, up to `most` colours. `score(original, mapped)`
+// compares two RGBA byte arrays, lower is better (a mean ΔE2000 from a colour library, say). `image` is ImageData or
+// { data, format: 'rgba', width }.
+async function sizeForScore(clustering, image, score, target, most = 256) {
+  let low = 1, high = Math.min(most, (await clustering.getClusteringInfo()).maxColors);
+  while (low < high) {
+    const k = (low + high) >> 1;
+    const mapped = await clustering.quantize(image, k);
+    if (score(image.data, mapped.data) <= target) {high = k;} else {low = k + 1;}
+  }
+  return low;   // the cap when no smaller size scores well enough
+}
+```
+
+If even `most` colours miss the target it returns `most`; score that size once if you need to know. It assumes the score falls as `k` grows. Mean ΔE2000 does: on four photos it rose by at most 0.002 from one size to the next, and the search found the smallest size every time. A score that jumps around can mislead it. With a ΔE2000 score written in JavaScript it took 0.6 to 1.2 s per photo, against 70 to 170 ms to cluster.
 
 ## GIFs and palette PNGs
 

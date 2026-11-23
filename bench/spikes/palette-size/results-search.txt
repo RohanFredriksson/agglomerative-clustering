@@ -1,0 +1,5 @@
+image     cluster ms  curve rule ms  search ms (ΔE <= 2.5)  k
+kodim01         72          5.46             582            33 (rule 25)
+kodim05        149          4.06            1208            292 (rule 127)
+kodim14        118         12.53             959            149 (rule 97)
+kodim23        170          7.69            1187            165 (rule 152)
