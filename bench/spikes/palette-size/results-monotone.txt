@@ -1,0 +1,4 @@
+kodim01: 2 rises in 319 steps, largest 0.001; ΔE<=2.5: smallest 33, binary search 33; ΔE<=4: smallest 9, binary search 9
+kodim05: 3 rises in 319 steps, largest 0.002; ΔE<=2.5: smallest 292, binary search 292; ΔE<=4: smallest 57, binary search 57
+kodim14: 0 rises in 319 steps, largest 0.000; ΔE<=2.5: smallest 149, binary search 149; ΔE<=4: smallest 31, binary search 31
+kodim23: 0 rises in 319 steps, largest 0.000; ΔE<=2.5: smallest 165, binary search 165; ΔE<=4: smallest 45, binary search 45

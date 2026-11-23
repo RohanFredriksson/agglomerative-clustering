@@ -632,6 +632,87 @@ describe('recipes in the guides', () => {
         });
     });
 
+    describe('choosing a palette size', () => {
+        // The smallest palette whose error is at most `rms` (root mean squared, per channel), up to `most` colours.
+        async function sizeForError(clustering, rms, most = 256) {
+          const { mse } = await clustering.getClusteringInfo();
+          const k = mse.findIndex((m) => Math.sqrt(m) <= rms) + 1;   // 0 when no size gets that low
+          return Math.max(1, Math.min(k || mse.length, most));
+        }
+
+        // The smallest palette whose mapped image scores at most `target`, up to `most` colours. `score(original, mapped)`
+        // compares two RGBA byte arrays, lower is better (a mean ΔE2000 from a colour library, say). `image` is ImageData or
+        // { data, format: 'rgba', width }.
+        async function sizeForScore(clustering, image, score, target, most = 256) {
+          let low = 1, high = Math.min(most, (await clustering.getClusteringInfo()).maxColors);
+          while (low < high) {
+            const k = (low + high) >> 1;
+            const mapped = await clustering.quantize(image, k);
+            if (score(image.data, mapped.data) <= target) {high = k;} else {low = k + 1;}
+          }
+          return low;   // the cap when no smaller size scores well enough
+        }
+
+        // A soft two-colour gradient with a disc: a few hundred colours.
+        const w = 64, h = 48, pixels = new Uint8Array(w * h * 4);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const disc = Math.hypot(x - 40, y - 20) < 12;
+                pixels.set(disc ? [230, 60, 40, 255] : [Math.round(x * 4), Math.round(80 + y * 3), 160, 255], 4 * (y * w + x));
+            }
+        }
+        const gradient = { data: pixels, format: 'rgba', width: w };
+        // Mean squared error per channel between two RGBA arrays: a score that needs no library.
+        const rgbError = (a, b) => {let s = 0; for (let i = 0; i < a.length; i++) {if ((i & 3) !== 3) {s += (a[i] - b[i]) ** 2;}} return s / (a.length * 0.75);};
+
+        it('sizeForError gives the smallest size under the error, capped, and never 0', async () => {
+            const clustering = await buildClustering(gradient);
+            const { mse, maxColors } = await clustering.getClusteringInfo();
+            for (const rms of [20, 8, 5, 2]) {
+                const k = await sizeForError(clustering, rms, 10_000);
+                expect(Math.sqrt(mse[k - 1])).toBeLessThanOrEqual(rms);
+                if (k > 1) {expect(Math.sqrt(mse[k - 2])).toBeGreaterThan(rms);}
+            }
+            expect(maxColors).toBeGreaterThan(40);
+            expect(await sizeForError(clustering, 0, 40)).toBe(40);
+            // Below precision 8 the error never reaches 0: a setting too low gives the largest size, not 0.
+            const grouped = await buildClustering(gradient, { precision: 4 });
+            const info = await grouped.getClusteringInfo();
+            expect(info.mse[info.maxColors - 1]).toBeGreaterThan(0);
+            expect(await sizeForError(grouped, 0, 10_000)).toBe(info.maxColors);
+        });
+
+        it('sizeForScore finds the smallest size a linear scan finds, and the cap when none is good enough', async () => {
+            const clustering = await buildClustering(gradient);
+            const scores = [];
+            for (let k = 1; k <= 64; k++) {scores.push(rgbError(pixels, (await clustering.quantize(gradient, k)).data));}
+            for (const target of [scores[2], scores[9], scores[30], (scores[20] + scores[21]) / 2]) {
+                const k = await sizeForScore(clustering, gradient, rgbError, target, 64);
+                expect(k).toBe(scores.findIndex((s) => s <= target) + 1);
+            }
+            expect(await sizeForScore(clustering, gradient, rgbError, -1, 64)).toBe(64);
+        });
+
+        it('matches the guides', async () => {
+            const { readFile } = await import('node:fs/promises');
+            const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+            const source = (text, start) => {
+                const lines = text.split('\n');
+                const first = lines.findIndex((line) => line.trim().startsWith(start));
+                expect(first, `${start} is in the file`).toBeGreaterThanOrEqual(0);
+                const indent = lines[first].match(/^ */)[0];
+                const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+                let top = first;
+                while (lines[top - 1].trim().startsWith('//')) {top--;}   // with the comment above it
+                return lines.slice(top, end + 1).map((line) => line.trim()).join('\n');
+            };
+            const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+            for (const start of ['async function sizeForError(', 'async function sizeForScore(']) {
+                expect(source(test, start)).toBe(source(guides, start));
+            }
+        });
+    });
+
     describe('mapping a large image: cancelling and progress', () => {
         // quantizeToIndicesWithPalette, stopped part way when `signal` aborts: it rejects with the signal's reason.
         // `workerOptions` go to createWorker ({ wasm, script }, where your setup needs them).
