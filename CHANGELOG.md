@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (3.5.0)
+## 3.5.0
 
 Output is unchanged; one new warning (and one error message is reworded).
 
