@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareRgbWarning, warnOnce} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -540,9 +540,15 @@ const makeWorker = (options, allowScript) => {
                     }
                     throw abortReason(signal);
                 }
+                // The rgb-as-rgba warning is decided here, on the caller's side and before a transfer can empty the
+                // array, and given once the call succeeds: the thread checks the other arguments, and its own copy is
+                // silenced (PRINCIPLES "Warnings").
+                const warning = bareRgbWarning(image);
+                const byteLength = warning ? image.byteLength : 0;
                 let sent = send(image);
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
+                if (warning) {warnOnce(warning, byteLength);}
                 return mapped ? rebuild(image)(result) : result;
             })();
         };
@@ -582,6 +588,8 @@ const makeWorker = (options, allowScript) => {
             const {options, signal, onProgress} = takeControls(clusterOptions, true, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
+            const warning = bareRgbWarning(image);
+            const byteLength = warning ? image.byteLength : 0;
             const sent = ready() ? send(image) : take(send(image));
             // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
             // existing (see `abandoned`).
@@ -596,6 +604,7 @@ const makeWorker = (options, allowScript) => {
                 if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
                 throw error;
             }
+            if (warning) {warnOnce(warning, byteLength);}
             const output = rebuild(image);
             let released = false;
             // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped

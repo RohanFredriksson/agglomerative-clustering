@@ -206,6 +206,141 @@ const paletteBrand = Symbol.for('agglomerative-clustering.palette');
 const clusteringBrand = Symbol.for('agglomerative-clustering.clustering');
 export const isPalette = (value) => isUint8Array(value) && value[paletteBrand] === true;
 export const isClustering = (value) => isUint8Array(value) && value[clusteringBrand] === true;
+
+// ----- Encoded image files -------------------------------------------------------------------------------------------
+// A bare Uint8Array is taken to be raw RGBA pixels, so the commonest mistake is handing over the bytes of an image *file*
+// (fs.readFile, fetch().arrayBuffer()): it passes as pixels whenever its length is a multiple of 4 and gives a palette of
+// nonsense. The signatures of the common formats are recognised so that it is reported instead. Only a bare Uint8Array is
+// looked at: an ImageData or a { data, format } object has said what its bytes are, so it is never second-guessed, and a
+// bare array that really is raw pixels can be passed as { data, format: 'rgba' } to say so.
+//
+// Decoding is left to the caller: the library has no decoders and no dependency on one (PRINCIPLES "Settled
+// decisions"), and the guides' "Decoding image files" gives a recipe per environment, which the message points to.
+const ascii = (bytes, at, text) => {
+    for (let i = 0; i < text.length; i++) {if (bytes[at + i] !== text.charCodeAt(i)) {return false;}}
+    return true;
+};
+
+// The name of the encoded image format `bytes` starts with, or null. Signatures are long enough, or have enough structure
+// beyond the first few bytes, that raw pixels all but never match.
+export const sniffImageFormat = (bytes) => {
+    const length = bytes.length;
+    if (length >= 8 && bytes[0] === 0x89 && ascii(bytes, 1, 'PNG') && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) {return 'PNG';}
+    // JPEG: FF D8, then a first segment: a marker that has a length (not a restart or a stuffed byte) and a length that fits
+    if (length >= 6 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF && bytes[3] >= 0xC0 && bytes[3] <= 0xFE && !(bytes[3] >= 0xD0 && bytes[3] <= 0xD9)
+        && (bytes[4] << 8 | bytes[5]) >= 2 && 4 + (bytes[4] << 8 | bytes[5]) <= length) {return 'JPEG';}
+    if (length >= 6 && (ascii(bytes, 0, 'GIF87a') || ascii(bytes, 0, 'GIF89a'))) {return 'GIF';}
+    if (length >= 12 && ascii(bytes, 0, 'RIFF') && ascii(bytes, 8, 'WEBP')) {return 'WebP';}
+    // BMP: 'BM', then the file's own length and two zero reserved fields, and a known header size
+    if (length >= 18 && bytes[0] === 0x42 && bytes[1] === 0x4D && bytes[6] === 0 && bytes[7] === 0 && bytes[8] === 0 && bytes[9] === 0
+        && (bytes[2] | (bytes[3] << 8) | (bytes[4] << 16) | (bytes[5] << 24)) === length && [12, 40, 52, 56, 64, 108, 124].includes(bytes[14]) && bytes[15] === 0 && bytes[16] === 0 && bytes[17] === 0) {return 'BMP';}
+    // TIFF: a byte order mark and 42, then the offset of the first directory, which must lie in the file and start with a plausible entry count
+    if (length >= 12) {
+        const little = bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2A && bytes[3] === 0;
+        const big = bytes[0] === 0x4D && bytes[1] === 0x4D && bytes[2] === 0 && bytes[3] === 0x2A;
+        if (little || big) {
+            const u16 = (at) => (little ? bytes[at] | (bytes[at + 1] << 8) : (bytes[at] << 8) | bytes[at + 1]);
+            const offset = little ? (bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24)) >>> 0 : ((bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7]) >>> 0;
+            if (offset >= 8 && offset + 2 <= length && u16(offset) >= 1 && u16(offset) <= 4096) {return 'TIFF';}
+        }
+    }
+    // ISO base media: a 'ftyp' box, then a brand
+    if (length >= 12 && ascii(bytes, 4, 'ftyp')) {
+        if (ascii(bytes, 8, 'avif') || ascii(bytes, 8, 'avis')) {return 'AVIF';}
+        if (['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'].some((brand) => ascii(bytes, 8, brand))) {return 'HEIC';}
+    }
+    return null;
+};
+
+// ----- RGB bytes passed bare ----------------------------------------------------------------------------------------
+// The other common way to get a bare array wrong is RGB bytes (sharp's plain .raw()): read as RGBA, every pixel takes
+// colour bytes from its neighbours and a colour value as its alpha, and nothing fails while the length divides by 4. They
+// are never reinterpreted (a bare array is RGBA, PRINCIPLES), only reported: a warning in 3.x, an error from 4.0.
+//
+// The rule (measured in bench/spikes/bare-rgb/: no false positives on 2,103 real RGBA images, 1,833 of 1,884 harmful RGB
+// cases caught): real RGBA changes least between a byte and the one 4 before it, RGB between a byte and the one 3 before.
+// A premultiplied white mask, (a, a, a, a), also scores high, so pixels with four equal bytes overrule it. Grey RGB is
+// too smooth for that score, but where it changes its bytes come in equal triples at a step of 3 and not of 4. Units equal
+// to the one before are skipped by the grey counts, since flat areas read the same either way. It samples 512 windows of
+// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.25 ms at any size
+// (about 0.4 ms for an array it flags, which happens once).
+const rgbFloor = 192, rgbWindow = 96, rgbWindows = 512;
+export const looksLikeRgb = (d) => {
+    if (d.length < rgbFloor) {return false;}
+    const whole = d.length <= rgbWindow * rgbWindows;
+    const windows = whole ? 1 : rgbWindows, size = whole ? d.length : rgbWindow;
+    const step = whole ? 0 : Math.floor((d.length - rgbWindow) / (rgbWindows - 1) / 12) * 12;
+    let e3 = 0, e4 = 0, n = 0, g3 = 0, n3 = 0, g4 = 0, q4 = 0, n4 = 0;
+    for (let w = 0; w < windows; w++) {
+        const start = w * step, end = start + size;
+        for (let i = start + 4; i < end; i++) {
+            const v = d[i], a = v - d[i - 3], b = v - d[i - 4];
+            e3 += a < 0 ? -a : a;
+            e4 += b < 0 ? -b : b;
+        }
+        n += size - 4;
+        for (let i = start + 3; i + 2 < end; i += 3) {
+            if (d[i] === d[i - 3] && d[i + 1] === d[i - 2] && d[i + 2] === d[i - 1]) {continue;}
+            n3++;
+            if (d[i] === d[i + 1] && d[i] === d[i + 2]) {g3++;}
+        }
+        for (let i = start + 4; i + 3 < end; i += 4) {
+            if (d[i] === d[i - 4] && d[i + 1] === d[i - 3] && d[i + 2] === d[i - 2] && d[i + 3] === d[i - 1]) {continue;}
+            n4++;
+            if (d[i] === d[i + 1] && d[i] === d[i + 2]) {g4++; if (d[i] === d[i + 3]) {q4++;}}
+        }
+    }
+    const score = (e4 / n + 0.05) / (e3 / n + 0.05);
+    const flagged = (score > 1.25 && q4 < 0.5 * Math.max(1, n4)) || (g3 > 0.9 * Math.max(1, n3) && g4 < 0.6 * Math.max(1, n4));
+    if (!flagged) {return false;}
+    // Bytes that mostly rise by one fixed step ((i * k) & 255, the usual fake image in tests) are pixels of neither kind,
+    // and score 4/3 whatever the step. Counted only for arrays about to be flagged, a second pass over the same windows,
+    // so RGBA (the usual input) doesn't pay for it.
+    let ramp = 0;
+    for (let w = 0; w < windows; w++) {
+        const start = w * step, end = start + size;
+        for (let i = start + 4; i < end; i++) {
+            const rise = (d[i] - d[i - 1]) & 255;
+            if (rise !== 0 && rise === ((d[i - 1] - d[i - 2]) & 255)) {ramp++;}
+        }
+    }
+    return ramp <= 0.5 * n;
+};
+
+// Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).
+const warned = new Set();
+
+// The warning a bare image calls for, or null. It skips everything the main entry rejects (palettes and clusterings
+// passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns about its image and
+// rejects it, and both entries share this one order.
+export const bareRgbWarning = (image) => {
+    if (warned.has('rgb-as-rgba') || !isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
+    if (sniffImageFormat(image) !== null || image.length % 4 !== 0) {return null;}
+    return looksLikeRgb(image) ? 'rgb-as-rgba' : null;
+};
+
+// The text of each warning. Delivered through process.emitWarning in Node, Bun and Deno (--no-warnings,
+// process.on('warning') and --trace-warnings then work), else console.warn. Runtimes that imitate Node have an
+// emitWarning that may print nothing (Cloudflare Workers with nodejs_compat), so they are told apart by
+// navigator.userAgent, as worker.js does; a bundler's `process` polyfill has no emitWarning, and `globalThis.process`
+// keeps Parcel from adding one.
+const nodeLike = () => typeof navigator === 'undefined' || /^(Node\.js|Bun|Deno)\//.test(String(navigator.userAgent));
+const warningText = {
+    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
+};
+export const warnOnce = (code, byteLength) => {
+    if (warned.has(code)) {return;}
+    warned.add(code);
+    const message = warningText[code](byteLength);
+    const runtime = globalThis.process;
+    if (runtime && typeof runtime.emitWarning === 'function' && nodeLike()) {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
+    else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}
+};
+// The worker thread's copy: its caller's side checks and warns (PRINCIPLES), so here every code counts as warned, which
+// also skips the sampling.
+export const silenceWarnings = () => {for (const code of Object.keys(warningText)) {warned.add(code);}};
+// For tests.
+export const resetWarnings = () => {warned.clear();};
 // Node's console.log and util.inspect call this (other environments ignore it), so the tag shows when debugging:
 // `Palette(oklab) [ 12, 34, ... ]` rather than a plain `Uint8Array(…)`.
 const inspect = Symbol.for('nodejs.util.inspect.custom');

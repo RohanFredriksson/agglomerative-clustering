@@ -1,0 +1,15 @@
+alpha.png      768×512, 4 channels, depth uchar: RGBA, nothing to detect
+animated.gif   768×512, 4 channels, depth uchar: RGBA, nothing to detect
+animated.webp  768×512, 3 channels, depth uchar: check flags it
+deep.png       768×512, 3 channels, depth uchar: check flags it
+grey.png       768×512, 3 channels, depth uchar: check flags it
+indexed.png    768×512, 3 channels, depth uchar: check flags it
+large.jpg      4240×2832, 3 channels, depth uchar: check flags it
+onebit.png     768×512, 3 channels, depth uchar: check MISSES it
+p3.jpg         768×512, 3 channels, depth uchar: check flags it
+photo.avif     768×512, 3 channels, depth uchar: check flags it
+photo.gif      768×512, 3 channels, depth uchar: check flags it
+photo.jpg      768×512, 3 channels, depth uchar: check flags it
+photo.png      768×512, 3 channels, depth uchar: check flags it
+photo.webp     768×512, 3 channels, depth uchar: check flags it
+rotated.jpg    512×768, 3 channels, depth uchar: check flags it

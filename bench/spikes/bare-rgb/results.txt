@@ -1,0 +1,220 @@
+
+=== score s3 (sampled) ===
+group                                           n     min median    max     >1.1  >1.25   >1.5     >2     >3   harm of missed at 1.5 (max)
+-- real RGBA: every flag is a false positive
+kodak: opaque                                  24    0.03   0.06   0.17        0      0      0      0      0   
+kodak: feathered cutout                        24    0.05   0.11   0.24        0      0      0      0      0   
+kodak: alpha ramp                              24    0.05   0.10   0.28        0      0      0      0      0   
+kodak: alpha = luma                            24    0.08   0.40   0.94        0      0      0      0      0   
+kodak: alpha 128                               24    0.05   0.15   0.36        0      0      0      0      0   
+kodak: alpha noise                             24    0.35   0.54   0.69        0      0      0      0      0   
+kodak: premultiplied cutout                    24    0.04   0.10   0.17        0      0      0      0      0   
+kodak: premultiplied alpha = luma              24    0.08   0.18   0.52        0      0      0      0      0   
+kodak: grey opaque                             24    0.03   0.07   0.17        0      0      0      0      0   
+kodak: white, alpha = luma (mask)              24    0.01   0.02   0.06        0      0      0      0      0   
+kodak: premultiplied white mask                24    1.33   1.33   1.33       24     24      0      0      0   
+kodak: dithered (floyd-steinberg), opaque      24    0.04   0.11   0.20        0      0      0      0      0   
+kodak: dithered (ordered), opaque              24    0.05   0.13   0.23        0      0      0      0      0   
+kodak: pixel art, sprite alpha                 24    0.03   0.05   0.07        0      0      0      0      0   
+kodak crop 2×2: opaque                         24    0.01   0.05   0.49        0      0      0      0      0   
+kodak crop 4×4: opaque                         24    0.01   0.08   0.44        0      0      0      0      0   
+kodak crop 8×8: opaque                         24    0.01   0.08   0.31        0      0      0      0      0   
+kodak crop 16×16: opaque                       24    0.02   0.09   0.23        0      0      0      0      0   
+kodak crop 32×32: opaque                       24    0.01   0.08   0.23        0      0      0      0      0   
+kodak crop 64×64: opaque                       24    0.02   0.09   0.19        0      0      0      0      0   
+synthetic: opaque                               5    0.00   0.03   0.61        0      0      0      0      0   
+twemoji: rgba                                 410    0.01   0.08   0.28        0      0      0      0      0   
+twemoji: premultiplied                        410    0.01   0.14   0.77        0      0      0      0      0   
+noto: rgba                                    399    0.03   0.10   0.45        0      0      0      0      0   
+noto: premultiplied                           399    0.03   0.10   0.50        0      0      0      0      0   
+-- not RGBA: every miss is a false negative
+kodak: rgb                                     24    1.49   3.08  16.60       24     24     23     21     13   1 missed, 1.79×
+kodak: grey as rgb                             24    1.12   1.16   1.20       24      0      0      0      0   24 missed, 3.40×
+kodak: grey, 1 channel                         24    1.06   1.11   1.18       15      0      0      0      0   24 missed, 5.01×
+kodak: grey + alpha, 2 channels                24    0.02   0.03   0.09        0      0      0      0      0   24 missed, 1979.81×
+kodak: dithered (floyd-steinberg), rgb         24    1.35   2.06  13.72       24     24     21     15      3   3 missed, ∞×
+kodak: dithered (ordered), rgb                 24    1.20   1.74   9.92       24     23     17      6      1   7 missed, ∞×
+kodak: pixel art, rgb                          24    3.55  12.05  66.58       24     24     24     24     24   none missed
+kodak crop 2×2: rgb                            24    0.79   3.00  44.33       20     18     18     15     13   6 missed, ∞×
+kodak crop 4×4: rgb                            24    1.09   2.09  25.81       23     21     19     14     11   5 missed, ∞×
+kodak crop 8×8: rgb                            24    1.21   2.23  26.82       24     23     21     14     10   3 missed, 51.67×
+kodak crop 16×16: rgb                          24    1.25   2.26  21.26       24     24     23     14      9   1 missed, 6.56×
+kodak crop 32×32: rgb                          24    1.43   2.47  22.29       24     24     23     18      9   1 missed, 3.43×
+kodak crop 64×64: rgb                          24    1.61   3.43  29.70       24     24     24     19     14   none missed
+synthetic: rgb                                  5    1.00  24.26 459.73        3      3      3      3      3   2 missed, 1.00×
+twemoji: rgb on white                         410    1.46   6.43 110.24      410    410    408    399    350   2 missed, 26.36×
+twemoji: rgb on black                         410    1.56   5.60 113.22      410    410    410    396    349   none missed
+noto: rgb on white                            399    1.32   6.58  46.06      399    399    389    386    344   10 missed, 143.84×
+noto: rgb on black                            399    1.32   6.65  45.21      399    399    389    383    348   10 missed, 175.63×
+
+=== score smin (sampled) ===
+group                                           n     min median    max     >1.1  >1.25   >1.5     >2     >3   harm of missed at 1.5 (max)
+-- real RGBA: every flag is a false positive
+kodak: opaque                                  24    0.03   0.06   0.18        0      0      0      0      0   
+kodak: feathered cutout                        24    0.05   0.11   0.27        0      0      0      0      0   
+kodak: alpha ramp                              24    0.05   0.10   0.32        0      0      0      0      0   
+kodak: alpha = luma                            24    0.08   0.43   1.41        1      1      0      0      0   
+kodak: alpha 128                               24    0.05   0.15   0.44        0      0      0      0      0   
+kodak: alpha noise                             24    0.35   0.56   0.79        0      0      0      0      0   
+kodak: premultiplied cutout                    24    0.04   0.10   0.18        0      0      0      0      0   
+kodak: premultiplied alpha = luma              24    0.08   0.18   0.67        0      0      0      0      0   
+kodak: grey opaque                             24    0.03   0.07   0.19        0      0      0      0      0   
+kodak: white, alpha = luma (mask)              24    0.01   0.02   0.06        0      0      0      0      0   
+kodak: premultiplied white mask                24    3.83   3.92   3.97       24     24     24     24     24   
+kodak: dithered (floyd-steinberg), opaque      24    0.04   0.12   0.22        0      0      0      0      0   
+kodak: dithered (ordered), opaque              24    0.05   0.14   0.26        0      0      0      0      0   
+kodak: pixel art, sprite alpha                 24    0.03   0.05   0.08        0      0      0      0      0   
+kodak crop 2×2: opaque                         24    0.01   0.05   0.63        0      0      0      0      0   
+kodak crop 4×4: opaque                         24    0.02   0.09   0.61        0      0      0      0      0   
+kodak crop 8×8: opaque                         24    0.02   0.08   0.37        0      0      0      0      0   
+kodak crop 16×16: opaque                       24    0.02   0.09   0.25        0      0      0      0      0   
+kodak crop 32×32: opaque                       24    0.02   0.08   0.25        0      0      0      0      0   
+kodak crop 64×64: opaque                       24    0.02   0.09   0.20        0      0      0      0      0   
+synthetic: opaque                               5    0.00   0.03   0.61        0      0      0      0      0   
+twemoji: rgba                                 410    0.01   0.08   0.30        0      0      0      0      0   
+twemoji: premultiplied                        410    0.01   0.15   1.10        1      0      0      0      0   
+noto: rgba                                    399    0.03   0.10   0.53        0      0      0      0      0   
+noto: premultiplied                           399    0.03   0.11   0.54        0      0      0      0      0   
+-- not RGBA: every miss is a false negative
+kodak: rgb                                     24    1.66   3.08  16.60       24     24     24     21     13   none missed
+kodak: grey as rgb                             24    3.33   3.50   3.62       24     24     24     24     24   none missed
+kodak: grey, 1 channel                         24    1.55   1.91   2.40       24     24     24      9      0   none missed
+kodak: grey + alpha, 2 channels                24    1.36   1.48   1.59       24     24     11      0      0   13 missed, 1979.81×
+kodak: dithered (floyd-steinberg), rgb         24    1.46   2.06  13.72       24     24     22     15      3   2 missed, ∞×
+kodak: dithered (ordered), rgb                 24    1.34   1.80   9.92       24     24     18      6      1   6 missed, ∞×
+kodak: pixel art, rgb                          24    3.55  12.05  66.58       24     24     24     24     24   none missed
+kodak crop 2×2: rgb                            24    0.91   3.00  44.33       23     22     20     15     13   4 missed, ∞×
+kodak crop 4×4: rgb                            24    1.43   2.13  25.81       24     24     22     15     11   2 missed, ∞×
+kodak crop 8×8: rgb                            24    1.61   2.48  26.82       24     24     24     16     10   none missed
+kodak crop 16×16: rgb                          24    1.52   2.26  21.26       24     24     24     14      9   none missed
+kodak crop 32×32: rgb                          24    1.43   2.47  22.29       24     24     23     18      9   1 missed, 3.43×
+kodak crop 64×64: rgb                          24    1.61   3.43  29.70       24     24     24     19     14   none missed
+synthetic: rgb                                  5    1.00  24.26 459.73        3      3      3      3      3   2 missed, 1.00×
+twemoji: rgb on white                         410    1.85   6.43 110.24      410    410    410    406    350   none missed
+twemoji: rgb on black                         410    1.77   5.60 113.22      410    410    410    400    349   none missed
+noto: rgb on white                            399    1.95   6.58  46.06      399    399    399    398    352   none missed
+noto: rgb on black                            399    1.90   6.65  45.21      399    399    399    394    357   none missed
+
+=== highest-scoring real RGBA (s3) ===
+kodak: premultiplied white mask              kodim08                      s3 1.33  smin 3.97  E3 13.48 E4 17.98
+kodak: premultiplied white mask              kodim13                      s3 1.33  smin 3.96  E3 11.27 E4 15.02
+kodak: premultiplied white mask              kodim05                      s3 1.33  smin 3.95  E3 8.87 E4 11.83
+kodak: premultiplied white mask              kodim01                      s3 1.33  smin 3.95  E3 8.30 E4 11.06
+kodak: premultiplied white mask              kodim18                      s3 1.33  smin 3.94  E3 7.63 E4 10.18
+kodak: premultiplied white mask              kodim19                      s3 1.33  smin 3.94  E3 7.08 E4 9.45
+kodak: premultiplied white mask              kodim24                      s3 1.33  smin 3.94  E3 6.85 E4 9.13
+kodak: premultiplied white mask              kodim14                      s3 1.33  smin 3.93  E3 6.46 E4 8.62
+kodak: premultiplied white mask              kodim11                      s3 1.33  smin 3.92  E3 5.46 E4 7.28
+kodak: premultiplied white mask              kodim06                      s3 1.33  smin 3.92  E3 5.32 E4 7.10
+kodak: premultiplied white mask              kodim15                      s3 1.33  smin 3.92  E3 5.29 E4 7.05
+kodak: premultiplied white mask              kodim21                      s3 1.33  smin 3.92  E3 5.21 E4 6.95
+
+=== lowest-scoring RGB (s3), with harm ===
+kodak crop 2×2: rgb                          kodim05                      s3 0.79  harm ∞×  E3 21.63 E4 17.13
+kodak crop 2×2: rgb                          kodim21                      s3 0.85  harm ∞×  E3 9.00 E4 7.63
+kodak crop 2×2: rgb                          kodim24                      s3 0.86  harm ∞×  E3 30.88 E4 26.50
+kodak crop 2×2: rgb                          kodim19                      s3 0.90  harm ∞×  E3 60.75 E4 54.88
+synthetic: rgb                               noise-1024                   s3 1.00  harm 1.00×  E3 85.48 E4 85.17
+synthetic: rgb                               noise-512                    s3 1.00  harm 1.00×  E3 85.55 E4 85.45
+kodak crop 4×4: rgb                          kodim09                      s3 1.09  harm ∞×  E3 52.82 E4 57.75
+kodak: grey as rgb                           kodim02                      s3 1.12  harm 1.86×  E3 4.08 E4 4.56
+kodak crop 4×4: rgb                          kodim05                      s3 1.12  harm ∞×  E3 32.77 E4 36.84
+kodak: grey as rgb                           kodim01                      s3 1.14  harm 1.73×  E3 11.12 E4 12.66
+kodak crop 2×2: rgb                          kodim13                      s3 1.14  harm ∞×  E3 16.50 E4 18.88
+kodak: grey as rgb                           kodim13                      s3 1.15  harm 2.15×  E3 15.02 E4 17.21
+
+=== harm: misread palette MSE / correct palette MSE, mapping the true image (k = 16) ===
+kodak: rgb                                     24  min 1.75×  median 2.19×  max 3.48×
+kodak: grey as rgb                             24  min 1.10×  median 1.68×  max 3.40×
+kodak: grey, 1 channel                         24  min 1.40×  median 2.35×  max 5.01×
+kodak: grey + alpha, 2 channels                24  min 274.18×  median 543.77×  max 1979.81×
+kodak crop 8×8: rgb                            23  min 4.90×  median 11.21×  max 84.50×
+kodak crop 16×16: rgb                          24  min 2.62×  median 3.81×  max 13.35×
+kodak crop 32×32: rgb                          24  min 2.15×  median 3.22×  max 5.74×
+kodak crop 64×64: rgb                          24  min 1.85×  median 2.95×  max 6.08×
+synthetic: rgb                                  5  min 1.00×  median 1.35×  max 35.01×
+twemoji: rgb on white                         394  min 2.81×  median 7.54×  max 1827.52×
+twemoji: rgb on black                         396  min 3.06×  median 23.67×  max 18671.03×
+noto: rgb on white                            398  min 2.01×  median 5.37×  max 143.84×
+noto: rgb on black                            398  min 2.40×  median 26.25×  max 6771.02×
+
+RGB cases a misread palette maps at least 1.1× worse: 1932 of 1935
+  s3 > 1.1: catches 1894; smin > 1.1: catches 1931
+  s3 > 1.25: catches 1850; smin > 1.25: catches 1930
+  s3 > 1.5: catches 1812; smin > 1.5: catches 1904
+  s3 > 2: catches 1727; smin > 2: catches 1796
+  s3 > 3: catches 1501; smin > 3: catches 1541
+
+Sampled and whole-array scores fall on different sides of a threshold for 15 of 4038 images.
+
+=== combined rule (sampled, 2048 windows) ===
+grey test: g3 = share of 3-aligned equal byte triples, g4 = 4-aligned. Rule: (s3 > T and q4 < 0.5) or (g3 > 0.9 and g4 < 0.6), arrays of at least 192 bytes
+-- real RGBA (flags are false positives), g3 / g4 / q4 medians
+kodak: opaque                                  24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: feathered cutout                        24  g3 0.01 g4 0.01 q4 0.01   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: alpha ramp                              24  g3 0.00 g4 0.01 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: alpha = luma                            24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: alpha 128                               24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: alpha noise                             24  g3 0.00 g4 0.03 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: premultiplied cutout                    24  g3 0.01 g4 0.02 q4 0.01   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: premultiplied alpha = luma              24  g3 0.00 g4 0.01 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: grey opaque                             24  g3 0.23 g4 1.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: white, alpha = luma (mask)              24  g3 0.23 g4 1.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: premultiplied white mask                24  g3 0.50 g4 1.00 q4 1.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: dithered (floyd-steinberg), opaque      24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: dithered (ordered), opaque              24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: pixel art, sprite alpha                 24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 2×2: opaque                         24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 4×4: opaque                         24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 8×8: opaque                         24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 16×16: opaque                       24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 32×32: opaque                       24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 64×64: opaque                       24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+synthetic: opaque                               5  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+twemoji: rgba                                 410  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+twemoji: premultiplied                        410  g3 0.02 g4 0.13 q4 0.11   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+noto: rgba                                    399  g3 0.03 g4 0.11 q4 0.07   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+noto: premultiplied                           399  g3 0.03 g4 0.11 q4 0.07   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+-- not RGBA (misses are false negatives)
+kodak: rgb                                     24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     23     21     13
+kodak: grey as rgb                             24  g3 1.00 g4 0.38 q4 0.11   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     24     24     24
+kodak: grey, 1 channel                         24  g3 0.03 g4 0.03 q4 0.01   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     15      0      0      0      0
+kodak: grey + alpha, 2 channels                24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak: dithered (floyd-steinberg), rgb         24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     21     15      3
+kodak: dithered (ordered), rgb                 24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     23     17      6      1
+kodak: pixel art, rgb                          24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     24     24     24
+kodak crop 2×2: rgb                            24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 4×4: rgb                            24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      0      0      0      0      0
+kodak crop 8×8: rgb                            24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     23     21     14     10
+kodak crop 16×16: rgb                          24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     23     14      9
+kodak crop 32×32: rgb                          24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     23     18      9
+kodak crop 64×64: rgb                          24  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:     24     24     24     19     14
+synthetic: rgb                                  5  g3 0.00 g4 0.00 q4 0.00   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:      3      3      3      3      3
+twemoji: rgb on white                         410  g3 0.13 g4 0.04 q4 0.03   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:    410    410    408    399    350
+twemoji: rgb on black                         410  g3 0.13 g4 0.04 q4 0.03   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:    410    410    410    396    349
+noto: rgb on white                            399  g3 0.11 g4 0.04 q4 0.03   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:    399    399    392    389    347
+noto: rgb on black                            399  g3 0.11 g4 0.04 q4 0.03   flagged at T = 1.1 / 1.25 / 1.5 / 2 / 3:    399    399    392    386    352
+T = 1.1: false positives 0 of 2103; RGB (3-channel) with harm ≥ 1.1× caught 1836 of 1884, of those at least 64×64: 1764 of 1764
+T = 1.25: false positives 0 of 2103; RGB (3-channel) with harm ≥ 1.1× caught 1834 of 1884, of those at least 64×64: 1763 of 1764
+T = 1.5: false positives 0 of 2103; RGB (3-channel) with harm ≥ 1.1× caught 1804 of 1884, of those at least 64×64: 1737 of 1764
+T = 2: false positives 0 of 2103; RGB (3-channel) with harm ≥ 1.1× caught 1727 of 1884, of those at least 64×64: 1681 of 1764
+T = 3: false positives 0 of 2103; RGB (3-channel) with harm ≥ 1.1× caught 1507 of 1884, of those at least 64×64: 1479 of 1764
+
+missed at T = 1.25, harm ≥ 1.1×, at least 64×64:
+  kodak: dithered (ordered), rgb kodim08                      s3 1.20 g3 0.00 g4 0.00 q4 0.00 harm ∞×
+Lean check (512 windows) decided differently from the rule at T = 1.25 with 2048 windows: 1 of 4038 (kodak: dithered (ordered), rgb kodim05: lean false)
+Lean check: false positives 0 of 2103; harmful RGB caught 1833 of 1884
+Shipped check decided differently from check.mjs: 0 of 4038 images
+Rule decided differently with the whole array than with 2048 windows: 9 of 4038 images
+Rule decided differently with the 512 windows than with 2048 windows: 25 of 4038 images
+
+=== cost of the check ===
+768×512 RGBA   2048 windows 1.392 ms   512 windows 0.330 ms   whole array 10.09 ms   lean check 0.301 ms
+12 MP RGBA     2048 windows 1.331 ms   512 windows 0.329 ms   whole array 325.79 ms   lean check 0.322 ms
+4×4 RGBA       2048 windows 0.002 ms   512 windows 0.001 ms   whole array 0.00 ms   lean check 0.000 ms
+shipped check (dist/shared.mjs), 768×512 RGBA  0.248 ms
+shipped check (dist/shared.mjs), 12 MP RGBA    0.262 ms
+shipped check (dist/shared.mjs), 768×512 RGB   0.352 ms
+shipped check (dist/shared.mjs), 12 MP RGB     0.391 ms
+buildPalette(kodim23, 16): 156.9 ms
+quantizeWithPalette(kodim23, 16 colours), the fastest call that takes an image: 7.03 ms
