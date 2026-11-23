@@ -2,6 +2,7 @@
 // the RGBA it is read as. The rule was measured on 2,103 real RGBA images and 1,884 harmful RGB cases in
 // bench/spikes/bare-rgb/ (results.txt); these synthetic images pin its answers so a change to it fails here.
 import { describe, it, expect } from 'vitest';
+import sharp from 'sharp';
 import * as shared from '../dist/shared.mjs';
 import { looksLikeRgb, bareRgbWarning, Palette } from '../dist/shared.mjs';
 
@@ -76,6 +77,30 @@ describe('looksLikeRgb', () => {
         big.set(gradientRgb, 40960);
         expect(looksLikeRgb(new Uint8Array(big.buffer, 40960, gradientRgb.length))).toBe(true);
         expect(looksLikeRgb(new Uint8Array(big.buffer, 0, gradientRgb.length))).toBe(false);
+    });
+});
+
+describe('looksLikeRgb on real images (fixtures/bare-rgb/)', () => {
+    const fixture = (name) => new URL(`../fixtures/bare-rgb/${name}`, import.meta.url).pathname;
+    const raw = async (name, alpha) => new Uint8Array(await (alpha ? sharp(fixture(name)).ensureAlpha() : sharp(fixture(name)).removeAlpha()).raw().toBuffer());
+
+    it('flags a Kodak photo as RGB and passes it as RGBA', async () => {
+        expect(looksLikeRgb(await raw('kodim23-crop.png', false))).toBe(true);
+        expect(looksLikeRgb(await raw('kodim23-crop.png', true))).toBe(false);
+    });
+    it('passes an anti-aliased emoji, straight and premultiplied, and flags it flattened onto white as RGB', async () => {
+        const rgba = await raw('noto-emoji_u1f34e.png', true);
+        const premultiplied = new Uint8Array(rgba), onWhite = new Uint8Array(rgba.length / 4 * 3);
+        for (let p = 0; p < rgba.length / 4; p++) {
+            const a = rgba[4 * p + 3] / 255;
+            for (let c = 0; c < 3; c++) {
+                premultiplied[4 * p + c] = Math.round(rgba[4 * p + c] * a);
+                onWhite[3 * p + c] = Math.round(rgba[4 * p + c] * a + 255 * (1 - a));
+            }
+        }
+        expect(looksLikeRgb(rgba)).toBe(false);
+        expect(looksLikeRgb(premultiplied)).toBe(false);
+        expect(looksLikeRgb(onWhite)).toBe(true);
     });
 });
 
