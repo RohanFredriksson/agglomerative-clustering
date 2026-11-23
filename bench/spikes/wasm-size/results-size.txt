@@ -1,2 +1,6 @@
-build/dist-before 101633 bytes; 135512 as base64; 47299 gzipped; 63068 gzipped then base64
-dist 75659 bytes; 100880 as base64; 36943 gzipped; 49260 gzipped then base64
+clustering.wasm (bytes; as base64; gzipped -9; gzipped then base64)
+before (perf/slice-build)            101633; 135512; 47299; 63068
+shipped (sorts + colour table)        82405; 109876; 39698; 52932
+not shipped, + MALLOC=emmalloc        75659; 100880; 36943; 49260   (runs out of memory sooner: results-limits.txt)
+
+function files, ES module entry (index.mjs + shared.mjs + clustering.js + clustering.wasm): 205074 bytes; with worker.mjs + worker-thread.mjs: 266238
