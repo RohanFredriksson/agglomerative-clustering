@@ -63,14 +63,18 @@ describe('looksLikeRgb', () => {
     it('passes arrays under the 192-byte floor', () => {
         expect(looksLikeRgb(gradientRgb.subarray(0, 188))).toBe(false);
     });
-    it('checks a Node Buffer like any bare array', () => {
+    it('checks a Node Buffer like any bare array, including a small one inside Node\'s shared pool', () => {
+        const pooled = Buffer.from(rgbOf(16, 16, gradient(16)));
+        expect(pooled.byteOffset).toBeGreaterThan(0);
+        expect(looksLikeRgb(pooled)).toBe(true);
         expect(looksLikeRgb(Buffer.from(gradientRgb))).toBe(true);
     });
     it('samples only its own range when it is a view into a larger buffer', () => {
+        // RGB far into a buffer of RGBA: reading from the buffer's start instead would see only RGBA.
         const big = rgbaOf(128, 128, gradient(128), opaque);
-        big.set(gradientRgb, 4096);
-        expect(looksLikeRgb(new Uint8Array(big.buffer, 4096, gradientRgb.length))).toBe(true);
-        expect(looksLikeRgb(new Uint8Array(big.buffer, 4096 + gradientRgb.length, 4096))).toBe(false);
+        big.set(gradientRgb, 40960);
+        expect(looksLikeRgb(new Uint8Array(big.buffer, 40960, gradientRgb.length))).toBe(true);
+        expect(looksLikeRgb(new Uint8Array(big.buffer, 0, gradientRgb.length))).toBe(false);
     });
 });
 

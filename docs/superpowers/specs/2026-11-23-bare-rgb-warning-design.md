@@ -40,11 +40,12 @@ When to emit it (raised by the builder check and `api-steward`):
 
 ### The check (`src/shared.js`)
 
-`looksLikeRgb(bytes)` is the rule measured in `bench/spikes/bare-rgb/check.mjs`, unchanged:
+`looksLikeRgb(bytes)` is the rule measured in `bench/spikes/bare-rgb/check.mjs`:
 - **The size floor:** arrays under 192 bytes are never flagged.
 - **Sampling:** 512 windows of 96 bytes, each starting on a multiple of 12, spread evenly; the whole array when it is shorter than 512 × 96 bytes.
 - **The colour test:** score = (mean |d[i] − d[i−4]| + 0.05) / (mean |d[i] − d[i−3]| + 0.05). It flags when the score is above 1.25 and fewer than half of the changing 4-byte pixels have four equal bytes.
 - **The grey test:** among changing 3-byte units, more than 90% have three equal bytes, and among changing 4-byte pixels, fewer than 60% have equal colour bytes.
+- **The byte-ramp test** (added during implementation; the brief's "Changed during implementation"): arrays whose bytes mostly rise by one fixed non-zero step (`(i * k) & 255`, the usual fake image in tests) are never flagged.
 
 ### One gate for both entries (`src/shared.js`)
 
@@ -62,7 +63,7 @@ Every case the gate skips is one the main entry rejects, or one that has said wh
 ### The warning (`src/shared.js`)
 
 `warnOnce(code, bytes)`:
-- **Delivery:** when `typeof globalThis.process?.emitWarning === 'function'`, it calls `process.emitWarning(message, { type: 'AgglomerativeClusteringWarning', code })`; otherwise `console.warn` with `agglomerative-clustering [code]: ` and the message. It uses `globalThis.process`, so bundlers' `process` polyfills (which have no `emitWarning`) fall back to the console, and Parcel adds no polyfill (see `scripts/patch-glue.mjs`).
+- **Delivery:** when `typeof globalThis.process?.emitWarning === 'function'` and the runtime is Node, Bun or Deno (no `navigator`, or a `navigator.userAgent` starting `Node.js/`, `Bun/` or `Deno/`, as `worker.js` tells them apart), it calls `process.emitWarning(message, { type: 'AgglomerativeClusteringWarning', code })`; otherwise `console.warn` with `agglomerative-clustering [code]: ` and the message. Cloudflare Workers with `nodejs_compat` has an `emitWarning` that reaches `process.on('warning')` but prints nothing (checked under `wrangler dev`), so it takes `console.warn`. A bundler's `process` polyfill has no `emitWarning`, and `globalThis.process` keeps Parcel from adding one (see `scripts/patch-glue.mjs`).
 - **State:** a module-level set of codes already warned.
 - **`silenceWarnings()`** (internal): marks every code as warned, so a silenced copy also skips the sampling. `worker-thread.js` calls it once at start; the thread imports the same `shared.mjs` instance as its `index.mjs`.
 - **`resetWarnings()`** (internal, for tests): clears the set.
@@ -70,7 +71,7 @@ Every case the gate skips is one the main entry rejects, or one that has said wh
 
 The message names the image by its size:
 
-> This image (1,179,648 bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.
+> This image (1,179,648 bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.
 
 The code is `rgb-as-rgba`.
 

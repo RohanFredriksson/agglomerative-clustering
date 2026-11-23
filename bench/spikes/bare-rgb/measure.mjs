@@ -18,7 +18,9 @@ import { buildPalette, quantize } from '../../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../../fixtures/kodak.js';
 import { syntheticImages } from '../../lib/images.js';
 import { MIN_BYTES, looksLikeRgb } from './check.mjs';
-import { looksLikeRgb as shippedLooksLikeRgb } from '../../../dist/shared.mjs';
+import { looksLikeRgb as shippedLooksLikeRgb, silenceWarnings } from '../../../dist/shared.mjs';
+
+silenceWarnings(); // the harm measurement passes bare RGB on purpose
 
 const here = dirname(fileURLToPath(import.meta.url));
 const emojiRoot = join(here, '../../../fixtures/images/bare-rgb');

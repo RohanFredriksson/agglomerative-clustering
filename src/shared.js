@@ -262,7 +262,7 @@ export const sniffImageFormat = (bytes) => {
 // A premultiplied white mask, (a, a, a, a), also scores high, so pixels with four equal bytes overrule it. Grey RGB is
 // too smooth for that score, but where it changes its bytes come in equal triples at a step of 3 and not of 4. Units equal
 // to the one before are skipped by the grey counts, since flat areas read the same either way. It samples 512 windows of
-// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.3 ms at any size.
+// 96 bytes (each on a multiple of 12, a pixel under both readings), so it costs about 0.4 ms at any size.
 const rgbFloor = 192, rgbWindow = 96, rgbWindows = 512;
 export const looksLikeRgb = (d) => {
     if (d.length < rgbFloor) {return false;}
@@ -310,18 +310,21 @@ export const bareRgbWarning = (image) => {
     return looksLikeRgb(image) ? 'rgb-as-rgba' : null;
 };
 
-// The text of each warning. Delivered through process.emitWarning where it exists (Node, Deno, Bun: --no-warnings,
-// process.on('warning') and --trace-warnings then work), else console.warn; a bundler's `process` polyfill has no
-// emitWarning, and `globalThis.process` keeps Parcel from adding one.
+// The text of each warning. Delivered through process.emitWarning in Node, Bun and Deno (--no-warnings,
+// process.on('warning') and --trace-warnings then work), else console.warn. Runtimes that imitate Node have an
+// emitWarning that may print nothing (Cloudflare Workers with nodejs_compat), so they are told apart by
+// navigator.userAgent, as worker.js does; a bundler's `process` polyfill has no emitWarning, and `globalThis.process`
+// keeps Parcel from adding one.
+const nodeLike = () => typeof navigator === 'undefined' || /^(Node\.js|Bun|Deno)\//.test(String(navigator.userAgent));
 const warningText = {
-    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
+    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
 };
 export const warnOnce = (code, byteLength) => {
     if (warned.has(code)) {return;}
     warned.add(code);
     const message = warningText[code](byteLength);
     const runtime = globalThis.process;
-    if (runtime && typeof runtime.emitWarning === 'function') {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
+    if (runtime && typeof runtime.emitWarning === 'function' && nodeLike()) {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
     else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}
 };
 // The worker thread's copy: its caller's side checks and warns (PRINCIPLES), so here every code counts as warned, which

@@ -374,7 +374,7 @@ Messages are for people and may change. The worker entry fails the same way as t
 
 ### Warnings
 
-A warning is for a call the next major version will reject. It never changes a result, and it is shown once per code. In Node (and Deno and Bun) it goes through `process.emitWarning`, as a warning named `AgglomerativeClusteringWarning` with a `code`; elsewhere through `console.warn`, prefixed `agglomerative-clustering [code]:`. There is one:
+A warning is for a call the next major version will reject. It never changes a result, and it is shown once per code. In Node, Bun and Deno it goes through `process.emitWarning`, as a warning named `AgglomerativeClusteringWarning` with a `code`; elsewhere (browsers, Cloudflare Workers and other runtimes that only imitate Node) through `console.warn`, prefixed `agglomerative-clustering [code]:`. There is one:
 
 | `code` | When | What to do |
 | --- | --- | --- |
@@ -383,7 +383,7 @@ A warning is for a call the next major version will reject. It never changes a r
 <!-- bench/spikes/bare-rgb/measure.mjs → results.txt -->
 The check samples the bytes, so it costs well under a millisecond at any size. It was tested on 2,103 real RGBA images (photos, emoji, cutouts, dithered images, pixel art, premultiplied pixels) and warned on none. `ImageData` and `{ data, format }` are never inspected, so saying what the bytes are silences it.
 
-- **When:** only for a call that passes its own checks, so a call that fails for another reason (a bad `k`, an unknown option) doesn't use the warning up. In the worker entry it comes after the call succeeds, on your side, never from the worker.
+- **When:** only for a call that passes its own checks, so a call that fails for another reason (a bad `k`, an unknown option, a signal already aborted) doesn't use the warning up. In the worker entry it comes after the call succeeds, on your side, never from the worker.
 - **Once per copy of the library:** an app that loads both the ES-module and CommonJS builds can see it twice.
 - **Silencing it in Node:** `node --no-warnings` or `NODE_NO_WARNINGS=1` silence every warning; `process.on('warning', (w) => …)` sees it, with `w.code === 'rgb-as-rgba'`, if you'd rather handle it.
 - **Finding the call:** `node --trace-warnings` prints the stack, which shows the call site when a dependency makes the call.

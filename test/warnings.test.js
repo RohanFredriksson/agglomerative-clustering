@@ -105,6 +105,30 @@ describe('main entry', () => {
         expect(await warningsFrom(() => buildPalette(bareRgb, 8))).toHaveLength(1);
     });
 
+    it("doesn't spend the warning on a call whose signal is already aborted", async () => {
+        const aborted = AbortSignal.abort();
+        await expect(buildPalette(bareRgb, 8, { signal: aborted })).rejects.toBeDefined();
+        await expect(quantize(bareRgb, 8, { signal: aborted })).rejects.toBeDefined();
+        await tick();
+        expect(seen).toHaveLength(0);
+        expect(await warningsFrom(() => buildPalette(bareRgb, 8))).toHaveLength(1);
+    });
+
+    it('uses console.warn on runtimes that only imitate Node (Cloudflare Workers: emitWarning there prints nothing)', async () => {
+        const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'Cloudflare-Workers' }, configurable: true, writable: true });
+            const warnings = await warningsFrom(() => buildPalette(bareRgb, 8));
+            expect(warnings).toHaveLength(0);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0][0]).toMatch(/^agglomerative-clustering \[rgb-as-rgba\]: This image/);
+        } finally {
+            if (navigatorDescriptor) {Object.defineProperty(globalThis, 'navigator', navigatorDescriptor);} else {delete globalThis.navigator;}
+            warn.mockRestore();
+        }
+    });
+
     it('never warns about an image it rejects', async () => {
         const png = new Uint8Array(bareRgb.length + 8);
         png.set([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -175,6 +199,9 @@ describe('worker entry', () => {
         const w = worker();
         await expect(w.buildPalette(bareRgb, 0)).rejects.toMatchObject({ code: 'invalid-argument' });
         await expect(w.buildPalette(new Palette(bareRgb.subarray(0, 768)), 4)).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(w.buildPalette(bareRgb, 8, { bogus: 1 })).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(w.quantizeWithPalette(bareRgb, new Uint8Array(4))).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(w.buildPalette(bareRgb, 8, { signal: AbortSignal.abort() })).rejects.toBeDefined();
         await tick();
         expect(seen).toHaveLength(0);
         expect(await warningsFrom(() => w.buildPalette(bareRgb, 8))).toHaveLength(1);
