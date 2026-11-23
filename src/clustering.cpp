@@ -1,7 +1,5 @@
 // Hierarchical Agglomerative Color Clustering (Ward's method)
-#include "clustering.hpp"
-#include "colorspace.hpp"
-#include "version.hpp"
+// The clock comes first: the grid in clustering.hpp checks it too, to slice its reviews.
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #else
@@ -13,6 +11,9 @@ static double emscripten_get_now() {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 #endif
+#include "clustering.hpp"
+#include "colorspace.hpp"
+#include "version.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -89,7 +90,9 @@ uint32_t read_u32(const uint8_t* at) {
 
 // CRC-32 (reflected, polynomial 0xEDB88320) of a clustering, reading the checksum field as zeros. The JavaScript
 // (shared.js) computes the same to check a clustering before it is used.
-uint32_t clustering_crc(const uint8_t* data, size_t length) {
+// CRC-32 of bytes [from, to) of a clustering, continuing from `crc` (start at 0xFFFFFFFF, finish by inverting), with the
+// checksum's own 4 bytes read as zeros.
+uint32_t clustering_crc_update(uint32_t crc, const uint8_t* data, size_t from, size_t to) {
     static uint32_t table[256];
     static bool ready = false;
     if (!ready) {
@@ -100,12 +103,14 @@ uint32_t clustering_crc(const uint8_t* data, size_t length) {
         }
         ready = true;
     }
-    uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < length; i++) {
+    for (size_t i = from; i < to; i++) {
         const uint8_t byte = i >= clustering_checksum && i < clustering_checksum + 4 ? 0 : data[i];
         crc = table[(crc ^ byte) & 0xFF] ^ (crc >> 8);
     }
-    return crc ^ 0xFFFFFFFFu;
+    return crc;
+}
+uint32_t clustering_crc(const uint8_t* data, size_t length) {
+    return clustering_crc_update(0xFFFFFFFFu, data, 0, length) ^ 0xFFFFFFFFu;
 }
 
 // Where an image format keeps its channels: the bytes per pixel, the offsets of red and blue (green is always byte 1),
@@ -170,14 +175,15 @@ public:
         const bool timed = budget_ms < std::numeric_limits<double>::infinity();
         const double deadline = timed ? emscripten_get_now() + budget_ms : 0.0;
         if (this->stage == Stage::scan && !this->scan(timed, deadline)) {return false;}
-        if (this->stage == Stage::build) {this->build();}
+        if (this->stage == Stage::build && !this->build(timed, deadline)) {return false;}
         if (this->stage == Stage::chain && !this->merge_some(timed, deadline)) {return false;}
-        if (this->stage == Stage::write) {this->write();}
+        if (this->stage == Stage::write && !this->write(timed, deadline)) {return false;}
         return this->stage == Stage::done;
     }
 
     // How far along it is, 0 to 1000 (approximate, and not linear in time). Scanning is the first tenth, building
-    // the next twentieth, merging most of the rest, writing the last twentieth.
+    // the next twentieth, merging most of the rest, writing the last twentieth; building and writing report where
+    // they start (they are short next to merging, and JS keeps the reports monotonic).
     int progress() const {
         switch (this->stage) {
             case Stage::scan: return this->limit > 0 ? int(100.0 * double(this->position) / double(this->limit)) : 0;
@@ -188,15 +194,21 @@ public:
         }
     }
 
-    // The finished clustering, sealed with its checksum.
+    // The finished clustering, sealed with its checksum (computed while writing, or here for a header-only one).
     std::vector<uint8_t> take() {
-        write_u32(&this->clustering[clustering_checksum], clustering_crc(this->clustering.data(), this->clustering.size()));
+        if (this->crc_cursor < this->clustering.size()) {
+            this->crc = clustering_crc_update(this->crc, this->clustering.data(), this->crc_cursor, this->clustering.size());
+            this->crc_cursor = this->clustering.size();
+        }
+        write_u32(&this->clustering[clustering_checksum], this->crc ^ 0xFFFFFFFFu);
         return std::move(this->clustering);
     }
 
 private:
 
     enum class Stage {scan, build, chain, write, done};
+    enum class Phase {convert, group, grouped_error, grid, index};
+    enum class Writing {colors, sort, records, checksum};
 
     struct Merge {
         double height;
@@ -223,6 +235,17 @@ private:
     bool weight_alpha = false;
     bool partial = false;
 
+    // Building
+    Phase phase = Phase::convert;
+    size_t cursor = 0;
+    std::vector<std::array<uint16_t, 3>> unique_colors;
+    std::vector<uint64_t> unique_counts;
+    AgglomerativeClustering::AgglomerativeHistogram bins;  // the groups, with `precision` below 8
+    std::vector<std::array<uint64_t, 3>> sums;
+    std::vector<std::array<uint16_t, 3>> group_colors;
+    std::vector<uint32_t> bin_of;
+    uint32_t total_weight = 0;
+
     // Building and merging
     size_t n = 0;
     int shift = 0;
@@ -233,11 +256,23 @@ private:
     std::vector<int32_t> chain;
     int32_t next_start = 0;
 
+    // Writing
+    Writing writing = Writing::colors;
+    std::vector<Rgb> rgb;
+    std::vector<Merge> sorted;
+    size_t sort_width = 1, sort_left = 0, sort_i = 0, sort_j = 0, sort_k = 0;
+    bool sort_active = false;
+    std::vector<uint32_t> index;
+    uint32_t crc = 0xFFFFFFFFu;
+    size_t crc_cursor = 0;
+
     // Pass 1: build the histogram and collect unique colours. Alpha weights are in units of 1/255 of a pixel.
     bool scan(bool timed, double deadline) {
         constexpr int64_t block = 65536;
         while (this->position < this->limit) {
             const int64_t end = std::min(this->limit, this->position + block * this->increment);
+            // Room for this block's new colours first, so the table never grows (rehashing every colour) in one go.
+            if (!this->histogram.make_room(size_t(block), timed, deadline)) {return false;}
             for (; this->position < end; this->position += this->increment) {
                 const uint8_t* pixel = this->image_data + this->position;
                 uint32_t key = (uint32_t(pixel[this->layout.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[this->layout.b]);
@@ -257,76 +292,127 @@ private:
         return true;
     }
 
-    // From the distinct colours to the grid, one cluster per colour (and the header fields that depend on them).
-    void build() {
-        std::vector<std::array<uint16_t, 3>> unique_colors;
-        std::vector<uint64_t> unique_counts = this->histogram.counts();
-        unique_colors.reserve(this->histogram.size());
-        for (uint32_t key : this->histogram.colors()) {
-            unique_colors.push_back(this->space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
+    // From the distinct colours to the grid, one cluster per colour (and the header fields that depend on them). It is a
+    // pass over the distinct colours, several with `precision` below 8, so on an image of millions of colours it is
+    // interruptible like the scan: each phase keeps its place (`cursor`) and checks the clock every `block` colours.
+    // The phases run the same operations in the same order however they are sliced.
+    bool build(bool timed, double deadline) {
+        constexpr size_t block = 65536;
+        const auto expired = [&](size_t done, size_t total) {return timed && done < total && emscripten_get_now() >= deadline;};
+        const std::vector<uint32_t>& keys = this->histogram.colors();
+
+        // Each distinct colour to clustering coordinates. With no partly transparent pixels every weight is a whole
+        // number of pixels: count in pixels, so an opaque image (or one with only fully transparent holes) clusters
+        // exactly as with alpha ignored.
+        if (this->phase == Phase::convert) {
+            if (this->cursor == 0) {
+                this->unique_counts = std::vector<uint64_t>(this->histogram.counts());
+                this->unique_colors.reserve(keys.size());
+                this->clustering[6] = this->weight_alpha && this->partial ? 1 : 0;
+            }
+            const bool whole_pixels = this->weight_alpha && !this->partial;
+            while (this->cursor < keys.size()) {
+                const size_t end = std::min(keys.size(), this->cursor + block);
+                for (; this->cursor < end; this->cursor++) {
+                    const uint32_t key = keys[this->cursor];
+                    this->unique_colors.push_back(this->space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
+                    if (whole_pixels) {this->unique_counts[this->cursor] /= 255u;}
+                }
+                if (expired(this->cursor, keys.size())) {return false;}
+            }
+            this->cursor = 0;
+            this->phase = this->precision < 8 ? Phase::group : Phase::grid;
         }
 
-        // With no partly transparent pixels every weight is a whole number of pixels: count in pixels, so an opaque
-        // image (or one with only fully transparent holes) clusters exactly as with alpha ignored.
-        if (this->weight_alpha && !this->partial) {
-            for (uint64_t& count : unique_counts) {count /= 255u;}
-        }
-        this->clustering[6] = this->weight_alpha && this->partial ? 1 : 0;
-
-        if (this->precision < 8) {
+        // With `precision` below 8: colours grouped by their top bits, each group entering as one cluster at the
+        // count-weighted mean of its colours.
+        if (this->phase == Phase::group) {
             const uint32_t channel = (0xFFu << (8 - this->precision)) & 0xFFu;
             const uint32_t mask = (channel << 16) | (channel << 8) | channel;
-            AgglomerativeClustering::AgglomerativeHistogram bins;
-            std::vector<std::array<uint64_t, 3>> sums;
-            const std::vector<std::array<uint16_t, 3>> original_colors = unique_colors;
-            const std::vector<uint64_t> original_counts = unique_counts;
-            std::vector<uint32_t> bin_of(unique_colors.size());
-            for (size_t i = 0; i < unique_colors.size(); i++) {
-                uint32_t bin = bins.add(this->histogram.colors()[i] & mask, unique_counts[i]);
-                bin_of[i] = bin;
-                if (bin == sums.size()) {sums.push_back({0u, 0u, 0u});}
-                for (int c = 0; c < 3; c++) {sums[bin][c] += uint64_t(unique_colors[i][c]) * unique_counts[i];}
-            }
-            unique_colors.resize(bins.size());
-            unique_counts = bins.counts();
-            for (size_t b = 0; b < bins.size(); b++) {
-                for (int c = 0; c < 3; c++) {unique_colors[b][c] = uint16_t(sums[b][c] / unique_counts[b]);}
-            }
-            // What grouping discarded: each original colour's squared distance to the mean that now stands for it.
-            for (size_t i = 0; i < original_colors.size(); i++) {
-                double squared = 0;
-                for (int c = 0; c < 3; c++) {
-                    const double d = double(original_colors[i][c]) - double(unique_colors[bin_of[i]][c]);
-                    squared += d * d;
+            if (this->cursor == 0) {this->bin_of = std::vector<uint32_t>(this->unique_colors.size());}
+            while (this->cursor < this->unique_colors.size()) {
+                const size_t end = std::min(this->unique_colors.size(), this->cursor + block);
+                for (size_t i = this->cursor; i < end; i++) {
+                    uint32_t bin = this->bins.add(keys[i] & mask, this->unique_counts[i]);
+                    this->bin_of[i] = bin;
+                    if (bin == this->sums.size()) {this->sums.push_back({0u, 0u, 0u});}
+                    for (int c = 0; c < 3; c++) {this->sums[bin][c] += uint64_t(this->unique_colors[i][c]) * this->unique_counts[i];}
                 }
-                this->grouped_error += squared * double(original_counts[i]);
+                this->cursor = end;
+                if (expired(this->cursor, this->unique_colors.size())) {return false;}
             }
+            // The groups' means (at most 2^(3 * precision) of them, so this part is short)
+            const std::vector<uint64_t>& group_counts = this->bins.counts();
+            this->group_colors.resize(this->bins.size());
+            for (size_t b = 0; b < this->bins.size(); b++) {
+                for (int c = 0; c < 3; c++) {this->group_colors[b][c] = uint16_t(this->sums[b][c] / group_counts[b]);}
+            }
+            this->cursor = 0;
+            this->phase = Phase::grouped_error;
         }
 
-        // An image with no visible pixels has no hierarchy: the result is just the header, which cuts to an empty palette.
-        this->n = unique_colors.size();
-        if (this->n == 0) {this->stage = Stage::done; return;}
-        // Pad so the length is 7 more than a multiple of 9, which no 1.x clustering can be.
-        size_t length = clustering_header + 3 + clustering_record * (this->n - 1);
-        this->clustering.resize(length + (7 + 9 - length % 9) % 9, 0);
-
-        // The grid counts in 32 bits. Weights only exceed that for partly transparent images above ~16.8 MP; scale
-        // those down by the smallest power of two that fits, keeping every visible colour at least 1.
-        uint64_t total = 0;
-        for (uint64_t count : unique_counts) {total += count;}
-        while ((total >> this->shift) > std::numeric_limits<uint32_t>::max() / 2u) {this->shift++;}
-        this->clustering[7] = uint8_t(this->shift);
-
-        // Pass 2: one cluster per unique colour
-        this->grid = std::make_unique<AgglomerativeClustering::WardGrid>(this->n);
-        uint32_t total_weight = 0;
-        for (size_t i = 0; i < this->n; i++) {
-            uint32_t weight = uint32_t(std::max<uint64_t>(unique_counts[i] >> this->shift, 1u));
-            this->grid->add(unique_colors[i], weight);
-            total_weight += weight;
+        // What grouping discarded: each original colour's squared distance to the mean that now stands for it. Then the
+        // groups replace the colours.
+        if (this->phase == Phase::grouped_error) {
+            while (this->cursor < this->unique_colors.size()) {
+                const size_t end = std::min(this->unique_colors.size(), this->cursor + block);
+                for (size_t i = this->cursor; i < end; i++) {
+                    double squared = 0;
+                    for (int c = 0; c < 3; c++) {
+                        const double d = double(this->unique_colors[i][c]) - double(this->group_colors[this->bin_of[i]][c]);
+                        squared += d * d;
+                    }
+                    this->grouped_error += squared * double(this->unique_counts[i]);
+                }
+                this->cursor = end;
+                if (expired(this->cursor, this->unique_colors.size())) {return false;}
+            }
+            this->unique_colors = std::move(this->group_colors);
+            this->unique_counts = std::vector<uint64_t>(this->bins.counts());
+            this->bin_of = {};
+            this->sums = {};
+            this->cursor = 0;
+            this->phase = Phase::grid;
         }
-        write_u32(&this->clustering[8], total_weight);
-        this->grid->reindex();
+
+        if (this->phase == Phase::grid) {
+            if (this->cursor == 0) {
+                // An image with no visible pixels has no hierarchy: the result is just the header, which cuts to an
+                // empty palette.
+                this->n = this->unique_colors.size();
+                if (this->n == 0) {this->stage = Stage::done; return true;}
+                // Pad so the length is 7 more than a multiple of 9, which no 1.x clustering can be.
+                size_t length = clustering_header + 3 + clustering_record * (this->n - 1);
+                this->clustering.resize(length + (7 + 9 - length % 9) % 9, 0);
+
+                // The grid counts in 32 bits. Weights only exceed that for partly transparent images above ~16.8 MP;
+                // scale those down by the smallest power of two that fits, keeping every visible colour at least 1.
+                uint64_t total = 0;
+                for (uint64_t count : this->unique_counts) {total += count;}
+                while ((total >> this->shift) > std::numeric_limits<uint32_t>::max() / 2u) {this->shift++;}
+                this->clustering[7] = uint8_t(this->shift);
+                this->grid = std::make_unique<AgglomerativeClustering::WardGrid>(this->n);
+            }
+            // Pass 2: one cluster per unique colour
+            while (this->cursor < this->n) {
+                const size_t end = std::min(this->n, this->cursor + block);
+                for (; this->cursor < end; this->cursor++) {
+                    uint32_t weight = uint32_t(std::max<uint64_t>(this->unique_counts[this->cursor] >> this->shift, 1u));
+                    this->grid->add(this->unique_colors[this->cursor], weight);
+                    this->total_weight += weight;
+                }
+                if (expired(this->cursor, this->n)) {return false;}
+            }
+            write_u32(&this->clustering[8], this->total_weight);
+            this->unique_colors = {};
+            this->unique_counts = {};
+            this->cursor = 0;  // writing uses it next
+            this->phase = Phase::index;
+        }
+
+        // The grid's first size, picked from how crowded the colours are (resumable too: on millions of clusters
+        // it is the longest part of building).
+        if (this->phase == Phase::index && !this->grid->reindex(timed, deadline)) {return false;}
 
         // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
         // cost, raised to its children's heights where centroid rounding would put it below them, so sorting by
@@ -334,12 +420,15 @@ private:
         this->merges.reserve(this->n - 1);
         this->heights.assign(2 * this->n, 0.0);
         this->stage = Stage::chain;
+        return true;
     }
 
     // Ward's criterion is reducible, so merging mutual cheapest partners as the chain finds them gives the
     // same hierarchy as always merging the globally cheapest pair.
     bool merge_some(bool timed, double deadline) {
         AgglomerativeClustering::WardGrid& grid = *this->grid;
+        // A review of the grid's size left unfinished by the last slice comes first: nothing may query the grid during one.
+        if (grid.reviewing() && !grid.reindex(timed, deadline)) {return false;}
         unsigned iterations = 0;
         while (grid.size() > 1) {
 
@@ -381,71 +470,130 @@ private:
             this->heights[m] = height;
             // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
             if (b_count > a_count) {this->merges.push_back({height, m, b, a, cost, a_count});} else {this->merges.push_back({height, m, a, b, cost, b_count});}
-            grid.reindex();
+            if (!grid.reindex(timed, deadline)) {return false;}
 
         }
         this->stage = Stage::write;
         return true;
     }
 
-    void write() {
+    // Writing the records, interruptible like the other stages: on millions of merges it is a conversion of every
+    // cluster, a sort and the records themselves, so each part keeps its place and checks the clock every `block`
+    // steps. The steps and their order are the same however it is sliced.
+    bool write(bool timed, double deadline) {
+        constexpr size_t block = 65536;
         AgglomerativeClustering::WardGrid& grid = *this->grid;
 
         // Every cluster (dead ones keep their coordinates) is converted to 8-bit sRGB once: in OKLab that takes
         // three powers, and most clusters appear in two records.
-        std::vector<Rgb> rgb(grid.capacity());
-        for (int32_t id = 0; id < grid.capacity(); id++) {rgb[id] = this->space.to_rgb(grid.coords(id));}
+        if (this->writing == Writing::colors) {
+            if (this->cursor == 0) {this->rgb = std::vector<Rgb>(size_t(grid.capacity()));}
+            const size_t total = size_t(grid.capacity());
+            while (this->cursor < total) {
+                const size_t end = std::min(total, this->cursor + block);
+                for (; this->cursor < end; this->cursor++) {this->rgb[this->cursor] = this->space.to_rgb(grid.coords(int32_t(this->cursor)));}
+                if (timed && this->cursor < total && emscripten_get_now() >= deadline) {return false;}
+            }
+            this->cursor = 0;
+            this->sorted.reserve(this->merges.size());
+            this->writing = Writing::sort;
+        }
 
         // Merged ids increase in chain order, so breaking height ties by them keeps chain order, as a stable sort would.
         // The order is total (merged ids are unique), so any sort gives these bytes. A plain bottom-up merge sort, not
-        // std::sort: its unrolled instantiation for Merge was 16 KB of WebAssembly, an eighth of the module.
-        {
+        // std::sort: its unrolled instantiation for Merge was 16 KB of WebAssembly, an eighth of the module. It keeps
+        // its place within a merge of two runs, since the last merges are as long as the whole list.
+        if (this->writing == Writing::sort) {
             auto before = [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);};
             std::vector<Merge>& a = this->merges;
-            std::vector<Merge> b(a.size());
+            std::vector<Merge>& b = this->sorted;
             const size_t n = a.size();
-            for (size_t width = 1; width < n; width *= 2) {
-                for (size_t left = 0; left < n; left += 2 * width) {
-                    const size_t middle = std::min(left + width, n), right = std::min(left + 2 * width, n);
-                    size_t i = left, j = middle, k = left;
-                    while (i < middle && j < right) {b[k++] = before(a[j], a[i]) ? a[j++] : a[i++];}
-                    while (i < middle) {b[k++] = a[i++];}
-                    while (j < right) {b[k++] = a[j++];}
+            // The second buffer, zeroed in parts first: it is as large as the merges (160 MB at four million).
+            while (b.size() < n) {
+                b.resize(std::min(n, b.size() + block * 16));
+                if (timed && b.size() < n && emscripten_get_now() >= deadline) {return false;}
+            }
+            size_t done = 0;
+            while (this->sort_width < n) {
+                const size_t width = this->sort_width;
+                while (this->sort_left < n) {
+                    const size_t middle = std::min(this->sort_left + width, n), right = std::min(this->sort_left + 2 * width, n);
+                    if (!this->sort_active) {
+                        this->sort_i = this->sort_left;
+                        this->sort_j = middle;
+                        this->sort_k = this->sort_left;
+                        this->sort_active = true;
+                    }
+                    size_t& i = this->sort_i;
+                    size_t& j = this->sort_j;
+                    size_t& k = this->sort_k;
+                    while (k < right) {
+                        // The left run's element first unless the right one is strictly before it.
+                        if (i < middle && (j >= right || !before(a[j], a[i]))) {b[k++] = a[i++];} else {b[k++] = a[j++];}
+                        if (++done % block == 0 && timed && k < right && emscripten_get_now() >= deadline) {return false;}
+                    }
+                    this->sort_active = false;
+                    this->sort_left += 2 * width;
                 }
                 a.swap(b);
+                this->sort_width *= 2;
+                this->sort_left = 0;
+                if (timed && this->sort_width < n && emscripten_get_now() >= deadline) {return false;}
             }
-        }
-
-        // Costs are converted from 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
-        const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
-        {
+            this->sorted = {};
+            this->index = std::vector<uint32_t>(size_t(grid.capacity()), 0u);
+            // The error that grouping discarded, in the same units as the costs.
+            const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
             const float grouped = float(this->grouped_error / double(uint64_t(1) << this->shift) / (scale * scale));
             uint32_t bits;
             std::memcpy(&bits, &grouped, 4);
             write_u32(&this->clustering[13], bits);
-        }
-        // Records go in split order, the reverse of merge order. Each cluster's split-order index: the root is 0,
-        // the heavier child keeps its parent's index, and record i's lighter child is i + 1.
-        std::vector<uint32_t> index(grid.capacity(), 0);
-        for (size_t i = 0; i < this->merges.size(); i++) {
-            const Merge& merge = this->merges[this->merges.size() - 1 - i];
-            index[merge.a] = index[merge.merged];
-            index[merge.b] = uint32_t(i + 1);
-            uint8_t* record = &this->clustering[clustering_header + 3 + clustering_record * i];
-            write_color(this->clustering, record - this->clustering.data(), rgb[merge.merged]);
-            write_color(this->clustering, record - this->clustering.data() + 3, rgb[merge.a]);
-            write_color(this->clustering, record - this->clustering.data() + 6, rgb[merge.b]);
-            write_u32(record + 9, index[merge.merged]);
-            write_u32(record + 13, merge.light);
-            float cost = float(merge.cost / (scale * scale));
-            uint32_t bits;
-            std::memcpy(&bits, &cost, 4);
-            write_u32(record + 17, bits);
+            this->writing = Writing::records;
         }
 
-        // Add the k=1 clustering colour
-        write_color(this->clustering, clustering_header, rgb[this->merges.empty() ? 0 : this->merges.back().merged]);
+        // Records go in split order, the reverse of merge order. Each cluster's split-order index: the root is 0,
+        // the heavier child keeps its parent's index, and record i's lighter child is i + 1. Costs are converted from
+        // 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
+        if (this->writing == Writing::records) {
+            const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
+            const size_t total = this->merges.size();
+            while (this->cursor < total) {
+                const size_t end = std::min(total, this->cursor + block);
+                for (; this->cursor < end; this->cursor++) {
+                    const size_t i = this->cursor;
+                    const Merge& merge = this->merges[total - 1 - i];
+                    this->index[merge.a] = this->index[merge.merged];
+                    this->index[merge.b] = uint32_t(i + 1);
+                    uint8_t* record = &this->clustering[clustering_header + 3 + clustering_record * i];
+                    write_color(this->clustering, record - this->clustering.data(), this->rgb[merge.merged]);
+                    write_color(this->clustering, record - this->clustering.data() + 3, this->rgb[merge.a]);
+                    write_color(this->clustering, record - this->clustering.data() + 6, this->rgb[merge.b]);
+                    write_u32(record + 9, this->index[merge.merged]);
+                    write_u32(record + 13, merge.light);
+                    float cost = float(merge.cost / (scale * scale));
+                    uint32_t bits;
+                    std::memcpy(&bits, &cost, 4);
+                    write_u32(record + 17, bits);
+                }
+                if (timed && this->cursor < total && emscripten_get_now() >= deadline) {return false;}
+            }
+            // Add the k=1 clustering colour
+            write_color(this->clustering, clustering_header, this->rgb[this->merges.empty() ? 0 : this->merges.back().merged]);
+            this->rgb = {};
+            this->index = {};
+            this->writing = Writing::checksum;
+        }
+
+        // The checksum, over the finished bytes (take() writes it).
+        constexpr size_t bytes = size_t(1) << 20;
+        while (this->crc_cursor < this->clustering.size()) {
+            const size_t end = std::min(this->clustering.size(), this->crc_cursor + bytes);
+            this->crc = clustering_crc_update(this->crc, this->clustering.data(), this->crc_cursor, end);
+            this->crc_cursor = end;
+            if (timed && this->crc_cursor < this->clustering.size() && emscripten_get_now() >= deadline) {return false;}
+        }
         this->stage = Stage::done;
+        return true;
     }
 
 };
