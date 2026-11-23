@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-Docs and tests only: output and the API are unchanged.
+Docs, tests and one error message: output and the API are unchanged.
 
 ### Docs
 - **Faster ordered dithering for animations:** the guides' "Animated GIFs" section shows how to map frames in batches (`mapFramesInBatches`): frames stacked into one call, each padded to a multiple of 8 rows, give the same indices as one call per frame, and build each colour's recipe once. Batches of 12 took 0.36 to 0.78 of the time on film clips and 0.12 to 0.29 on screen recordings and pans. `test/recipes.test.js` runs it and checks it matches the guides. It rests on a property now promised through 3.x (API reference and stability.md): with ordered dithering, for a given palette and options, a pixel's result depends only on its own colour and its position modulo 8 from the image's top-left pixel. Which colours it picks can still change between releases, like any output. A built-in (a prepared palette or frame mapper) was measured and not added: the ROADMAP has why.
+- **Cancelling or showing progress while mapping a large image:** a new guides section. The functions that map pixels run in one piece, which on a 6-megapixel photo at 256 colours is 2.6 s with Floyd–Steinberg and 7.5 s with ordered dithering. To cancel, map in a worker of its own and terminate it on abort (`mapCancellably`; exact, any dither method). To show progress, map in strips of rows (`mapInStrips`): the same indices as one call without dithering and with ordered dithering, a faint seam at strip edges with error diffusion. `test/recipes.test.js` runs both. The message for `onProgress` on a mapping function no longer says those functions finish in milliseconds; it points to the guides. A built-in (sliced mapping) is kept for later: the ROADMAP says what would bring it forward.
 
 ## 3.4.1
 

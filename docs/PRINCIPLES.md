@@ -91,7 +91,8 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - smoothing palettes across frames;
   - a function for choosing N colours from a fixed palette (a recipe in the guides covers it);
   - a linear-light dither option (a recipe in the API reference covers it);
-  - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it).
+  - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it);
+  - sliced pixel mapping, with `signal` and `onProgress` taking effect while mapping (recipes in the guides, a worker of its own and strips of rows, cover it).
 - **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.

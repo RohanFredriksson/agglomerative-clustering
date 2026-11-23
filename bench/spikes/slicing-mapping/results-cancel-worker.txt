@@ -1,0 +1,4 @@
+Node v24.18.0, 7 runs
+abort to rejection (terminate during a ~15 s ordered mapping): median 0.1 ms, range 0.1 to 0.3 ms
+first call on a fresh worker (64x64 image):                    median 41.5 ms, range 39.5 to 42.9 ms
+same call on a running worker:                                 median 3.6 ms, range 0.8 to 4.0 ms
