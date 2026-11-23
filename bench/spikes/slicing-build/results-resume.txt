@@ -1,0 +1,9 @@
+noise, rgba, partial alpha weighted           528326 slices, 13186096 bytes: identical
+noise, rgba, oklab                            528431 slices, 13186096 bytes: identical
+noise, rgba, precision 6                      211128 slices,  5024239 bytes: identical
+noise, rgba, precision 5, oklab                26888 slices,   688138 bytes: identical
+noise, rgba, transparent cutoff 200           231478 slices,  5822215 bytes: identical
+noise, rgb                                    526232 slices, 13189453 bytes: identical
+gradient                                      542938 slices, 13440004 bytes: identical
+fully transparent                                  1 slices,       22 bytes: identical
+all identical
