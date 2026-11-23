@@ -2,7 +2,17 @@
 #include "clustering.hpp"
 #include "colorspace.hpp"
 #include "version.hpp"
+#ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#else
+// A native build (fuzzers and profiling, scripts/native.sh) has no Emscripten: exports are plain functions, and the
+// clock that slices a ClusteringJob is std::chrono's.
+#include <chrono>
+#define EMSCRIPTEN_KEEPALIVE
+static double emscripten_get_now() {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+#endif
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -26,7 +36,7 @@ uint8_t* allocate_variable_size(size_t size) {
 
 uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
     uint8_t* output = allocate_variable_size(vector.size());
-    std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));
+    if (!vector.empty()) {std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));}   // memcpy from an empty vector's null data() is undefined
     return output;
 }
 
@@ -1096,7 +1106,7 @@ uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int imag
     write32(output, uint32_t(count));
     write32(output + 4, uint32_t(transparent_index));
     write32(output + 8, index_bytes);
-    std::memcpy(output + header, entries.data(), entries.size());
+    if (!entries.empty()) {std::memcpy(output + header, entries.data(), entries.size());}
     uint8_t* indices = output + header + entries.size();
 
     const PixelSink sink = {false, L, image_data, indices, nullptr, index_bytes, cutoff, transparent, transparent_index};
@@ -1165,7 +1175,7 @@ EMSCRIPTEN_KEEPALIVE
 uint8_t* get_palette_weights(uint8_t* clustering_data, int clustering_length, int k) {
     std::vector<double> weights = _get_palette_weights(clustering_data, clustering_length, k);
     uint8_t* output = allocate_variable_size(weights.size() * sizeof(double));
-    std::memcpy(output + 4, weights.data(), weights.size() * sizeof(double));
+    if (!weights.empty()) {std::memcpy(output + 4, weights.data(), weights.size() * sizeof(double));}
     return output;
 }
 

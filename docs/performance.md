@@ -4,7 +4,7 @@ Times are from an idle laptop (Intel Core i7-1185G7, Node 24). A busy or throttl
 
 ## Speed
 
-Time and memory grow with the number of *distinct colours*, not just pixels. A 768×512 photo clusters in about 70 ms (24 ms with `precision: 6`), and every cut after that takes about 0.4 ms. A 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`; 36 megapixels of random noise (the worst case) take about 6 s with `precision: 6`. Mapping pixels to a palette takes milliseconds: 6 ms at 768×512, 27 ms dithered.
+Time and memory grow with the number of *distinct colours*, not just pixels. A 768×512 photo clusters in about 70 ms (24 ms with `precision: 6`), and every cut after that takes about 0.4 ms. A 12-megapixel photo takes 2 to 8 s exact (0.2 to 0.9 million distinct colours) and 0.1 to 0.4 s with `precision: 6`; 36 megapixels of random noise (the worst case) take about 6 s with `precision: 6`. Mapping pixels to a palette takes milliseconds: 6 ms at 768×512, 27 ms dithered (seconds for a large image dithered: [the guides](guides.md#cancelling-or-showing-progress-while-mapping-a-large-image) show how to cancel it or show progress).
 
 For a palette, downscale first: 512 px on the long side changes the palette by about 2% and is 3 to 8 times faster. See the [benchmarks](../bench/COMPARISON.md) for comparisons with other libraries.
 

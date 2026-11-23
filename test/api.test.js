@@ -173,7 +173,7 @@ describe('the worker entry', () => {
             const progress = [];
             const run = instance[name](...callArguments[name], { onProgress: (value) => progress.push(value) });
             if (mappingOnly.includes(name)) {
-                // they take milliseconds, so there is no progress to report: only `signal` applies
+                // mapping runs in one piece, so only `signal` (checked before it starts) applies
                 await expect(run, `${name} refuses onProgress`).rejects.toMatchObject({ code: 'invalid-argument' });
                 await main[name](...callArguments[name], { signal: new AbortController().signal });
             } else {

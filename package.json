@@ -81,7 +81,7 @@
     "README.md"
   ],
   "scripts": {
-    "build:wasm": "mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_library_version','_get_clustering','_clustering_job_start','_clustering_job_step','_clustering_job_result','_clustering_job_free','_get_palette','_get_palette_from_clustering','_get_palette_weights','_quantize','_quantize_with_clustering','_quantize_with_palette','_quantize_indices','_quantize_indices_with_clustering','_quantize_indices_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js && node scripts/patch-glue.mjs",
+    "build:wasm": "node scripts/check-emsdk.mjs && mkdirp dist && em++ src/clustering.cpp -O3 -msimd128 -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME='createWasmModule' -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=32MB -s MAXIMUM_MEMORY=2147483648 -s EXPORTED_FUNCTIONS=\"['_library_version','_get_clustering','_clustering_job_start','_clustering_job_step','_clustering_job_result','_clustering_job_free','_get_palette','_get_palette_from_clustering','_get_palette_weights','_quantize','_quantize_with_clustering','_quantize_with_palette','_quantize_indices','_quantize_indices_with_clustering','_quantize_indices_with_palette','_malloc','_free']\" -s EXPORTED_RUNTIME_METHODS=\"['HEAPU8']\" -o dist/clustering.js && node scripts/patch-glue.mjs",
     "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir dist --extensions \".js\" --ignore \"src/worker-thread.js\" --out-file-extension .cjs && node scripts/patch-cjs.mjs",
     "build:esm": "cross-env BABEL_ENV=esm babel src --out-dir dist --extensions \".js\" --out-file-extension .mjs",
     "build:types": "mkdirp dist && node -e \"const fs = require('fs'); for (const f of ['index.d.ts', 'worker.d.ts']) {fs.copyFileSync('src/' + f, 'dist/' + f);} fs.copyFileSync('src/index.d.ts', 'dist/index.d.cts'); fs.writeFileSync('dist/worker.d.cts', fs.readFileSync('src/worker.d.ts', 'utf8').replaceAll(\\\"'./index.js'\\\", \\\"'./index.cjs'\\\"));\"",
@@ -103,6 +103,8 @@
     "@babel/core": "^7.27.4",
     "@babel/plugin-transform-modules-commonjs": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
+    "@parcel/config-default": "^2.16.4",
+    "@parcel/core": "^2.16.4",
     "@types/node": "^22.20.5",
     "canvas": "^3.2.3",
     "cross-env": "^7.0.3",

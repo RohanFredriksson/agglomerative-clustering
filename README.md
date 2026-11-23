@@ -154,7 +154,8 @@ All rows are from one run. Full results at every palette size, on synthetic imag
 
 ```sh
 git clone https://github.com/RohanFredriksson/agglomerative-clustering && cd agglomerative-clustering
-npm install && npm run build   # building needs Emscripten (em++) on your PATH
+scripts/setup-emsdk.sh && source ~/.local/share/emsdk/emsdk_env.sh   # Emscripten, the version CI uses
+npm install && npm run build
 npm run demo                   # then open http://localhost:8080/demo/
 ```
 
