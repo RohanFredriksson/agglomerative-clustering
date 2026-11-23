@@ -67,6 +67,8 @@ shares.forEach((share, i) => {
 });
 ```
 
+Entries keep their place as `k` grows (split order), so palettes nest. For hex strings, the largest share first or a dominant colour, see [Heaviest first](docs/guides.md#heaviest-first).
+
 **A colour-count slider:** cluster once, then cut and map as often as you like.
 
 ```js
