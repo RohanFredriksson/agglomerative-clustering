@@ -36,7 +36,7 @@ It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome
 import sharp from 'sharp';
 import { buildPalette, quantize } from 'agglomerative-clustering';
 
-const { data, info } = await sharp('photo.jpg').ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+const { data, info } = await sharp('photo.jpg').rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const image = { data, format: 'rgba', width: info.width };   // in TypeScript: format: 'rgba' as const
 
 const palette = await buildPalette(image, 8);                   // flat bytes: [r, g, b, r, g, b, ...]
@@ -80,7 +80,7 @@ slider.oninput = async () => {
 };
 ```
 
-Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx', width?, height? }`: BGRA for Electron's `nativeImage` and Windows bitmaps, and the `x` formats for buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). Alpha is straight; [where pixels come from](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#input) lists common sources, which are premultiplied, and the conversion. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. For a page that stays responsive while it clusters, use `agglomerative-clustering/worker`: its functions are the same, and for a slider `createWorker().cluster(image)` keeps the image and its clustering in the worker, behind a handle whose `handle.getPalette(k)` and `handle.quantize(k)` re-cut and re-map without sending the pixels again (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)). The `clustering.…` methods above run on the calling thread, so they don't move work off it.
+Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx', width?, height? }`: BGRA for Electron's `nativeImage` and Windows bitmaps, and the `x` formats for buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). Alpha is straight; [where pixels come from](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#input) lists common sources, which are premultiplied, and the conversion. RGB bytes passed bare are read as RGBA, so pass them as `{ data, format: 'rgb' }`. To start from a PNG, JPEG, WebP or GIF file, decode it first: [Decoding image files](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#decoding-image-files) has a recipe for Node, browsers and edge runtimes. For a page that stays responsive while it clusters, use `agglomerative-clustering/worker`: its functions are the same, and for a slider `createWorker().cluster(image)` keeps the image and its clustering in the worker, behind a handle whose `handle.getPalette(k)` and `handle.quantize(k)` re-cut and re-map without sending the pixels again (see [Workers](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#workers)). The `clustering.…` methods above run on the calling thread, so they don't move work off it.
 
 ## How it works
 

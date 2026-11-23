@@ -319,9 +319,8 @@ const bytes = (data) => isUint8Array(data) ? data : new Uint8Array(data.buffer, 
 // looked at: an ImageData or a { data, format } object has said what its bytes are, so it is never second-guessed, and a
 // bare array that really is raw pixels can be passed as { data, format: 'rgba' } to say so.
 //
-// This is also where decoding would go. The library doesn't decode files today (that needs a decoder per format, and
-// sharp, pngjs, createImageBitmap and the like already do it); when it does, a file recognised here is decoded into
-// { data, format, width, height } instead of rejected, and `load` becomes asynchronous. See docs/ROADMAP.md.
+// Decoding is left to the caller: the library has no decoders and no dependency on one (PRINCIPLES "Settled
+// decisions"), and the guides' "Decoding image files" gives a recipe per environment, which the message points to.
 const ascii = (bytes, at, text) => {
     for (let i = 0; i < text.length; i++) {if (bytes[at + i] !== text.charCodeAt(i)) {return false;}}
     return true;
@@ -392,7 +391,7 @@ const load = (image) => {
     if (isUint8Array(image)) {
         const encoded = sniffImageFormat(image);
         if (encoded) {
-            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode it first (in a browser, draw it to a canvas or use createImageBitmap, then pass getImageData(); in Node use sharp, pngjs or similar) and pass the raw pixels. If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
+            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode them to pixels first and pass those ("Decoding image files" in the guides has a recipe for Node, browsers and edge runtimes). If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
         }
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
         return {data: held(image), format: 'rgba'};

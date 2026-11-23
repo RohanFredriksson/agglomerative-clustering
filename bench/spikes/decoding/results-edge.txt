@@ -1,0 +1,15 @@
+photo.png    decode    12 ms, decode + buildSwatches(5, precision 6)    71 ms; upright; 5-colour palette identical to sharp's
+photo.jpg    decode     7 ms, decode + buildSwatches(5, precision 6)    74 ms; upright; 5-colour palette identical to sharp's
+rotated.jpg  decode    12 ms, decode + buildSwatches(5, precision 6)    70 ms; upright; 5-colour palette identical to sharp's
+p3.jpg       decode     6 ms, decode + buildSwatches(5, precision 6)    58 ms; upright; 5-colour palette differs from sharp's by up to 187
+indexed.png  decode     8 ms, decode + buildSwatches(5, precision 6)    12 ms; upright; 5-colour palette identical to sharp's
+grey.png     decode     7 ms, decode + buildSwatches(5, precision 6)     8 ms; upright; 5-colour palette identical to sharp's
+deep.png     decode    20 ms, decode + buildSwatches(5, precision 6)    78 ms; upright; 5-colour palette identical to sharp's
+alpha.png    decode    15 ms, decode + buildSwatches(5, precision 6)   168 ms; upright; 5-colour palette identical to sharp's
+onebit.png   decode     4 ms, decode + buildSwatches(5, precision 6)     8 ms; upright; 5-colour palette identical to sharp's
+photo.gif    decode     7 ms, decode + buildSwatches(5, precision 6)    12 ms; upright; 5-colour palette identical to sharp's
+photo.webp   decode    13 ms, decode + buildSwatches(5, precision 6)    74 ms; upright; 5-colour palette identical to sharp's
+large.jpg    decode   139 ms, decode + buildSwatches(5, precision 6)   536 ms; upright; 5-colour palette identical to sharp's
+
+Worker bundle (wrangler deploy --dry-run, the library and the three decoders and omggif): 790 KiB, 290 KiB gzipped.
+edge/decode.js: 24 non-blank lines.

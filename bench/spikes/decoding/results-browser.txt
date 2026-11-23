@@ -1,0 +1,22 @@
+Chromium 159.0.8154.6; recipe:
+async (blob) => {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0);
+    return context.getImageData(0, 0, bitmap.width, bitmap.height);
+}
+
+photo.png    decode    8.8 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+photo.jpg    decode    4.3 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+rotated.jpg  decode    6.7 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+p3.jpg       decode    6.5 ms  mean |Δ| 0.01, max 1; palette mapping MSE 1.03× reference
+indexed.png  decode    4.0 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+grey.png     decode    5.1 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+deep.png     decode    9.3 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+alpha.png    decode    9.4 ms  mean |Δ| 1.29, max 113, mean |Δ| where alpha < 32: 8.31; palette mapping MSE 1.01× reference
+onebit.png   decode    3.8 ms  mean |Δ| 0.00, max 0; palette mapping MSE NaN× reference
+photo.gif    decode    4.1 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+photo.webp   decode    6.5 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference
+photo.avif   decode   10.6 ms  mean |Δ| 0.07, max 1; palette mapping MSE 0.94× reference
+large.jpg    decode   83.6 ms  mean |Δ| 0.00, max 0; palette mapping MSE 1.00× reference

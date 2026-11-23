@@ -63,7 +63,7 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
   export default {
     async fetch(request) {
       await ready;
-      // … decode the upload to pixels (fast-png works here), then buildSwatches(pixels, 8)
+      // … decode the upload to pixels (see Decoding image files in the guides), then buildSwatches(pixels, 8)
     },
   };
   ```

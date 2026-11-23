@@ -1,0 +1,20 @@
+{
+  "name": "decoding-spike",
+  "private": true,
+  "type": "module",
+  "description": "Value brief spike: decoding image files. Install with npm install --cache <dir>; not part of the package.",
+  "dependencies": {
+    "@jsquash/avif": "^2.1.1",
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/png": "^3.1.1",
+    "@jsquash/webp": "^1.5.0",
+    "agglomerative-clustering": "^3.4.2",
+    "esbuild": "^0.28.2",
+    "fast-png": "^8.0.0",
+    "jpeg-js": "^0.4.4",
+    "omggif": "^1.0.10",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.35.5",
+    "wrangler": "^4.166.0"
+  }
+}
