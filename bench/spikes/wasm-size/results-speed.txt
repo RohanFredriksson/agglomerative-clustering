@@ -1,11 +1,11 @@
 kodim23 768×512, best of 6 processes × 15 runs; build/dist-before → dist
-palette from clustering, k=16384     2.0 ms     1.0 ms  -47.8%
-swatches from clustering, k=16384     5.1 ms     2.7 ms  -47.0%
-ordered, 16 colours, 16 steps       58.4 ms    59.4 ms    1.8%
-ordered, 16 colours, 64 steps      259.2 ms   257.7 ms   -0.6%
-ordered, 256 colours, 16 steps     144.5 ms   140.9 ms   -2.5%
-floyd-steinberg, 256 colours        40.8 ms    41.0 ms    0.3%
-no dither, 256 colours               9.2 ms     9.1 ms   -0.5%
-no dither, 1024 colours             16.5 ms    16.2 ms   -2.1%
-no dither, 8192 colours (k-d tree)    39.1 ms    39.7 ms    1.6%
-buildPalette 16                    139.0 ms   142.0 ms    2.2%
+palette from clustering, k=16384     2.0 ms     1.0 ms  -48.1%
+swatches from clustering, k=16384     5.1 ms     2.7 ms  -47.5%
+ordered, 16 colours, 16 steps       58.0 ms    59.0 ms    1.7%
+ordered, 16 colours, 64 steps      259.3 ms   252.4 ms   -2.7%
+ordered, 256 colours, 16 steps     139.0 ms   141.4 ms    1.7%
+floyd-steinberg, 256 colours        40.0 ms    40.3 ms    0.8%
+no dither, 256 colours               9.1 ms     9.0 ms   -0.9%
+no dither, 1024 colours             16.4 ms    16.0 ms   -2.3%
+no dither, 8192 colours (k-d tree)    38.4 ms    39.8 ms    3.6%
+buildPalette 16                    140.4 ms   139.2 ms   -0.9%
