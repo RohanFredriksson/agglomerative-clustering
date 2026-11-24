@@ -1,0 +1,32 @@
+24 Kodak photos (RGB clustering, 1024 swatches); the guides' search against the same swap pass from a greedy start and 10 random starts.
+Columns: photos where any start beat the guides / mean objective gain of the best start (%) / max gain (%) / share of starts that beat it;
+then, on the photos where one did, mean CIEDE2000 of the photo mapped (RGB, undithered) to the guides' choice / to the best.
+
+threads (584), N = 6, rgb       4/24  0.161%  1.886%  11%   9.057 / 9.652
+threads (584), N = 6, oklab     2/24  0.687%  14.007%  5%   7.695 / 7.956
+threads (584), N = 12, rgb      6/24  0.188%  2.032%  18%   7.469 / 7.427
+threads (584), N = 12, oklab    5/24  0.183%  2.562%  11%   7.650 / 7.388
+threads (584), N = 24, rgb      9/24  0.070%  0.347%  21%   6.925 / 6.869
+threads (584), N = 24, oklab    5/24  0.018%  0.162%  12%   6.401 / 6.367
+threads (584), N = 40, rgb     13/24  0.028%  0.201%  30%   6.509 / 6.512
+threads (584), N = 40, oklab   11/24  0.015%  0.195%  28%   6.172 / 6.174
+bricks (78), N = 8, rgb         4/24  0.190%  2.570%  9%   10.268 / 10.161
+bricks (78), N = 8, oklab       5/24  0.093%  1.460%  12%   9.206 / 9.137
+bricks (78), N = 16, rgb        1/24  0.006%  0.136%  4%   10.115 / 10.623
+bricks (78), N = 16, oklab      1/24  0.000%  0.001%  3%   8.746 / 8.735
+bricks (78), N = 24, rgb        8/24  0.037%  0.264%  32%   9.964 / 9.955
+bricks (78), N = 24, oklab      7/24  0.007%  0.072%  28%   9.930 / 10.190
+pigments (26), N = 4, rgb       1/24  0.001%  0.022%  0%   33.727 / 28.254
+pigments (26), N = 4, oklab     0/24  0.000%  0.000%  0%   -
+pigments (26), N = 6, rgb       0/24  0.000%  0.000%  0%   -
+pigments (26), N = 6, oklab     1/24  0.004%  0.096%  2%   32.703 / 21.231
+pigments (26), N = 8, rgb       4/24  0.045%  0.732%  11%   23.031 / 22.908
+pigments (26), N = 8, oklab     1/24  0.000%  0.010%  4%   20.181 / 20.615
+dense (1000), N = 6, rgb        5/24  0.465%  4.862%  14%   9.767 / 9.768
+dense (1000), N = 6, oklab     12/24  1.730%  7.684%  30%   9.036 / 8.923
+dense (1000), N = 12, rgb       9/24  0.241%  1.467%  16%   8.053 / 8.081
+dense (1000), N = 12, oklab    10/24  0.384%  2.449%  21%   7.063 / 7.068
+dense (1000), N = 24, rgb       6/24  0.138%  1.089%  17%   7.126 / 7.120
+dense (1000), N = 24, oklab     9/24  0.144%  1.432%  26%   6.712 / 6.602
+dense (1000), N = 40, rgb       6/24  0.024%  0.187%  11%   6.645 / 6.636
+dense (1000), N = 40, oklab     9/24  0.028%  0.310%  19%   6.456 / 6.475
