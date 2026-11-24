@@ -35,7 +35,7 @@ List the new capabilities in the proposal: what a user can do afterwards that th
 - **The recipe alternative:** Could the user do this in a few lines outside the library, correctly and fast enough?
   - Sketch the strongest recipe you can (in a sentence, or a few lines of code) and say what the built-in would add over it. Look past the obvious version: transforming the inputs so the library's existing matching, error carrying or cutting does the work in another space or order often gets most of the way (the linear-light option was matched by encoding light-weighted coordinates into the RGB bytes).
   - **Check whether the recipe was measured.** If the proposal says a recipe can't do something, or does it worse, find the measurement (a script and results file run through `dist/`). An unmeasured claim is a finding: say what to measure, and treat the claim as open until it is.
-  - A recipe in the guides is the default answer, and the built-in has to earn its place.
+  - **Weigh the recipe's own costs too** (PRINCIPLES test 1): its length, any third-party library or metric it needs, knowledge of the internals, speed against a built-in, and how easy it is to copy wrong. Every user who needs it pays them. Neither the recipe nor the built-in is the default answer.
 - **A smaller version:** Is there a narrower feature that covers most of the asked-for use? It might be one option value instead of a family, a helper instead of a mode, or a docs note instead of either.
 - **The costs:**
   - surface area (exports, options, types, docs);
@@ -47,7 +47,7 @@ List the new capabilities in the proposal: what a user can do afterwards that th
 - **The boundary:** Does it pull the library towards a neighbouring job that "What it leaves to others" names (decoding or encoding files, image processing, app policy, compression pipelines)? If the boundary should move, the maintainer decides, and PRINCIPLES.md changes in the same change.
 - **Past verdicts:** Has this been considered before? If so, quote the reason it was turned down, and say whether the proposal brings the evidence that was missing.
 
-Also say where the proposal removes or avoids surface that could go. Less is a valid outcome.
+Also say where the proposal removes or avoids surface that could go. Less is a valid outcome; so is more, when the recipe costs users more than the API would cost the library.
 
 ## How to report
 
@@ -55,7 +55,7 @@ Keep it short. Start with one line, `Verdict: in scope`, `Verdict: trim` or `Ver
 
 ```
 - <capability>: [keep | shrink | recipe | defer | drop]
-  Tests: <which of the six pass or fail, briefly>
+  Tests: <which of the six pass or fail, briefly; test 2 passes when the maintainer asked with a use case>
   Why: <one or two sentences, citing PRINCIPLES.md, ROADMAP or README with the words quoted; or "judgment">
   Instead: <the smaller version or the recipe, if any>
 ```

@@ -89,21 +89,23 @@ C++17 is required (the header enforces it). Keep `std::sort` and `std::unordered
 
 ## Design review
 
-The three read-only reviewers in `.claude/agents/` check a design against the project's written intent, so a proposal is not checked only by the agent that wrote it. `docs/PRINCIPLES.md` is their ground truth (the charter, API principles and settled decisions), together with `docs/ROADMAP.md` and `docs/stability.md`.
+The reviewers in `.claude/agents/` (read-only; `user-advocate` may also run commands, writing only to its scratchpad) check a design against the project's written intent, so a proposal is not checked only by the agent that wrote it. Three stewards argue for keeping the library small; `user-advocate` argues the users' side, so the maintainer hears both. `docs/PRINCIPLES.md` is their ground truth (the charter, API principles and settled decisions), together with `docs/ROADMAP.md` and `docs/stability.md`.
 
 | Agent | Question |
 |---|---|
 | `roadmap-steward` | Does this fit the roadmap and the settled decisions? Does it close off anything planned, 4.0 especially? |
 | `api-steward` | Is the public surface consistent, compatible, and what a well-made library would ship? |
 | `scope-steward` | Is this the library's job, or bloat? Would a smaller version or a recipe do? |
+| `user-advocate` | What do users lose with only a recipe: would they find it, copy it right, and how much slower or worse is it? |
 
-- **Value brief first, for a new capability.** Before writing a spec for something users couldn't do before, write a one-page value brief (`docs/superpowers/briefs/`, whose README has the sections): who asked, quoted; the user's symptom in their words; **the best recipe, built and measured through `dist/`**; and what a built-in adds over that recipe, with numbers. Run `scope-steward` on it, then ask the maintainer: recipe, build or wait. Only "build" goes on to a spec. Don't claim in a spec that a recipe can't do something without the measurement that shows it: the linear-light spec did, and a recipe then matched it (ROADMAP "Considered"). Fixes, speed work and internal changes skip the brief.
+- **Value brief first, for a new capability.** Before writing a spec for something users couldn't do before, write a one-page value brief (`docs/superpowers/briefs/`, whose README has the sections): who asked, quoted; the user's symptom in their words; **the best recipe, built and measured through `dist/`**; and what a built-in adds over that recipe, with numbers, against what the recipe costs every user who needs it (PRINCIPLES test 1: its length, dependencies, internals, speed and traps). The maintainer's request with a use case passes "who asked" (test 2): don't count it as nobody asking. Run `scope-steward` and `user-advocate` on it, in parallel, then ask the maintainer: recipe, build or wait, with both verdicts. Only "build" goes on to a spec. Don't claim in a spec that a recipe can't do something without the measurement that shows it: the linear-light spec did, and a recipe then matched it (ROADMAP "Considered"). Fixes, speed work and internal changes skip the brief.
 - **A cold-read user, for a new option or function:** with the proposed docs text, run a fresh `general-purpose` agent that knows only the README and `docs/` (not `src/`, specs or the ROADMAP), playing a user with the use case. Ask what it guesses the name does before reading the explanation, where it would look for it, and which rules it would get wrong. It found the naming problem in the linear-light review that the three stewards missed. Run it once, with the spec stewards.
 - **Numbers in the docs have a source.** A new measured figure in `docs/` or the README comes from a script and results file in the repo (`bench/`, or `bench/spikes/<topic>/`), named in an HTML comment next to it. Don't write an estimate as a measurement.
 - **One review round per stage.** Combine questions into the stewards' prompts rather than running a second round on the same document; a second round is for a changed document.
 - **When:**
-  - **On every written spec,** before it goes to the maintainer for approval: run all three, in parallel, on the spec file.
-  - **In the final branch review,** alongside the code reviewer: write `git diff master...HEAD` to a file and run them on it. This catches drift during implementation.
+  - **On every written spec,** before it goes to the maintainer for approval: run the three stewards and `user-advocate`, in parallel, on the spec file.
+  - **Before each major version,** run `user-advocate` and `scope-steward` over the recipes and ROADMAP "Considered" (PRINCIPLES "Recipes are reviewed again").
+  - **In the final branch review,** alongside the code reviewer: write `git diff master...HEAD` to a file and run the three stewards on it (and `user-advocate` when the branch adds a capability or a recipe). This catches drift during implementation.
   - **Changes without a spec** that touch the public API, the docs' promises or the ROADMAP still get `api-steward`, and `roadmap-steward` for the ROADMAP. Internal fixes, speed work and tests skip review.
 - **Each call gives:**
   - the proposal's path;
