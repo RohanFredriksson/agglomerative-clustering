@@ -981,25 +981,31 @@ describe('embedding the module gzipped (the esbuild plugin)', () => {
         const { build } = await import('esbuild');
         const { spawnSync } = await import('child_process');
         const docs = await readFile(new URL('../docs/environments.md', import.meta.url), 'utf8');
-        const block = docs.slice(docs.indexOf('const gzipWasm'), docs.indexOf('} };', docs.indexOf('const gzipWasm')) + 4);
-        const runtime = docs.match(/^ *const wasm = await new Response\(new Blob\(\[gz\]\).*$/m)[0].trim();
-        expect(block).toContain("loader: 'binary'");
+        // The docs' two blocks, by their first lines, without the two-space list indent.
+        const block = (first) => {
+            const start = docs.indexOf(first);
+            return docs.slice(start, docs.indexOf('```', start)).split('\n').map((l) => l.replace(/^ {2}/, '')).join('\n');
+        };
+        const buildScript = block('// build.mjs'), pluginScript = block('// plugin.js');
+        expect(buildScript).toContain('plugins: [gzipWasm]');
+        // The build script's plugin, run here (its own build call targets the user's files).
+        const definition = buildScript.slice(buildScript.indexOf('const gzipWasm'), buildScript.indexOf('} };') + 4);
         const { gzipSync } = await import('node:zlib');
         const { readFileSync } = await import('node:fs');
-        const gzipWasm = new Function('gzipSync', 'readFileSync', `${block}\nreturn gzipWasm;`)(gzipSync, readFileSync);
+        const gzipWasm = new Function('gzipSync', 'readFileSync', `${definition}\nreturn gzipWasm;`)(gzipSync, readFileSync);
 
         const dist = new URL('../dist/', import.meta.url).pathname;
         const folder = await mkdtemp(join(tmpdir(), 'ac-gzip-'));
         try {
-            await writeFile(join(folder, 'entry.mjs'), `
-import gz from ${JSON.stringify(`${dist}clustering.wasm`)};
-import { init, buildPalette } from ${JSON.stringify(`${dist}index.mjs`)};
-${runtime}
-await init({ wasm });
+            // The plugin script as the docs have it, plus a check that it clusters; the package's names resolve to dist/.
+            await writeFile(join(folder, 'entry.mjs'), `${pluginScript}
+import { buildPalette } from 'agglomerative-clustering';
 const palette = await buildPalette(new Uint8Array(32 * 32 * 4).map((_, i) => (i * 7) & 255), 4);
 console.log(gz.length, palette.length / 3);`);
             await build({ entryPoints: [join(folder, 'entry.mjs')], bundle: true, format: 'esm', platform: 'neutral', target: 'es2022',
-                mainFields: ['module', 'main'], external: ['node:*'], plugins: [gzipWasm], outfile: join(folder, 'out.mjs'), logLevel: 'error' });
+                mainFields: ['module', 'main'], external: ['node:*'], plugins: [{ name: 'this-package', setup(b) {
+                    b.onResolve({ filter: /^agglomerative-clustering(\/clustering\.wasm)?$/ }, (args) => ({ path: args.path.endsWith('.wasm') ? `${dist}clustering.wasm` : `${dist}index.mjs` }));
+                } }, gzipWasm], outfile: join(folder, 'out.mjs'), logLevel: 'error' });
             const run = spawnSync(process.execPath, [join(folder, 'out.mjs')], { encoding: 'utf8', timeout: 60000 });
             expect(run.stderr).toBe('');
             const [embedded, colours] = run.stdout.trim().split(' ').map(Number);

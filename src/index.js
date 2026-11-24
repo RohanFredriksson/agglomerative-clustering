@@ -119,8 +119,8 @@ const wasmLoadFailed = (cause, given, gzipped = false) => {
         advice = "This engine has no WebAssembly SIMD, which the module needs (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 16.4 or newer).";
     } else if (gzipped) {
         // Engines word this differently (V8 and Firefox name the magic number, Safari doesn't), so it goes by the bytes.
-        reason = `the bytes given to init({ wasm }) are gzipped, not a WebAssembly module (${reason})`;
-        advice = "These bytes are gzipped (they start with 1f 8b): decompress them first, for example with new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(), and pass the result (see Plugins and single-file hosts in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
+        reason = `the bytes given to init({ wasm }) are gzipped (they start with 1f 8b), not a WebAssembly module (${reason})`;
+        advice = "Decompress them first, for example with new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(), and pass the result (see Plugins and single-file hosts in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
     } else if (/magic (word|number)|BufferSource argument is empty|wasm validation error: at offset [0-4]:/i.test(text)) {
         // What a 404 page, or a server's fallback HTML page, looks like once it has been compiled as WebAssembly.
         if (given === true) {

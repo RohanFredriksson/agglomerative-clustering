@@ -170,15 +170,23 @@ The main entry runs in every extension context: a Manifest V3 service worker, an
 Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wasm` and worker script can't sit next to it. Embed them, and say where everything is: in these hosts the package can't find its own files. (Tested against stand-ins for these hosts: a sandboxed iframe, a Node host process, an Electron renderer. Not inside the apps themselves.)
 
 - **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 86 KB, 115 KB as base64, and 53 KB gzipped then base64<!-- bench/spikes/slicing-mapping/results-size.txt -->.
-- **Smaller: embed it gzipped.** With esbuild, a plugin gzips the module as it bundles, so the import stays `agglomerative-clustering/clustering.wasm` and can't go stale after an upgrade (other toolchains: `gzip -9k` the file as a build step, every build):
+- **Smaller: embed it gzipped.** With esbuild, a plugin gzips the module as it bundles, so the import stays `agglomerative-clustering/clustering.wasm` and can't go stale after an upgrade. With another toolchain, gzip the file on every build (`gzip -9k`) and import the `.gz` with the binary loader (in esbuild, `--loader:.gz=binary`).
 
   ```js
+  // build.mjs (Node, at build time)
+  import { build } from 'esbuild';
   import { gzipSync } from 'node:zlib';
   import { readFileSync } from 'node:fs';
   const gzipWasm = { name: 'gzip-wasm', setup(build) {
     build.onLoad({ filter: /clustering\.wasm$/ }, (args) => ({ contents: gzipSync(readFileSync(args.path), { level: 9 }), loader: 'binary' }));
   } };
-  // in the plugin: `gz` is the imported clustering.wasm, now gzipped
+  await build({ entryPoints: ['plugin.js'], bundle: true, format: 'esm', target: 'es2022', plugins: [gzipWasm], outfile: 'dist/plugin.js' });
+  ```
+
+  ```js
+  // plugin.js (runs in the host)
+  import gz from 'agglomerative-clustering/clustering.wasm';
+  import { init } from 'agglomerative-clustering';
   const wasm = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   await init({ wasm });
   ```
