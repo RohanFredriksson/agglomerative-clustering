@@ -95,13 +95,16 @@ describe('the declarations', () => {
     });
 
     it('mark exactly the old names deprecated, and never the methods that keep them', () => {
+        // The renamed 3.4.0 names, and (3.8) the …FromClustering function forms; the methods that replace them are not.
+        const fromClustering = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
+        const expected = [...Object.keys(deprecated), ...fromClustering].sort();
         const isDeprecated = (symbol) => resolved(symbol).getJsDocTags(checker).some((tag) => tag.name === 'deprecated');
         for (const fileName of ['index.d.ts', 'worker.d.ts']) {
             const marked = moduleExports(fileName).filter(isDeprecated).map((symbol) => symbol.name).sort();
-            expect(marked, fileName).toEqual(Object.keys(deprecated).sort());
+            expect(marked, fileName).toEqual(expected);
         }
         const membersMarked = (interfaceName) => checker.getPropertiesOfType(declaredType(interfaceName === 'Clustering' ? 'index.d.ts' : 'worker.d.ts', interfaceName)).filter(isDeprecated).map((p) => p.name).sort();
-        expect(membersMarked('AgglomerativeWorker')).toEqual(Object.keys(deprecated).sort());
+        expect(membersMarked('AgglomerativeWorker')).toEqual(expected);
         expect(membersMarked('ClusteringHandle')).toEqual([]);
         expect(membersMarked('LoadedClusteringHandle')).toEqual([]);
         expect(membersMarked('Clustering')).toEqual([]);
@@ -221,7 +224,7 @@ describe('the API reference (docs/api.md)', () => {
     it('lists, for each function, exactly the options it accepts', async () => {
         const checked = [];
         for (const name of Object.keys(callArguments).filter((name) => !(name in deprecated))) {
-            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
+            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? |(?![\\s\\S]))', 'm'));   // a section ends at the next heading or the end of the file (the deprecated function forms come last)
             expect(section, `docs/api.md has a section for ${name}`).not.toBeNull();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
             if (!line || /those of|theirs/.test(line)) {continue;}          // these point at another function's list
@@ -376,6 +379,40 @@ describe('the documentation files', () => {
             ];
             for (const [target, anchor] of links) {
                 expect(anchorsOf(read(target)).has(anchor), `${file} links to ${target}#${anchor}, which is not a heading`).toBe(true);
+            }
+        }
+    });
+});
+
+describe('deprecated …FromClustering functions', () => {
+    const names = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
+    // The declarations of the function forms: functions and consts at the top level, and the worker's methods that take
+    // a clustering (a handle's own `getClusteringInfo()` takes nothing and is not one).
+    const declarations = (file) => {
+        const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+        const found = [];
+        const visit = (node) => {
+            let name;
+            if (ts.isFunctionDeclaration(node) && node.name) name = node.name.text;
+            else if (ts.isVariableStatement(node)) name = node.declarationList.declarations[0].name.text;
+            else if (ts.isMethodSignature(node) && node.parameters.length > 0) name = node.name.text;
+            if (name && names.includes(name)) found.push({ name, node });
+            ts.forEachChild(node, visit);
+        };
+        visit(source);
+        return { source, found };
+    };
+
+    it('the …FromClustering functions are deprecated in both entries', () => {
+        for (const file of ['src/index.d.ts', 'src/worker.d.ts']) {
+            const { source, found } = declarations(file);
+            for (const name of names) expect(found.some((d) => d.name === name), `${file} declares ${name}`).toBe(true);
+            for (const { name, node } of found) {
+                const comments = (ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? []).map((r) => source.text.slice(r.pos, r.end));
+                const doc = comments.filter((c) => c.startsWith('/**')).pop() ?? '';
+                expect(doc, `${file}: ${name} has @deprecated`).toContain('@deprecated');
+                expect(doc, `${file}: ${name} names the method`).toMatch(/clustering\.\w+\(/);
+                expect(doc, `${file}: ${name} names worker.load`).toMatch(/worker\.load/);
             }
         }
     });

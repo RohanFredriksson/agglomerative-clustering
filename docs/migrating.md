@@ -2,6 +2,23 @@
 
 Upgrading from an earlier major version, and replacing names deprecated along the way. The full list of changes in every release is in the [CHANGELOG](../CHANGELOG.md).
 
+## Deprecated in 3.8 (removed in 4.0)
+
+3.8 deprecates the five functions that take a stored clustering, in both entries. They keep working through 3.x, with no warning at run time, and 4.0 removes them. Use the method on the main thread, and a loaded handle off it: `worker.load(clustering)` keeps one copy of the clustering in the worker, so a slider or a batch no longer sends the bytes with every call.
+
+| Deprecated (both entries) | Main thread | Off the thread |
+|---|---|---|
+| `getPaletteFromClustering(c, k)` | `c.getPalette(k)` | `(await worker.load(c)).getPalette(k)` |
+| `getSwatchesFromClustering(c, k)` | `c.getSwatches(k)` | `….getSwatches(k)` |
+| `getClusteringInfo(c)` (the function) | `c.getClusteringInfo()` | `….getClusteringInfo()` |
+| `quantizeFromClustering(image, c, k)` | `c.quantize(image, k)` | `….quantize(image, k)` |
+| `quantizeToIndicesFromClustering(image, c, k)` | `c.quantizeToIndices(image, k)` | `….quantizeToIndices(image, k)` |
+
+- **The methods give the same results, defaults and errors.** The image still comes first in the mapping methods, as in the function forms. A clustering read from storage has no methods until `new Clustering(bytes)`.
+- **A one-off call in a worker** (`await worker.getPaletteFromClustering(c, k)`) becomes `await using loaded = await worker.load(c)` and a call on `loaded`: one copy of the clustering is sent, and you can cut it as often as you like.
+- **Mocks and spies:** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`; spy on the method of a real clustering instead.
+- **`getClusteringInfo` as a function is deprecated, the method is not.** Only `getClusteringInfo(clustering)` goes; `clustering.getClusteringInfo()` and a handle's `getClusteringInfo()` stay.
+
 ## Deprecated in 3.4 (removed in 4.0)
 
 3.4.0 gave the three functions that cluster an image verb names, so that from 4.0 a name starting with `get` only reads or cuts what it is given. The old names keep working through 3.x and are removed in 4.0.

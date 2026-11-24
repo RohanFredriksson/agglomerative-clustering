@@ -409,6 +409,8 @@ export function getPalette(image: ImageLike, k: number, options?: ClusteringOpti
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.getPalette(k)`; off the main thread, `(await worker.load(clustering)).getPalette(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 
@@ -446,6 +448,8 @@ export function getSwatches(image: ImageLike, k: number, options?: ClusteringOpt
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.getSwatches(k)`; off the main thread, `(await worker.load(clustering)).getSwatches(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 
@@ -489,6 +493,8 @@ export interface ClusteringInfo {
  * Reads what a clustering holds, including its error curve for choosing a palette size. Needs a clustering from 3.x: a 2.x
  * clustering recorded no weights, so it is rejected with `unsupported-version` (as `getSwatchesFromClustering` rejects it);
  * the palette and mapping functions still read it.
+ *
+ * @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 
@@ -509,6 +515,8 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.quantize(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantize(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
@@ -539,6 +547,8 @@ export function quantizeToIndices(image: ImageLike, k: number, options?: Quantiz
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
  *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
  *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
+ *
+ * @deprecated Use `clustering.quantizeToIndices(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantizeToIndices(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
