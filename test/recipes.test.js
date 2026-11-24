@@ -312,6 +312,7 @@ describe('recipes in the guides', () => {
     // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches, and returns
     // them heaviest first. `space`: 'oklab' (closer by eye) or 'rgb' (closer in sRGB values, which PSNR measures).
     async function improveThreads(clustering, threads, chosen, space = 'oklab') {
+      if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
       const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
       const a = coordinates(threads, space), b = coordinates(colors, space);
       const m = weights.length, t = threads.length / 3, n = chosen.length;
@@ -470,6 +471,26 @@ describe('recipes in the guides', () => {
             expect(new Set(improved).size).toBe(n);
             expect(error(improved)).toBeLessThanOrEqual(error(start));
         }
+    });
+
+    it('the guides\' thread functions run with the worker entry\'s functions and give the same threads', async () => {
+        const { readFile } = await import('fs/promises');
+        const guides = (await readFile(new URL('../docs/guides.md', import.meta.url), 'utf8')).split('\n');
+        const source = (name) => {
+            const start = guides.findIndex((l) => new RegExp(`^\\s*(async )?function ${name}\\(`).test(l));
+            const indent = guides[start].match(/^ */)[0];
+            return guides.slice(start, guides.findIndex((l, i) => i > start && l === `${indent}}`) + 1).join('\n');
+        };
+        const make = (entry) => new Function('getPaletteFromClustering', 'getSwatchesFromClustering', 'quantizeToIndicesWithPalette',
+            `${source('chooseThreads')}\n${source('improveThreads')}\n${source('coordinates')}\nreturn { chooseThreads, improveThreads };`)(entry.getPaletteFromClustering, entry.getSwatchesFromClustering, entry.quantizeToIndicesWithPalette);
+        const worker = await import('../dist/worker.mjs');
+        const viaWorker = make(worker);
+        const data = new Uint8Array(40 * 30 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i * 37) % 251));
+        const threads = new Uint8Array(3 * 60).map((_, i) => (i * 97) % 256);
+        const clustering = await worker.buildClustering({ data, format: 'rgba', width: 40 });
+        const chosen = await viaWorker.improveThreads(clustering, threads, await viaWorker.chooseThreads(clustering, threads, 6));
+        expect(chosen).toEqual(await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 6)));
+        await expect(viaWorker.improveThreads(clustering, threads, chosen, 'RGB')).rejects.toThrow(/Invalid space/);
     });
 
     it('improveThreads handles an image with fewer colours than n, and one with none visible', async () => {

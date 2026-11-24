@@ -43,7 +43,7 @@ The guides' `chooseThreads` and `improveThreads` (docs/guides.md, "Fixed palette
      - **With Floyd–Steinberg in RGB** it is mixed:
        - threads 6: 9.48 → 9.50, 11 photos each way;
        - dense 6 and 12 get worse on more photos (8 better / 14 worse, 9 / 11).
-     - **Every cell costs PSNR,** up to 2 dB.
+     - **Every cell but one costs PSNR,** up to 2 dB.
      - **The swatches' source doesn't matter:** taken from an OKLab clustering instead, the numbers barely move (`results-oklab-clustering.txt`; pigments 4: 23.3 → 18.7, threads 12: 7.11 → 6.84).
 
      So the gain follows the scoring space, not the mapping space. A rule of "score where you map" is not what the data show. The rule they show is "score in OKLab if you judge by eye (ΔE), in RGB if you judge by sRGB error (PSNR)", with dense charts and dithering as exceptions. The guides only say "compare the two choices on your image"; they give no conversion and no rule.

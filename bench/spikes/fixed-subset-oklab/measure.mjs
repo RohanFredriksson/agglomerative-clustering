@@ -97,13 +97,14 @@ for (const entry of KODAK_IMAGES.slice(0, limit)) {
             const start = await chooseThreads(clustering, F, n);
             const bySrgb = improve(F, colors, weights, start), byOklab = improve(threadsLab, swatchesLab, weights, start);
             const key = `${name} (${F.length / 3}), N = ${n}`;
-            if (!rows.has(key)) {rows.set(key, modes.map(() => ({ s: [], o: [], ps: [], po: [] })));}
+            if (!rows.has(key)) {rows.set(key, modes.map(() => ({ s: [], o: [], ps: [], po: [], c: [], pc: [] })));}
             const same = bySrgb.slice().sort().join() === byOklab.slice().sort().join();
             for (const [i, [colorSpace, dither]] of modes.entries()) {
                 const r = rows.get(key)[i];
                 const a = measure(rgba, (await quantizeWithPalette(image, pick(F, bySrgb), { colorSpace, dither })).data);
                 const b = same ? a : measure(rgba, (await quantizeWithPalette(image, pick(F, byOklab), { colorSpace, dither })).data);
-                r.s.push(a.deltaE); r.o.push(b.deltaE); r.ps.push(a.psnr); r.po.push(b.psnr);
+                const c = measure(rgba, (await quantizeWithPalette(image, pick(F, start), { colorSpace, dither })).data);
+                r.s.push(a.deltaE); r.o.push(b.deltaE); r.ps.push(a.psnr); r.po.push(b.psnr); r.c.push(c.deltaE); r.pc.push(c.psnr);
             }
         }
     }
@@ -117,4 +118,12 @@ for (const [key, perMode] of rows) {
         const better = r.s.filter((v, i) => r.o[i] < v - 0.05).length, worse = r.s.filter((v, i) => r.o[i] > v + 0.05).length;
         return `${mean(r.s).toFixed(2)}/${mean(r.o).toFixed(2)} ${better}/${worse} ${(mean(r.po) - mean(r.ps)).toFixed(2)}`.padEnd(30);
     }).join(''));
+}
+console.log('\nAgainst the start (chooseThreads alone): mean CIEDE2000 of the start / of the OKLab-scored search, the photos where the search');
+console.log('was better / worse by more than 0.05 ΔE, and its PSNR change (dB); then the same for the sRGB-scored search.\n');
+console.log('chart, N'.padEnd(26) + modes.map(([c, d]) => `${c}${d ? ' + dither' : ''}`.padEnd(30)).join(''));
+const versus = (start, after, ps, pa) => `${mean(start).toFixed(2)}/${mean(after).toFixed(2)} ${start.filter((v, i) => after[i] < v - 0.05).length}/${start.filter((v, i) => after[i] > v + 0.05).length} ${(mean(pa) - mean(ps)).toFixed(2)}`;
+for (const [key, perMode] of rows) {
+    console.log(key.padEnd(26) + perMode.map((r) => versus(r.c, r.o, r.pc, r.po).padEnd(30)).join(''));
+    console.log('  (sRGB-scored)'.padEnd(26) + perMode.map((r) => versus(r.c, r.s, r.pc, r.ps).padEnd(30)).join(''));
 }
