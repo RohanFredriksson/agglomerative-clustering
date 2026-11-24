@@ -89,7 +89,7 @@ C++17 is required (the header enforces it). Keep `std::sort` and `std::unordered
 
 ## Design review
 
-The reviewers in `.claude/agents/` (read-only; `user-advocate` may also run commands, writing only to its scratchpad) check a design against the project's written intent, so a proposal is not checked only by the agent that wrote it. Three stewards argue for keeping the library small; `user-advocate` argues the users' side, so the maintainer hears both. `docs/PRINCIPLES.md` is their ground truth (the charter, API principles and settled decisions), together with `docs/ROADMAP.md` and `docs/stability.md`.
+The reviewers in `.claude/agents/` (read-only; `user-advocate` may also run commands, writing only to its scratchpad) check a design against the project's written intent, so a proposal is not checked only by the agent that wrote it. Three stewards argue for keeping the library small; `user-advocate` argues the users' side, so the maintainer hears both. They run on Sonnet (`model:` in each file's frontmatter), chosen by the maintainer on 2026-11-24 to spend less of the usage quota; exploratory-round agents (outside users building projects against the package) also run on Sonnet, with their reports written to files. `docs/PRINCIPLES.md` is their ground truth (the charter, API principles and settled decisions), together with `docs/ROADMAP.md` and `docs/stability.md`.
 
 | Agent | Question |
 |---|---|

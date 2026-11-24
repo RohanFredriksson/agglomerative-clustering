@@ -1093,3 +1093,36 @@ console.log(gz.length, palette.length / 3);`);
         }
     });
 });
+
+// docs/environments.md "Plugins and single-file hosts": the worker script as a data: URL. The plugin is the docs' block,
+// written inside the repository (so the package's name resolves to itself, as it would from node_modules) and run.
+describe('the worker script as a data: URL (the esbuild plugin)', () => {
+    it('gives a data: URL that starts a worker, given the bytes', async () => {
+        const { readFile, mkdir, writeFile, rm } = await import('fs/promises');
+        const { readFileSync } = await import('node:fs');
+        const { build } = await import('esbuild');
+        const { fileURLToPath } = await import('url');
+        const { createWorker } = await import('../dist/worker.mjs');
+        const docs = await readFile(new URL('../docs/environments.md', import.meta.url), 'utf8');
+        const start = docs.indexOf('// worker-script.mjs');
+        const pluginModule = docs.slice(start, docs.indexOf('```', start)).split('\n').map((l) => l.replace(/^ {2}/, '')).join('\n');
+        const folder = new URL(`../build/recipe-worker-script-${process.pid}/`, import.meta.url);
+        await mkdir(folder, { recursive: true });
+        try {
+            await writeFile(new URL('worker-script.mjs', folder), pluginModule);
+            await writeFile(new URL('entry.mjs', folder), "import script from 'worker-script';\nexport default script;\n");
+            const { workerScript } = await import(new URL('worker-script.mjs', folder).href);
+            await build({ entryPoints: [fileURLToPath(new URL('entry.mjs', folder))], bundle: true, format: 'esm', plugins: [workerScript], outfile: fileURLToPath(new URL('out.mjs', folder)), logLevel: 'error' });
+            const { default: script } = await import(new URL('out.mjs', folder).href);
+            expect(script).toMatch(/^data:text\/javascript;base64,/);
+            const worker = createWorker({ script, wasm: readFileSync(new URL('../dist/clustering.wasm', import.meta.url)) });
+            try {
+                expect((await worker.buildPalette(new Uint8Array(64 * 4).map((_, i) => (i * 37) & 255), 4)).length).toBe(12);
+            } finally {
+                await worker.terminate();
+            }
+        } finally {
+            await rm(folder, { recursive: true, force: true });
+        }
+    }, timeLimit(60000));
+});

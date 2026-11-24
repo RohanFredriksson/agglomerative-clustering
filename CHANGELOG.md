@@ -9,6 +9,12 @@
 - **A worker started from a `data:` URL without `wasm`** (a bundled worker script in a single-file host) now fails with a `wasm-load-failed` message that says the package can't tell where `clustering.wasm` is and to pass the module, `createWorker({ script, wasm: bytes })`. Before, it said to use `init({ wasm })` and serve the file, neither of which helps there. The same applies to code running from a `blob:` URL or an `about:srcdoc` page.
 - **A worker from a `blob:` URL in a sandboxed iframe** (an opaque origin, as Figma's plugin UI is) fails in Chromium, and the `worker-failed` message now says why and to use a `data:` URL instead, linking the docs' recipe. Before, it said to serve `worker-thread.mjs`. Both found by the same round.
 
+### Docs
+- **Gaps the exploratory round on 3.7.1 ran into, filled.**
+  - **Workers guide:** `signal` and `onProgress` on `worker.cluster` too, and what an aborted call rejects with. A large-export example with progress, Cancel and the handle released in `finally`, and how many workers to create.
+  - **Plugins and single-file hosts:** a tested esbuild plugin that turns the worker script into a `data:` URL; what a plugin must pass (`wasm`, and a worker's `script`); and Obsidian's `main.js` as CommonJS.
+  - **GIFs:** frames must share one size. The fast-png palette PNG without transparency.
+
 ## 3.7.1
 
 Output and the API are unchanged; one error message is clearer, and the docs gain two improved recipes.
