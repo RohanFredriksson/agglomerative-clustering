@@ -1120,7 +1120,7 @@ const chooseFrom = async (name, clustering, palette, k, options) => {
         swatches: () => cutSwatches(name, clustering, 1024, []),
         snap: async (colours) => (await quantizeToIndicesWithPalette({data: colours, format: 'rgb'}, entries, {colorSpace: 'rgb'})).indices,
         pause,
-    }, entries, k, o.colorSpace);
+    }, entries, k, colorSpaceName(o.colorSpace));
     indices.sort((x, y) => x - y);
     const chosen = new Uint8Array(3 * indices.length);
     indices.forEach((j, s) => chosen.set(entries.subarray(3 * j, 3 * j + 3), 3 * s));

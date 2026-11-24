@@ -88,6 +88,14 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
             check(`${name}/clustering/${label}`, clustering);
             for (const k of [16, 256]) {check(`${name}/palette/${label}/${k}`, await getPaletteFromClustering(clustering, k));}
         }
+        // chooseFrom on the RGB clustering, from a seeded 200-entry chart (the generator of test/recipes.test.js).
+        let seed = 11;
+        const chart = new Uint8Array(200 * 3).map(() => (seed = (seed * 16807) % 2147483647) % 256);
+        const clustering = await buildClustering(rgba);
+        for (const space of ['rgb', 'oklab']) {
+            const { indices, palette } = await clustering.chooseFrom(chart, 12, { colorSpace: space });
+            check(`${name}/chooseFrom/${space}/12`, new Uint8Array([...new Uint8Array(Uint16Array.from(indices).buffer), ...palette]));
+        }
     }, timeLimit(60_000));
 
     it('quantized images', async () => {
