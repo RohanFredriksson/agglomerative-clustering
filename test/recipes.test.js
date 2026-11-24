@@ -360,7 +360,8 @@ describe('recipes in the guides', () => {
     }
 
     // Pixels per chosen thread, most used first, leaving out threads no pixel was mapped to (it happens, more often with
-    // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch.
+    // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch, and pass `transparent: true` for
+    // an image with transparent areas, or they are counted to the nearest thread.
     async function countThreads(image, threads, chosen, options) {
       const subset = new Uint8Array(3 * chosen.length);
       chosen.forEach((j, s) => subset.set(threads.slice(3 * j, 3 * j + 3), 3 * s));
