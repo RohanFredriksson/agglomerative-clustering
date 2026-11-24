@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- **Choosing N colours from a fixed palette is 5 to 25 times faster.** The guides' `improveThreads` scored every (thread, position) swap with its own pass over the swatches; it now gets every position's score for a thread from one pass. It chooses the same threads (tested against the old search), and takes 18 ms for 12 of 584 threads and 37 ms for 40 of 1000, where it took 149 and 907 ms<!-- bench/spikes/fixed-subset-speed/speed.mjs → results-speed.txt -->. Copy the new version if you use it. The guides no longer suggest a Web Worker of your own for large charts, and say that the recipe needs the main entry.
+
 ## 3.6.0
 
 Output is unchanged; one new warning, the 3.5.0 warning is reworded and catches more, cancelling stays prompt on very large images, and the WebAssembly is a fifth smaller.

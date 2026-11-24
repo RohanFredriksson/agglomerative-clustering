@@ -524,7 +524,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 - **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering. With small palettes of widely spaced inks (e-ink, grey levels), dither in light with the function above and leave `colorSpace` out: without it every method makes photos too light, and OKLab more so in black and white.
 - **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but two short functions do it.
   - **`chooseThreads`** cuts the clustering, snaps each cut colour to its nearest thread, and cuts finer until N distinct threads appear. After clustering it takes about a millisecond. On the Kodak photos with large charts it beat "the N most used threads" by about 3 to 4 dB PSNR at 6 to 12 threads; the gain shrinks as N grows.
-  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image; it grows with the number of threads times N: about 50 ms for 6 of 584 threads, 150 ms for 12 and 350 ms for 24, and up to 1.5 s for 40 of 1000. The loop is your own code, so the library's worker entry can't move it off the main thread: for large charts in a browser, run both functions in a Web Worker of your own that imports the main entry. Skip it when `chooseThreads` is good enough.
+  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image, and each pass sweeps the swatches once per thread in the chart: 18 ms for 12 of 584 threads and 30 ms for 40, 25 to 37 ms for 12 to 40 of 1000 (medians on the Kodak photos, under 60 ms at worst)<!-- bench/spikes/fixed-subset-speed/speed.mjs → results-speed.txt -->. Both functions call the clustering's methods, which run on the calling thread with the main entry (see [Clustering methods](api.md#clustering-methods)): with only the worker entry imported, they reject with `wasm-load-failed`, so import the main entry where you call them. Skip it when `chooseThreads` is good enough.
 
   ```js
   import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
@@ -549,7 +549,7 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
   // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
   async function improveThreads(clustering, threads, chosen) {
     const { palette: colors, weights } = await clustering.getSwatches(1024);
-    const m = weights.length, t = threads.length / 3;
+    const m = weights.length, t = threads.length / 3, n = chosen.length;
     const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
     for (let j = 0; j < t; j++) {
       for (let i = 0; i < m; i++) {
@@ -558,24 +558,32 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
       }
     }
     chosen = [...chosen];
+    const nearest = new Int32Array(m), first = new Float64Array(m), second = new Float64Array(m), change = new Float64Array(n);
     for (;;) {
       // Each swatch's nearest chosen thread (its position in `chosen`) and the distances to the nearest two.
-      const nearest = new Int32Array(m), first = new Float64Array(m).fill(Infinity), second = new Float64Array(m).fill(Infinity);
       let current = 0;
       for (let i = 0; i < m; i++) {
-        chosen.forEach((j, s) => {
-          const d = distance[j * m + i];
-          if (d < first[i]) {second[i] = first[i]; first[i] = d; nearest[i] = s;} else if (d < second[i]) {second[i] = d;}
-        });
-        current += weights[i] * first[i];
+        let f = Infinity, g = Infinity, near = 0;
+        for (let s = 0; s < n; s++) {
+          const d = distance[chosen[s] * m + i];
+          if (d < f) {g = f; f = d; near = s;} else if (d < g) {g = d;}
+        }
+        nearest[i] = near; first[i] = f; second[i] = g; current += weights[i] * f;
       }
-      // The best swap of an unchosen thread j for the chosen thread at position s, if any is better.
+      // For each unchosen thread j, one pass over the swatches gives the error after swapping j in at every position s:
+      // current + shared + change[s]. Keep the best swap, if any is better.
       let best = null, lowest = current * (1 - 1e-9);
       for (let j = 0; j < t; j++) {
         if (chosen.includes(j)) {continue;}
-        for (let s = 0; s < chosen.length; s++) {
-          let error = 0;
-          for (let i = 0; i < m; i++) {error += weights[i] * Math.min(distance[j * m + i], nearest[i] === s ? second[i] : first[i]);}
+        let shared = 0;   // what j gains on the swatches it brings closer, whichever thread it replaces
+        change.fill(0);   // change[s]: the rest of the change, on the swatches whose nearest thread is at s
+        for (let i = 0; i < m; i++) {
+          const d = distance[j * m + i], gain = d < first[i] ? weights[i] * (d - first[i]) : 0;
+          shared += gain;
+          change[nearest[i]] += weights[i] * (Math.min(d, second[i]) - first[i]) - gain;
+        }
+        for (let s = 0; s < n; s++) {
+          const error = current + shared + change[s];
           if (error < lowest) {lowest = error; best = [s, j];}
         }
       }
