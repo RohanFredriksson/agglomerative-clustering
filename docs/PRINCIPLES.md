@@ -48,7 +48,7 @@ The mechanical conventions are in `CLAUDE.md`: option shapes, lists of names, er
   - Example: while designing 3.2.0, format names like `'bgra-premultiplied'` were turned down because 4.0 plans a `premultiplied` property.
 - **Names follow their family:**
   - `get…` for calls that read or cut what their arguments or receiver already hold (a cut of a clustering, its info, a handle's kept data); they never cluster, map or search. A call that does that work is named with a verb (`buildPalette`, `quantize`, `cluster`). `getClustering`, `getPalette` and `getSwatches`, which predate this rule, are deprecated names of `buildClustering`, `buildPalette` and `buildSwatches` since 3.4.0, and 4.0 removes them (ROADMAP).
-  - `…FromClustering` for those that take a stored clustering;
+  - `…FromClustering` for those that take a stored clustering (through 3.x; deprecated from 3.8 and removed in 4.0, see "Settled decisions");
   - `…WithPalette` for those that take a palette.
   - A method takes its function form's name without the suffix that names the receiver (`clustering.getPalette(k)`), so the two always share a stem and the rule above names both. Methods that manage a live object are named for the action (`release`, `terminate`).
   - A new name should read as a sibling of the names around it.
@@ -84,6 +84,7 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - the main entry if loaded, else the worker (an import would change where code runs).
 
   A lazy loader in the worker entry and one slot across copies of the package were left out, not rejected for good: both are additive later (ROADMAP "Considered").
+- **Off the calling thread, the handle is the answer; `…FromClustering` goes in 4.0** (decided by the maintainer on 2026-11-24, before the 4.0 spec). `worker.load(clustering)` gives a handle for a stored clustering, so the worker entry needs no `…FromClustering` functions. 3.8 adds it and marks every `…FromClustering` function `@deprecated` in both entries; 4.0 removes them. New cut-or-search functions are a `Clustering` method plus a handle method, with no function form (the first is the fixed-palette subset, reopened from "Declined" and built in 3.8; ROADMAP "Considered").
 - **`Palette` keeps no methods:** `…WithPalette` takes a `PaletteLike` ("Methods go where losing them costs nothing"). The last open condition, ROADMAP item 6 (reusing dither recipes), ended as a recipe. A frame-mapper object is a separate question (ROADMAP "Considered").
 - **The default colour space stays `'rgb'`.**
 - **Indexed output:** `transparent` is `boolean | cutoff`, and `k` counts the transparent entry.
@@ -101,7 +102,6 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - palette file writers;
   - a matte colour;
   - smoothing palettes across frames;
-  - a function for choosing N colours from a fixed palette (a recipe in the guides covers it);
   - a linear-light dither option (a recipe in the API reference covers it);
   - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it);
   - built-in swatch helpers: a ranking function, an ordering option on swatches, a one-call dominant colour (the guides' `rankSwatches` recipe covers them).
