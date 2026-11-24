@@ -217,6 +217,8 @@ const png = encode({
 });
 ```
 
+For an opaque image, leave out `transparent` and the swap: `encode({ width, height, depth: 8, channels: 1, data: indices, palette: entries })`.
+
 ## Animated GIFs and sets of images
 
 One palette for a whole animation (or a set of images that should share colours) keeps colours from flickering between frames. Cluster a sample of the frames as one image, by putting their pixels end to end, then map every frame with that clustering:
@@ -243,6 +245,7 @@ for (const frame of frames) {
 
 - **Cut once, map with the palette.** A palette passed to `quantizeToIndicesWithPalette` has the transparent entry added after it, so 255 colours make at most 256 entries. Cutting per frame instead (`clustering.quantizeToIndices(frame, 256)`) gives a frame without transparent pixels 256 colours, a finer cut with one colour split in two, so still parts of the picture would change colour between frames.
 - **A frame with no transparent pixels has no transparent entry**, so its palette is one entry shorter; a GIF with one global palette can use the longer one throughout. Take the transparent entry's index from `transparentIndex` (it is `shared.length / 3`: 255 when the sample has that many colours, fewer for an animation of few colours, such as pixel art).
+- **Every frame of a GIF has its size.** The example writes all frames at `width` × `height`; for a set of photos of different shapes, resize them to one size first (sharp: `resize(width, height, { fit: 'contain', background })` letterboxes). Clustering the sample doesn't need this: the frames are joined as pixels, without a width.
 - **In parallel:** with the worker entry, a few `createWorker()`s map frames side by side. On small frames (320×240) the cost of sending them across outweighs the gain.
 
 ### Faster ordered dithering: map frames in batches
@@ -380,11 +383,31 @@ slider.oninput = async () => {
 };
 ```
 
+`signal` and `onProgress` work on every call that takes an image, `worker.cluster(image, options)` included. An aborted call rejects with the signal's reason (an `AbortError` `DOMException`, unless you give `abort()` a reason of your own).
+
 Calls to one worker run in order, and re-mapping a large image takes a while (0.2 to 0.3 s at 12 megapixels, about 1 s dithered), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
 
 Cancelling stops a call already mapping within a slice, about 10 ms (from 3.7.0) and skips calls still waiting their turn, so the picture stays close behind the slider with every dither method, even ordered dithering with many steps (a second or more; see [Choosing a dither method](api.md#choosing-a-dither-method)).
 
+**A large export, with progress and a Cancel button.** Clustering is the first half of the work, so it takes the signal too, and the handle is released however the export ends: it holds a copy of the image and its clustering in the worker (about 25 MB and more for a 6-megapixel photo):
+
+```js
+const controller = new AbortController();
+cancel.onclick = () => controller.abort();
+const { signal } = controller;
+const handle = await worker.cluster(big, { precision: 6, signal, onProgress: (f) => bar.value = f / 2 });
+try {
+  const result = await handle.quantize(16, { dither: 'ordered', signal, onProgress: (f) => bar.value = 0.5 + f / 2 });
+  // ... save result
+} finally {
+  await handle.release();   // or create the handle with `await using`, where your target supports it
+}
+```
+
+Splitting the bar in half is a guess: mapping with ordered dithering usually takes longer than clustering, plain mapping much less.
+
 - **Bundlers.** The worker is started with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, which Vite, webpack 5, Rsbuild and Next.js pick up. Angular, plain esbuild and Rollup need the script copied for them: see [Angular, esbuild, Rollup and other bundlers](environments.md#angular-esbuild-rollup-and-other-bundlers).
+- **How many workers.** Each call runs on one thread, so more workers than the machine has cores add memory, not speed: every worker has its own WebAssembly instance and, while it works, a copy of its image. `os.availableParallelism()` (Node) and `navigator.hardwareConcurrency` count logical cores, twice the physical ones on many CPUs; start below that and measure. The [Servers](performance.md#servers) section has a pool.
 - **Terminate the workers you create.** A worker you make with `createWorker()` keeps its thread until `terminate()` (or `await using worker = createWorker()`). The shared worker behind the exported functions needs nothing.
 - **TypeScript:** a handle keeps the image type it was made from, so a variable that holds one is `ClusteringHandle<ImageData> | null`, not a bare `ClusteringHandle`.
 

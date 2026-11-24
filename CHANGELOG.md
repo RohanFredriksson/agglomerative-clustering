@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- **Gaps the exploratory round on 3.7.1 ran into, filled.**
+  - **Workers guide:** `signal` and `onProgress` on `worker.cluster` too, and what an aborted call rejects with. A large-export example with progress, Cancel and the handle released in `finally`, and how many workers to create.
+  - **Plugins and single-file hosts:** a tested esbuild plugin that turns the worker script into a `data:` URL; what a plugin must pass (`wasm`, and a worker's `script`); and Obsidian's `main.js` as CommonJS.
+  - **GIFs:** frames must share one size. The fast-png palette PNG without transparency.
+
 ## 3.7.1
 
 Output and the API are unchanged; one error message is clearer, and the docs gain two improved recipes.
