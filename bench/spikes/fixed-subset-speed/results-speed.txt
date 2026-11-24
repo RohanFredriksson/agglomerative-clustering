@@ -1,0 +1,12 @@
+24 Kodak photos; times in ms (median, max) for improveThreads as in the guides, the fast swap pass in JavaScript, and in C++/WebAssembly.
+chart, N                      guides            fast JS            C++ (WASM)       speed-up fast/guides, C++/fast
+threads (584), N = 6            54.5   110.7     11.9    34.7      8.0    20.0     4.6x, 1.5x
+threads (584), N = 12          148.6   222.5     17.7    26.8     10.7    16.0     8.4x, 1.7x
+threads (584), N = 24          368.8   639.8     23.0    38.2     12.8    23.1     16.1x, 1.8x
+threads (584), N = 40          721.2   946.2     30.1    54.8     16.2    20.4     24.0x, 1.9x
+dense (1000), N = 6             91.2   172.0     20.4    36.6     12.2    21.6     4.5x, 1.7x
+dense (1000), N = 12           225.9   480.1     24.7    43.6     13.9    21.8     9.2x, 1.8x
+dense (1000), N = 24           452.4   792.3     29.9    48.3     16.4    27.5     15.1x, 1.8x
+dense (1000), N = 40           906.6  1687.8     36.9    58.6     20.2    38.6     24.5x, 1.8x
+
+same choice as the guides' function: 192 of 192
