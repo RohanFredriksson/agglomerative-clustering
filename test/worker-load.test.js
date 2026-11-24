@@ -1,5 +1,5 @@
 // worker.load(clustering): a handle for a stored clustering, kept in the worker (3.8).
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { Worker } from 'worker_threads';
 import * as ac from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
@@ -12,6 +12,11 @@ for (let p = 0; p < width * height; p++) {
 }
 
 const worker = createWorker();
+// `await using` is syntax Node 20 and 22 can't parse, so the tests release their handles here instead; the syntax
+// itself is type-checked in test/types/disposable.mts.
+const open = [];
+const track = (handle) => {open.push(handle); return handle;};
+afterEach(async () => {for (const handle of open.splice(0)) {await handle.release();}});
 afterAll(() => worker.terminate());
 
 const imageData = () => new ImageData(new Uint8ClampedArray(image), width, height);
@@ -21,7 +26,7 @@ describe('worker.load', () => {
     it('matches the deprecated function forms byte for byte', async () => {
         for (const clusterOptions of [{}, { colorSpace: 'oklab' }]) {
             const clustering = await ac.buildClustering(image, clusterOptions);
-            await using loaded = await worker.load(clustering);
+            const loaded = track(await worker.load(clustering));
             for (const k of [4, 16]) {
                 expect(await loaded.getPalette(k)).toEqual(await worker.getPaletteFromClustering(clustering, k));
                 expect(await loaded.getSwatches(k)).toEqual(await worker.getSwatchesFromClustering(clustering, k));
@@ -38,7 +43,7 @@ describe('worker.load', () => {
 
     it('returns the type of the image it is given', async () => {
         const clustering = await ac.buildClustering(image);
-        await using loaded = await worker.load(clustering);
+        const loaded = track(await worker.load(clustering));
         expect(await loaded.quantize(image, 4)).toBeInstanceOf(Uint8Array);
         const data = await loaded.quantize(imageData(), 4);
         expect(data).toBeInstanceOf(ImageData);
@@ -88,7 +93,7 @@ describe('worker.load', () => {
 
     it('a number where the image goes says what the handle holds', async () => {
         const clustering = await ac.buildClustering(image);
-        await using loaded = await worker.load(clustering);
+        const loaded = track(await worker.load(clustering));
         const message = "Invalid image: this handle holds a clustering, not an image (from worker.load); pass the image, then k.";
         await expect(loaded.quantize(4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message });
         await expect(loaded.quantizeToIndices(4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message });
@@ -96,7 +101,7 @@ describe('worker.load', () => {
 
     it('signal and onProgress work on its mapping methods', async () => {
         const clustering = await ac.buildClustering(image);
-        await using loaded = await worker.load(clustering);
+        const loaded = track(await worker.load(clustering));
         const reason = new Error('stop');
         await expect(loaded.quantize(image, 4, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
         await expect(loaded.quantizeToIndices(image, 4, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
@@ -117,24 +122,25 @@ describe('worker.load', () => {
         for (const call of [() => loaded.getPalette(4), () => loaded.getSwatches(4), () => loaded.getClusteringInfo(), () => loaded.quantize(image, 4), () => loaded.quantizeToIndices(image, 4), () => loaded.chooseFrom(new Uint8Array(6), 1)]) {
             await expect(call()).rejects.toMatchObject({ code: 'invalid-handle' });
         }
-        let kept;
-        {
-            await using inBlock = await worker.load(clustering);
-            kept = inBlock;
+        // What `await using` calls at the end of its block (where the runtime has Symbol.asyncDispose).
+        if (typeof Symbol.asyncDispose === 'symbol') {
+            const inBlock = await worker.load(clustering);
+            expect(inBlock[Symbol.asyncDispose]).toBe(inBlock.release);
             expect((await inBlock.getPalette(4)).length).toBe(12);
+            await inBlock[Symbol.asyncDispose]();
+            await expect(inBlock.getPalette(4)).rejects.toMatchObject({ code: 'invalid-handle' });
         }
-        await expect(kept.getPalette(4)).rejects.toMatchObject({ code: 'invalid-handle' });
     });
 
     it('has no getClustering and no …WithPalette methods', async () => {
-        await using loaded = await worker.load(await ac.buildClustering(image));
+        const loaded = track(await worker.load(await ac.buildClustering(image)));
         for (const name of ['getClustering', 'quantizeWithPalette', 'quantizeToIndicesWithPalette']) {expect(loaded[name]).toBeUndefined();}
     });
 
     it('chooseFrom on a loaded handle equals clustering.chooseFrom', async () => {
         const clustering = await ac.buildClustering(image);
         const fixed = new Uint8Array([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 200, 200, 0]);
-        await using loaded = await worker.load(clustering);
+        const loaded = track(await worker.load(clustering));
         expect(await loaded.chooseFrom(fixed, 3)).toEqual(await clustering.chooseFrom(fixed, 3));
         expect(await loaded.chooseFrom(fixed, 3, { colorSpace: 'oklab' })).toEqual(await clustering.chooseFrom(fixed, 3, { colorSpace: 'oklab' }));
     });
@@ -148,18 +154,18 @@ describe('worker.load', () => {
             const first = new Uint8Array(clustering);
             const pending = moving.load(first);
             expect(first.length).toBe(0);
-            await using early = await pending;
+            const early = await pending;
             expect(await early.getPalette(5)).toEqual(expected);
             // Running: posting moves them, as it does for an image.
             const second = new Uint8Array(clustering);
-            await using later = await moving.load(second);
+            const later = await moving.load(second);
             expect(second.length).toBe(0);
             expect(await later.getPalette(5)).toEqual(expected);
             // A view into part of a larger buffer is copied, not moved.
             const inside = new Uint8Array(clustering.length + 8);
             inside.set(clustering, 4);
             const view = inside.subarray(4, 4 + clustering.length);
-            await using copied = await moving.load(view);
+            const copied = await moving.load(view);
             expect(view.length).toBe(clustering.length);
             expect(await copied.getPalette(5)).toEqual(expected);
         } finally {
