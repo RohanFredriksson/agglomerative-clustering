@@ -970,3 +970,43 @@ describe('fastPngToImage', () => {
         for (const png of [indexed, deep, packed]) {expect(() => fastPngToImage(png)).toThrow('needs a decoder that expands');}
     });
 });
+
+// docs/environments.md "Plugins and single-file hosts": embedding the module gzipped. The plugin and the runtime lines are
+// read from the docs' text, so they can't drift: bundled with esbuild, the result must load and cluster.
+describe('embedding the module gzipped (the esbuild plugin)', () => {
+    it('bundles the module gzipped, and the bundle decompresses it, loads and clusters', async () => {
+        const { readFile, mkdtemp, writeFile, rm } = await import('fs/promises');
+        const { tmpdir } = await import('os');
+        const { join } = await import('path');
+        const { build } = await import('esbuild');
+        const { spawnSync } = await import('child_process');
+        const docs = await readFile(new URL('../docs/environments.md', import.meta.url), 'utf8');
+        const block = docs.slice(docs.indexOf('const gzipWasm'), docs.indexOf('} };', docs.indexOf('const gzipWasm')) + 4);
+        const runtime = docs.match(/^ *const wasm = await new Response\(new Blob\(\[gz\]\).*$/m)[0].trim();
+        expect(block).toContain("loader: 'binary'");
+        const { gzipSync } = await import('node:zlib');
+        const { readFileSync } = await import('node:fs');
+        const gzipWasm = new Function('gzipSync', 'readFileSync', `${block}\nreturn gzipWasm;`)(gzipSync, readFileSync);
+
+        const dist = new URL('../dist/', import.meta.url).pathname;
+        const folder = await mkdtemp(join(tmpdir(), 'ac-gzip-'));
+        try {
+            await writeFile(join(folder, 'entry.mjs'), `
+import gz from ${JSON.stringify(`${dist}clustering.wasm`)};
+import { init, buildPalette } from ${JSON.stringify(`${dist}index.mjs`)};
+${runtime}
+await init({ wasm });
+const palette = await buildPalette(new Uint8Array(32 * 32 * 4).map((_, i) => (i * 7) & 255), 4);
+console.log(gz.length, palette.length / 3);`);
+            await build({ entryPoints: [join(folder, 'entry.mjs')], bundle: true, format: 'esm', platform: 'neutral', target: 'es2022',
+                mainFields: ['module', 'main'], external: ['node:*'], plugins: [gzipWasm], outfile: join(folder, 'out.mjs'), logLevel: 'error' });
+            const run = spawnSync(process.execPath, [join(folder, 'out.mjs')], { encoding: 'utf8', timeout: 60000 });
+            expect(run.stderr).toBe('');
+            const [embedded, colours] = run.stdout.trim().split(' ').map(Number);
+            expect(colours).toBe(4);
+            expect(embedded).toBeLessThan(readFileSync(`${dist}clustering.wasm`).length * 0.6);   // it was gzipped
+        } finally {
+            await rm(folder, { recursive: true, force: true });
+        }
+    });
+});
