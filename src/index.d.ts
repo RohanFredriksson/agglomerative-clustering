@@ -392,7 +392,7 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
 
 /**
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
- * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `buildClustering`
+ * order (see `clustering.getPalette(k)`). It clusters the image each time: to try several sizes, call `buildClustering`
  * once and cut it.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
@@ -419,7 +419,7 @@ export function getPaletteFromClustering(clustering: Clustering, k: number): Pro
  * from one cut of one clustering, so they line up by construction: entry `i` of each describes the same colour.
  */
 export interface Swatches {
-    /** The colours in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
+    /** The colours in split order, exactly what `clustering.getPalette(k)` gives for the same `k`. */
     palette: Palette;
     /**
      * Pixels per colour, counted as in clustering: by default fully transparent pixels count 0 and partly transparent ones
@@ -433,7 +433,7 @@ export interface Swatches {
 
 /**
  * The palette for `image` at `k` colours with each colour's weight and share: one call for swatches with percentages.
- * It clusters the image each time; if you already have a clustering, use `getSwatchesFromClustering`.
+ * It clusters the image each time; if you already have a clustering, use `clustering.getSwatches(k)`.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
@@ -491,7 +491,7 @@ export interface ClusteringInfo {
 
 /**
  * Reads what a clustering holds, including its error curve for choosing a palette size. Needs a clustering from 3.x: a 2.x
- * clustering recorded no weights, so it is rejected with `unsupported-version` (as `getSwatchesFromClustering` rejects it);
+ * clustering recorded no weights, so it is rejected with `unsupported-version` (as `clustering.getSwatches(k)` rejects it);
  * the palette and mapping functions still read it.
  *
  * @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
@@ -541,7 +541,7 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
 /**
- * Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s.
+ * Like `quantizeFromClustering`, but returns palette indices. The palette is `clustering.getPalette(k)`'s.
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.

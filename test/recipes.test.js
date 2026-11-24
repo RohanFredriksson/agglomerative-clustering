@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { Palette, buildSwatches, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
+import { Palette, buildSwatches, buildClustering, quantizeToIndices, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 
@@ -82,7 +82,7 @@ describe('recipes in the guides', () => {
 
     it('palette conversions', async () => {
         const clustering = await buildClustering(image);
-        const { palette, shares } = await getSwatchesFromClustering(clustering, 3);
+        const { palette, shares } = await clustering.getSwatches(3);
         const colors = toColors(palette);
         const css = (i) => `rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`;
         const hexString = (i) => toHex(...palette.subarray(3 * i, 3 * i + 3));
@@ -242,7 +242,7 @@ describe('recipes in the guides', () => {
         const clustering = await buildClustering({ data: pixels, format: 'rgba' }, { precision: 6, transparent: true });
         const gif = GIFEncoder();
         for (const frame of frames) {
-            const { palette, indices, transparentIndex } = await quantizeToIndicesFromClustering(frame, clustering, 256, { dither: 0.5 });
+            const { palette, indices, transparentIndex } = await clustering.quantizeToIndices(frame, 256, { dither: 0.5 });
             expect(palette.length / 3).toBeLessThanOrEqual(256);
             expect(indices).toBeInstanceOf(Uint8Array);
             gif.writeFrame(indices, w, h, { palette: toColors(palette), transparent: transparentIndex !== null, transparentIndex: transparentIndex ?? 0 });
@@ -256,139 +256,21 @@ describe('recipes in the guides', () => {
         expect(decoded[(20 * w + 20) * 4 + 3]).toBe(255);
     });
 
-    // "Fixed palettes": choosing N colours from a fixed set. The two functions are the guides' own, and the test checks
-    // that their text matches the guides' (ignoring indentation), so the two can't drift apart.
-    // The search as the guides had it until 3.6.0: every (thread, position) pair scored by its own pass over the
-    // swatches. A reference for the fast version below, which must choose the same threads.
-    async function plainImproveThreads(clustering, threads, chosen) {
-      const { palette: colors, weights } = await clustering.getSwatches(1024);
-      const m = weights.length, t = threads.length / 3;
-      const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
-      for (let j = 0; j < t; j++) {
-        for (let i = 0; i < m; i++) {
-          const dr = threads[3 * j] - colors[3 * i], dg = threads[3 * j + 1] - colors[3 * i + 1], db = threads[3 * j + 2] - colors[3 * i + 2];
-          distance[j * m + i] = dr * dr + dg * dg + db * db;
-        }
-      }
-      chosen = [...chosen];
-      for (;;) {
-        // Each swatch's nearest chosen thread (its position in `chosen`) and the distances to the nearest two.
-        const nearest = new Int32Array(m), first = new Float64Array(m).fill(Infinity), second = new Float64Array(m).fill(Infinity);
-        let current = 0;
-        for (let i = 0; i < m; i++) {
-          chosen.forEach((j, s) => {
-            const d = distance[j * m + i];
-            if (d < first[i]) {second[i] = first[i]; first[i] = d; nearest[i] = s;} else if (d < second[i]) {second[i] = d;}
-          });
-          current += weights[i] * first[i];
-        }
-        // The best swap of an unchosen thread j for the chosen thread at position s, if any is better.
-        let best = null, lowest = current * (1 - 1e-9);
-        for (let j = 0; j < t; j++) {
-          if (chosen.includes(j)) {continue;}
-          for (let s = 0; s < chosen.length; s++) {
-            let error = 0;
-            for (let i = 0; i < m; i++) {error += weights[i] * Math.min(distance[j * m + i], nearest[i] === s ? second[i] : first[i]);}
-            if (error < lowest) {lowest = error; best = [s, j];}
-          }
-        }
-        if (!best) {return chosen;}
-        chosen[best[0]] = best[1];
-      }
-    }
-
-    // The indices of n threads that represent the clustered image well.
-    async function chooseThreads(clustering, threads, n) {
-      let chosen = [];
-      for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-        const cut = await getPaletteFromClustering(clustering, k);
-        // The cut palette as an image of one pixel per colour, mapped to the threads.
-        const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
-        // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
-        chosen = [...new Set(indices)].slice(0, n);
-      }
-      return chosen;   // can be fewer than n for an image with few colours
-    }
-
-    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches. `space`: 'rgb'
-    // (sRGB values, which PSNR measures) or 'oklab' (a lower mean ΔE2000, but it can grey out small vivid areas).
-    async function improveThreads(clustering, threads, chosen, space = 'rgb') {
-      if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
-      const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
-      const a = coordinates(threads, space), b = coordinates(colors, space);
-      const m = weights.length, t = threads.length / 3, n = chosen.length;
-      const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
-      for (let j = 0; j < t; j++) {
-        for (let i = 0; i < m; i++) {
-          const dx = a[3 * j] - b[3 * i], dy = a[3 * j + 1] - b[3 * i + 1], dz = a[3 * j + 2] - b[3 * i + 2];
-          distance[j * m + i] = dx * dx + dy * dy + dz * dz;
-        }
-      }
-      chosen = [...chosen];
-      const nearest = new Int32Array(m), first = new Float64Array(m), second = new Float64Array(m), change = new Float64Array(n);
-      for (;;) {
-        // Each swatch's nearest chosen thread (its position in `chosen`) and the distances to the nearest two.
-        let current = 0;
-        for (let i = 0; i < m; i++) {
-          let f = Infinity, g = Infinity, near = 0;
-          for (let s = 0; s < n; s++) {
-            const d = distance[chosen[s] * m + i];
-            if (d < f) {g = f; f = d; near = s;} else if (d < g) {g = d;}
-          }
-          nearest[i] = near; first[i] = f; second[i] = g; current += weights[i] * f;
-        }
-        // For each unchosen thread j, one pass over the swatches gives the error after swapping j in at every position s:
-        // current + shared + change[s]. Keep the best swap, if any is better.
-        let best = null, lowest = current * (1 - 1e-9);
-        for (let j = 0; j < t; j++) {
-          if (chosen.includes(j)) {continue;}
-          let shared = 0;   // what j gains on the swatches it brings closer, whichever thread it replaces
-          change.fill(0);   // change[s]: the rest of the change, on the swatches whose nearest thread is at s
-          for (let i = 0; i < m; i++) {
-            const d = distance[j * m + i], gain = d < first[i] ? weights[i] * (d - first[i]) : 0;
-            shared += gain;
-            change[nearest[i]] += weights[i] * (Math.min(d, second[i]) - first[i]) - gain;
-          }
-          for (let s = 0; s < n; s++) {
-            const error = current + shared + change[s];
-            if (error < lowest) {lowest = error; best = [s, j];}
-          }
-        }
-        if (!best) {return chosen;}
-        chosen[best[0]] = best[1];
-      }
-    }
+    // "Fixed palettes": choosing N colours from a fixed set is clustering.chooseFrom (tested against the 3.7.2 recipe in
+    // test/choose-from.test.js, which covers the choice itself: exact k, scoring spaces, fewer colours than k, empty
+    // images, errors). Here: the guides' countThreads, as written there, and chooseFrom with the legend.
 
     // Pixels per chosen thread, most used first, leaving out threads no pixel was mapped to (it happens, more often with
     // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch, and pass `transparent: true` for
     // an image with transparent areas, or they are counted to the nearest thread.
-    async function countThreads(image, threads, chosen, options) {
-      const subset = new Uint8Array(3 * chosen.length);
-      chosen.forEach((j, s) => subset.set(threads.slice(3 * j, 3 * j + 3), 3 * s));
-      const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, subset, options);
-      const counts = new Array(chosen.length).fill(0);
+    async function countThreads(image, threads, choice, options) {
+      const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, choice.palette, options);
+      const counts = new Array(choice.indices.length).fill(0);
       for (const s of indices) {if (s !== transparentIndex) {counts[s]++;}}
-      return chosen.map((thread, s) => ({ thread, count: counts[s] })).filter((e) => e.count > 0).sort((x, y) => y.count - x.count);
+      return choice.indices.map((j, s) => ({ thread: j, count: counts[s] })).filter((e) => e.count > 0).sort((x, y) => y.count - x.count);
     }
 
-    // Colours (3 bytes each) as coordinates to measure distance in: OKLab, or the sRGB values themselves.
-    function coordinates(rgb, space) {
-      if (space === 'rgb') {return Float64Array.from(rgb);}
-      const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-      const out = new Float64Array(rgb.length);
-      for (let i = 0; i < rgb.length; i += 3) {
-        const r = linear(rgb[i]), g = linear(rgb[i + 1]), b = linear(rgb[i + 2]);
-        const l = Math.cbrt(0.4122214708 * r + 0.5363329343 * g + 0.0514459929 * b);
-        const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-        const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-        out[i] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
-        out[i + 1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
-        out[i + 2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
-      }
-      return out;
-    }
-
-    it('the thread-choosing functions are the ones in the guides', async () => {
+    it('countThreads is the one in the guides', async () => {
         const { readFile } = await import('fs/promises');
         const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
         // A function's lines, trimmed: from its declaration to the closing brace at the declaration's indentation.
@@ -402,10 +284,10 @@ describe('recipes in the guides', () => {
             return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
-        for (const name of ['chooseThreads', 'improveThreads', 'countThreads', 'coordinates']) {expect(source(test, name)).toBe(source(guides, name));}
+        expect(source(test, 'countThreads')).toBe(source(guides, 'countThreads'));
     });
 
-    it('chooses n threads from a fixed set, beats the n most used threads, and the swaps never make it worse', async () => {
+    it('chooseFrom picks n threads that beat the n most used threads', async () => {
         // A smooth photo-like image, and 120 pseudo-random threads.
         const w = 64, h = 48, photo = new Uint8Array(w * h * 4);
         for (let i = 0; i < w * h; i++) {photo.set([(i % w) * 4, Math.floor(i / w) * 5, ((i % w) * 3 + Math.floor(i / w) * 2) & 255, 255], i * 4);}
@@ -423,33 +305,12 @@ describe('recipes in the guides', () => {
         for (const index of indices) {used[index]++;}
         const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
         for (const n of [4, 8, 12]) {
-            const chosen = await chooseThreads(clustering, threads, n);
-            expect(chosen).toHaveLength(n);
-            expect(new Set(chosen).size).toBe(n);
+            const choice = await clustering.chooseFrom(threads, n);
+            expect(choice.indices).toHaveLength(n);
+            expect(new Set(choice.indices).size).toBe(n);
             const top = Array.from(used.keys()).sort((a, b) => used[b] - used[a]).slice(0, n);
-            expect(await error(pick(chosen))).toBeLessThan(await error(pick(top)));
-
-            // Scored in RGB (the default), the error this test measures (OKLab scoring may raise it: see the guides).
-            const improved = await improveThreads(clustering, threads, chosen, 'rgb');
-            expect(improved).toHaveLength(n);
-            expect(new Set(improved).size).toBe(n);
-            expect(await error(pick(improved))).toBeLessThanOrEqual(await error(pick(chosen)));
-        }
-    });
-
-    it('improveThreads in RGB chooses the same threads as the plain search, one pass per (thread, position) pair', async () => {
-        const w = 48, h = 32, photo = new Uint8Array(w * h * 4);
-        let seed = 7;
-        const rnd = () => ((seed = Math.imul(seed, 1103515245) + 12345) >>> 8) / 16777216;
-        for (let p = 0; p < w * h; p++) {
-            const x = p % w, y = Math.floor(p / w);
-            photo.set([Math.round(40 + 4 * x + 20 * rnd()), Math.round(30 + 6 * y + 20 * rnd()), Math.round(200 - 3 * x + 20 * rnd()), 255], 4 * p);
-        }
-        const threads = new Uint8Array(3 * 150).map(() => Math.floor(256 * rnd()));
-        const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
-        for (const n of [1, 3, 6, 12, 24]) {
-            const chosen = await chooseThreads(clustering, threads, n);
-            expect((await improveThreads(clustering, threads, chosen, 'rgb')).sort((x, y) => x - y)).toEqual((await plainImproveThreads(clustering, threads, chosen)).sort((x, y) => x - y));
+            expect(await error(pick(choice.indices))).toBeLessThan(await error(pick(top)));
+            expect(Array.from(choice.palette)).toEqual(Array.from(pick(choice.indices)));
         }
     });
 
@@ -460,65 +321,32 @@ describe('recipes in the guides', () => {
         const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 202, 42, 38, 128, 128, 128, 28, 42, 152, 38, 158, 62, 250, 250, 0]);
         const image = { data, format: 'rgba', width: 10 };
         const clustering = await buildClustering(image);
-        for (const space of ['rgb', 'oklab']) {
-            const chosen = await improveThreads(clustering, threads, [0, 1, 3], space);
-            expect([...chosen].sort()).toEqual([2, 4, 5]);
-            expect(await countThreads(image, threads, chosen, { transparent: true })).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }]);
+        for (const options of [undefined, { colorSpace: 'oklab' }]) {
+            const choice = await clustering.chooseFrom(threads, 3, options);
+            expect(choice.indices).toEqual([2, 4, 5]);
+            expect(await countThreads(image, threads, choice, { transparent: true })).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }]);
         }
         // Without `transparent`, the transparent pixels (stored black) go to their nearest thread; and a thread no pixel
-        // is nearest to (white, here) is left out. Plain arrays work too.
-        expect(await countThreads(image, [...threads], [1, 2, 4, 5, 0])).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }, { thread: 0, count: 10 }]);
+        // is nearest to (white, here) is left out.
+        const wide = await clustering.chooseFrom(threads, 5);
+        expect(wide.indices).toEqual([0, 1, 2, 4, 5]);
+        expect(await countThreads(image, threads, wide)).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 0, count: 10 }, { thread: 2, count: 10 }]);   // ties keep the ascending order
     });
 
-    it('improveThreads in OKLab never makes the error it measures worse than its start', async () => {
-        const w = 48, h = 32, photo = new Uint8Array(w * h * 4);
-        let seed = 3;
-        const rnd = () => ((seed = Math.imul(seed, 1103515245) + 12345) >>> 8) / 16777216;
-        for (let p = 0; p < w * h; p++) {photo.set([Math.round(255 * rnd()), Math.round(100 + 50 * rnd()), Math.round(60 + 4 * (p % w)), 255], 4 * p);}
-        const threads = new Uint8Array(3 * 90).map(() => Math.floor(256 * rnd()));
-        const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
-        const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
-        const a = coordinates(threads, 'oklab'), b = coordinates(colors, 'oklab');
-        const error = (chosen) => weights.reduce((sum, wt, i) => sum + wt * Math.min(...chosen.map((j) => (a[3 * j] - b[3 * i]) ** 2 + (a[3 * j + 1] - b[3 * i + 1]) ** 2 + (a[3 * j + 2] - b[3 * i + 2]) ** 2)), 0);
-        for (const n of [3, 8]) {
-            const start = await chooseThreads(clustering, threads, n);
-            const improved = await improveThreads(clustering, threads, start, 'oklab');
-            expect(new Set(improved).size).toBe(n);
-            expect(error(improved)).toBeLessThanOrEqual(error(start));
-        }
-    });
-
-    it('the guides\' thread functions run with the worker entry\'s functions and give the same threads', async () => {
-        const { readFile } = await import('fs/promises');
-        const guides = (await readFile(new URL('../docs/guides.md', import.meta.url), 'utf8')).split('\n');
-        const source = (name) => {
-            const start = guides.findIndex((l) => new RegExp(`^\\s*(async )?function ${name}\\(`).test(l));
-            const indent = guides[start].match(/^ */)[0];
-            return guides.slice(start, guides.findIndex((l, i) => i > start && l === `${indent}}`) + 1).join('\n');
-        };
-        const make = (entry) => new Function('getPaletteFromClustering', 'getSwatchesFromClustering', 'quantizeToIndicesWithPalette',
-            `${source('chooseThreads')}\n${source('improveThreads')}\n${source('coordinates')}\nreturn { chooseThreads, improveThreads };`)(entry.getPaletteFromClustering, entry.getSwatchesFromClustering, entry.quantizeToIndicesWithPalette);
+    it('the guides\' chooseFrom call gives the same choice through a loaded worker handle', async () => {
         const worker = await import('../dist/worker.mjs');
-        const viaWorker = make(worker);
         const data = new Uint8Array(40 * 30 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i * 37) % 251));
         const threads = new Uint8Array(3 * 60).map((_, i) => (i * 97) % 256);
-        const clustering = await worker.buildClustering({ data, format: 'rgba', width: 40 });
-        const chosen = await viaWorker.improveThreads(clustering, threads, await viaWorker.chooseThreads(clustering, threads, 6));
-        expect(chosen).toEqual(await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 6)));
-        expect(await viaWorker.improveThreads(clustering, threads, chosen, 'oklab')).toEqual(await improveThreads(clustering, threads, chosen, 'oklab'));
-        await expect(viaWorker.improveThreads(clustering, threads, chosen, 'RGB')).rejects.toThrow(/Invalid space/);
-    });
-
-    it('improveThreads handles an image with fewer colours than n, and one with none visible', async () => {
-        const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 255]);
-        const two = new Uint8Array([250, 10, 10, 255, 5, 5, 240, 255]);
-        const clustering = await buildClustering(two);
-        const chosen = await chooseThreads(clustering, threads, 3);
-        expect(chosen.sort()).toEqual([2, 3]);
-        expect((await improveThreads(clustering, threads, chosen)).sort()).toEqual([2, 3]);
-        const empty = await buildClustering(new Uint8Array([9, 9, 9, 0]));
-        expect(await chooseThreads(empty, threads, 2)).toEqual([]);
-        expect(await improveThreads(empty, threads, [])).toEqual([]);
+        const clustering = await buildClustering({ data, format: 'rgba', width: 40 });
+        const pool = worker.createWorker();
+        const loaded = await pool.load(clustering);
+        try {
+            const here = await clustering.chooseFrom(threads, 6);
+            const there = await loaded.chooseFrom(threads, 6);
+            expect(there.indices).toEqual(here.indices);
+            expect(Array.from(there.palette)).toEqual(Array.from(here.palette));
+            expect(Array.from((await loaded.chooseFrom(threads, 6, { colorSpace: 'oklab' })).indices)).toEqual((await clustering.chooseFrom(threads, 6, { colorSpace: 'oklab' })).indices);
+        } finally {await loaded.release(); await pool.terminate();}
     });
 
     // "Live video and camera frames": following the previous palette (the guides' function, as written there).
