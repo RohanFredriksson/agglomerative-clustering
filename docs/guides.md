@@ -455,8 +455,8 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 - **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering. With small palettes of widely spaced inks (e-ink, grey levels), dither in light with the function above and leave `colorSpace` out: without it every method makes photos too light, and OKLab more so in black and white.
 - **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but two short functions do it.
   - **`chooseThreads`** cuts the clustering, snaps each cut colour to its nearest thread, and cuts finer until N distinct threads appear. After clustering it takes about a millisecond. On the Kodak photos with large charts it beat "the N most used threads" by about 3 to 4 dB PSNR at 6 to 12 threads; the gain shrinks as N grows.
-  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo, and returns the threads heaviest first. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart, mapped in RGB without dithering, it lowered the mean ΔE2000 of `chooseThreads`' choice from 9.25 to 8.23 at 6 threads and from 7.77 to 6.87 at 12 (better on 22 and 20 of the 24 photos, worse on 1), with PSNR about the same; with 4 of 26 pigments, from 23.1 to 18.7<!-- bench/spikes/fixed-subset-oklab/measure.mjs → results.txt -->. Scored in `'rgb'` instead, it adds 0.4 to 0.45 dB PSNR at 6 and 12 threads. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image.
-  - **Which space to measure in.** Unlike the library's `colorSpace`, which defaults to `'rgb'`, `improveThreads` measures distance in OKLab by default, which chooses threads closer to the photo by eye, whichever space you then map in: the gain follows the space the search measures in, not the one you map in, so setting `colorSpace` when mapping doesn't change it. Pass `'rgb'` to choose by sRGB values instead, which is what PSNR measures. On the 24 Kodak photos, mapped in RGB without dithering, OKLab lowered the mean ΔE2000 for 4 of 26 pigments from 23.3 to 18.7 (better on 22 photos, worse on 2), for 16 of 78 bricks from 10.0 to 9.3 (23 and 0), and for 12 of 584 threads from 7.13 to 6.87 (17 and 6), at 0.3 to 1.7 dB less PSNR<!-- bench/spikes/fixed-subset-oklab/measure.mjs → results.txt -->. On a dense chart of 1000 colours spread evenly over the RGB cube, and with error diffusion and few threads, the two are about even, so compare both on your images there. `chooseThreads`' snapping stays in RGB: only the search's space was measured to matter.
+  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart, mapped in RGB without dithering, it lowered the mean ΔE2000 of `chooseThreads`' choice from 9.25 to 8.52 at 6 threads and from 7.77 to 7.13 at 12 (better on 19 and 21 of the 24 photos, worse on 4 and 3), and raised PSNR by 0.4 to 0.45 dB<!-- bench/spikes/fixed-subset-oklab/measure.mjs → results.txt -->. It works on 1024 swatches, so its time doesn't grow with the image.
+  - **Which space to measure in.** `improveThreads` measures distance in sRGB values by default, like the library's `colorSpace`. Pass `'oklab'` for a lower mean ΔE2000, which on the page shows as a closer match in large soft areas such as backgrounds and skin; the gain follows the space the search measures in, not the one you map in. But it can grey out small vivid areas: with 12 of 584 threads it lowered the mean ΔE2000 on the Kodak photos from 7.13 to 6.87, yet the most saturated pixels (8.6% of them) came out further off (10.74 against 9.85) and duller, and on the parrots photo at 16 threads the pink cheek patch and a teal feather turned grey. From 24 threads that cost was gone, and with a few widely spaced colours OKLab was better throughout: with 4 of 26 pigments, a mean ΔE2000 of 18.7 against 23.3<!-- bench/spikes/fixed-subset-oklab/accents.mjs → results-accents.txt; measure.mjs → results.txt -->. So for embroidery and other small vivid details, keep the default and compare both on your images; for a handful of paints or inks, use `'oklab'`. `chooseThreads`' snapping stays in RGB: only the search's space was measured to matter.
   - **Speed:** each pass sweeps the swatches once per thread in the chart: 21 ms for 12 of 584 threads and 45 ms for 40, 30 to 56 ms for 12 to 40 of 1000 (medians on the Kodak photos, 84 ms at worst; with `'rgb'`, 17 to 38 ms)<!-- bench/spikes/fixed-subset-oklab/speed.mjs → results-speed.txt -->. Both functions use the function forms (`getPaletteFromClustering`, `getSwatchesFromClustering`), which both entries export: import them from `agglomerative-clustering/worker` to cluster and cut off the page (the search itself, in JavaScript, runs where you call it). Skip `improveThreads` when `chooseThreads` is good enough.
 
   ```js
@@ -465,8 +465,10 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 
   const clustering = await buildClustering(image);
   const chosen = await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 12));
-  // chosen: indices into `threads` (flat RGB), heaviest first. For exact counts per thread (a shopping list), map the
-  // image with quantizeToIndicesWithPalette and count the indices: dithering changes them.
+  // chosen: indices into `threads` (flat RGB), in no useful order. For the legend and the shopping list, count the
+  // stitches, mapping with the options you will use (dithering changes the counts):
+  const legend = await countThreads(image, threads, chosen, { dither: true });
+  // [{ thread: 213, count: 4120 }, ...]: most used first, without threads no pixel was mapped to
 
   // The indices of n threads that represent the clustered image well.
   async function chooseThreads(clustering, threads, n) {
@@ -481,9 +483,9 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
     return chosen;   // can be fewer than n for an image with few colours
   }
 
-  // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches, and returns
-  // them heaviest first. `space`: 'oklab' (closer by eye) or 'rgb' (closer in sRGB values, which PSNR measures).
-  async function improveThreads(clustering, threads, chosen, space = 'oklab') {
+  // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches. `space`: 'rgb'
+  // (sRGB values, which PSNR measures) or 'oklab' (a lower mean ΔE2000, but it can grey out small vivid areas).
+  async function improveThreads(clustering, threads, chosen, space = 'rgb') {
     if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
     const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
     const a = coordinates(threads, space), b = coordinates(colors, space);
@@ -525,12 +527,20 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
           if (error < lowest) {lowest = error; best = [s, j];}
         }
       }
-      if (best) {chosen[best[0]] = best[1]; continue;}
-      // Done: heaviest first, by the swatch weight each thread serves (an estimate of its share of the pixels).
-      const served = new Float64Array(n);
-      for (let i = 0; i < m; i++) {served[nearest[i]] += weights[i];}
-      return chosen.map((j, s) => [j, served[s]]).sort((x, y) => y[1] - x[1]).map(([j]) => j);
+      if (!best) {return chosen;}
+      chosen[best[0]] = best[1];
     }
+  }
+
+  // Pixels per chosen thread, most used first, leaving out threads no pixel was mapped to (it happens, more often with
+  // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch.
+  async function countThreads(image, threads, chosen, options) {
+    const subset = new Uint8Array(3 * chosen.length);
+    chosen.forEach((j, s) => subset.set(threads.slice(3 * j, 3 * j + 3), 3 * s));
+    const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, subset, options);
+    const counts = new Array(chosen.length).fill(0);
+    for (const s of indices) {if (s !== transparentIndex) {counts[s]++;}}
+    return chosen.map((thread, s) => ({ thread, count: counts[s] })).filter((e) => e.count > 0).sort((x, y) => y.count - x.count);
   }
 
   // Colours (3 bytes each) as coordinates to measure distance in: OKLab, or the sRGB values themselves.

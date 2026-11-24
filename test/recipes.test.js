@@ -310,9 +310,9 @@ describe('recipes in the guides', () => {
       return chosen;   // can be fewer than n for an image with few colours
     }
 
-    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches, and returns
-    // them heaviest first. `space`: 'oklab' (closer by eye) or 'rgb' (closer in sRGB values, which PSNR measures).
-    async function improveThreads(clustering, threads, chosen, space = 'oklab') {
+    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches. `space`: 'rgb'
+    // (sRGB values, which PSNR measures) or 'oklab' (a lower mean ΔE2000, but it can grey out small vivid areas).
+    async function improveThreads(clustering, threads, chosen, space = 'rgb') {
       if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
       const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
       const a = coordinates(threads, space), b = coordinates(colors, space);
@@ -354,12 +354,20 @@ describe('recipes in the guides', () => {
             if (error < lowest) {lowest = error; best = [s, j];}
           }
         }
-        if (best) {chosen[best[0]] = best[1]; continue;}
-        // Done: heaviest first, by the swatch weight each thread serves (an estimate of its share of the pixels).
-        const served = new Float64Array(n);
-        for (let i = 0; i < m; i++) {served[nearest[i]] += weights[i];}
-        return chosen.map((j, s) => [j, served[s]]).sort((x, y) => y[1] - x[1]).map(([j]) => j);
+        if (!best) {return chosen;}
+        chosen[best[0]] = best[1];
       }
+    }
+
+    // Pixels per chosen thread, most used first, leaving out threads no pixel was mapped to (it happens, more often with
+    // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch.
+    async function countThreads(image, threads, chosen, options) {
+      const subset = new Uint8Array(3 * chosen.length);
+      chosen.forEach((j, s) => subset.set(threads.slice(3 * j, 3 * j + 3), 3 * s));
+      const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, subset, options);
+      const counts = new Array(chosen.length).fill(0);
+      for (const s of indices) {if (s !== transparentIndex) {counts[s]++;}}
+      return chosen.map((thread, s) => ({ thread, count: counts[s] })).filter((e) => e.count > 0).sort((x, y) => y.count - x.count);
     }
 
     // Colours (3 bytes each) as coordinates to measure distance in: OKLab, or the sRGB values themselves.
@@ -393,7 +401,7 @@ describe('recipes in the guides', () => {
             return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
-        for (const name of ['chooseThreads', 'improveThreads', 'coordinates']) {expect(source(test, name)).toBe(source(guides, name));}
+        for (const name of ['chooseThreads', 'improveThreads', 'countThreads', 'coordinates']) {expect(source(test, name)).toBe(source(guides, name));}
     });
 
     it('chooses n threads from a fixed set, beats the n most used threads, and the swaps never make it worse', async () => {
@@ -420,7 +428,7 @@ describe('recipes in the guides', () => {
             const top = Array.from(used.keys()).sort((a, b) => used[b] - used[a]).slice(0, n);
             expect(await error(pick(chosen))).toBeLessThan(await error(pick(top)));
 
-            // Scored in RGB, the error this test measures (OKLab scoring may raise it: see the guides).
+            // Scored in RGB (the default), the error this test measures (OKLab scoring may raise it: see the guides).
             const improved = await improveThreads(clustering, threads, chosen, 'rgb');
             expect(improved).toHaveLength(n);
             expect(new Set(improved).size).toBe(n);
@@ -444,16 +452,21 @@ describe('recipes in the guides', () => {
         }
     });
 
-    it('improveThreads returns the threads heaviest first, in OKLab (the default) and RGB', async () => {
-        // 60, 30 and 10 pixels of three colours, and a chart holding near matches for them among distractors.
+    it('countThreads counts pixels per thread, most used first, without unused threads or transparent pixels', async () => {
+        // 10, 30 and 50 pixels of three colours, then 10 transparent ones, and a chart holding near matches among distractors.
         const data = new Uint8Array(100 * 4);
-        for (let p = 0; p < 100; p++) {data.set(p < 10 ? [200, 40, 40, 255] : p < 40 ? [40, 160, 60, 255] : [30, 40, 150, 255], 4 * p);}
+        for (let p = 0; p < 100; p++) {data.set(p < 10 ? [200, 40, 40, 255] : p < 40 ? [40, 160, 60, 255] : p < 90 ? [30, 40, 150, 255] : [0, 0, 0, 0], 4 * p);}
         const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 202, 42, 38, 128, 128, 128, 28, 42, 152, 38, 158, 62, 250, 250, 0]);
-        const clustering = await buildClustering({ data, format: 'rgba', width: 10 });
-        for (const space of ['oklab', 'rgb']) {
+        const image = { data, format: 'rgba', width: 10 };
+        const clustering = await buildClustering(image);
+        for (const space of ['rgb', 'oklab']) {
             const chosen = await improveThreads(clustering, threads, [0, 1, 3], space);
-            expect(chosen).toEqual([4, 5, 2]);   // blue (60 pixels), green (30), red (10)
+            expect([...chosen].sort()).toEqual([2, 4, 5]);
+            expect(await countThreads(image, threads, chosen, { transparent: true })).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }]);
         }
+        // Without `transparent`, the transparent pixels (stored black) go to their nearest thread; and a thread no pixel
+        // is nearest to (white, here) is left out. Plain arrays work too.
+        expect(await countThreads(image, [...threads], [1, 2, 4, 5, 0])).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }, { thread: 0, count: 10 }]);
     });
 
     it('improveThreads in OKLab never makes the error it measures worse than its start', async () => {
@@ -468,7 +481,7 @@ describe('recipes in the guides', () => {
         const error = (chosen) => weights.reduce((sum, wt, i) => sum + wt * Math.min(...chosen.map((j) => (a[3 * j] - b[3 * i]) ** 2 + (a[3 * j + 1] - b[3 * i + 1]) ** 2 + (a[3 * j + 2] - b[3 * i + 2]) ** 2)), 0);
         for (const n of [3, 8]) {
             const start = await chooseThreads(clustering, threads, n);
-            const improved = await improveThreads(clustering, threads, start);
+            const improved = await improveThreads(clustering, threads, start, 'oklab');
             expect(new Set(improved).size).toBe(n);
             expect(error(improved)).toBeLessThanOrEqual(error(start));
         }
@@ -491,6 +504,7 @@ describe('recipes in the guides', () => {
         const clustering = await worker.buildClustering({ data, format: 'rgba', width: 40 });
         const chosen = await viaWorker.improveThreads(clustering, threads, await viaWorker.chooseThreads(clustering, threads, 6));
         expect(chosen).toEqual(await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 6)));
+        expect(await viaWorker.improveThreads(clustering, threads, chosen, 'oklab')).toEqual(await improveThreads(clustering, threads, chosen, 'oklab'));
         await expect(viaWorker.improveThreads(clustering, threads, chosen, 'RGB')).rejects.toThrow(/Invalid space/);
     });
 

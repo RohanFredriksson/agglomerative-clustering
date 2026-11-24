@@ -1,0 +1,14 @@
+24 Kodak photos, mapped in RGB without dithering. Vivid pixels (CIELAB chroma > 40): 8.6% of pixels on average.
+Mean CIEDE2000 over all pixels, over the vivid pixels, the chroma the vivid pixels lose, and chosen threads with no pixels (total, photos).
+
+case                              ΔE all    ΔE vivid  chroma lost  unused threads
+threads (584), N = 12, rgb        7.13      9.85      10.77        0 on 0
+threads (584), N = 12, oklab      6.87      10.74     13.90        1 on 1
+threads (584), N = 16, rgb        6.75      8.21      7.71         0 on 0
+threads (584), N = 16, oklab      6.45      8.39      8.45         1 on 1
+threads (584), N = 24, rgb        6.65      6.91      5.94         0 on 0
+threads (584), N = 24, oklab      6.10      6.68      5.32         4 on 3
+pigments (26), N = 4, rgb         23.29     25.06     -6.78        0 on 0
+pigments (26), N = 4, oklab       18.67     19.30     -5.69        0 on 0
+pigments (26), N = 6, rgb         22.48     22.07     -7.92        0 on 0
+pigments (26), N = 6, oklab       19.16     15.54     -8.63        3 on 3
