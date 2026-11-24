@@ -2,6 +2,8 @@
 
 ## 3.8.0
 
+Additive: output and every existing call are unchanged. The fixed-palette search is built in, workers get a handle for a stored clustering, and the `…FromClustering` functions are deprecated ahead of their removal in 4.0.
+
 ### Added
 - **`clustering.chooseFrom(palette, k, options?)`** chooses the `k` entries of a fixed palette (threads, bricks, inks) that best represent the clustered image, returning their positions and colours (`{ indices, palette }`). It is the guides' `chooseThreads` + `improveThreads` recipe moved into the library, with one change: the result always has exactly `k` entries. `colorSpace` (default `'rgb'`) and `signal` are its options.
 - **`handle.chooseFrom(palette, k, options?)`** on a worker handle from `worker.cluster`: the clustering method of the same name, run in the worker (`colorSpace` and `signal`). A number or an image where the wrong kind of handle expects one now says which handle it is holding.
@@ -9,6 +11,11 @@
 
 ### Deprecated
 - **The five `…FromClustering` functions, in both entries and on workers:** `getPaletteFromClustering`, `getSwatchesFromClustering`, `getClusteringInfo(clustering)` (the function; the methods keep the name), `quantizeFromClustering` and `quantizeToIndicesFromClustering`. Use `clustering.getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(image, k)` and `quantizeToIndices(image, k)` on the main thread, and the same methods on `await worker.load(clustering)` off it. TypeScript marks them deprecated; nothing changes at run time and there is no warning. 4.0 removes them. See [Migrating](docs/migrating.md#deprecated-in-38-removed-in-40).
+
+### Docs
+- **The guides' fixed-palette recipe is now one `chooseFrom` call.** If you copied 3.7.2's `chooseThreads` and `improveThreads`, `chooseFrom` gives the same choice: it was compared on the 24 Kodak photos with 584- and 1000-entry charts, 6 to 40 entries, in both spaces. The one difference is that it always returns exactly `k` entries. `countThreads` stays, shorter: it now takes the result, `countThreads(image, choice, options)`.
+- **The cost of a live thread-count slider is measured:** the counting pass, not the search, is what costs. The guides give its time at 12 and 1 megapixels, and advise counting a downscaled copy while the slider moves.
+- **Guides, recipes and the README use the methods and `worker.load`** in place of the deprecated functions.
 
 ## 3.7.2
 
