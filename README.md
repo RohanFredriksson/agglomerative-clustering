@@ -96,19 +96,20 @@ The one-shot functions (`buildPalette`, `quantize`, …) do every step for you. 
 
 | You want | from the image | from a clustering you hold¹ | with a palette you supply |
 |---|---|---|---|
-| a palette (flat RGB) | `buildPalette` | `clustering.getPalette(k)` (`getPaletteFromClustering`) | |
-| a palette with each colour's share | `buildSwatches` | `clustering.getSwatches(k)` (`getSwatchesFromClustering`) | |
-| the image reduced to those colours | `quantize` | `clustering.quantize(image, k)` (`quantizeFromClustering`) | `quantizeWithPalette` |
-| palette indices (GIF, PNG-8) | `quantizeToIndices` | `clustering.quantizeToIndices(image, k)` (`quantizeToIndicesFromClustering`) | `quantizeToIndicesWithPalette` |
-| its error curve, for choosing a palette size | | `clustering.getClusteringInfo()` (`getClusteringInfo`) | |
+| a palette (flat RGB) | `buildPalette` | `clustering.getPalette(k)` | |
+| a palette with each colour's share | `buildSwatches` | `clustering.getSwatches(k)` | |
+| the image reduced to those colours | `quantize` | `clustering.quantize(image, k)` | `quantizeWithPalette` |
+| palette indices (GIF, PNG-8) | `quantizeToIndices` | `clustering.quantizeToIndices(image, k)` | `quantizeToIndicesWithPalette` |
+| its error curve, for choosing a palette size | | `clustering.getClusteringInfo()` | |
+| the `k` entries of a fixed palette (threads, bricks) that best fit | | `clustering.chooseFrom(palette, k)` | |
 
 A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `buildClustering` builds a clustering, and `init` loads the WebAssembly module (optional). Most code only needs the first column.
 
 The verb says how much work a call does. `build…` clusters an image (tens of milliseconds for a photo). `get…` reads or cuts what a clustering or a worker handle already holds (well under a millisecond). `quantize…` maps pixels. So `buildPalette(image, k)` and `clustering.getPalette(k)` give the same kind of result from different starting points. The `build…` names arrived in 3.4.0; [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md) has the old ones.
 
-**Methods or functions?** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **In a worker, use a handle** (`createWorker().cluster(image)`, below) or the worker entry's function forms: the methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
+**Where to call them.** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **Off the thread, use a handle**: `worker.cluster(image)` keeps an image and its clustering in the worker, and `worker.load(clustering)` keeps a stored clustering (`await using loaded = await worker.load(stored)`, then `loaded.getPalette(k)` and `loaded.quantize(image, k)`). The methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
 
-¹ Each method has a function form, in brackets, that does the same. The cuts take the clustering first (`getPaletteFromClustering(clustering, k)`); the mapping functions take the image first and the clustering second (`quantizeFromClustering(image, clustering, k)`). See [Clustering methods](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#clustering-methods).
+¹ The `…FromClustering` functions (`getPaletteFromClustering(clustering, k)`, `quantizeFromClustering(image, clustering, k)` and the rest) do the same as the methods. They are deprecated from 3.8 and removed in 4.0: see [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md#deprecated-in-38-removed-in-40) for the replacement of each, and [Clustering methods](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md#clustering-methods).
 
 Palettes come in **split order**: the palette for `k + 1` is the one for `k` with one colour split in two, so entries keep their place as `k` grows (they are not sorted by share). The options are `precision` (6 is about 3× faster at practically the same quality), `colorSpace` (`'rgb'` or `'oklab'`), `alpha`, `transparent`, `dither` (Floyd–Steinberg, Atkinson, or ordered for animation, which keeps still areas still), `width`, `signal` and `onProgress`: see the [API reference](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/api.md).
 

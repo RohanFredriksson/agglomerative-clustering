@@ -95,14 +95,18 @@ describe('the declarations', () => {
     });
 
     it('mark exactly the old names deprecated, and never the methods that keep them', () => {
+        // The renamed 3.4.0 names, and (3.8) the …FromClustering function forms; the methods that replace them are not.
+        const fromClustering = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
+        const expected = [...Object.keys(deprecated), ...fromClustering].sort();
         const isDeprecated = (symbol) => resolved(symbol).getJsDocTags(checker).some((tag) => tag.name === 'deprecated');
         for (const fileName of ['index.d.ts', 'worker.d.ts']) {
             const marked = moduleExports(fileName).filter(isDeprecated).map((symbol) => symbol.name).sort();
-            expect(marked, fileName).toEqual(Object.keys(deprecated).sort());
+            expect(marked, fileName).toEqual(expected);
         }
         const membersMarked = (interfaceName) => checker.getPropertiesOfType(declaredType(interfaceName === 'Clustering' ? 'index.d.ts' : 'worker.d.ts', interfaceName)).filter(isDeprecated).map((p) => p.name).sort();
-        expect(membersMarked('AgglomerativeWorker')).toEqual(Object.keys(deprecated).sort());
+        expect(membersMarked('AgglomerativeWorker')).toEqual(expected);
         expect(membersMarked('ClusteringHandle')).toEqual([]);
+        expect(membersMarked('LoadedClusteringHandle')).toEqual([]);
         expect(membersMarked('Clustering')).toEqual([]);
     });
 
@@ -152,7 +156,7 @@ describe('the worker entry', () => {
         const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function' && !/^[A-Z]/.test(name) && !helpers.includes(name));
         for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function' || helpers.includes(name))) {expect(worker[name], name).toBe(main[name]);}
         expect(Object.keys(worker).sort()).toEqual([...Object.keys(main), 'createWorker', 'terminate'].sort());
-        expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'terminate'].sort());
+        expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'load', 'terminate'].sort());
         expect(propertyNames(declaredType('worker.d.ts', 'AgglomerativeWorker'))).toEqual(Object.keys(instance).sort());
     });
 
@@ -160,6 +164,12 @@ describe('the worker entry', () => {
         const handle = await instance.cluster(image);
         expect(Object.keys(handle).sort()).toEqual(propertyNames(declaredType('worker.d.ts', 'ClusteringHandle')).filter((name) => name !== 'then'));
         await handle.release();
+    });
+
+    it('gives loaded handles exactly the methods their type declares', async () => {
+        const loaded = await instance.load(await main.buildClustering(image));
+        expect(Object.keys(loaded).sort()).toEqual(propertyNames(declaredType('worker.d.ts', 'LoadedClusteringHandle')).filter((name) => name !== 'then'));
+        await loaded.release();
     });
 
     it('routes signal and onProgress for every function that takes an image', async () => {
@@ -185,9 +195,12 @@ describe('the worker entry', () => {
             expect(progress[progress.length - 1], `handle.${name} reports progress`).toBe(1);
             await handle[name](...args, { signal: new AbortController().signal });
         }
-        // Every handle method that takes mapping options is covered above.
+        // chooseFrom takes a signal but no progress callback.
+        await expect(handle.chooseFrom(palette, 2, { signal: aborted.signal }), 'handle.chooseFrom with a signal').rejects.toMatchObject({ name: 'AbortError' });
+        await handle.chooseFrom(palette, 2, { signal: new AbortController().signal });
+        // Every handle method that takes options is covered above.
         const mapping = Object.keys(handle).filter((name) => parameterNamesOfMember('ClusteringHandle', name).includes('options')).sort();
-        expect(mapping).toEqual(Object.keys(calls).sort());
+        expect(mapping).toEqual([...Object.keys(calls), 'chooseFrom'].sort());
         await handle.release();
     });
 
@@ -211,7 +224,7 @@ describe('the API reference (docs/api.md)', () => {
     it('lists, for each function, exactly the options it accepts', async () => {
         const checked = [];
         for (const name of Object.keys(callArguments).filter((name) => !(name in deprecated))) {
-            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
+            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? |(?![\\s\\S]))', 'm'));   // a section ends at the next heading or the end of the file (the deprecated function forms come last)
             expect(section, `docs/api.md has a section for ${name}`).not.toBeNull();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
             if (!line || /those of|theirs/.test(line)) {continue;}          // these point at another function's list
@@ -289,8 +302,11 @@ describe('methods on Clustering', () => {
         expect(declared).toEqual(runtime);
     });
 
+    // Methods with no function form (PRINCIPLES "Settled decisions"): new ones are methods only.
+    const methodOnly = ['chooseFrom'];
+
     it('each have a function form in both entries, named by dropping FromClustering', () => {
-        for (const name of runtime) {
+        for (const name of runtime.filter((name) => !methodOnly.includes(name))) {
             const form = functionForm(name);
             expect(typeof main[form], `${name} has a function form in the main entry`).toBe('function');
             expect(typeof worker[form], `${name} has a function form in the worker entry`).toBe('function');
@@ -304,6 +320,15 @@ describe('methods on Clustering', () => {
             const section = api.match(new RegExp('^###[^\\n]*`clustering\\.' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
             expect(section, `docs/api.md has a section for clustering.${name}`).not.toBeNull();
             const form = functionForm(name);
+            if (methodOnly.includes(name)) {
+                const error = await clustering[name](new Uint8Array(30), 4, { __unknown__: true }).catch((e) => e);
+                const enforced = error.message.match(/expected one of (.*)\./)[1].split(', ').sort();
+                const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
+                expect(line, `clustering.${name} has an Options line`).toBeDefined();
+                expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
+                checked.push(name);
+                continue;
+            }
             if (!callArguments[form]) {continue;}   // the cuts take no options
             // The method enforces exactly what its function form does, and its Options line lists that.
             const args = callArguments[form].filter((value) => value !== clustering);
@@ -315,7 +340,7 @@ describe('methods on Clustering', () => {
             expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
             checked.push(name);
         }
-        expect(checked.sort()).toEqual(['quantize', 'quantizeToIndices']);
+        expect(checked.sort()).toEqual(['chooseFrom', 'quantize', 'quantizeToIndices']);
     });
 
 });
@@ -354,6 +379,40 @@ describe('the documentation files', () => {
             ];
             for (const [target, anchor] of links) {
                 expect(anchorsOf(read(target)).has(anchor), `${file} links to ${target}#${anchor}, which is not a heading`).toBe(true);
+            }
+        }
+    });
+});
+
+describe('deprecated …FromClustering functions', () => {
+    const names = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
+    // The declarations of the function forms: functions and consts at the top level, and the worker's methods that take
+    // a clustering (a handle's own `getClusteringInfo()` takes nothing and is not one).
+    const declarations = (file) => {
+        const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+        const found = [];
+        const visit = (node) => {
+            let name;
+            if (ts.isFunctionDeclaration(node) && node.name) name = node.name.text;
+            else if (ts.isVariableStatement(node)) name = node.declarationList.declarations[0].name.text;
+            else if (ts.isMethodSignature(node) && node.parameters.length > 0) name = node.name.text;
+            if (name && names.includes(name)) found.push({ name, node });
+            ts.forEachChild(node, visit);
+        };
+        visit(source);
+        return { source, found };
+    };
+
+    it('the …FromClustering functions are deprecated in both entries', () => {
+        for (const file of ['src/index.d.ts', 'src/worker.d.ts']) {
+            const { source, found } = declarations(file);
+            for (const name of names) expect(found.some((d) => d.name === name), `${file} declares ${name}`).toBe(true);
+            for (const { name, node } of found) {
+                const comments = (ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? []).map((r) => source.text.slice(r.pos, r.end));
+                const doc = comments.filter((c) => c.startsWith('/**')).pop() ?? '';
+                expect(doc, `${file}: ${name} has @deprecated`).toContain('@deprecated');
+                expect(doc, `${file}: ${name} names the method`).toMatch(/clustering\.\w+\(/);
+                expect(doc, `${file}: ${name} names worker.load`).toMatch(/worker\.load/);
             }
         }
     });

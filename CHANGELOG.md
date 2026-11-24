@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.8.0
+
+### Added
+- **`clustering.chooseFrom(palette, k, options?)`** chooses the `k` entries of a fixed palette (threads, bricks, inks) that best represent the clustered image, returning their positions and colours (`{ indices, palette }`). It is the guides' `chooseThreads` + `improveThreads` recipe moved into the library, with one change: the result always has exactly `k` entries. `colorSpace` (default `'rgb'`) and `signal` are its options.
+- **`handle.chooseFrom(palette, k, options?)`** on a worker handle from `worker.cluster`: the clustering method of the same name, run in the worker (`colorSpace` and `signal`). A number or an image where the wrong kind of handle expects one now says which handle it is holding.
+- **`worker.load(clustering)`** keeps a stored clustering in the worker and returns a `LoadedClusteringHandle`: `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `chooseFrom(palette, k, options?)`, `quantize(image, k, options?)` and `quantizeToIndices(image, k, options?)`, with `release()` and `await using`. It replaces one-off `worker.getPaletteFromClustering(clustering, k)` calls, which send the clustering every time. The mapping methods take `signal` and `onProgress`. The clustering is checked and its bytes taken at the call, so a damaged clustering, a palette or an image rejects with `invalid-clustering` before anything is posted.
+
+### Deprecated
+- **The five `…FromClustering` functions, in both entries and on workers:** `getPaletteFromClustering`, `getSwatchesFromClustering`, `getClusteringInfo(clustering)` (the function; the methods keep the name), `quantizeFromClustering` and `quantizeToIndicesFromClustering`. Use `clustering.getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `quantize(image, k)` and `quantizeToIndices(image, k)` on the main thread, and the same methods on `await worker.load(clustering)` off it. TypeScript marks them deprecated; nothing changes at run time and there is no warning. 4.0 removes them. See [Migrating](docs/migrating.md#deprecated-in-38-removed-in-40).
+
 ## 3.7.2
 
 Output and the API are unchanged; a progress bug is fixed, two error messages are clearer, and the guides' fixed-palette recipe goes back to RGB scoring and counts stitches.

@@ -10,7 +10,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - [Errors](#errors)
 - [Worker entry](#worker-entry)
 - [TypeScript](#typescript)
-- [Functions](#functions), and [deprecated names](#deprecated-names)
+- [Functions](#functions), [deprecated names](#deprecated-names) and [deprecated function forms](#deprecated-function-forms)
 
 ## Terms
 
@@ -294,15 +294,24 @@ const restored = new Clustering(await db.get('clustering'));               // st
 - **Only clusterings made by 3.3 or later have them.** A clustering from an older copy of the package (say a dependency that still pins 3.2) is tagged but has no methods, so `clustering.getPalette` is `undefined` there; wrap it with this copy's `new Clustering(bytes)`, or use the function form.
 - **In tests,** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on `clustering.getPalette` itself, on a real clustering, with `vi.spyOn` (or `jest.spyOn`).
 
-| Method | Function form | Arguments of the function form |
+| Method | Function form (deprecated) | Arguments of the function form |
 |---|---|---|
 | `clustering.getPalette(k)` | `getPaletteFromClustering` | `(clustering, k)` |
 | `clustering.getSwatches(k)` | `getSwatchesFromClustering` | `(clustering, k)` |
 | `clustering.getClusteringInfo()` | `getClusteringInfo` | `(clustering)` |
 | `clustering.quantize(image, k, options?)` | `quantizeFromClustering` | `(image, clustering, k, options?)`: the image comes first |
 | `clustering.quantizeToIndices(image, k, options?)` | `quantizeToIndicesFromClustering` | `(image, clustering, k, options?)`: the image comes first |
+| `clustering.chooseFrom(palette, k, options?)` | none | |
 
-Moving existing code to the methods is optional: the `…FromClustering` functions are not deprecated in 3.x, and the two forms give the same results.
+The `…FromClustering` functions are deprecated from 3.8 and 4.0 removes them (see [Deprecated function forms](#deprecated-function-forms)): use the method on the main thread, and a loaded handle off it. Nothing changes at run time, and there is no warning. The methods give the same results, and `worker.load(clustering)` keeps one copy of the clustering in the worker, where `worker.getPaletteFromClustering(clustering, k)` sends it every time.
+
+| Deprecated function (both entries) | Main thread | Off the thread |
+|---|---|---|
+| `getPaletteFromClustering(c, k)` | `c.getPalette(k)` | `(await worker.load(c)).getPalette(k)` |
+| `getSwatchesFromClustering(c, k)` | `c.getSwatches(k)` | `….getSwatches(k)` |
+| `getClusteringInfo(c)` (the function) | `c.getClusteringInfo()` | `….getClusteringInfo()` |
+| `quantizeFromClustering(image, c, k)` | `c.quantize(image, k)` | `….quantize(image, k)` |
+| `quantizeToIndicesFromClustering(image, c, k)` | `c.quantizeToIndices(image, k)` | `….quantizeToIndices(image, k)` |
 
 ### `clustering.getPalette(k): Promise<Palette>`
 `getPaletteFromClustering(clustering, k)` as a method. Takes no options.
@@ -322,6 +331,13 @@ Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal
 `quantizeToIndicesFromClustering(image, clustering, k, options)` as a method, with the cutoff the clustering was made with as the default `transparent`.
 
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
+
+### `clustering.chooseFrom(palette, k, options?): Promise<PaletteChoice>`
+Chooses the `k` entries of a fixed palette (the threads you own, the bricks in a set, the inks of a panel) that best represent the clustered image. It returns `{ indices, palette }`: `indices` are exactly `k` positions in the palette you gave, ascending and not ranked (count the mapped pixels for a legend), and `palette` holds those entries' colours in the same order, tagged `'rgb'` whatever space the search measured in, so `quantizeToIndicesWithPalette(image, result.palette)` maps in RGB and index `s` is entry `indices[s]`. The result is a good choice, not always the best one: it is a search (snap each cut of the clustering to its nearest entries, then swap entries in and out while that brings the image closer), the same as the guides' [fixed-palette recipe](guides.md#fixed-palettes-e-ink-thread-bricks), and it depends only on the clustering, the palette's bytes, `k` and `colorSpace`. It runs on the calling thread, with the main entry. An image with fewer colours than `k` still gets `k` entries, and an empty image gets the first `k`.
+
+`k` is a whole number from 1 to the palette's entry count. `colorSpace` is the space the search measures distance in, `'rgb'` unless you pass it: it does not follow the clustering's space, nor a `Palette`'s tag. `'oklab'` lowers the mean ΔE2000 but can grey out small vivid areas. There is no function form and no `onProgress`: the search takes 18 to 64 ms (86 ms at worst) for 12 to 40 of 584 to 1000 entries, and `signal` is checked between its passes. Time and memory grow with the palette's entry count (the search keeps an entries × 1024 table): 110 to 250 ms for 12 to 40 of 4096 entries (471 ms at worst, scoring in OKLab). It is sized for charts of up to a few thousand entries.<!-- bench/spikes/choose-from/speed.mjs → results-speed.txt -->
+
+Options: `colorSpace`, `signal`.
 
 ## Cancelling and progress
 
@@ -351,16 +367,16 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | --- | --- |
 | `invalid-argument` | A bad image, `k`, option or palette. |
 | `invalid-clustering` | Bytes that aren't a clustering this version can read, or a stored clustering that came back damaged (its checksum or its records don't fit). |
-| `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `getSwatchesFromClustering`). |
+| `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `clustering.getSwatches(k)`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate: an image with very many colours, or pixel data over its 2 GB (the message gives the size). |
 | `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. Also a [`Clustering` method](#clustering-methods) called where the main entry isn't loaded, with no `cause`: import the main entry on that thread. |
 | `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped, failed, or a handle was released. `worker-terminated` is for calls running or waiting when `terminate()` was called, and every later call on that `createWorker()` worker, so retrying on it can't help (the shared worker starts again on the next call). After `worker-failed` (it couldn't start, crashed or exited), the next call starts a new worker. |
 
 ```js
-import { getPaletteFromClustering, isCodedError } from 'agglomerative-clustering';
+import { Clustering, isCodedError } from 'agglomerative-clustering';
 
 try {
-  await getPaletteFromClustering(stored, 16);
+  await new Clustering(stored).getPalette(16);
 } catch (error) {
   // isCodedError narrows the type in TypeScript, and is false for errors that aren't the library's (Node's ENOENT, an abort)
   if (isCodedError(error) && (error.code === 'unsupported-version' || error.code === 'invalid-clustering')) { /* cluster the image again */ }
@@ -393,16 +409,24 @@ The check samples the bytes, so it costs well under a millisecond at any size. I
 
 `agglomerative-clustering/worker` exports every function of the main entry, run in one shared worker started on first use, plus `terminate()`, which stops it (the next call starts a new one), and `createWorker(options?)`, which starts a worker of your own. A worker has every function as a method, plus:
 
-- **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `handle.getClustering()`, `handle.getPalette(k)`, `handle.getSwatches(k)`, `handle.getClusteringInfo()`, `handle.quantize(k, options?)`, `handle.quantizeToIndices(k, options?)`, `handle.quantizeWithPalette(palette, options?)` and `handle.quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
+- **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `handle.getClustering()`, `handle.getPalette(k)`, `handle.getSwatches(k)`, `handle.getClusteringInfo()`, `handle.chooseFrom(palette, k, options?)` (the clustering method of the same name, run in the worker: `colorSpace` and `signal` only), `handle.quantize(k, options?)`, `handle.quantizeToIndices(k, options?)`, `handle.quantizeWithPalette(palette, options?)` and `handle.quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
+- **`load(clustering)`** keeps a stored clustering in the worker, behind a `LoadedClusteringHandle` with `loaded.getPalette(k)`, `loaded.getSwatches(k)`, `loaded.getClusteringInfo()`, `loaded.chooseFrom(palette, k, options?)`, `loaded.quantize(image, k, options?)` and `loaded.quantizeToIndices(image, k, options?)`. It holds no image, so the mapping methods take the one to map (and return its type), and it has no `loaded.getClustering()` (you passed the clustering in) and no `…WithPalette` methods (use `worker.quantizeWithPalette`). The clustering is checked and its bytes taken at the call, as for any argument. `signal` and `onProgress` work on the mapping methods. Free it with `release()`, or `await using loaded = await worker.load(clustering)`, which replaces one-off `worker.getPaletteFromClustering(clustering, k)` calls that send the clustering every time.
+
+  The two kinds of handle differ in what they keep, and so in how they map:
+
+  | Handle from | Keeps | Maps with |
+  |---|---|---|
+  | `cluster(image)` | the image and its clustering | `quantize(k)` |
+  | `load(clustering)` | only the clustering | `quantize(image, k)` |
 - **`terminate()`** stops the worker and rejects the calls still waiting. `await using worker = createWorker()` calls it at the end of the block.
 
-**A `Clustering`'s methods run on the calling thread,** using the main entry: import `agglomerative-clustering` in that thread (and call its `init({ wasm })` if you set where the module comes from), or they reject with `wasm-load-failed`. To cut or map a clustering off the thread, use this entry's functions (`getPaletteFromClustering(clustering, k)` and the rest) or a `worker.cluster()` handle.
+**A `Clustering`'s methods run on the calling thread,** using the main entry: import `agglomerative-clustering` in that thread (and call its `init({ wasm })` if you set where the module comes from), or they reject with `wasm-load-failed`. To cut or map a clustering off the thread, use `worker.load(clustering)` or a `worker.cluster()` handle.
 
 **Terminate the workers you create.** A worker's thread, and the memory its last images needed, stay until `terminate()`: a running worker is never garbage-collected, so a server or page that creates a worker per request and drops it gathers threads. Keep a few workers and reuse them (see [the pool](performance.md#servers)), or use the shared worker. As a safety net, a worker you dropped is stopped some time after the garbage collector has collected it, once no call is running on it and no handle from it is left, but when that happens is up to the engine (it may be never, in a process with little memory pressure).
 
 `createWorker` takes `transfer`, `wasm` (see [Loading the WebAssembly module](environments.md#loading-the-webassembly-module)) and `script`: the URL (or in Node, the path) of a copy of the package's `dist/worker-thread.mjs`, for setups whose bundler doesn't emit the package's own. For the shared worker, `init({ script })` does the same, before any other call.
 
-Calls run one at a time, in order. Results are transferred back without copying. Images are copied in, unless you create the worker with `createWorker({ transfer: true })`, which is faster but leaves your buffer empty. Only pixels that are a whole buffer of their own are transferred; a view into part of a larger buffer, such as a `subarray` or a small Node `Buffer`, is copied.
+Calls run one at a time, in order. Results are transferred back without copying. Images, and clusterings passed to `load`, are copied in, unless you create the worker with `createWorker({ transfer: true })`, which is faster but leaves your buffer empty (at once if the worker has not started yet, otherwise when the call posts it). Only an array that is a whole buffer of its own is transferred; a view into part of a larger buffer, such as a `subarray` or a small Node `Buffer`, is copied.
 
 The worker is started with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, the form bundlers look for (see [Environments](environments.md#angular-esbuild-rollup-and-other-bundlers) for those that don't). Loaded from a CDN (another origin than the page), it starts the worker through a small `blob:` script, as browsers don't start workers from other origins' scripts. In Node an idle worker never keeps the process alive.
 
@@ -425,51 +449,29 @@ Both entries ship declarations, checked in CI under strict mode with `nodenext` 
 ## Functions
 
 ### `buildClustering(image, options?): Promise<Clustering>`
-Builds the colour hierarchy for an image. Cut it with its [methods](#clustering-methods) (`clustering.getPalette(k)`, `clustering.quantize(image, k)`) or the `…FromClustering` functions to get any number of palettes without clustering again. In the worker entry, `buildClustering(image)` returns the clustering's bytes, as here; `worker.cluster(image)` instead keeps the image and its clustering in the worker and returns a handle.
+Builds the colour hierarchy for an image. Cut it with its [methods](#clustering-methods) (`clustering.getPalette(k)`, `clustering.quantize(image, k)`) to get any number of palettes without clustering again. In the worker entry, `buildClustering(image)` returns the clustering's bytes, as here; `worker.cluster(image)` instead keeps the image and its clustering in the worker and returns a handle.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 
-### `getPaletteFromClustering(clustering, k): Promise<Palette>`
-The function form of `clustering.getPalette(k)`. Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too. `k` is a maximum: an image with fewer distinct colours gives fewer entries.
-
 ### `buildPalette(image, k, options?): Promise<Palette>`
-`buildClustering` followed by `getPaletteFromClustering`.
+`buildClustering` followed by `clustering.getPalette(k)`.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 
 ### `buildSwatches(image, k, options?): Promise<Swatches>`
 A palette with how much of the image each colour covers, for swatches with percentages. It returns `{ palette, weights, shares }`, three arrays from one cut of one clustering, so entry `i` of each describes the same colour:
-- `palette` is flat RGB bytes in split order (what `getPaletteFromClustering` gives).
+- `palette` is flat RGB bytes in split order (what `clustering.getPalette(k)` gives).
 - `weights` are pixels per colour. Fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1.
 - `shares` are the weights divided by their total, so they sum to 1.
 
-All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `buildClustering` once and `getSwatchesFromClustering`.
+All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `buildClustering` once and `clustering.getSwatches(k)`.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
-
-### `getSwatchesFromClustering(clustering, k): Promise<Swatches>`
-The function form of `clustering.getSwatches(k)`. The same from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected.
-
-### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
-Also `clustering.getClusteringInfo()`. What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, maxColors, totalWeight, mse, explained }`.
-
-- `formatVersion`: the format of its bytes (compare it with the exported `formatVersion`).
-- `transparent`: the alpha cutoff it was made with, or `false`. `quantizeToIndicesFromClustering` uses it by default.
-- `maxColors`: the largest palette it can be cut to.
-- `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
-- `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces. Being relative to the image's own variance, it is a poor guide to how many colours an image needs: to choose a palette size by error, see [the guides](guides.md#choosing-a-palette-size).
-
-It needs a clustering from 3.x, like `getSwatchesFromClustering`: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` (the palette and mapping functions still read it).
 
 ### `quantize(image, k, options?): Promise<the type of image>`
 Reduces the image to at most `k` colours.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `dither`, `width`, `signal`, `onProgress`.
-
-### `quantizeFromClustering(image, clustering, k, options?): Promise<the type of image>`
-The function form of `clustering.quantize(image, k, options)`. Quantizes using a clustering you already have.
-
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
 
 ### `quantizeWithPalette(image, palette, options?): Promise<the type of image>`
 Maps each pixel to its nearest colour in any palette: a `Palette`, or flat RGB bytes (a `Uint8Array`, `Uint8ClampedArray`, or plain array of integers 0–255; flatten an array of `[r, g, b]` colours first with `colors.flat()`). A `Palette` is matched in its own colour space and plain bytes in RGB, unless you name a `colorSpace`. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value.
@@ -493,11 +495,6 @@ With `transparent`, pixels of an RGBA or BGRA image below the cutoff get the tra
 const { palette, colors, indices, transparentIndex } = await quantizeToIndices(imageData, 256, { transparent: true });
 ```
 
-### `quantizeToIndicesFromClustering(image, clustering, k, options?): Promise<IndexedImage>`
-The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
-
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
-
 ### `quantizeToIndicesWithPalette(image, palette, options?): Promise<IndexedImage>`
 The same as `quantizeToIndices`, with a palette you supply. The result's `palette` is the palette you give, in its order, so each index is a position in it. There is no `k`: the transparent entry is added after the palette you give, so a 256-colour palette gives 257 entries. To use only some of a large chart (the 12 threads out of 400 that best match a photo, the bricks to buy), choose them first: see [Fixed palettes](guides.md#fixed-palettes-e-ink-thread-bricks) in the guides.
 
@@ -513,7 +510,38 @@ Loads the WebAssembly module. Every other function does this on first use, so ca
 Frozen arrays of every value of the options that take one of a fixed set of names (see [Lists of names](#options)): `colorSpaces` (`'rgb'`, `'oklab'`), `imageFormats` (`'rgb'`, `'rgba'`, `'bgra'`, `'rgbx'`, `'bgrx'`), `alphaModes` (`'weight'`, `'ignore'`), `ditherMethods` (`'floyd-steinberg'`, `'atkinson'`, `'ordered'`) and `ditherSteps` (2, 4, 8, 16, 32, 64). In TypeScript each is typed as a list of its option's type, so `find` narrows a value from a form: `ditherMethods.find((m) => m === select.value)` is a `DitherMethod` or `undefined`, and `ditherSteps.find((s) => s === Number(slider.value))` a `DitherSteps`. No dithering is `dither: false`, not a method. Both entries export all of them.
 
 ### `version: string` and `formatVersion: number`
-`version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `getClusteringInfo(stored).formatVersion` is below it, or when `getClusteringInfo` rejects the clustering with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
+`version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `(await new Clustering(stored).getClusteringInfo()).formatVersion` is below it, or when `new Clustering(stored)` throws or `getClusteringInfo()` rejects with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
 
 ### Deprecated names
 `getClustering(image, options?)`, `getPalette(image, k, options?)` and `getSwatches(image, k, options?)` are the same functions as `buildClustering`, `buildPalette` and `buildSwatches` (their names before 3.4.0), in both entries and on workers, and 4.0 removes them. See [Migrating](migrating.md#deprecated-in-34-removed-in-40).
+
+## Deprecated function forms
+
+The five functions that take a stored clustering are deprecated from 3.8 and removed in 4.0, in both entries and on workers. They work as before; TypeScript marks them deprecated. Replace each with the method on the main thread or a loaded handle off it (the table under [Clustering methods](#clustering-methods)); [Migrating](migrating.md#deprecated-in-38-removed-in-40) has the steps.
+
+### `getPaletteFromClustering(clustering, k): Promise<Palette>`
+The function form of `clustering.getPalette(k)`. Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too. `k` is a maximum: an image with fewer distinct colours gives fewer entries.
+
+### `getSwatchesFromClustering(clustering, k): Promise<Swatches>`
+The function form of `clustering.getSwatches(k)`. The same from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected.
+
+### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
+The function form of `clustering.getClusteringInfo()`. What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, maxColors, totalWeight, mse, explained }`.
+
+- `formatVersion`: the format of its bytes (compare it with the exported `formatVersion`).
+- `transparent`: the alpha cutoff it was made with, or `false`. `quantizeToIndicesFromClustering` uses it by default.
+- `maxColors`: the largest palette it can be cut to.
+- `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
+- `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces. Being relative to the image's own variance, it is a poor guide to how many colours an image needs: to choose a palette size by error, see [the guides](guides.md#choosing-a-palette-size).
+
+It needs a clustering from 3.x, like `getSwatchesFromClustering`: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` (the palette and mapping functions still read it).
+
+### `quantizeFromClustering(image, clustering, k, options?): Promise<the type of image>`
+The function form of `clustering.quantize(image, k, options)`. Quantizes using a clustering you already have.
+
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
+
+### `quantizeToIndicesFromClustering(image, clustering, k, options?): Promise<IndexedImage>`
+The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
+
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.

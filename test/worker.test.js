@@ -269,3 +269,57 @@ describe('the drop-in module', () => {
     }, timeLimit(30_000));
 
 });
+
+describe('worker handles: chooseFrom and an image passed as k', () => {
+    let seed = 11;
+    const threads = new Uint8Array(120 * 3).map(() => (seed = (seed * 16807) % 2147483647) % 256);
+    const failure = (promise) => promise.then(() => null, (error) => error);
+
+    it('handle.chooseFrom equals clustering.chooseFrom', async () => {
+        const handle = await worker.cluster(image);
+        const clustering = await ac.buildClustering(image);
+        for (const options of [undefined, { colorSpace: 'rgb' }, { colorSpace: 'oklab' }]) {
+            const got = await handle.chooseFrom(threads, 8, options);
+            expect(got).toEqual(await clustering.chooseFrom(threads, 8, options));
+            expect(got.palette).toBeInstanceOf(ac.Palette);
+            expect(got.palette.colorSpace).toBe('rgb');
+        }
+        await handle.release();
+    });
+
+    it('handle.chooseFrom errors match the main entry', async () => {
+        const handle = await worker.cluster(image);
+        const clustering = await ac.buildClustering(image);
+        const cases = [
+            (c) => c.chooseFrom(new Uint8Array(0), 1),
+            (c) => c.chooseFrom(new Uint8Array(7), 1),
+            (c) => c.chooseFrom(threads, 0),
+            (c) => c.chooseFrom(threads, 2.5),
+            (c) => c.chooseFrom(threads, '4'),
+            (c) => c.chooseFrom(threads, 121),
+            (c) => c.chooseFrom(threads, 4, { colorSpace: 'lab' }),
+            (c) => c.chooseFrom(threads, 4, { onProgress() {} }),
+            (c) => c.chooseFrom(threads, 4, { dither: true }),
+        ];
+        for (const call of cases) {
+            const expected = await failure(call(clustering));
+            const error = await failure(call(handle));
+            expect(error, String(call)).not.toBeNull();
+            expect(error).toMatchObject({ code: expected.code, argument: expected.argument, message: expected.message });
+        }
+        await handle.release();
+    });
+
+    it('an image handle given an image for k says so', async () => {
+        const handle = await worker.cluster(image);
+        const images = [new Uint8Array(16), { data: new Uint8Array(16), format: 'rgba', width: 2, height: 2 }, new ImageData(2, 2)];
+        for (const method of ['quantize', 'quantizeToIndices']) {
+            for (const given of images) {
+                const error = await failure(handle[method](given, 4));
+                expect(error).toMatchObject({ code: 'invalid-argument', argument: 'k' });
+                expect(error.message).toMatch(/this handle holds an image \(from worker\.cluster\).*worker\.load/);
+            }
+        }
+        await handle.release();
+    });
+});

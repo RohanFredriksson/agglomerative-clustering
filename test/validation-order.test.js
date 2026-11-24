@@ -57,6 +57,16 @@ describe('with two mistakes, the worker entry reports the one the main entry doe
 
 });
 
+describe('chooseFrom', () => {
+
+    it('a bad k with an aborted signal rejects on k', async () => {
+        const clustering = await main.buildClustering(image);
+        const error = await clustering.chooseFrom(new Uint8Array(30), 0, { signal: aborted() }).then(() => null, (reason) => reason);
+        expect(error).toMatchObject({ code: 'invalid-argument', argument: 'k' });
+    });
+
+});
+
 describe('an aborted signal with nothing else wrong', () => {
 
     it('rejects with the signal\'s reason, in both entries', async () => {

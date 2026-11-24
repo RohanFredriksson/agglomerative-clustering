@@ -99,6 +99,24 @@ async function run() {
         checks.methodsOnWorkerClustering = false;
         details.methodsOnWorkerClustering = `${error.code}: ${error.message}`;
     }
+    // worker.load (3.8) gives a handle for a stored clustering, and chooseFrom matches the method on the clustering itself.
+    try {
+        checks.loadAndChooseFrom = typeof worker.load !== 'function' || await (async () => {
+            const loaded = await worker.load(clustering);
+            try {
+                const chart = await ac.getPalette(image, 12);
+                const viaHandle = await loaded.chooseFrom(chart, 6);
+                const viaMethod = await clustering.chooseFrom(chart, 6);
+                return equal(await loaded.getPalette(8), await clustering.getPalette(8))
+                    && equal(viaHandle.indices, viaMethod.indices) && equal(viaHandle.palette, viaMethod.palette);
+            } finally {
+                await loaded.release();
+            }
+        })();
+    } catch (error) {
+        checks.loadAndChooseFrom = false;
+        details.loadAndChooseFrom = `${error.code}: ${error.message}`;
+    }
     // A palette made in RGB (it knows that), and the same bytes without the tag.
     const custom = await ac.getPalette(image, 5);
     const plain = new Uint8Array(custom);

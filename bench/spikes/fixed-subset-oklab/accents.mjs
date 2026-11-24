@@ -1,25 +1,17 @@
 // Does OKLab scoring in the guides' improveThreads lose small vivid areas? (The 3.7.1 exploratory round saw a parrot's
 // pink cheek and teal feather turn grey at 16 threads, kodim23.) For each Kodak photo, the guides' chooseThreads and
-// improveThreads (read from docs/guides.md), scored in 'rgb' and in 'oklab', mapped in RGB without dithering. Reported:
+// improveThreads (test/reference/fixed-palette-recipe.js, the 3.7.2 guides' text), scored in 'rgb' and in 'oklab', mapped in RGB without dithering. Reported:
 // mean CIEDE2000 over all pixels; over the vivid pixels only (CIELAB chroma above 40, the most saturated few per cent);
 // the chroma those vivid pixels lose; and how many chosen threads no pixel is mapped to.
 //   node bench/spikes/fixed-subset-oklab/accents.mjs [kodak limit] > bench/spikes/fixed-subset-oklab/results-accents.txt
-import { readFile } from 'fs/promises';
+import { recipe } from '../../../test/reference/fixed-palette-recipe.js';
 import * as entry from '../../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../../fixtures/kodak.js';
 import { ciede2000 } from '../../lib/metrics.js';
 import { PALETTES } from '../fixed-subset.js';
 
 const limit = Number(process.argv[2] ?? 24);
-const guides = (await readFile(new URL('../../../docs/guides.md', import.meta.url), 'utf8')).split('\n');
-const source = (name) => {
-    const start = guides.findIndex((l) => new RegExp(`^ *(async )?function ${name}\\(`).test(l));
-    const indent = /^ */.exec(guides[start])[0];
-    const end = guides.findIndex((l, i) => i > start && l === `${indent}}`);
-    return guides.slice(start, end + 1).join('\n');
-};
-const { chooseThreads, improveThreads } = new Function('getPaletteFromClustering', 'getSwatchesFromClustering', 'quantizeToIndicesWithPalette',
-    `${source('chooseThreads')}\n${source('improveThreads')}\n${source('coordinates')}\nreturn { chooseThreads, improveThreads };`)(entry.getPaletteFromClustering, entry.getSwatchesFromClustering, entry.quantizeToIndicesWithPalette);
+const { chooseThreads, improveThreads } = recipe(entry);   // the 3.7.2 guides' recipe, which clustering.chooseFrom reproduces
 
 const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const lab = (r, g, b) => {

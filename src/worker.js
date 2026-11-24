@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -108,7 +108,7 @@ const start = async (receive, chosen) => {
         // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
         // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
         const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
-        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
         let worker, source = null;
         try {
             if (opaque) {
@@ -152,7 +152,7 @@ const start = async (receive, chosen) => {
     worker.on('error', (error) => receive({failure: missing(error)
         ? inZip(error)
             ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).`
-            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
+            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
         : error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
@@ -582,6 +582,105 @@ const makeWorker = (options, allowScript) => {
         return invoke('init', checked === undefined || Object.keys(checked).length === 0 ? [] : [checked], [], origin).then(() => undefined);
     };
 
+    // Whether a value is an image where a palette size was expected (a pixel array, an ImageData or `{data, ...}`).
+    const looksLikeImage = (value) => value !== null && typeof value === 'object' && (isUint8Array(value) || isUint8ClampedArray(value) || isImageData(value) || 'data' in value);
+    // Builds the handle object for what the worker keeps under `id`: `kind` is 'image' (from `cluster`: an image and its
+    // clustering) or 'clustering' (from `load`: a clustering alone). `output` turns a mapped result back into the type of the image given.
+    const makeHandle = (id, kind, output) => {
+        let released = false;
+        // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
+        // keeps it alive and it is not reclaimed while still in use.
+        const use = (method, args, controls) => {
+            if (released || !handle) {return Promise.reject(fail('invalid-handle', "Invalid handle: it was released."));}
+            return invoke(method, [id, ...args], [], new Error(), controls);
+        };
+        // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
+        const withControls = (method, leading, mapOptions) => {
+            let taken;
+            try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
+            return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
+        };
+        // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,
+        // as in the main entry, rather than silently ignored.
+        const plain = (method, name, args, extra) => extra.some((value) => value !== undefined)
+            ? Promise.reject(fail('invalid-argument', `Invalid arguments: handle.${name} takes no options. To map pixels with options, use handle.quantize.`, 'options'))
+            : use(method, args);
+        // An image where k belongs is a mix-up between the two kinds of handle: say so, rather than "k must be an integer".
+        const imageAsK = (name, k) => looksLikeImage(k)
+            ? Promise.reject(fail('invalid-argument', `Invalid k: this handle holds an image (from worker.cluster) and maps it with ${name}(k); pass k, not an image. To map other images with a stored clustering, use worker.load(clustering).`, 'k'))
+            : null;
+        const handle = {
+            getPalette: (k, ...extra) => plain('handleGetPalette', 'getPalette', [k], extra),
+            getSwatches: (k, ...extra) => plain('handleGetSwatches', 'getSwatches', [k], extra),
+            getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
+            // Takes the signal only: the main entry's chooseFrom takes no progress callback, so one given crosses as null for
+            // the thread to reject with the main entry's own error.
+            // That relies on the thread injecting a progress poster only for calls that have one (see `optionsIndex` in
+            // worker-thread.js): the null is then the only onProgress it sees, so its own option check rejects it.
+            chooseFrom: (palette, k, chooseOptions) => {
+                let taken;
+                try {taken = takeControls(chooseOptions, false);} catch (error) {return Promise.reject(error);}
+                const sent = taken.onProgress !== undefined ? {...taken.options, onProgress: null} : taken.options;
+                return use('handleChooseFrom', [palette, k, sent], {signal: taken.signal});
+            },
+            release: async () => {
+                if (released) {return;}
+                released = true;
+                liveHandles--;
+                if (reclaim) {reclaim.unregister(handle);}
+                // If the worker has been terminated there is nothing left to free (so `await using` and
+                // terminate() can come in either order); any other failure is reported.
+                try {await invoke('release', [id], [], new Error());} catch (error) {if (error.code !== 'worker-terminated') {throw error;}}
+                stopIfAbandoned();
+            },
+        };
+        if (kind === 'image') {
+            Object.assign(handle, {
+                getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
+                quantize: (k, mapOptions) => imageAsK('quantize', k) || (async () => output(await withControls('handleQuantize', [k], mapOptions)))(),
+                quantizeToIndices: (k, mapOptions) => imageAsK('quantizeToIndices', k) || withControls('handleQuantizeToIndices', [k], mapOptions),
+                quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),
+                quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions),
+            });
+        }
+        if (kind === 'clustering') {
+            // The handle holds no image: each call maps the image it is given, and returns the type of that image.
+            const mapping = (name, method, mapped) => (image, k, mapOptions) => {
+                if (typeof image === 'number') {return Promise.reject(fail('invalid-argument', "Invalid image: this handle holds a clustering, not an image (from worker.load); pass the image, then k.", 'image'));}
+                const origin = new Error();
+                return (async () => {
+                    if (released || !handle) {throw fail('invalid-handle', "Invalid handle: it was released.");}
+                    const {options, signal, onProgress} = takeControls(mapOptions);
+                    if (signal && signal.aborted) {
+                        // As the functions on the worker do: a wrong argument is reported before the abort.
+                        try {
+                            await invoke(method, [id, own(send(image)), k, options], [], origin, {check: true});
+                        } catch (error) {
+                            if (isCodedError(error) && error.argument !== undefined) {throw error;}
+                        }
+                        throw abortReason(signal);
+                    }
+                    const warning = bareImageWarning(image);
+                    const byteLength = warning ? image.byteLength : 0;
+                    let sent = send(image);
+                    const ahead = !ready();
+                    if (ahead) {sent = take(sent);}
+                    const result = await invoke(method, [id, sent, ahead ? own(k) : k, options], pixelBuffers(sent), origin, {signal, onProgress});
+                    if (warning) {warnOnce(warning, byteLength);}
+                    return mapped ? rebuild(image)(result) : result;
+                })();
+            };
+            Object.assign(handle, {
+                quantize: mapping('quantize', 'handleQuantizeImage', true),
+                quantizeToIndices: mapping('quantizeToIndices', 'handleQuantizeToIndicesImage', false),
+            });
+        }
+        // `await using handle = await worker.cluster(image)` releases it at the end of the block.
+        if (typeof Symbol.asyncDispose === 'symbol') {handle[Symbol.asyncDispose] = handle.release;}
+        if (reclaim) {reclaim.register(handle, id, handle);}
+        return handle;
+    };
+
     // Clusters `image` and keeps it, with its clustering, in the worker.
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
@@ -606,49 +705,29 @@ const makeWorker = (options, allowScript) => {
                 throw error;
             }
             if (warning) {warnOnce(warning, byteLength);}
-            const output = rebuild(image);
-            let released = false;
-            // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
-            // keeps it alive and it is not reclaimed while still in use.
-            const use = (method, args, controls) => {
-                if (released || !handle) {return Promise.reject(fail('invalid-handle', "Invalid handle: it was released."));}
-                return invoke(method, [id, ...args], [], new Error(), controls);
-            };
-            // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
-            const withControls = (method, leading, mapOptions) => {
-                let taken;
-                try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
-                return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
-            };
-            // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,
-            // as in the main entry, rather than silently ignored.
-            const plain = (method, name, args, extra) => extra.some((value) => value !== undefined)
-                ? Promise.reject(fail('invalid-argument', `Invalid arguments: handle.${name} takes no options. To map pixels with options, use handle.quantize.`, 'options'))
-                : use(method, args);
-            const handle = {
-                getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
-                getPalette: (k, ...extra) => plain('handleGetPalette', 'getPalette', [k], extra),
-                getSwatches: (k, ...extra) => plain('handleGetSwatches', 'getSwatches', [k], extra),
-                getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
-                quantize: async (k, mapOptions) => output(await withControls('handleQuantize', [k], mapOptions)),
-                quantizeToIndices: (k, mapOptions) => withControls('handleQuantizeToIndices', [k], mapOptions),
-                quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),
-                quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions),
-                release: async () => {
-                    if (released) {return;}
-                    released = true;
-                    liveHandles--;
-                    if (reclaim) {reclaim.unregister(handle);}
-                    // If the worker has been terminated there is nothing left to free (so `await using` and
-                    // terminate() can come in either order); any other failure is reported.
-                    try {await invoke('release', [id], [], new Error());} catch (error) {if (error.code !== 'worker-terminated') {throw error;}}
-                    stopIfAbandoned();
-                },
-            };
-            // `await using handle = await worker.cluster(image)` releases it at the end of the block.
-            if (typeof Symbol.asyncDispose === 'symbol') {handle[Symbol.asyncDispose] = handle.release;}
-            if (reclaim) {reclaim.register(handle, id, handle);}
-            return handle;
+            return makeHandle(id, 'image', rebuild(image));
+        })();
+    };
+
+    // Keeps a stored clustering in the worker, for cutting it and mapping images with it without sending it again.
+    instance.load = (clustering, ...extra) => {
+        const origin = new Error();
+        return (async () => {
+            // Checked, and the bytes taken, before anything is awaited (see `own`): a damaged clustering, a palette or an
+            // image is reported here, and nothing is posted.
+            if (extra.length > 0) {throw fail('invalid-argument', "Invalid arguments: load takes the clustering only. Options go to the handle's methods.", 'options');}
+            readHeader(clustering);
+            const id = nextHandle++;
+            const sent = ready() ? clustering : take(clustering);
+            liveHandles++;
+            try {
+                await invoke('load', [id, sent], pixelBuffers(sent), origin);
+            } catch (error) {
+                liveHandles--;
+                if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
+                throw error;
+            }
+            return makeHandle(id, 'clustering');
         })();
     };
 

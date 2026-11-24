@@ -172,3 +172,15 @@ describe('a worker call with a signal or onProgress', () => {
     });
 
 });
+
+describe('chooseFrom on a handle', () => {
+    it('an aborted signal rejects with its reason', async () => {
+        const handle = await worker.cluster(noise(20, 20, 5));
+        const palette = new Uint8Array(30).map((_, i) => (i * 37) & 255);
+        const controller = new AbortController();
+        controller.abort(new Error('stop'));
+        await expect(handle.chooseFrom(palette, 3, { signal: controller.signal })).rejects.toThrow('stop');
+        expect((await handle.chooseFrom(palette, 3, { signal: new AbortController().signal })).indices).toHaveLength(3);
+        await handle.release();
+    });
+});

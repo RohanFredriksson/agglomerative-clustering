@@ -4,7 +4,7 @@
 
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
-    IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches,
+    IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, ChooseOptions, PaletteChoice,
 } from './index.js';
 import type { Palette, Clustering } from './index.js';
 
@@ -13,7 +13,7 @@ export { Palette } from './index.js';
 
 /**
  * The same class as the main entry's `Clustering`. Its methods run on the calling thread and need the main entry imported
- * there; off the thread, use this entry's `…FromClustering` functions or `cluster()`.
+ * there; off the thread, use `worker.load(clustering)` or `cluster()`.
  */
 export { Clustering } from './index.js';
 
@@ -34,7 +34,7 @@ export const formatVersion: number;
 
 export type {
     ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, DitherMethod, DitherOptions, DitherSteps, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches,
+    ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, ChooseOptions, PaletteChoice,
 } from './index.js';
 
 /** Options for `createWorker`. */
@@ -69,9 +69,14 @@ export interface SharedInitOptions extends InitOptions {
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */
 export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getClustering(): Promise<Clustering>;
+    /** The k-colour palette of the clustering. */
     getPalette(k: number): Promise<Palette>;
+    /** Palette, weights and shares of the k-colour cut. */
     getSwatches(k: number): Promise<Swatches>;
+    /** The error curve and totals of the clustering. */
     getClusteringInfo(): Promise<ClusteringInfo>;
+    /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
     /** Maps the kept image to the k-colour palette. Returns the same type as the image given to `cluster`. */
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
@@ -82,6 +87,34 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
      * Frees the image and clustering in the worker. Later calls on the handle fail. Call it when you are done, or
      * declare the handle with `await using`, which does. A handle that is dropped without either is freed once it is
      * garbage-collected, but when that happens is up to the JavaScript engine.
+     */
+    release(): Promise<void>;
+    /** The same as `release()`, for `await using`. Present where the runtime has `Symbol.asyncDispose`. */
+    [Symbol.asyncDispose](): Promise<void>;
+}
+
+/**
+ * A stored clustering, kept in the worker (from `worker.load`): cut it and map images with it without sending it again.
+ * It holds no image, so the mapping methods take the image, then k (`cluster` keeps the image and maps it with `quantize(k)`).
+ * There is no `getClustering()`: you passed the clustering in and still have it.
+ */
+export interface LoadedClusteringHandle {
+    /** The k-colour palette of the clustering. */
+    getPalette(k: number): Promise<Palette>;
+    /** Palette, weights and shares of the k-colour cut. */
+    getSwatches(k: number): Promise<Swatches>;
+    /** The error curve and totals of the clustering. */
+    getClusteringInfo(): Promise<ClusteringInfo>;
+    /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+    /** Maps `image` to the k-colour palette of the kept clustering. Returns the same type as the image given. */
+    quantize<Image extends ImageLike>(image: Image, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    /** Maps `image` to indices into the k-colour palette of the kept clustering. */
+    quantizeToIndices(image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    /**
+     * Frees the clustering in the worker. Later calls on the handle fail. Call it when you are done, or declare the
+     * handle with `await using`, which does. A handle that is dropped without either is freed once it is garbage-collected,
+     * but when that happens is up to the JavaScript engine.
      */
     release(): Promise<void>;
     /** The same as `release()`, for `await using`. Present where the runtime has `Symbol.asyncDispose`. */
@@ -100,21 +133,31 @@ export interface AgglomerativeWorker {
     buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
     /** @deprecated Renamed {@link AgglomerativeWorker.buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
     getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
+    /** @deprecated Use `clustering.getPalette(k)`; off the main thread, `(await worker.load(clustering)).getPalette(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
     getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
     /** The main entry's `buildSwatches`, run in this worker. */
     buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
     /** @deprecated Renamed {@link AgglomerativeWorker.buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
     getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
+    /** @deprecated Use `clustering.getSwatches(k)`; off the main thread, `(await worker.load(clustering)).getSwatches(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
     getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
+    /** @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
     getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
     quantize<Image extends ImageLike>(image: Image, k: number, options?: QuantizeOptions): Promise<ImageResult<Image>>;
+    /** @deprecated Use `clustering.quantize(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantize(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
     quantizeFromClustering<Image extends ImageLike>(image: Image, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeWithPalette<Image extends ImageLike>(image: Image, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<Image>>;
     quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
+    /** @deprecated Use `clustering.quantizeToIndices(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantizeToIndices(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
     quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
+    /**
+     * Keeps a stored clustering in the worker and gives a handle for cutting it and mapping images with it. The bytes are
+     * checked and taken at the call (copied, or moved with `transfer: true`), so you may change the array at once.
+     */
+    load(clustering: Clustering | Uint8Array): Promise<LoadedClusteringHandle>;
     /** Stops the worker. Calls still waiting are rejected, and later calls fail. */
     terminate(): Promise<void>;
     /** The same as `terminate()`, for `await using worker = createWorker()`. Present where the runtime has `Symbol.asyncDispose`. */
@@ -146,25 +189,25 @@ export const getClustering: AgglomerativeWorker['getClustering'];
 export const buildPalette: AgglomerativeWorker['buildPalette'];
 /** @deprecated Renamed {@link buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
 export const getPalette: AgglomerativeWorker['getPalette'];
-/** The main entry's `getPaletteFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** @deprecated Use `clustering.getPalette(k)`; off the main thread, `(await worker.load(clustering)).getPalette(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
 export const getPaletteFromClustering: AgglomerativeWorker['getPaletteFromClustering'];
 /** The main entry's `buildSwatches`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const buildSwatches: AgglomerativeWorker['buildSwatches'];
 /** @deprecated Renamed {@link buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
 export const getSwatches: AgglomerativeWorker['getSwatches'];
-/** The main entry's `getSwatchesFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** @deprecated Use `clustering.getSwatches(k)`; off the main thread, `(await worker.load(clustering)).getSwatches(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
 export const getSwatchesFromClustering: AgglomerativeWorker['getSwatchesFromClustering'];
-/** The main entry's `getClusteringInfo`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
 export const getClusteringInfo: AgglomerativeWorker['getClusteringInfo'];
 /** The main entry's `quantize`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantize: AgglomerativeWorker['quantize'];
-/** The main entry's `quantizeFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** @deprecated Use `clustering.quantize(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantize(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
 export const quantizeFromClustering: AgglomerativeWorker['quantizeFromClustering'];
 /** The main entry's `quantizeWithPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeWithPalette: AgglomerativeWorker['quantizeWithPalette'];
 /** The main entry's `quantizeToIndices`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeToIndices: AgglomerativeWorker['quantizeToIndices'];
-/** The main entry's `quantizeToIndicesFromClustering`, run in the shared worker (see `createWorker` for a worker of your own). */
+/** @deprecated Use `clustering.quantizeToIndices(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantizeToIndices(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time. */
 export const quantizeToIndicesFromClustering: AgglomerativeWorker['quantizeToIndicesFromClustering'];
 /** The main entry's `quantizeToIndicesWithPalette`, run in the shared worker (see `createWorker` for a worker of your own). */
 export const quantizeToIndicesWithPalette: AgglomerativeWorker['quantizeToIndicesWithPalette'];

@@ -46,6 +46,15 @@ export class Clustering extends Uint8Array {
     getClusteringInfo(this: Clustering): Promise<ClusteringInfo>;
     quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
     quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    chooseFrom(this: Clustering, palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+}
+export interface ChooseOptions {
+    colorSpace?: ColorSpace | undefined;
+    signal?: AbortSignal | undefined;
+}
+export interface PaletteChoice {
+    indices: number[];
+    palette: Palette;
 }
 type NotClustering = {
     readonly [clusteringBrand]?: never;

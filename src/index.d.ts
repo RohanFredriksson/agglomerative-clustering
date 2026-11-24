@@ -147,16 +147,33 @@ export class Clustering extends Uint8Array {
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     /** Only a type: what makes a `Clustering` different from a palette or other bytes to the compiler. */
     readonly [clusteringBrand]: true;
-    /** The k-colour palette, as `getPaletteFromClustering(this, k)`. Takes no options. Runs on the calling thread, with the main entry. */
+    /** The k-colour palette of this clustering. Takes no options. Runs on the calling thread, with the main entry. */
     getPalette(this: Clustering, k: number): Promise<Palette>;
-    /** Palette, weights and shares, as `getSwatchesFromClustering(this, k)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    /** Palette, weights and shares of the k-colour cut. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
     getSwatches(this: Clustering, k: number): Promise<Swatches>;
-    /** The error curve and totals, as `getClusteringInfo(this)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    /** The error curve and totals of this clustering. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
     getClusteringInfo(this: Clustering): Promise<ClusteringInfo>;
-    /** Maps `image` to the k-colour palette, as `quantizeFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    /** Maps `image` to this clustering's k-colour palette, returning the image's type. Runs on the calling thread, with the main entry. */
     quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
-    /** Indexed output, as `quantizeToIndicesFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    /** Maps `image` to this clustering's k-colour palette as palette indices. Runs on the calling thread, with the main entry. */
     quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    /** Chooses the k entries of `palette` that best represent the clustered image: their positions and colours. Runs on the calling thread, with the main entry. */
+    chooseFrom(this: Clustering, palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+}
+
+/** Options of `clustering.chooseFrom`. */
+export interface ChooseOptions {
+    /** The space the search measures distance in: 'rgb' (default) or 'oklab'. It doesn't follow the clustering's space. */
+    colorSpace?: ColorSpace | undefined;
+    signal?: AbortSignal | undefined;
+}
+
+/** What `clustering.chooseFrom` returns. */
+export interface PaletteChoice {
+    /** Exactly k positions in the palette given, ascending: no ranking (count the mapped pixels for a legend). */
+    indices: number[];
+    /** The chosen colours, in the order of `indices`: map with it, and index s of the result is entry indices[s]. */
+    palette: Palette;
 }
 
 /** What is not a clustering: a `Clustering` is not accepted where a palette is. */
@@ -375,7 +392,7 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
 
 /**
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
- * order (see `getPaletteFromClustering`). It clusters the image each time: to try several sizes, call `buildClustering`
+ * order (see `clustering.getPalette(k)`). It clusters the image each time: to try several sizes, call `buildClustering`
  * once and cut it.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
@@ -392,6 +409,8 @@ export function getPalette(image: ImageLike, k: number, options?: ClusteringOpti
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.getPalette(k)`; off the main thread, `(await worker.load(clustering)).getPalette(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 
@@ -400,7 +419,7 @@ export function getPaletteFromClustering(clustering: Clustering, k: number): Pro
  * from one cut of one clustering, so they line up by construction: entry `i` of each describes the same colour.
  */
 export interface Swatches {
-    /** The colours in split order, exactly what `getPaletteFromClustering` gives for the same `k`. */
+    /** The colours in split order, exactly what `clustering.getPalette(k)` gives for the same `k`. */
     palette: Palette;
     /**
      * Pixels per colour, counted as in clustering: by default fully transparent pixels count 0 and partly transparent ones
@@ -414,7 +433,7 @@ export interface Swatches {
 
 /**
  * The palette for `image` at `k` colours with each colour's weight and share: one call for swatches with percentages.
- * It clusters the image each time; if you already have a clustering, use `getSwatchesFromClustering`.
+ * It clusters the image each time; if you already have a clustering, use `clustering.getSwatches(k)`.
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
@@ -429,6 +448,8 @@ export function getSwatches(image: ImageLike, k: number, options?: ClusteringOpt
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.getSwatches(k)`; off the main thread, `(await worker.load(clustering)).getSwatches(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 
@@ -470,8 +491,10 @@ export interface ClusteringInfo {
 
 /**
  * Reads what a clustering holds, including its error curve for choosing a palette size. Needs a clustering from 3.x: a 2.x
- * clustering recorded no weights, so it is rejected with `unsupported-version` (as `getSwatchesFromClustering` rejects it);
+ * clustering recorded no weights, so it is rejected with `unsupported-version` (as `clustering.getSwatches(k)` rejects it);
  * the palette and mapping functions still read it.
+ *
+ * @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 
@@ -492,6 +515,8 @@ export function quantize<I extends ImageLike>(image: I, k: number, options?: Qua
  *
  * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
+ *
+ * @deprecated Use `clustering.quantize(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantize(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 
@@ -516,12 +541,14 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
 
 /**
- * Like `quantizeFromClustering`, but returns palette indices. The palette is `getPaletteFromClustering`'s.
+ * Like `quantizeFromClustering`, but returns palette indices. The palette is `clustering.getPalette(k)`'s.
  *
  * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
  *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
  *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
  *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
+ *
+ * @deprecated Use `clustering.quantizeToIndices(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantizeToIndices(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
  */
 export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 

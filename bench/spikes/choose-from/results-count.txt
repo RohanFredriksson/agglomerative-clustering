@@ -1,0 +1,9 @@
+kodim23, 584 threads; countThreads' mapping and count, ms (median of 5)
+12 MP (4240x2832)  12 entries undithered    184
+12 MP (4240x2832)  12 entries dithered      810
+12 MP (4240x2832)  40 entries undithered    179
+12 MP (4240x2832)  40 entries dithered     1005
+1 MP (1224x817)    12 entries undithered     22
+1 MP (1224x817)    12 entries dithered       67
+1 MP (1224x817)    40 entries undithered     16
+1 MP (1224x817)    40 entries dithered       82

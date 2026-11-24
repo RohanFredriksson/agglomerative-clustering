@@ -33,6 +33,15 @@ describe('methods on Clustering without the main entry', () => {
         }
     });
 
+    it('chooseFrom rejects with wasm-load-failed and names worker.load', async () => {
+        const clustering = await buildClustering(image);
+        const error = await clustering.chooseFrom(new Uint8Array(30), 4).then(() => null, (reason) => reason);
+        expect(error).not.toBeNull();
+        expect(error.code).toBe('wasm-load-failed');
+        expect(error.message).toMatch(/^clustering\.chooseFrom can't run here/);
+        expect(error.message).toContain('worker.load');
+    });
+
     it('still check their receiver first, and the handle-shaped quantize(k), before the main entry', async () => {
         const clustering = await buildClustering(image);
         const error = await clustering.getPalette.call(undefined, 4).then(() => null, (reason) => reason);
