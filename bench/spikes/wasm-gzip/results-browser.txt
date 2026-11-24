@@ -1,0 +1,1 @@
+Chromium, DecompressionStream('gzip') of 40616 bytes to the module: first call 2.30 ms, repeat 1.20 ms (medians of 5 pages)

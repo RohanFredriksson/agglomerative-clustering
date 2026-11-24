@@ -54,6 +54,28 @@ describe('init({ wasm })', () => {
         expect(await ac.buildPalette(image, 6)).toEqual(expected);
     });
 
+    it('says when the bytes are gzipped, and how to decompress them, in both entries', async () => {
+        const { gzipSync } = await import('zlib');
+        const gz = gzipSync(bytes);
+        for (const wasm of [new Uint8Array(gz), gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength)]) {
+            const ac = await fresh();
+            const error = await ac.init({ wasm }).catch((e) => e);
+            expect(error.code).toBe('wasm-load-failed');
+            expect(error.message).toContain('are gzipped');
+            expect(error.message).toContain('DecompressionStream');
+            // Decompressed as the message says, the same bytes load.
+            const unzipped = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+            await ac.init({ wasm: unzipped });
+            expect(await ac.buildPalette(image, 6)).toEqual(expected);
+        }
+        const worker = createWorker({ wasm: new Uint8Array(gz) });
+        try {
+            await expect(worker.buildPalette(image, 6)).rejects.toMatchObject({ code: 'wasm-load-failed', message: expect.stringContaining('are gzipped') });
+        } finally {
+            await worker.terminate();
+        }
+    });
+
     // Found by the fourth round (3.0.0-beta.4): a 404 page served as the .wasm read as a bare compile error.
     it('says when the file at a location is not WebAssembly (an error page in its place), and names it', async () => {
         const { mkdtempSync, writeFileSync, rmSync } = await import('fs');
