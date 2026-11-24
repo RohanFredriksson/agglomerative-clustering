@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Palette, Clustering, buildClustering } from '../dist/index.mjs';
+import * as entry from '../dist/index.mjs';
+import { recipe } from './reference/fixed-palette-recipe.js';
+const { Palette, Clustering, buildClustering } = entry;
 
 // A smooth photo-like image, and 120 pseudo-random threads (as in test/recipes.test.js).
 const w = 64, h = 48, photo = new Uint8Array(w * h * 4);
@@ -69,6 +71,26 @@ describe('clustering.chooseFrom', () => {
         const tagged = await clustering.chooseFrom(new Palette(threads, 'oklab'), 12);
         expect(tagged.indices).toEqual(plain.indices);
         expect(Array.from(tagged.palette)).toEqual(Array.from(plain.palette));
+    });
+
+    it('scores in rgb unless told, whatever the clustering\'s space, and rgb and oklab really differ (against the 3.7.2 recipe)', async () => {
+        const { chooseThreads, improveThreads } = recipe(entry);
+        const sorted = (list) => [...list].sort((a, b) => a - b);
+        let differ = 0;
+        for (const clusteringSpace of ['rgb', 'oklab']) {
+            const clustering = await buildClustering(photo, { colorSpace: clusteringSpace });
+            for (const k of [6, 12, 24]) {
+                const start = await chooseThreads(clustering, threads, k);
+                const viaRgb = sorted(await improveThreads(clustering, threads, start, 'rgb'));
+                const viaOklab = sorted(await improveThreads(clustering, threads, start, 'oklab'));
+                const fallback = (await clustering.chooseFrom(threads, k)).indices;
+                expect(fallback, `${clusteringSpace} clustering, k=${k}: default`).toEqual(viaRgb);
+                expect((await clustering.chooseFrom(threads, k, { colorSpace: 'rgb' })).indices).toEqual(viaRgb);
+                expect((await clustering.chooseFrom(threads, k, { colorSpace: 'oklab' })).indices).toEqual(viaOklab);
+                if (viaRgb.join() !== viaOklab.join()) {differ++;}
+            }
+        }
+        expect(differ, 'the test only proves something where rgb and oklab choose differently').toBeGreaterThan(0);
     });
 
     it('the same with and without a signal', async () => {
