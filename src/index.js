@@ -162,6 +162,11 @@ const wasmLoadFailed = (cause, given, gzipped = false) => {
         // A server runtime that isn't Node (an edge runtime, Deno Deploy): it has no page, so a CSP or a 404 page are unlikely.
         if (/Invalid URL/i.test(reason)) {reason = "the package can't tell where clustering.wasm is in this runtime";}
         advice = "Give the module to init({ wasm }) before the first call: in an edge runtime (Cloudflare Workers, Vercel's), import clustering.wasm as a compiled module (the docs show how for Cloudflare Workers and Next.js: https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md); elsewhere its bytes or URL.";
+    } else if (/Invalid URL/i.test(reason) && /^(data|blob|about):$/.test(String(globalThis.location && globalThis.location.protocol))) {
+        // The code runs from a data: or blob: URL (a bundled worker script in a single-file host) or an about:srcdoc page, so
+        // there is nothing to find clustering.wasm next to. (In a worker, location is the worker script's own URL.)
+        reason = `the package can't tell where clustering.wasm is: it runs from a ${globalThis.location.protocol} URL, with nothing next to it (${reason})`;
+        advice = "Pass the module itself: createWorker({ script, wasm: bytes }) for a worker you start, init({ wasm: bytes }) for the main entry or the worker entry's shared worker (the bytes, a URL, or a compiled module; see \"Plugins and single-file hosts\" in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
     } else {
         advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
     }

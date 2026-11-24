@@ -134,7 +134,10 @@ const start = async (receive, chosen) => {
             ? `The worker failed to start: its script comes from another origin (${script.origin}), so it was started through a blob: URL, which also failed. Check that the server sends CORS headers, and that a Content-Security-Policy allows the worker: worker-src needs both blob: and ${script.origin} (the blob: worker imports the script from there). Or serve a copy of dist/ from this origin and say where with createWorker({ script }) or init({ script }).`
             : opaque
                 ? `The worker failed to start from this page, whose origin is opaque (a sandboxed iframe): it was started from a data: URL importing ${script.href}, which needs CORS headers on that script and on what it imports. Or bundle worker-thread.mjs and its imports into one file, and pass it as a data: URL with createWorker({ script }).`
-                : `The worker failed to start${chosen ? ` from ${script.href}` : ''}. ${scriptHint} A Content-Security-Policy must also allow it as a worker (worker-src).`}));
+                : script.protocol === 'blob:' && isOpaqueOrigin()
+                    // Chromium refuses blob: workers in an opaque origin; the docs' single-file recipe uses a data: URL.
+                    ? `The worker failed to start from ${script.href}: in a sandboxed iframe (an opaque origin, as plugin hosts such as Figma use) Chromium can't start a worker from a blob: URL. Pass the bundled worker script as a data: URL instead, createWorker({ script: 'data:text/javascript;base64,…', wasm: bytes }) (see "Plugins and single-file hosts" in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).`
+                    : `The worker failed to start${chosen ? ` from ${script.href}` : ''}. ${scriptHint} A Content-Security-Policy must also allow it as a worker (worker-src).`}));
         return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => {}, unref: () => {}};
     }
     // The specifier is built at run time so no bundler tries to resolve it (esbuild ignores comment hints on a literal).

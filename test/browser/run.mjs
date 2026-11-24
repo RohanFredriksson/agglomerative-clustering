@@ -36,6 +36,9 @@ const bundle = {
         // A page that imports the package from another origin (?cdn=...), with no bundler, and reports checks like the app.
         run: async (project) => {
             await mkdir(join(project, 'out'), { recursive: true });
+            // The worker script bundled into one file, as docs/environments.md has single-file hosts do, to start from a data: URL.
+            const { build: esbuild } = await import('esbuild');
+            await esbuild({ entryPoints: [join(root, 'dist', 'worker-thread.mjs')], bundle: true, format: 'esm', target: 'es2022', outfile: join(project, 'out', 'worker-bundle.mjs'), logLevel: 'error' });
             await writeFile(join(project, 'out', 'index.html'), `<!doctype html><html><head><meta charset="utf-8"><title>cdn</title></head><body><script type="module">
 const cdn = new URLSearchParams(location.search).get('cdn');
 const checks = {}, details = {};
@@ -91,6 +94,36 @@ try {
         frame.remove();
         if (reply.error) {throw new Error(reply.error);}
         return reply.palette === expected;
+    });
+    // A worker started from a blob: URL inside the sandbox: Chromium refuses it, and the error points at the data: URL the
+    // docs use (other engines may start it, which is fine).
+    await check('blobWorkerInSandboxNamesDataUrl', async () => {
+        const frame = document.createElement('iframe');
+        frame.sandbox = 'allow-scripts';
+        frame.srcdoc = '<script type="module">const w = await import(' + JSON.stringify(cdn + '/worker.mjs') + ');'
+            + 'const script = URL.createObjectURL(new Blob(["import " + JSON.stringify(' + JSON.stringify(cdn + '/worker-thread.mjs') + ') + ";"], { type: "text/javascript" }));'
+            + 'const worker = w.createWorker({ script });'
+            + 'worker.getPalette(new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255), 4).then(() => parent.postMessage({ ok: "started" }, "*"), (e) => parent.postMessage({ message: e.message }, "*")).finally(() => worker.terminate());'
+            + '<\\/script>';
+        const answer = new Promise((done) => addEventListener('message', (event) => {if (event.source === frame.contentWindow) {done(event.data);}}));
+        document.body.append(frame);
+        const reply = await Promise.race([answer, new Promise((done) => setTimeout(() => done({ message: 'no answer from the iframe' }), 20000))]);
+        frame.remove();
+        if (reply.ok) {return true;}
+        if (!/data: URL/.test(reply.message)) {throw new Error(reply.message);}
+        return true;
+    });
+    // The worker script bundled into a data: URL and started without wasm: nothing is next to it, and the error says to
+    // pass the bytes to createWorker, not to serve a file.
+    await check('dataWorkerWithoutWasmNamesCreateWorker', async () => {
+        const text = await (await fetch('./worker-bundle.mjs')).text();
+        const script = 'data:text/javascript;base64,' + btoa(unescape(encodeURIComponent(text)));
+        const worker = w.createWorker({ script });
+        const error = await worker.getPalette(image, 4).then(() => null, (e) => e);
+        await worker.terminate();
+        if (!error) {throw new Error('it loaded the module without being given it');}
+        if (error.code !== 'wasm-load-failed' || !error.message.includes('createWorker({ script, wasm')) {throw new Error(error.message);}
+        return true;
     });
     window.result = { checks, details };
 } catch (error) {

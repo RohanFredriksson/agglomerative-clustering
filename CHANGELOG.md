@@ -5,6 +5,10 @@
 ### Fixed
 - **Progress while mapping stopped rising above 4.3 million pixels**, then jumped to 1 at the end: on a 6.3-megapixel photo it sat at 0.68 for the last third of the mapping. The mapping job worked out its progress in 32-bit integers, which overflowed. Results and cancelling were unaffected. Found by an exploratory round on 3.7.1.
 
+### Changed
+- **A worker started from a `data:` URL without `wasm`** (a bundled worker script in a single-file host) now fails with a `wasm-load-failed` message that says the package can't tell where `clustering.wasm` is and to pass the module, `createWorker({ script, wasm: bytes })`. Before, it said to use `init({ wasm })` and serve the file, neither of which helps there. The same applies to code running from a `blob:` URL or an `about:srcdoc` page.
+- **A worker from a `blob:` URL in a sandboxed iframe** (an opaque origin, as Figma's plugin UI is) fails in Chromium, and the `worker-failed` message now says why and to use a `data:` URL instead, linking the docs' recipe. Before, it said to serve `worker-thread.mjs`. Both found by the same round.
+
 ## 3.7.1
 
 Output and the API are unchanged; one error message is clearer, and the docs gain two improved recipes.
