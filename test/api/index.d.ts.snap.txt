@@ -76,7 +76,7 @@ export type DitherOptions = {
     strength?: number | undefined;
     steps?: DitherSteps | undefined;
 };
-export interface MappingOptions extends CancelOptions {
+export interface MappingOptions extends ProgressOptions {
     colorSpace?: ColorSpace | undefined;
     dither?: boolean | number | DitherMethod | DitherOptions | undefined;
     width?: number | undefined;

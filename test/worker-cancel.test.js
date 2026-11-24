@@ -122,7 +122,9 @@ describe('a worker call with a signal or onProgress', () => {
 
         const handle = await worker.cluster(small, { signal: new AbortController().signal });
         expect(await handle.quantize(4, { signal: new AbortController().signal })).toEqual(await worker.quantizeFromClustering(small, await ac.buildClustering(small), 4));
-        await expect(handle.quantize(4, { onProgress: () => {} })).rejects.toMatchObject({ code: 'invalid-argument' });
+        const progress = [];
+        expect(await handle.quantize(4, { onProgress: (v) => progress.push(v) })).toEqual(await worker.quantizeFromClustering(small, await ac.buildClustering(small), 4));
+        expect(progress[progress.length - 1]).toBe(1);
         const aborted = new AbortController();
         aborted.abort();
         await expect(handle.quantize(4, { signal: aborted.signal })).rejects.toMatchObject({ name: 'AbortError' });

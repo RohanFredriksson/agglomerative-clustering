@@ -101,7 +101,7 @@ Every function that takes an image also takes an optional last argument of optio
 | `dither` | mapping | `false` (default), `true`, `0`–`1`, `'floyd-steinberg'`, `'atkinson'`, `'ordered'`, or `{ method, strength, steps }` | Dithering, which hides banding at low colour counts at a cost in per-pixel metrics such as PSNR. `true` or a strength from 0 to 1 is Floyd–Steinberg error diffusion; a method name picks another; the object form sets `strength` (0 to 1, default 1) and, for `'ordered'`, `steps` (2, 4, 8, 16, 32 or 64; default 64 for two colours, else 16). See [Choosing a dither method](#choosing-a-dither-method). Fully transparent pixels are left undithered, and with a strength of 0 no width is needed. |
 | `width` | mapping | integer | The image width, for dithering a `Uint8Array` or a `RawImage` without one. If the image has a width of its own, this must equal it. |
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see [Cancelling and progress](#cancelling-and-progress). |
-| `onProgress` | clustering | `(fraction) => void` | Reports 0 to 1 as the clustering runs; see [Cancelling and progress](#cancelling-and-progress). |
+| `onProgress` | any call with an image | `(fraction) => void` | Reports 0 to 1 as the call runs; see [Cancelling and progress](#cancelling-and-progress). |
 
 Pass an ordinary object. It is copied once before use (its enumerable properties, inherited ones included, so `Object.create(defaults)` works), and an unknown key is an error, including one that another function takes: an object with both `precision` and `dither` passed to `buildClustering` throws on `dither`. TypeScript doesn't catch that when the object is a variable typed `QuantizeOptions`, so give each call the options it takes, or keep one object per stage.
 
@@ -163,7 +163,7 @@ Measured on six Kodak photos after a slight blur (to stand in for viewing distan
 
 **`steps`** (`'ordered'` only) is how many cells of the 8×8 pattern each colour's mix is spread over, so two colours blend in `steps + 1` shades: 2, 4, 8, 16, 32 or 64. The default is 64 for a palette of two colours (black and white), where every shade shows on a smooth gradient, and 16 otherwise. Each doubling about doubles the time; at 16 colours, 8 to 16 was about 5% more accurate (ΔE 2.87 to 2.72) and visibly smoother on gradients, and 16 to 32 about 5% more again (2.59), with little visible difference. The pattern starts at each image's top-left pixel, so tiles dithered separately line up only at offsets that are multiples of 8. For a given palette and options, a pixel's result with `'ordered'` depends only on its own colour (and, with `transparent`, whether its alpha is below the cutoff) and on its column and row modulo 8, counted from the image's top-left pixel; this holds through 3.x, so frames stacked into one image give the same result as one call each ([guides: map frames in batches](guides.md#faster-ordered-dithering-map-frames-in-batches)). The colours chosen can still change between releases ([Stability](stability.md)).
 
-**Speed.** Mapping a 768×512 photo (kodim23) to 16 colours took 6 ms undithered, 27 ms with Floyd–Steinberg, 26 ms with Atkinson, and 33, 66 and 144 ms ordered with 8, 16 and 32 steps (64 colours: 7, 35, 28, and 51, 101 and 213 ms; 256 colours with 64 steps took about a second). In black and white the default 64 steps took about 220 ms, against 48 ms with 16. Ordered dithering builds a recipe for every distinct colour in the image, on every call, so its time follows the number of distinct colours more than the size: on smaller frames it is a larger multiple of Floyd–Steinberg's time (about 7× at 384×256), and on images where nearly every pixel is a different colour it is far slower (768×512 noise: 2 s with 16 colours and 64 steps, 10 s with 256; a 16-megapixel image of all different colours: 22 s at the default for 16 colours, 58 s in black and white). Mapping can't be interrupted once it starts (see [Cancelling and progress](#cancelling-and-progress)), so for such images use fewer steps, or scale them down. `bench/dither.bench.js` measures it.
+**Speed.** Mapping a 768×512 photo (kodim23) to 16 colours took 6 ms undithered, 27 ms with Floyd–Steinberg, 26 ms with Atkinson, and 33, 66 and 144 ms ordered with 8, 16 and 32 steps (64 colours: 7, 35, 28, and 51, 101 and 213 ms; 256 colours with 64 steps took about a second). In black and white the default 64 steps took about 220 ms, against 48 ms with 16. Ordered dithering builds a recipe for every distinct colour in the image, on every call, so its time follows the number of distinct colours more than the size: on smaller frames it is a larger multiple of Floyd–Steinberg's time (about 7× at 384×256), and on images where nearly every pixel is a different colour it is far slower (768×512 noise: 2 s with 16 colours and 64 steps, 10 s with 256; a 16-megapixel image of all different colours: 22 s at the default for 16 colours, 58 s in black and white). For such images use fewer steps, or scale them down; to let the user cancel or watch it, pass `signal` and `onProgress` (see [Cancelling and progress](#cancelling-and-progress)). `bench/dither.bench.js` measures it.
 
 #### Dithering to a few inks: mix in light
 
@@ -316,16 +316,16 @@ Moving existing code to the methods is optional: the `…FromClustering` functio
 ### `clustering.quantize(image, k, options?): Promise<the type of image>`
 `quantizeFromClustering(image, clustering, k, options)` as a method: maps the image to the `k`-colour palette, matched in the clustering's colour space unless you name one. It takes the image first, unlike a worker handle's `quantize(k)`, which maps the image it holds.
 
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`.
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
 
 ### `clustering.quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 `quantizeToIndicesFromClustering(image, clustering, k, options)` as a method, with the cutoff the clustering was made with as the default `transparent`.
 
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `transparent`.
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
 ## Cancelling and progress
 
-Every function that takes an image accepts `signal`; the ones that cluster (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`) also accept `onProgress`:
+Every function that takes an image accepts `signal` and `onProgress`, whether it clusters, maps pixels or both:
 
 ```js
 const controller = new AbortController();
@@ -335,10 +335,10 @@ const clustering = await buildClustering(image, {
 });
 ```
 
-- **Slices.** With either option, clustering runs in slices of about 10 ms (one can overrun to a few tens of milliseconds on a very large image: see [Performance and limits](performance.md#large-images)), so an abort takes effect within a slice and the page stays responsive. The result is the same; slicing costs about 5% more time.
+- **Slices.** With either option, clustering and mapping run in slices of about 10 ms (one can overrun to a few tens of milliseconds on a very large image: see [Performance and limits](performance.md#large-images)), so an abort takes effect within a slice and the page stays responsive. The result is the same, for every dither method; slicing costs about 5% more time. A call that finishes within its first slice (a small image) doesn't yield at all.
 - **Aborting** rejects with the signal's `reason` (an `AbortError` by default), like `fetch`. It is not one of this library's errors, and has none of their codes (a `DOMException`'s `code` is a number). To tell an abort from a failure, check your signal (`signal.aborted`), not the error: a reason you gave (`controller.abort(new Error('superseded'))`) keeps its own name. An already aborted signal does no work.
-- **Mapping can't be interrupted** (for a 768×512 photo: 6 ms, 27 ms dithered, 66 ms with ordered dithering, and up to about a second for ordered dithering with 64 steps and 256 colours; seconds for a 6-megapixel photo dithered). The functions that only map check the signal before they start, and don't take `onProgress`. To cancel or show progress while mapping a large image, see [the guides](guides.md#cancelling-or-showing-progress-while-mapping-a-large-image).
-- **Progress** is approximate, never goes backwards, and ends at exactly 1.
+- **Progress** is approximate, never goes backwards, and ends at exactly 1. It is reported between slices, about every 10 ms, so a small image may report only 0 and 1. In `quantize` and `quantizeToIndices` it covers the clustering and the mapping together.
+- **Before 3.7.0** mapping ran in one piece: the functions that only map checked the signal before they started and rejected `onProgress`, and a mapping already running finished (in the worker entry too, holding up the calls queued behind it).
 - **In a worker** the work in the worker stops too, and a call still queued is removed without running. The worker keeps running for later calls.
 
 ## Errors
@@ -469,12 +469,12 @@ Options: `colorSpace`, `precision`, `alpha`, `transparent`, `dither`, `width`, `
 ### `quantizeFromClustering(image, clustering, k, options?): Promise<the type of image>`
 The function form of `clustering.quantize(image, k, options)`. Quantizes using a clustering you already have.
 
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`.
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
 
 ### `quantizeWithPalette(image, palette, options?): Promise<the type of image>`
 Maps each pixel to its nearest colour in any palette: a `Palette`, or flat RGB bytes (a `Uint8Array`, `Uint8ClampedArray`, or plain array of integers 0–255; flatten an array of `[r, g, b]` colours first with `colors.flat()`). A `Palette` is matched in its own colour space and plain bytes in RGB, unless you name a `colorSpace`. The result doesn't depend on the palette's order: equally near colours are decided by their RGB value.
 
-Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`.
+Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`, `onProgress`.
 
 ### `quantizeToIndices(image, k, options?): Promise<IndexedImage>`
 Like `quantize`, but returns each pixel's palette index rather than its colour: what palette PNGs, GIFs, pixel art and pattern generators need.
@@ -496,12 +496,12 @@ const { palette, colors, indices, transparentIndex } = await quantizeToIndices(i
 ### `quantizeToIndicesFromClustering(image, clustering, k, options?): Promise<IndexedImage>`
 The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
 
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `transparent`.
+Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
 ### `quantizeToIndicesWithPalette(image, palette, options?): Promise<IndexedImage>`
 The same as `quantizeToIndices`, with a palette you supply. The result's `palette` is the palette you give, in its order, so each index is a position in it. There is no `k`: the transparent entry is added after the palette you give, so a 256-colour palette gives 257 entries.
 
-Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`, `transparent`.
+Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
 ### `init(options?): Promise<void>`
 Loads the WebAssembly module. Every other function does this on first use, so calling it is optional, for example to warm up before a batch. Concurrent calls share one load, and a failed load can be retried. To say where the module is, see [Loading the WebAssembly module](environments.md#loading-the-webassembly-module).

@@ -1,0 +1,74 @@
+none, rgb, 40 colours, rgba                                    10 slices: identical
+none, rgb, 40 colours, indices + transparent                   10 slices: identical
+none, rgb, 2000 colours, rgba                                  10 slices: identical
+none, rgb, 2000 colours, indices + transparent                 10 slices: identical
+none, oklab, 40 colours, rgba                                  10 slices: identical
+none, oklab, 40 colours, indices + transparent                 10 slices: identical
+none, oklab, 2000 colours, rgba                                10 slices: identical
+none, oklab, 2000 colours, indices + transparent               10 slices: identical
+none, rgb input, indices                                       10 slices: identical
+none, no width                                                 10 slices: identical
+none, width 1                                                  10 slices: identical
+none, empty palette, indices + transparent                     10 slices: identical
+floyd-steinberg, rgb, 40 colours, rgba                        157 slices: identical
+floyd-steinberg, rgb, 40 colours, indices + transparent       157 slices: identical
+floyd-steinberg, rgb, 2000 colours, rgba                      157 slices: identical
+floyd-steinberg, rgb, 2000 colours, indices + transparent     157 slices: identical
+floyd-steinberg, oklab, 40 colours, rgba                      157 slices: identical
+floyd-steinberg, oklab, 40 colours, indices + transparent     157 slices: identical
+floyd-steinberg, oklab, 2000 colours, rgba                    157 slices: identical
+floyd-steinberg, oklab, 2000 colours, indices + transparent    157 slices: identical
+floyd-steinberg, rgb input, indices                           157 slices: identical
+floyd-steinberg, no width                                      10 slices: identical
+floyd-steinberg, width 1                                      157 slices: identical
+floyd-steinberg, empty palette, indices + transparent         157 slices: identical
+floyd-steinberg 0.5, rgb, 40 colours, rgba                    157 slices: identical
+floyd-steinberg 0.5, rgb, 40 colours, indices + transparent    157 slices: identical
+floyd-steinberg 0.5, rgb, 2000 colours, rgba                  157 slices: identical
+floyd-steinberg 0.5, rgb, 2000 colours, indices + transparent    157 slices: identical
+floyd-steinberg 0.5, oklab, 40 colours, rgba                  157 slices: identical
+floyd-steinberg 0.5, oklab, 40 colours, indices + transparent    157 slices: identical
+floyd-steinberg 0.5, oklab, 2000 colours, rgba                157 slices: identical
+floyd-steinberg 0.5, oklab, 2000 colours, indices + transparent    157 slices: identical
+floyd-steinberg 0.5, rgb input, indices                       157 slices: identical
+floyd-steinberg 0.5, no width                                  10 slices: identical
+floyd-steinberg 0.5, width 1                                  157 slices: identical
+floyd-steinberg 0.5, empty palette, indices + transparent     157 slices: identical
+atkinson, rgb, 40 colours, rgba                               157 slices: identical
+atkinson, rgb, 40 colours, indices + transparent              157 slices: identical
+atkinson, rgb, 2000 colours, rgba                             157 slices: identical
+atkinson, rgb, 2000 colours, indices + transparent            157 slices: identical
+atkinson, oklab, 40 colours, rgba                             157 slices: identical
+atkinson, oklab, 40 colours, indices + transparent            157 slices: identical
+atkinson, oklab, 2000 colours, rgba                           157 slices: identical
+atkinson, oklab, 2000 colours, indices + transparent          157 slices: identical
+atkinson, rgb input, indices                                  157 slices: identical
+atkinson, no width                                             10 slices: identical
+atkinson, width 1                                             157 slices: identical
+atkinson, empty palette, indices + transparent                157 slices: identical
+ordered, rgb, 40 colours, rgba                               2451 slices: identical
+ordered, rgb, 40 colours, indices + transparent              2451 slices: identical
+ordered, rgb, 2000 colours, rgba                             2451 slices: identical
+ordered, rgb, 2000 colours, indices + transparent            2451 slices: identical
+ordered, oklab, 40 colours, rgba                             2451 slices: identical
+ordered, oklab, 40 colours, indices + transparent            2451 slices: identical
+ordered, oklab, 2000 colours, rgba                           2451 slices: identical
+ordered, oklab, 2000 colours, indices + transparent          2451 slices: identical
+ordered, rgb input, indices                                  2500 slices: identical
+ordered, no width                                              10 slices: identical
+ordered, width 1                                             2451 slices: identical
+ordered, empty palette, indices + transparent                2451 slices: identical
+ordered 64, rgb, 40 colours, rgba                            2451 slices: identical
+ordered 64, rgb, 40 colours, indices + transparent           2451 slices: identical
+ordered 64, rgb, 2000 colours, rgba                          2451 slices: identical
+ordered 64, rgb, 2000 colours, indices + transparent         2451 slices: identical
+ordered 64, oklab, 40 colours, rgba                          2451 slices: identical
+ordered 64, oklab, 40 colours, indices + transparent         2451 slices: identical
+ordered 64, oklab, 2000 colours, rgba                        2451 slices: identical
+ordered 64, oklab, 2000 colours, indices + transparent       2451 slices: identical
+ordered 64, rgb input, indices                               2500 slices: identical
+ordered 64, no width                                           10 slices: identical
+ordered 64, width 1                                          2451 slices: identical
+ordered 64, empty palette, indices + transparent             2451 slices: identical
+empty image                                                     1 slices: identical
+all identical

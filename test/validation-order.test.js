@@ -46,12 +46,11 @@ describe('with two mistakes, the worker entry reports the one the main entry doe
         }
     });
 
-    it('a function that only maps pixels rejects onProgress with the main entry\'s message', async () => {
+    it('a function that only maps pixels rejects an onProgress that isn\'t a function with the main entry\'s message', async () => {
         const palette = new Uint8Array([0, 0, 0, 255, 255, 255]);
-        const call = (f) => f(image, palette, { onProgress: () => {} });
+        const call = (f) => f(image, palette, { onProgress: 5 });
         const expected = await outcome(() => call(main.quantizeWithPalette));
         expect(expected).toMatchObject({ code: 'invalid-argument', argument: 'options.onProgress' });
-        expect(expected.message).toMatch(/only map pixels/);
         expect(await outcome(() => call(own.quantizeWithPalette))).toEqual(expected);
     });
 

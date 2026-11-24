@@ -91,20 +91,18 @@ describe('progress', () => {
         for (let i = 1; i < calls.length; i++) {expect(calls[i]).toBeGreaterThan(calls[i - 1]);}
     });
 
-    it('also ends at 1 for palettes and mapped images, and is not taken by the functions that only map', async () => {
+    it('also ends at 1 for palettes and mapped images, including the functions that only map', async () => {
         for (const run of [
             (onProgress) => buildPalette(image, 8, { onProgress }),
             (onProgress) => quantize(image, 8, { onProgress }),
             (onProgress) => quantizeToIndices(image, 8, { onProgress }),
+            (onProgress) => quantizeWithPalette(image, new Uint8Array([1, 2, 3]), { onProgress }),
+            (onProgress) => quantizeToIndicesWithPalette(image, new Uint8Array([1, 2, 3]), { onProgress }),
         ]) {
             const { calls, onProgress } = progressOf();
             await run(onProgress);
             expect(calls[calls.length - 1]).toBe(1);
         }
-        // mapping runs in one piece: it has a signal (checked before it starts) but no progress to report
-        const error = await quantizeWithPalette(image, new Uint8Array([1, 2, 3]), { onProgress: () => {} }).catch((e) => e);
-        expect(error.code).toBe('invalid-argument');
-        expect(error.message).toContain("Invalid option 'onProgress'");
         expect((await quantizeWithPalette(image, new Uint8Array([1, 2, 3]), { signal: new AbortController().signal })).length).toBe(image.length);
     });
 

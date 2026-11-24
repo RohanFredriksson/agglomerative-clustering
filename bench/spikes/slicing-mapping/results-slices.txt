@@ -1,0 +1,38 @@
+image                  colours  method            slices  longest slice  sliced   one-shot  3.6.0 one-shot
+photo 6.3 MP, rgb         16    none                10      10.2 ms      96 ms     86 ms     85 ms
+photo 6.3 MP, rgb         16    floyd-steinberg     40      10.1 ms     395 ms    385 ms    385 ms
+photo 6.3 MP, rgb         16    atkinson            35      10.1 ms     346 ms    338 ms    352 ms
+photo 6.3 MP, rgb         16    ordered             95      10.1 ms     950 ms    943 ms   1005 ms
+photo 6.3 MP, rgb         16    ordered 64         393      10.5 ms    3965 ms   3914 ms   4113 ms
+noise 4 MP, rgb           16    none                11      10.5 ms     103 ms    104 ms    102 ms
+noise 4 MP, rgb           16    floyd-steinberg     24      10.1 ms     235 ms    235 ms    231 ms
+noise 4 MP, rgb           16    atkinson            26      10.1 ms     255 ms    232 ms    235 ms
+noise 4 MP, rgb           16    ordered            297      10.4 ms    2975 ms   2924 ms   2969 ms
+noise 4 MP, rgb           16    ordered 64        1238      10.3 ms   12497 ms  12433 ms  12475 ms
+photo 6.3 MP, rgb        256    none                13      10.4 ms     125 ms    123 ms    121 ms
+photo 6.3 MP, rgb        256    floyd-steinberg     53      10.1 ms     526 ms    520 ms    519 ms
+photo 6.3 MP, rgb        256    atkinson            41      10.1 ms     409 ms    417 ms    420 ms
+photo 6.3 MP, rgb        256    ordered            193      10.3 ms    1938 ms   1985 ms   1903 ms
+photo 6.3 MP, rgb        256    ordered 64        1179      12.1 ms   12194 ms  12295 ms  12094 ms
+photo 6.3 MP, oklab      256    none                24      10.8 ms     245 ms    246 ms    246 ms
+photo 6.3 MP, oklab      256    floyd-steinberg     83      10.2 ms     832 ms    826 ms    843 ms
+photo 6.3 MP, oklab      256    atkinson            63      10.1 ms     624 ms    617 ms    660 ms
+photo 6.3 MP, oklab      256    ordered            167      10.1 ms    1668 ms   1663 ms   1676 ms
+photo 6.3 MP, oklab      256    ordered 64         711      11.0 ms    7233 ms   7271 ms   7323 ms
+noise 4 MP, rgb          256    none                15      10.7 ms     153 ms    152 ms    156 ms
+noise 4 MP, rgb          256    floyd-steinberg     29      10.2 ms     284 ms    282 ms    283 ms
+noise 4 MP, rgb          256    atkinson            28      10.1 ms     279 ms    275 ms    284 ms
+noise 4 MP, rgb          256    ordered           1357      10.5 ms   13718 ms  13667 ms  13962 ms
+noise 4 MP, rgb          256    ordered 64        6746      11.9 ms   71358 ms  71071 ms  70613 ms
+photo 6.3 MP, rgb       4096    none                60      12.3 ms     662 ms    659 ms    663 ms
+photo 6.3 MP, rgb       4096    floyd-steinberg    221      10.7 ms    2254 ms   2237 ms   2222 ms
+photo 6.3 MP, rgb       4096    atkinson           124      10.3 ms    1244 ms   1233 ms   1289 ms
+photo 6.3 MP, rgb       4096    ordered            722      10.9 ms    7355 ms   7317 ms   7297 ms
+photo 6.3 MP, rgb       4096    ordered 64        3654      39.1 ms   43169 ms  43010 ms  42780 ms
+noise 4 MP, rgb         4096    none               117      15.8 ms    1278 ms   1265 ms   1266 ms
+noise 4 MP, rgb         4096    floyd-steinberg    146      10.4 ms    1481 ms   1471 ms   1461 ms
+noise 4 MP, rgb         4096    atkinson           139      10.4 ms    1410 ms   1406 ms   1470 ms
+noise 4 MP, rgb         4096    ordered           5395      11.8 ms   56485 ms  56717 ms  55993 ms
+noise 4 MP, rgb         4096    ordered 64       28636      22.0 ms  370027 ms  368513 ms  367426 ms
+
+longest slice anywhere: 39.1 ms; outputs that differ (sliced, one-shot, 3.6.0): 0

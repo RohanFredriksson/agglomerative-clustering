@@ -175,27 +175,25 @@ export type ColorSpace = 'rgb' | 'oklab';
 /** How pixel opacity affects clustering. */
 export type AlphaMode = 'weight' | 'ignore';
 
-/** Cancelling a call. Every function that takes an image has it. */
+/** Cancelling a call: the base of `ProgressOptions`, which every function that takes an image has. */
 export interface CancelOptions {
     /**
-     * Cancels the call. A call given a `signal` clusters (where it clusters) in slices of about 10 ms and checks the
-     * signal between them, so an abort takes effect within a slice, not after the whole clustering. It rejects with
-     * the signal's `reason` (an `AbortError` by default), like `fetch`; note that it is that reason that is thrown, so it
-     * has the signal's own `name`, not an `ErrorCode`. A signal that is already aborted does no work. On the functions
-     * that only map pixels (`quantizeFromClustering`, `quantizeWithPalette` and their indexed forms) it is checked once,
-     * before the call starts. Pixel mapping, which follows the clustering, can't be
-     * interrupted (the guides show how to map a large image in strips, or cancel it through a worker). The call's result is the same as without a signal. In the worker entry the worker stops
-     * working on a call that clusters, and a call still waiting its turn never starts; a mapping already running finishes.
+     * Cancels the call. A call given a `signal` clusters and maps in slices of about 10 ms and checks the signal
+     * between them, so an abort takes effect within a slice, not after the whole call. It rejects with the signal's
+     * `reason` (an `AbortError` by default), like `fetch`; note that it is that reason that is thrown, so it has the
+     * signal's own `name`, not an `ErrorCode`. A signal that is already aborted does no work. The call's result is the
+     * same as without a signal. In the worker entry the worker stops working on the call too, and a call still waiting
+     * its turn never starts.
      */
     signal?: AbortSignal | undefined;
 }
 
-/** Cancelling a long call and watching its progress, for the functions that cluster. Both are optional and can be used apart. */
+/** Cancelling a long call and watching its progress, for every function that takes an image. Both are optional and can be used apart. */
 export interface ProgressOptions extends CancelOptions {
     /**
-     * Called with the fraction done, from 0 to 1, as the call runs: a few times per slice at most, never going
-     * backwards, ending with 1. It is approximate and not linear in time. Giving it also makes the call run in
-     * slices, so other tasks (such as painting) get a turn while it works.
+     * Called with the fraction done, from 0 to 1, as the call runs: between slices (about every 10 ms; a small image
+     * may report only 0 and 1), never going backwards, ending with 1. It is approximate and not linear in time. Giving
+     * it also makes the call run in slices, so other tasks (such as painting) get a turn while it works.
      */
     onProgress?: ((progress: number) => void) | undefined;
 }
@@ -257,8 +255,8 @@ export type DitherOptions =
     | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined; steps?: undefined }
     | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
 
-/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. They take `signal` (checked before mapping starts) but no `onProgress`: mapping runs in one piece. */
-export interface MappingOptions extends CancelOptions {
+/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. With `signal` or `onProgress`, mapping runs in slices, as clustering does. */
+export interface MappingOptions extends ProgressOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. The default is the space the colours were made in:
      * the clustering's in `quantizeFromClustering`, a `Palette`'s own in `quantizeWithPalette` and

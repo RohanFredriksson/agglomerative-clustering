@@ -87,8 +87,8 @@ const alreadyAborted = () => {const controller = new AbortController(); controll
 const respond = async ({id, method, args, progress, check}, post) => {
     const controller = check ? alreadyAborted() : controllers.get(id);
     try {
-        // The call before this one may have run in one piece (mapping does), with no turn of the event loop for a cancel
-        // of this call to arrive; take one before starting, so a call cancelled while it waited never runs.
+        // The call before this one may have run in one piece (a call without a signal does), with no turn of the event
+        // loop for a cancel of this call to arrive; take one before starting, so a call cancelled while it waited never runs.
         if (controller && !controller.signal.aborted) {await nextTurn();}
         if (controller && controller.signal.aborted && !check) {return;}
         if (!Object.prototype.hasOwnProperty.call(methods, method)) {throw Object.assign(new Error(`Unknown method '${method}'.`), {code: 'invalid-argument'});}

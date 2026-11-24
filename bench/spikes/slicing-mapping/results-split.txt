@@ -1,0 +1,41 @@
+set     precision  colours  method            share of clustering: median  min   max
+photos          8       16  none                                      0.92  0.87  0.96
+photos          8       16  floyd-steinberg                           0.74  0.51  0.85
+photos          8       16  atkinson                                  0.76  0.55  0.86
+photos          8       16  ordered                                   0.67  0.59  0.72
+photos          8       16  ordered 64                                0.34  0.26  0.39
+photos          8      256  none                                      0.89  0.82  0.94
+photos          8      256  floyd-steinberg                           0.62  0.34  0.77
+photos          8      256  atkinson                                  0.70  0.48  0.82
+photos          8      256  ordered                                   0.43  0.35  0.51
+photos          8      256  ordered 64                                0.13  0.08  0.15
+photos          6       16  none                                      0.83  0.70  0.89
+photos          6       16  floyd-steinberg                           0.45  0.28  0.66
+photos          6       16  atkinson                                  0.49  0.31  0.68
+photos          6       16  ordered                                   0.42  0.34  0.48
+photos          6       16  ordered 64                                0.16  0.11  0.19
+photos          6      256  none                                      0.76  0.64  0.85
+photos          6      256  floyd-steinberg                           0.35  0.15  0.57
+photos          6      256  atkinson                                  0.42  0.26  0.62
+photos          6      256  ordered                                   0.23  0.17  0.27
+photos          6      256  ordered 64                                0.05  0.03  0.06
+noise           8       16  none                                      0.98  0.98  0.98
+noise           8       16  floyd-steinberg                           0.97  0.97  0.97
+noise           8       16  atkinson                                  0.97  0.97  0.97
+noise           8       16  ordered                                   0.71  0.71  0.71
+noise           8       16  ordered 64                                0.37  0.37  0.37
+noise           8      256  none                                      0.98  0.98  0.98
+noise           8      256  floyd-steinberg                           0.96  0.96  0.96
+noise           8      256  atkinson                                  0.96  0.96  0.96
+noise           8      256  ordered                                   0.35  0.35  0.35
+noise           8      256  ordered 64                                0.10  0.10  0.10
+noise           6       16  none                                      0.95  0.95  0.95
+noise           6       16  floyd-steinberg                           0.90  0.90  0.90
+noise           6       16  atkinson                                  0.90  0.90  0.90
+noise           6       16  ordered                                   0.43  0.43  0.43
+noise           6       16  ordered 64                                0.15  0.15  0.15
+noise           6      256  none                                      0.93  0.93  0.93
+noise           6      256  floyd-steinberg                           0.88  0.88  0.88
+noise           6      256  atkinson                                  0.88  0.88  0.88
+noise           6      256  ordered                                   0.14  0.14  0.14
+noise           6      256  ordered 64                                0.03  0.03  0.03
