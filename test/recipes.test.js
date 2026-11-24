@@ -1100,6 +1100,7 @@ describe('the worker script as a data: URL (the esbuild plugin)', () => {
         const { readFile, mkdir, writeFile, rm } = await import('fs/promises');
         const { readFileSync } = await import('node:fs');
         const { build } = await import('esbuild');
+        const { fileURLToPath } = await import('url');
         const { createWorker } = await import('../dist/worker.mjs');
         const docs = await readFile(new URL('../docs/environments.md', import.meta.url), 'utf8');
         const start = docs.indexOf('// worker-script.mjs');
@@ -1110,7 +1111,7 @@ describe('the worker script as a data: URL (the esbuild plugin)', () => {
             await writeFile(new URL('worker-script.mjs', folder), pluginModule);
             await writeFile(new URL('entry.mjs', folder), "import script from 'worker-script';\nexport default script;\n");
             const { workerScript } = await import(new URL('worker-script.mjs', folder).href);
-            await build({ entryPoints: [new URL('entry.mjs', folder).pathname], bundle: true, format: 'esm', plugins: [workerScript], outfile: new URL('out.mjs', folder).pathname, logLevel: 'error' });
+            await build({ entryPoints: [fileURLToPath(new URL('entry.mjs', folder))], bundle: true, format: 'esm', plugins: [workerScript], outfile: fileURLToPath(new URL('out.mjs', folder)), logLevel: 'error' });
             const { default: script } = await import(new URL('out.mjs', folder).href);
             expect(script).toMatch(/^data:text\/javascript;base64,/);
             const worker = createWorker({ script, wasm: readFileSync(new URL('../dist/clustering.wasm', import.meta.url)) });
