@@ -22,6 +22,7 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getPalette(k: number): Promise<Palette>;
     getSwatches(k: number): Promise<Swatches>;
     getClusteringInfo(): Promise<ClusteringInfo>;
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeWithPalette(palette: PaletteLike, options?: MappingOptions): Promise<Image>;

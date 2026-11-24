@@ -72,6 +72,8 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getPalette(k: number): Promise<Palette>;
     getSwatches(k: number): Promise<Swatches>;
     getClusteringInfo(): Promise<ClusteringInfo>;
+    /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
     /** Maps the kept image to the k-colour palette. Returns the same type as the image given to `cluster`. */
     quantize(k: number, options?: MappingOptions): Promise<Image>;
     quantizeToIndices(k: number, options?: MappingIndexOptions): Promise<IndexedImage>;

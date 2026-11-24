@@ -185,9 +185,12 @@ describe('the worker entry', () => {
             expect(progress[progress.length - 1], `handle.${name} reports progress`).toBe(1);
             await handle[name](...args, { signal: new AbortController().signal });
         }
-        // Every handle method that takes mapping options is covered above.
+        // chooseFrom takes a signal but no progress callback.
+        await expect(handle.chooseFrom(palette, 2, { signal: aborted.signal }), 'handle.chooseFrom with a signal').rejects.toMatchObject({ name: 'AbortError' });
+        await handle.chooseFrom(palette, 2, { signal: new AbortController().signal });
+        // Every handle method that takes options is covered above.
         const mapping = Object.keys(handle).filter((name) => parameterNamesOfMember('ClusteringHandle', name).includes('options')).sort();
-        expect(mapping).toEqual(Object.keys(calls).sort());
+        expect(mapping).toEqual([...Object.keys(calls), 'chooseFrom'].sort());
         await handle.release();
     });
 

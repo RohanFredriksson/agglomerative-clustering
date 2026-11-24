@@ -1,7 +1,7 @@
 // See main.mts.
 import { createWorker, init, buildPalette, quantize, quantizeToIndices, terminate } from 'agglomerative-clustering/worker';
 import { Palette, Clustering } from 'agglomerative-clustering/worker';
-import type { AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, ProgressOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
+import type { PaletteChoice, AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, ProgressOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
 
 declare const imageData: ImageData;
 declare const bytes: Uint8Array;
@@ -28,6 +28,10 @@ async function main() {
     await worker.quantizeToIndicesWithPalette(imageData, palette, { onProgress: (p) => void p });
     const editedIndexed = await handle.quantizeToIndicesWithPalette(palette, { transparent: true });
     void [edited, editedIndexed];
+    const choice: PaletteChoice = await handle.chooseFrom(new Uint8Array(36), 12);
+    void choice;
+    // @ts-expect-error an image handle maps with quantize(k): the image is the one it holds
+    await handle.quantize(imageData, 4);
     await handle.release();
     await terminate();
 
