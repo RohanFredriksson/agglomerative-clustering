@@ -1,4 +1,5 @@
 import createWasmModule from './clustering.js';
+import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
@@ -1090,5 +1091,42 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
 
 };
 
+// clustering.chooseFrom: validates everything before its first await (the palette is copied, so the caller may change it
+// at once), then runs the search in choose.js on this thread with the cuts above.
+const chooseFrom = async (name, clustering, palette, k, options) => {
+
+    const header = readHeader(clustering);
+    checkPalette(palette);
+    if (palette.length === 0) {
+        throw fail('invalid-argument', "Invalid palette: it is empty; give at least one RGB entry (3 bytes).", 'palette');
+    }
+    const entries = Uint8Array.from(palette);
+    const count = entries.length / 3;
+    k = check(k);
+    if (k > count) {
+        throw fail('invalid-argument', `Invalid k: ${k} is more than the ${count} entries in the palette; use ${count} or fewer.`, 'k');
+    }
+    const o = parseOptions(options, ['colorSpace', 'signal']);
+    needsWeights(header);
+    clustering = held(clustering);
+    checkAborted(o.signal);
+
+    const pause = async () => {
+        checkAborted(o.signal);
+        if (o.signal) {await yieldNow(); checkAborted(o.signal);}
+    };
+    const indices = await choose({
+        cut: (size) => cutPalette(name, clustering, size, []),
+        swatches: () => cutSwatches(name, clustering, 1024, []),
+        snap: async (colours) => (await quantizeToIndicesWithPalette({data: colours, format: 'rgb'}, entries, {colorSpace: 'rgb'})).indices,
+        pause,
+    }, entries, k, o.colorSpace);
+    indices.sort((x, y) => x - y);
+    const chosen = new Uint8Array(3 * indices.length);
+    indices.forEach((j, s) => chosen.set(entries.subarray(3 * j, 3 * j + 3), 3 * s));
+    return {indices, palette: markPalette(chosen, 'rgb')};
+
+};
+
 // The methods on Clustering (shared.js) run through these. Only this entry fills the slot, so the methods need it loaded.
-setEngine({cut: cutPalette, cutSwatches, info: readInfo, quantizeFromClustering, quantizeToIndicesFromClustering});
+setEngine({cut: cutPalette, cutSwatches, info: readInfo, quantizeFromClustering, quantizeToIndicesFromClustering, chooseFrom});

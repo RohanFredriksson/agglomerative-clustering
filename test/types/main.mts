@@ -5,7 +5,7 @@ import {
     quantize, quantizeFromClustering, quantizeWithPalette,
     quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from 'agglomerative-clustering';
-import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, ProgressOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace, ErrorArgument } from 'agglomerative-clustering';
+import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, ProgressOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace, ErrorArgument, ChooseOptions, PaletteChoice } from 'agglomerative-clustering';
 
 declare const bytes: Uint8Array;
 declare const imageData: ImageData;
@@ -131,6 +131,15 @@ async function methods(c: Clustering) {
     const fromRaw: RawImage = await c.quantize(raw, 8, { colorSpace: 'oklab', signal: controller.signal });
     const indexed: IndexedImage = await c.quantizeToIndices(imageData, 8, { transparent: true });
     const restored: Palette = await new Clustering(plainBytes).getPalette(4);
+    const choice: PaletteChoice = await c.chooseFrom(plainBytes, 4, { colorSpace: 'oklab', signal: controller.signal });
+    const chosenIndices: number[] = choice.indices;
+    const chosenPalette: Palette = choice.palette;
+    const chooseOptions: ChooseOptions = { colorSpace: undefined, signal: undefined };
+    await c.chooseFrom(new Palette(plainBytes), 4, chooseOptions);
+    // @ts-expect-error chooseFrom takes no progress callback
+    c.chooseFrom(plainBytes, 4, { onProgress() {} });
+    // @ts-expect-error a clustering is not a palette
+    c.chooseFrom(c, 4);
     // @ts-expect-error a detached method has lost its clustering
     const { getPalette: detached } = c; detached(4);
     // @ts-expect-error the image comes first: quantize(16) is a worker handle's shape

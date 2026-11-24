@@ -108,7 +108,7 @@ const start = async (receive, chosen) => {
         // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
         // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
         const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
-        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
         let worker, source = null;
         try {
             if (opaque) {
@@ -152,7 +152,7 @@ const start = async (receive, chosen) => {
     worker.on('error', (error) => receive({failure: missing(error)
         ? inZip(error)
             ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).`
-            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
+            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
         : error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();

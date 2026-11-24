@@ -289,8 +289,11 @@ describe('methods on Clustering', () => {
         expect(declared).toEqual(runtime);
     });
 
+    // Methods with no function form (PRINCIPLES "Settled decisions"): new ones are methods only.
+    const methodOnly = ['chooseFrom'];
+
     it('each have a function form in both entries, named by dropping FromClustering', () => {
-        for (const name of runtime) {
+        for (const name of runtime.filter((name) => !methodOnly.includes(name))) {
             const form = functionForm(name);
             expect(typeof main[form], `${name} has a function form in the main entry`).toBe('function');
             expect(typeof worker[form], `${name} has a function form in the worker entry`).toBe('function');
@@ -304,6 +307,15 @@ describe('methods on Clustering', () => {
             const section = api.match(new RegExp('^###[^\\n]*`clustering\\.' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
             expect(section, `docs/api.md has a section for clustering.${name}`).not.toBeNull();
             const form = functionForm(name);
+            if (methodOnly.includes(name)) {
+                const error = await clustering[name](new Uint8Array(30), 4, { __unknown__: true }).catch((e) => e);
+                const enforced = error.message.match(/expected one of (.*)\./)[1].split(', ').sort();
+                const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
+                expect(line, `clustering.${name} has an Options line`).toBeDefined();
+                expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
+                checked.push(name);
+                continue;
+            }
             if (!callArguments[form]) {continue;}   // the cuts take no options
             // The method enforces exactly what its function form does, and its Options line lists that.
             const args = callArguments[form].filter((value) => value !== clustering);
@@ -315,7 +327,7 @@ describe('methods on Clustering', () => {
             expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
             checked.push(name);
         }
-        expect(checked.sort()).toEqual(['quantize', 'quantizeToIndices']);
+        expect(checked.sort()).toEqual(['chooseFrom', 'quantize', 'quantizeToIndices']);
     });
 
 });

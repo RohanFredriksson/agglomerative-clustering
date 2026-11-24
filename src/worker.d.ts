@@ -4,7 +4,7 @@
 
 import type {
     ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions,
-    IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches,
+    IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, ChooseOptions, PaletteChoice,
 } from './index.js';
 import type { Palette, Clustering } from './index.js';
 
@@ -34,7 +34,7 @@ export const formatVersion: number;
 
 export type {
     ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, DitherMethod, DitherOptions, DitherSteps, ClusteringOptions, MappingOptions, QuantizeOptions,
-    ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches,
+    ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, ChooseOptions, PaletteChoice,
 } from './index.js';
 
 /** Options for `createWorker`. */

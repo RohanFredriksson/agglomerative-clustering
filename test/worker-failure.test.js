@@ -16,7 +16,7 @@ const folder = mkdtempSync(join(tmpdir(), 'ac-broken-'));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
 // The package with a worker thread script that fails as it starts. (A missing script isn't this case in Node: the worker
 // entry then starts the package's own copy, as it does in a server bundle that moved it.)
-for (const file of ['index.mjs', 'shared.mjs', 'clustering.js', 'clustering.wasm', 'worker.mjs']) {copyFileSync(join(dist, file), join(folder, file));}
+for (const file of ['index.mjs', 'shared.mjs', 'choose.mjs', 'clustering.js', 'clustering.wasm', 'worker.mjs']) {copyFileSync(join(dist, file), join(folder, file));}
 writeFileSync(join(folder, 'worker-thread.mjs'), "throw new Error('this worker script is broken');\n");
 
 const settle = (promise, ms = 8000) => Promise.race([

@@ -157,6 +157,23 @@ export class Clustering extends Uint8Array {
     quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
     /** Indexed output, as `quantizeToIndicesFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
     quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    /** Chooses the k entries of `palette` that best represent the clustered image: their positions and colours. Runs on the calling thread, with the main entry. */
+    chooseFrom(this: Clustering, palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+}
+
+/** Options of `clustering.chooseFrom`. */
+export interface ChooseOptions {
+    /** The space the search measures distance in: 'rgb' (default) or 'oklab'. It doesn't follow the clustering's space. */
+    colorSpace?: ColorSpace | undefined;
+    signal?: AbortSignal | undefined;
+}
+
+/** What `clustering.chooseFrom` returns. */
+export interface PaletteChoice {
+    /** Exactly k positions in the palette given, ascending: no ranking (count the mapped pixels for a legend). */
+    indices: number[];
+    /** The chosen colours, in the order of `indices`: map with it, and index s of the result is entry indices[s]. */
+    palette: Palette;
 }
 
 /** What is not a clustering: a `Clustering` is not accepted where a palette is. */

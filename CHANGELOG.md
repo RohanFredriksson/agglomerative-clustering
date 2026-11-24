@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.8.0
+
+### Added
+- **`clustering.chooseFrom(palette, k, options?)`** chooses the `k` entries of a fixed palette (threads, bricks, inks) that best represent the clustered image, returning their positions and colours (`{ indices, palette }`). It is the guides' `chooseThreads` + `improveThreads` recipe moved into the library, with one change: the result always has exactly `k` entries. `colorSpace` (default `'rgb'`) and `signal` are its options.
+
 ## 3.7.2
 
 Output and the API are unchanged; a progress bug is fixed, two error messages are clearer, and the guides' fixed-palette recipe goes back to RGB scoring and counts stitches.

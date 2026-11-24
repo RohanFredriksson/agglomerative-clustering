@@ -31,7 +31,7 @@ describe('bundling with esbuild', () => {
 // when they may not install it (--no-autoinstall, CI). The browser-facing files reach it through globalThis instead.
 describe('no bare process', () => {
 
-    it.each(['index.mjs', 'shared.mjs', 'worker.mjs', 'worker-thread.mjs', 'clustering.js', 'index.cjs', 'shared.cjs', 'worker.cjs'])('%s', async (file) => {
+    it.each(['index.mjs', 'shared.mjs', 'choose.mjs', 'worker.mjs', 'worker-thread.mjs', 'clustering.js', 'index.cjs', 'shared.cjs', 'choose.cjs', 'worker.cjs'])('%s', async (file) => {
         const { readFile } = await import('fs/promises');
         const code = (await readFile(resolve(dist, file), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
         expect(code.match(/(?<![.\w$'"])process\b(?!['"])/g)).toBeNull();

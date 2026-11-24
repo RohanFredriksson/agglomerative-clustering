@@ -56,6 +56,18 @@ describe('bytes are read when the call is made', () => {
         expect(Array.from((await mapped).subarray(0, 3))).toEqual(red);
     });
 
+    it('in chooseFrom: the palette is read at the call', async () => {
+        const clustering = await ac.buildClustering(solid(red, 400));
+        const chart = new Uint8Array(30);
+        chart.forEach((_, i) => {chart[i] = (i * 67) & 255;});
+        const expected = await clustering.chooseFrom(chart.slice(), 4);
+        const call = clustering.chooseFrom(chart, 4);
+        chart.fill(0);
+        const result = await call;
+        expect(result.indices).toEqual(expected.indices);
+        expect(Array.from(result.palette)).toEqual(Array.from(expected.palette));
+    });
+
     // The methods forward to the function forms at once, so they take the bytes when called too.
     it('in the methods on Clustering', async () => {
         const clustering = new ac.Clustering(new Uint8Array(await ac.buildClustering(solid(red))));

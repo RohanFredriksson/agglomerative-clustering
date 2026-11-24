@@ -1,5 +1,5 @@
 /// <reference lib="esnext.disposable" />
-import type { ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, } from './index.js';
+import type { ImageLike, RawImage, ClusteringOptions, MappingOptions, QuantizeOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, InitOptions, ImageResult, PaletteLike, Swatches, ChooseOptions, PaletteChoice, } from './index.js';
 import type { Palette, Clustering } from './index.js';
 export { Palette } from './index.js';
 export { Clustering } from './index.js';
@@ -8,7 +8,7 @@ export { colorSpaces, imageFormats, alphaModes, ditherMethods, ditherSteps } fro
 export { isCodedError } from './index.js';
 export const version: string;
 export const formatVersion: number;
-export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, DitherMethod, DitherOptions, DitherSteps, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, } from './index.js';
+export type { ImageFormat, RawImage, ImageLike, PaletteLike, PlatformImageData, ImageResult, WasmModule, ColorSpace, AlphaMode, DitherMethod, DitherOptions, DitherSteps, ClusteringOptions, MappingOptions, QuantizeOptions, ErrorCode, ErrorArgument, CodedError, InitOptions, ProgressOptions, CancelOptions, IndexOptions, QuantizeIndexOptions, MappingIndexOptions, IndexedImage, ClusteringInfo, Swatches, ChooseOptions, PaletteChoice, } from './index.js';
 export interface WorkerOptions {
     transfer?: boolean | undefined;
     wasm?: InitOptions['wasm'] | undefined;

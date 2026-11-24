@@ -301,6 +301,7 @@ const restored = new Clustering(await db.get('clustering'));               // st
 | `clustering.getClusteringInfo()` | `getClusteringInfo` | `(clustering)` |
 | `clustering.quantize(image, k, options?)` | `quantizeFromClustering` | `(image, clustering, k, options?)`: the image comes first |
 | `clustering.quantizeToIndices(image, k, options?)` | `quantizeToIndicesFromClustering` | `(image, clustering, k, options?)`: the image comes first |
+| `clustering.chooseFrom(palette, k, options?)` | none | |
 
 Moving existing code to the methods is optional: the `…FromClustering` functions are not deprecated in 3.x, and the two forms give the same results.
 
@@ -322,6 +323,13 @@ Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal
 `quantizeToIndicesFromClustering(image, clustering, k, options)` as a method, with the cutoff the clustering was made with as the default `transparent`.
 
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
+
+### `clustering.chooseFrom(palette, k, options?): Promise<PaletteChoice>`
+Chooses the `k` entries of a fixed palette (the threads you own, the bricks in a set, the inks of a panel) that best represent the clustered image. It returns `{ indices, palette }`: `indices` are exactly `k` positions in the palette you gave, ascending and not ranked (count the mapped pixels for a legend), and `palette` holds those entries' colours in the same order, tagged `'rgb'` whatever space the search measured in, so `quantizeToIndicesWithPalette(image, result.palette)` maps in RGB and index `s` is entry `indices[s]`. The result is a good choice, not always the best one: it is a search (snap each cut of the clustering to its nearest entries, then swap entries in and out while that brings the image closer), the same as the guides' [fixed-palette recipe](guides.md#fixed-palettes-e-ink-thread-bricks), and it depends only on the clustering, the palette's bytes, `k` and `colorSpace`. It runs on the calling thread, with the main entry. An image with fewer colours than `k` still gets `k` entries, and an empty image gets the first `k`.
+
+`k` is a whole number from 1 to the palette's entry count. `colorSpace` is the space the search measures distance in, `'rgb'` unless you pass it: it does not follow the clustering's space, nor a `Palette`'s tag. `'oklab'` lowers the mean ΔE2000 but can grey out small vivid areas. There is no function form and no `onProgress`: the search takes tens of milliseconds, and `signal` is checked between its passes.
+
+Options: `colorSpace`, `signal`.
 
 ## Cancelling and progress
 
