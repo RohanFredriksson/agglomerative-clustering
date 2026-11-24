@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { build } from 'esbuild';
 import { createWorker } from '../dist/worker.mjs';
 import { buildPalette } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
@@ -21,7 +22,7 @@ afterAll(() => rmSync(folder, { recursive: true, force: true }));
 const runModule = (source, { cwd = root, name = 'run.mjs' } = {}) => {
     const file = join(folder, name);
     writeFileSync(file, source);
-    const run = spawnSync(process.execPath, [file], { cwd, encoding: 'utf8', timeout: 60000 });
+    const run = spawnSync(process.execPath, [file], { cwd, encoding: 'utf8', timeout: timeLimit(60000) });
     return { status: run.status, output: `${run.stdout}${run.stderr}`.trim() };
 };
 
@@ -135,15 +136,15 @@ describe('choosing worker_threads or a Web Worker', () => {
         const bundle = join(folder, 'bundle.cjs');
         writeFileSync(bundle, result.outputFiles[0].text);
         // From the project (where Node finds the package by name, as an app's would be).
-        const found = spawnSync(process.execPath, [bundle], { cwd: root, encoding: 'utf8', timeout: 60000 });
+        const found = spawnSync(process.execPath, [bundle], { cwd: root, encoding: 'utf8', timeout: timeLimit(60000) });
         expect(`${found.stdout}${found.stderr}`.trim()).toBe('6');
         // From somewhere the package isn't installed.
-        const lost = spawnSync(process.execPath, [bundle], { cwd: tmpdir(), encoding: 'utf8', timeout: 60000 });
+        const lost = spawnSync(process.execPath, [bundle], { cwd: tmpdir(), encoding: 'utf8', timeout: timeLimit(60000) });
         const output = `${lost.stdout}${lost.stderr}`.trim();
         expect(output).toMatch(/^worker-failed: Worker failed: the worker entry can't find its worker script/);
         expect(output).toContain('createWorker({ script })');
         expect(output.match(/Worker failed/g)).toHaveLength(1);
-    }, 60000);
+    }, timeLimit(60000));
 
 });
 

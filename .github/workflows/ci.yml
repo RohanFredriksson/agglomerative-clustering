@@ -179,3 +179,32 @@ jobs:
             leak-*
             timeout-*
           retention-days: 14
+
+  # The suite against an AddressSanitizer + UBSan build of the WebAssembly (scripts/asan-test.sh): WebAssembly hides
+  # out-of-bounds reads that stay inside the heap, so the release tests can't see them, and the fuzzers above cover the
+  # C++ natively, not the build that ships through its JavaScript. Several times slower than the release suite.
+  asan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.12
+          actions-cache-folder: emsdk-cache
+
+      - name: Cache Kodak images
+        uses: actions/cache@v4
+        with:
+          path: fixtures/images
+          key: kodak-${{ hashFiles('fixtures/kodak.js') }}
+
+      - run: npm ci
+      - run: npm run build
+      - run: scripts/asan-test.sh

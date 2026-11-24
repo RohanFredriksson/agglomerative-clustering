@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { performance } from 'perf_hooks';
 import * as ac from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 // Noise with ~half a million distinct colours: clustering it takes most of a second, long enough to cancel.
 const mulberry = (seed) => () => {
@@ -51,7 +52,7 @@ describe('a worker call with a signal or onProgress', () => {
         expect(bigCalls.length).toBeGreaterThan(10);
         for (let i = 1; i < bigCalls.length; i++) {expect(bigCalls[i]).toBeGreaterThan(bigCalls[i - 1]);}
         expect(bigCalls[bigCalls.length - 1]).toBe(1);
-    }, 60000);
+    }, timeLimit(60000));
 
     it('stops the worker when aborted mid-run, so the next call is not kept waiting', async () => {
         // The test only means something if the clustering is long enough to cancel (it takes ~1 s here).
@@ -64,7 +65,7 @@ describe('a worker call with a signal or onProgress', () => {
         const next = await timed(worker.buildPalette(small, 4));
         expect(next.value).toEqual(await ac.buildPalette(small, 4));
         expect(next.ms).toBeLessThan(whole.ms * 0.4);
-    }, 60000);
+    }, timeLimit(60000));
 
     it('rejects at once with the reason, and a queued call that is cancelled never runs', async () => {
         const start = performance.now();
@@ -83,7 +84,7 @@ describe('a worker call with a signal or onProgress', () => {
         expect(elapsed).toBeLessThan(whole.ms * 1.6);
         expect(same(firstResult, whole.value)).toBe(true);
         expect(thirdResult).toEqual(await ac.buildPalette(small, 4));
-    }, 60000);
+    }, timeLimit(60000));
 
     it('skips cancelled calls queued behind mapping calls', async () => {
         // Ten slow mappings sent at once with the first nine cancelled at once should cost about one mapping: the queued
@@ -100,7 +101,7 @@ describe('a worker call with a signal or onProgress', () => {
         expect(same(last.value.data, one.value.data)).toBe(true);
         expect(last.ms, `one mapping took ${one.ms.toFixed(0)} ms`).toBeLessThan(one.ms * 3);
         await handle.release();
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('rejects a call whose signal is already aborted without sending or detaching anything', async () => {
         const moving = createWorker({ transfer: true });
@@ -131,7 +132,7 @@ describe('a worker call with a signal or onProgress', () => {
         await expect(handle.quantizeToIndices(4, { signal: aborted.signal })).rejects.toMatchObject({ name: 'AbortError' });
         expect((await handle.quantizeToIndices(4, { signal: new AbortController().signal })).indices.length).toBe(256);
         await handle.release();
-    }, 60000);
+    }, timeLimit(60000));
 
     it('fails the call with the error of an onProgress that throws, and stops the worker, like the main thread', async () => {
         const start = performance.now();
@@ -143,7 +144,7 @@ describe('a worker call with a signal or onProgress', () => {
         expect(performance.now() - start).toBeLessThan(whole.ms * 0.6);
         // a clustering call's callback that throws fails the call, through a handle too
         await expect(worker.cluster(big, { onProgress: () => {throw new Error('boom again');} })).rejects.toThrow('boom again');
-    }, 60000);
+    }, timeLimit(60000));
 
     it('lets a handle be released after its worker was terminated, in either order', async () => {
         const doomed = createWorker();

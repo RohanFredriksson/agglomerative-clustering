@@ -4,16 +4,17 @@ import { it, expect } from 'vitest';
 import { spawnSync } from 'child_process';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { timeLimit } from './timeout.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 it('runs under Jest in CommonJS mode, in the node and jsdom environments', () => {
     const run = spawnSync(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'test/jest/jest.config.cjs', '--ci'], {
-        cwd: root, encoding: 'utf8', timeout: 120000,
+        cwd: root, encoding: 'utf8', timeout: timeLimit(120000),
         // Without --experimental-vm-modules, as Jest runs by default.
         env: { ...process.env, NODE_OPTIONS: '' },
     });
     const output = `${run.stdout}\n${run.stderr}`;
     expect(output, output).toMatch(/Tests:\s+14 passed, 14 total/);
     expect(run.status, output).toBe(0);
-}, 150000);
+}, timeLimit(150000));

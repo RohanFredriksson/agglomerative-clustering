@@ -3,18 +3,16 @@
 # PATH). WebAssembly hides out-of-bounds reads that stay inside the heap, so tests alone can't see them; a sanitizer
 # report aborts the run. The sanitized module (and its glue, through patch-glue, as a release build's) is swapped into
 # dist/ for the run and the real files put back afterwards, whatever happens. ASan makes everything several times
-# slower, so tests get 120 s by default instead of 5, and the memory test is skipped (ASan's overhead changes the 2 GB
-# limit). Built at -O2 with --profiling-funcs rather than -g: a report names functions, not lines, but the glue is
-# minified like a release build's, which patch-glue needs; for lines, build by hand with -g (CLAUDE.md). Extra arguments
-# go to vitest, so `scripts/asan-test.sh test/indices.test.js` checks one file.
+# slower, so tests without a limit of their own get 120 s instead of 5, the limits tests give themselves are multiplied
+# by TEST_TIMEOUT_SCALE (10; test/timeout.js), and the memory test is skipped (ASan's overhead changes the 2 GB limit).
+# The module starts at 512 MB for ASan's shadow memory; the library retires an instance by how much it has grown since
+# it started (retireIfLarge), so that doesn't make every call reload it. Built at -O2 with --profiling-funcs rather than
+# -g: a report names functions, not lines, but the glue is minified like a release build's, which patch-glue needs; for
+# lines, build by hand with -g (CLAUDE.md). Extra arguments go to vitest, so `scripts/asan-test.sh test/indices.test.js`
+# checks one file. CI runs it (the `asan` job in .github/workflows/ci.yml).
 #
-# Expected failures, none of them findings (last full run, 2026-11-23: about 9 minutes, 606 of 616 passed, no report):
-#   - the heaviest tests (golden noise and gradients, large-k, real encoded files) time out at their own 60-120 s
-#     limits, which --testTimeout doesn't raise;
-#   - init "shares one load ... and the first load wins": ASan's heap starts at 512 MB, above the 256 MB at which the
-#     library discards its instance after a call (retireIfLarge), so the module is never "already loaded" there.
-# A finding is anything else: the glue's print is silenced, so a sanitizer report shows as a call rejecting with
-# "Aborted" (often wasm-load-failed or a RuntimeError) in a test that passes on the release build.
+# Every test is expected to pass. A finding shows as a failure that the release build doesn't have: the glue's print is
+# silenced, so a sanitizer report shows as a call rejecting with "Aborted" (often wasm-load-failed or a RuntimeError).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,4 +31,4 @@ cp dist/clustering.js dist/clustering.cjs dist/clustering.wasm "$out/keep/"
 trap 'cp "$out/keep/clustering.js" "$out/keep/clustering.cjs" "$out/keep/clustering.wasm" dist/' EXIT
 cp "$out/clustering.js" "$out/clustering.wasm" dist/
 node scripts/patch-glue.mjs
-npx vitest run --exclude test/memory.test.js --testTimeout=120000 "$@"
+TEST_TIMEOUT_SCALE="${TEST_TIMEOUT_SCALE:-10}" npx vitest run --exclude test/memory.test.js --testTimeout=120000 --hookTimeout=120000 "$@"

@@ -145,7 +145,7 @@ Changes that would break code written against 3.x wait here for the next major v
 
 ## Engineering, alongside the releases
 
-- **The sanitized suite in CI.** `scripts/asan-test.sh` runs the suite against an ASan/UBSan build of the WebAssembly, and the native fuzzers (`scripts/native.sh`) run in CI. The sanitized suite doesn't, yet: it takes about 9 minutes, and ten tests fail for reasons of the build, not the code (the heaviest time out at their own limits, and ASan's 512 MB starting heap is above the 256 MB at which the library discards its instance after every call, which also makes every call reload the module). A threshold the tests could raise, and timeouts that scale, would let it run clean.
+- [x] **The sanitized suite in CI** (done 2026-11-24). `scripts/asan-test.sh` runs the suite against an ASan/UBSan build of the WebAssembly, and CI now runs it (the `asan` job) beside the native fuzzers. Ten tests used to fail for reasons of the build: the heaviest timed out at their own limits, and ASan's 512 MB starting heap was above the 256 MB at which the library discards its instance, so every call reloaded the module. Per-test limits now go through `timeLimit` (`test/timeout.js`), which the script scales by 10, and the library retires an instance by how much it has grown since it started (the release build's threshold is unchanged at 256 MB). All 700 tests pass, about 8 minutes locally.
 
 ## Considered, and why not (yet)
 

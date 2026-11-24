@@ -259,6 +259,7 @@ const acquire = async (options) => {
                 instance = await instantiate(fallback).catch(() => {throw wasmLoadFailed(error, false);});
             }
             checkWasmVersion(instance);
+            if (instance.HEAPU8) {startSizes.set(instance, instance.HEAPU8.length);}
             Module = instance;
             return instance;
         })().catch((error) => {
@@ -285,10 +286,14 @@ const discard = (instance) => {
 // WebAssembly memory only grows: an instance that once held a huge image keeps all that memory for the life of the process.
 // So when a call leaves the heap larger than this, the instance is retired like an aborted one: calls already running keep
 // it, the next call loads a fresh one (a few milliseconds, next to the seconds such an image took), and the old memory is
-// freed when nothing uses it any more.
-const retireAbove = 256 * 1024 * 1024;
+// freed when nothing uses it any more. The limit counts growth from the size the instance started at (32 MB in the
+// release build), so a build that starts larger, such as the sanitized one scripts/asan-test.sh uses (512 MB, for its
+// shadow memory), isn't retired after every call.
+const releaseStart = 32 * 1024 * 1024;             // INITIAL_MEMORY in build:wasm
+const retireAfter = 256 * 1024 * 1024 - releaseStart;  // so the release build retires above 256 MB, as before
+const startSizes = new WeakMap();
 const retireIfLarge = (instance) => {
-    if (instance.HEAPU8 && instance.HEAPU8.length > retireAbove) {discard(instance);}
+    if (instance.HEAPU8 && instance.HEAPU8.length > (startSizes.get(instance) ?? releaseStart) + retireAfter) {discard(instance);}
 };
 // What to try depends on the call: a large input has to shrink whatever else changes, and `precision: 6` helps only a
 // clustering (`precision` given) that isn't already at 6 or below.
