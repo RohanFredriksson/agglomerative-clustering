@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- **Progress while mapping stopped rising above 4.3 million pixels**, then jumped to 1 at the end: on a 6.3-megapixel photo it sat at 0.68 for the last third of the mapping. The mapping job worked out its progress in 32-bit integers, which overflowed. Results and cancelling were unaffected. Found by an exploratory round on 3.7.1.
+
+### Changed
+- **A worker started from a `data:` URL without `wasm`** (a bundled worker script in a single-file host) now fails with a `wasm-load-failed` message that says the package can't tell where `clustering.wasm` is and to pass the module, `createWorker({ script, wasm: bytes })`. Before, it said to use `init({ wasm })` and serve the file, neither of which helps there. The same applies to code running from a `blob:` URL or an `about:srcdoc` page.
+- **A worker from a `blob:` URL in a sandboxed iframe** (an opaque origin, as Figma's plugin UI is) fails in Chromium, and the `worker-failed` message now says why and to use a `data:` URL instead, linking the docs' recipe. Before, it said to serve `worker-thread.mjs`. Both found by the same round.
+
 ### Docs
 - **The guides' fixed-palette recipe is back to RGB scoring by default, and counts stitches.** If you copied the 3.7.1 version, the new one chooses differently and returns the threads unsorted: pass `'oklab'` for the 3.7.1 choice, and use `countThreads` for the order. OKLab scoring (the default from 3.7.1) lowers the mean ΔE2000 but can grey out small vivid areas: a parrot's pink cheek and teal feather at 16 threads (seen by eye in the exploratory round on 3.7.1), and on the Kodak photos at 12 of 584 threads the most saturated pixels came out further off (ΔE2000 10.74 against 9.85)<!-- bench/spikes/fixed-subset-oklab/accents.mjs → results-accents.txt -->. `improveThreads` now measures in sRGB values unless you pass `'oklab'`, which the guides still suggest for a few widely spaced paints or inks. It no longer claims to return the threads heaviest first (the order came from swatch weights and was often wrong by real counts); a new `countThreads` maps the image and returns `{ thread, count }` most used first, leaving out threads no pixel was mapped to, for the legend and the shopping list. Copy the new version if you use it. Found by the exploratory round on 3.7.1.
 - **Gaps the exploratory round on 3.7.1 ran into, filled.**

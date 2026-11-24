@@ -1085,7 +1085,8 @@ describe('embedding the module gzipped (the esbuild plugin)', () => {
         const { readFileSync } = await import('node:fs');
         const gzipWasm = new Function('gzipSync', 'readFileSync', `${definition}\nreturn gzipWasm;`)(gzipSync, readFileSync);
 
-        const dist = new URL('../dist/', import.meta.url).pathname;
+        // A file path, not the URL's pathname: on Windows that is /D:/..., which esbuild can't find.
+        const dist = (await import('url')).fileURLToPath(new URL('../dist/', import.meta.url));
         const folder = await mkdtemp(join(tmpdir(), 'ac-gzip-'));
         try {
             // The plugin script as the docs have it, plus a check that it clusters; the package's names resolve to dist/.

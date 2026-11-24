@@ -139,6 +139,14 @@ describe('mapping in slices gives one call\'s result', () => {
         }
     }, timeLimit(120_000));
 
+    it('progress keeps rising past 4.3 million pixels (32-bit overflow before 3.7.2)', async () => {
+        const big = picture(2400, 2000, 21), palette = paletteOf(16, 9), values = [];
+        await quantizeWithPalette(big, palette, { dither: 'ordered', onProgress: (v) => values.push(v) });
+        expect(values.at(-1)).toBe(1);
+        // Reports are about every 10 ms; before the fix they stopped at 0.89 (4.29 of 4.8 million pixels) and jumped to 1.
+        expect(values.at(-2)).toBeGreaterThan(0.95);
+    }, timeLimit(60_000));
+
     it('a width of 1, and an image one row high', async () => {
         const palette = paletteOf(16, 4);
         for (const [w, h] of [[1, 3000], [3000, 1]]) {

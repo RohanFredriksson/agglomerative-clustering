@@ -1013,7 +1013,8 @@ public:
 
     // How far the mapping has got, from 0 to 999.
     int progress() const {
-        return this->pixels == 0 ? 0 : int(std::min<size_t>(999, this->cursor * 1000 / this->pixels));
+        // In doubles: size_t is 32 bits in WebAssembly, so cursor * 1000 overflowed above 4.29 million pixels.
+        return this->pixels == 0 ? 0 : std::min(999, int(1000.0 * double(this->cursor) / double(this->pixels)));
     }
 
     // Maps pixels until `deadline` (with `timed`) or the end, and returns whether the whole image is done. The clock is

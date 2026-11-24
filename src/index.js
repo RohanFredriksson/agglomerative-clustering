@@ -64,6 +64,10 @@ const wasmSettings = (wasm, onError) => {
     throw fail('invalid-argument', "Invalid wasm: must be a URL or path string, a URL, an ArrayBuffer or typed array of the .wasm bytes, or a WebAssembly.Module.", 'options.wasm');
 };
 
+// How each engine words a URL that can't be resolved: Chromium and Node "Invalid URL", Firefox "… is not a valid URL",
+// WebKit "… cannot be parsed as a URL".
+const badUrl = /Invalid URL|not a valid URL|cannot be parsed as a URL/i;
+
 // A module that cannot be loaded is the commonest first-run failure: a 404, a Content-Security-Policy that blocks it, a
 // bundler that moved the file, an engine without WebAssembly SIMD. The engine's own error (a CompileError, a failed fetch)
 // says little about which, so the message leads with what happened and then gives the likely fix for where it ran.
@@ -156,12 +160,17 @@ const wasmLoadFailed = (cause, given, gzipped = false) => {
         advice = `Check what init({ wasm }) was given${where}: it must be this package's clustering.wasm (its URL or path, its bytes, or the module compiled from it).`;
     } else if (isNodeLike) {
         // The glue's `new URL('clustering.wasm', import.meta.url)`, with import.meta emptied by a CommonJS bundle.
-        if (/Invalid URL/i.test(reason)) {reason = "the package doesn't know where clustering.wasm is (bundled into CommonJS, it has lost its own URL)";}
+        if (badUrl.test(reason)) {reason = "the package doesn't know where clustering.wasm is (bundled into CommonJS, it has lost its own URL)";}
         advice = `If the package was bundled (a server build, a CommonJS bundle from esbuild or Rollup, a plugin's single file), the bundler moved clustering.wasm or dropped what tells the package where it is, and the package's own copy wasn't found from the working directory either: leave the package out of the bundle (mark it external; in Next.js, serverExternalPackages: ['agglomerative-clustering']), or say where the file is with init({ wasm: path }) or give its bytes. ${deployAdvice}`;
     } else if (!isBrowserLike()) {
         // A server runtime that isn't Node (an edge runtime, Deno Deploy): it has no page, so a CSP or a 404 page are unlikely.
-        if (/Invalid URL/i.test(reason)) {reason = "the package can't tell where clustering.wasm is in this runtime";}
+        if (badUrl.test(reason)) {reason = "the package can't tell where clustering.wasm is in this runtime";}
         advice = "Give the module to init({ wasm }) before the first call: in an edge runtime (Cloudflare Workers, Vercel's), import clustering.wasm as a compiled module (the docs show how for Cloudflare Workers and Next.js: https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md); elsewhere its bytes or URL.";
+    } else if (badUrl.test(reason) && /^(data|blob|about):$/.test(String(globalThis.location && globalThis.location.protocol))) {
+        // The code runs from a data: or blob: URL (a bundled worker script in a single-file host) or an about:srcdoc page, so
+        // there is nothing to find clustering.wasm next to. (In a worker, location is the worker script's own URL.)
+        reason = `the package can't tell where clustering.wasm is: it runs from a ${globalThis.location.protocol} URL, with nothing next to it (${reason})`;
+        advice = "Pass the module itself: createWorker({ script, wasm: bytes }) for a worker you start, init({ wasm: bytes }) for the main entry or the worker entry's shared worker (the bytes, a URL, or a compiled module; see \"Plugins and single-file hosts\" in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
     } else {
         advice = "Check that clustering.wasm is served next to the script (not a 404, and with the application/wasm type) and allowed by the page's Content-Security-Policy, or say where it is with init({ wasm }).";
     }
