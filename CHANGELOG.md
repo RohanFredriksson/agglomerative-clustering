@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 3.7.1
+
+Output and the API are unchanged; one error message is clearer, and the docs gain two improved recipes.
 
 ### Changed
 - **`init({ wasm })` given gzipped bytes** now says so in its `wasm-load-failed` message and shows how to decompress them, in every engine (it checks the bytes for gzip's `1f 8b`).
