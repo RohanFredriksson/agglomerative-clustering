@@ -9,6 +9,7 @@ import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createWorker } from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 const workerEntry = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../dist/worker.mjs')).href;
 
@@ -64,7 +65,7 @@ describe('workers that are dropped', () => {
         try {
             const file = join(folder, 'drop.mjs');
             writeFileSync(file, script);
-            const run = spawnSync(process.execPath, ['--expose-gc', file], { encoding: 'utf8', timeout: 120000 });
+            const run = spawnSync(process.execPath, ['--expose-gc', file], { encoding: 'utf8', timeout: timeLimit(120000) });
             expect(run.status, run.stderr).toBe(0);
             const results = JSON.parse(run.stdout.trim().split('\n').pop());
             expect(results.afterDropped).toBe(results.base);
@@ -77,7 +78,7 @@ describe('workers that are dropped', () => {
         } finally {
             rmSync(folder, { recursive: true, force: true });
         }
-    }, 150000);
+    }, timeLimit(150000));
 
     it.skipIf(typeof Symbol.asyncDispose !== 'symbol')('can be terminated with await using (Symbol.asyncDispose)', async () => {
         const worker = createWorker();

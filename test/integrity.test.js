@@ -7,6 +7,7 @@ import {
     Clustering, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering,
     quantizeToIndicesFromClustering,
 } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 const width = 6, height = 6;   // 36 colours, a clustering of 760 bytes: small enough to flip every bit of
 const image = new Uint8Array(width * height * 4);
@@ -135,7 +136,7 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
             }
         }
         expect([...codes].sort()).toEqual(['invalid-clustering']);
-    }, 120000);
+    }, timeLimit(120000));
 
     it('reject a damaged root colour', async () => {
         const damaged = unchecked.slice();

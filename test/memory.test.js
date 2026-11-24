@@ -3,6 +3,7 @@
 // (about 10 s and 2 GB per case), so it runs once per Node version in CI.
 import { describe, it, expect } from 'vitest';
 import { buildPalette } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 const mulberry = (seed) => () => {
     seed = (seed + 0x6D2B79F5) | 0;
@@ -40,6 +41,6 @@ describe('running out of memory', () => {
         const sliced = await buildPalette(image, 16, { onProgress: () => {} }).catch((e) => e);
         expect(sliced.code).toBe('out-of-memory');
         expect(await buildPalette(normal, 16)).toEqual(expected);
-    }, 240000);
+    }, timeLimit(240000));
 
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as ac from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
 import { buildClustering, buildPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 // A minimal valid 2x2 solid red RGBA image.
 const validImage = new Uint8Array([
@@ -377,7 +378,7 @@ describe('real encoded files', () => {
         const pixels = new Uint8Array(context.getImageData(0, 0, 16, 16).data);
         expect((await ac.buildPalette(pixels, 2)).length).toBe(6);
     // Loading the native canvas module for the first time can take several seconds on a busy Windows runner.
-    }, 30000);
+    }, timeLimit(30000));
 
     it('are not confused with random pixel data', async () => {
         let seed = 12345;

@@ -7,6 +7,7 @@ import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import * as dropIn from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
 const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
@@ -41,7 +42,7 @@ describe('a worker that cannot start', () => {
         copyFileSync(join(dist, 'worker-thread.mjs'), join(folder, 'worker-thread.mjs'));
         expect(await worker.buildPalette(image, 4)).toEqual(await broken.createWorker().buildPalette(image, 4));
         await worker.terminate();
-    }, 60000);
+    }, timeLimit(60000));
 
 });
 

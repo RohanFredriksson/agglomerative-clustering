@@ -13,6 +13,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { init, quantize as acQuantize } from '../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../fixtures/kodak.js';
+import { timeLimit } from '../timeout.js';
 
 const require = createRequire(import.meta.url);
 const iq = require('image-q');
@@ -56,7 +57,7 @@ beforeAll(async () => {
     for (const image of SUBSET) {
         await ensureImage(image);
     }
-}, 120_000);
+}, timeLimit(120_000));
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -83,7 +84,7 @@ describe('kodak visual — AC vs NeuQuant', () => {
                 const nqPalette   = iq.buildPaletteSync([pointContainer], { paletteQuantization: 'neuquant', colors: k });
                 const nqContainer = iq.applyPaletteSync(pointContainer, nqPalette);
                 writeOutput(`${image.name}-neuquant-k${k}`, nqContainer.toUint8Array(), width, height);
-            }, 60_000);
+            }, timeLimit(60_000));
 
         }
     }

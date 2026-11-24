@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import * as ac from '../dist/index.mjs';
 import * as dropIn from '../dist/worker.mjs';
 import { createWorker } from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 const width = 32, height = 24;
 const image = new Uint8Array(width * height * 4);
@@ -263,8 +264,8 @@ describe('the drop-in module', () => {
     it('never keeps a Node process alive while idle', async () => {
         const script = `import { buildPalette } from ${JSON.stringify(new URL('../dist/worker.mjs', import.meta.url).href)};
             console.log((await buildPalette(new Uint8Array([1, 2, 3, 255, 200, 100, 0, 255]), 2)).length);`;
-        const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { timeout: 20_000 });
+        const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { timeout: timeLimit(20_000) });
         expect(stdout.trim()).toBe('6');
-    }, 30_000);
+    }, timeLimit(30_000));
 
 });
