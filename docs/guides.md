@@ -389,7 +389,7 @@ Calls to one worker run in order, and re-mapping a large image takes a while (0.
 
 Cancelling stops a call already mapping within a slice, about 10 ms (from 3.7.0) and skips calls still waiting their turn, so the picture stays close behind the slider with every dither method, even ordered dithering with many steps (a second or more; see [Choosing a dither method](api.md#choosing-a-dither-method)).
 
-**A large export, with progress and a Cancel button.** Clustering is the first half of the work, so it takes the signal too, and the handle is released however the export ends: it holds a copy of the image and its clustering in the worker (about 25 MB and more for a 6-megapixel photo):
+**A large export, with progress and a Cancel button.** Clustering is the first half of the work, so it takes the signal too, and the handle is released however the export ends: it holds a copy of the image and its clustering in the worker (the pixels alone are 24 MB for a 6-megapixel RGBA image):
 
 ```js
 const controller = new AbortController();

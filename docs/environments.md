@@ -216,7 +216,7 @@ Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wa
   const worker = createWorker({ script, wasm });
   ```
 
-  The worker's script is always an ES module, whatever format the rest of the plugin is bundled in.
+  The worker's script is always an ES module, whatever format the rest of the plugin is bundled in. Its path, `dist/worker-thread.mjs`, isn't part of the API ([stability](stability.md)) and can change in a minor release; if a build stops finding it after an upgrade, look in the package's `dist/` for the worker script's new name.
 - **VS Code.** The extension host is Node: bundle your extension with the package external and ship it in `node_modules`, or bundle it and pass a path to a `.wasm` you ship (`init({ wasm: path.join(context.extensionPath, 'dist', 'clustering.wasm') })`); a bundled extension otherwise looks for the package from the working directory, which is not your extension's. A webview's CSP needs `'wasm-unsafe-eval'` in `script-src`, and `worker-src` for the worker entry.
 - **Obsidian** ships `main.js`, `manifest.json` and `styles.css` only, so embed the `.wasm` bytes. `main.js` is CommonJS: bundle it with `format: 'cjs'` (and, as CommonJS has no top-level `await`, decompress and `init` inside your plugin's `onload`). Its renderer has Node's globals and a real `Worker`, so both entries work once given the bytes (and, for workers, the `data:` script).
 - **Get it wrong** and the error says so: a bundled main entry without its `.wasm` fails with `wasm-load-failed` asking for `init({ wasm })`, and a worker without its script with `worker-failed` naming `createWorker({ script })`.
