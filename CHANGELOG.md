@@ -4,6 +4,10 @@
 
 ### Docs
 - **The guides' fixed-palette recipe is back to RGB scoring by default, and counts stitches.** If you copied the 3.7.1 version, the new one chooses differently and returns the threads unsorted: pass `'oklab'` for the 3.7.1 choice, and use `countThreads` for the order. OKLab scoring (the default from 3.7.1) lowers the mean ΔE2000 but can grey out small vivid areas: a parrot's pink cheek and teal feather at 16 threads (seen by eye in the exploratory round on 3.7.1), and on the Kodak photos at 12 of 584 threads the most saturated pixels came out further off (ΔE2000 10.74 against 9.85)<!-- bench/spikes/fixed-subset-oklab/accents.mjs → results-accents.txt -->. `improveThreads` now measures in sRGB values unless you pass `'oklab'`, which the guides still suggest for a few widely spaced paints or inks. It no longer claims to return the threads heaviest first (the order came from swatch weights and was often wrong by real counts); a new `countThreads` maps the image and returns `{ thread, count }` most used first, leaving out threads no pixel was mapped to, for the legend and the shopping list. Copy the new version if you use it. Found by the exploratory round on 3.7.1.
+- **Gaps the exploratory round on 3.7.1 ran into, filled.**
+  - **Workers guide:** `signal` and `onProgress` on `worker.cluster` too, and what an aborted call rejects with. A large-export example with progress, Cancel and the handle released in `finally`, and how many workers to create.
+  - **Plugins and single-file hosts:** a tested esbuild plugin that turns the worker script into a `data:` URL; what a plugin must pass (`wasm`, and a worker's `script`); and Obsidian's `main.js` as CommonJS.
+  - **GIFs:** frames must share one size. The fast-png palette PNG without transparency.
 
 ## 3.7.1
 
