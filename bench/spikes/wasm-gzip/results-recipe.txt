@@ -1,0 +1,6 @@
+bundle (esbuild --bundle --format=esm --minify, .wasm embedded with the binary loader, so it is base64 in the bundle)
+                  bundle        bundle gzipped   decompress + init, in a fresh Node process (median of 5 runs)
+raw                160.9 KB       70.5 KB       4.4 ms, of which decompressing 0.0 ms (clusters: yes)
+gzipped            101.7 KB       58.8 KB       75.9 ms, of which decompressing 69.8 ms (clusters: yes)
+
+clustering.wasm 86217 bytes; gzip -9 40616 bytes
