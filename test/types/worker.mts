@@ -1,7 +1,7 @@
 // See main.mts.
 import { createWorker, init, buildPalette, quantize, quantizeToIndices, terminate } from 'agglomerative-clustering/worker';
 import { Palette, Clustering } from 'agglomerative-clustering/worker';
-import type { PaletteChoice, AgglomerativeWorker, ClusteringHandle, ImageLike, ErrorCode, CodedError, ProgressOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
+import type { PaletteChoice, AgglomerativeWorker, ClusteringHandle, LoadedClusteringHandle, ImageLike, ErrorCode, CodedError, ProgressOptions, InitOptions, SharedInitOptions, WorkerOptions } from 'agglomerative-clustering/worker';
 
 declare const imageData: ImageData;
 declare const bytes: Uint8Array;
@@ -50,9 +50,19 @@ async function main() {
     // A clustering from the worker entry has the main entry's methods (they run on this thread).
     const cut: Palette = await stored.getPalette(4);
     const mapped: ImageData = await stored.quantize(imageData, 4);
+    const loaded: LoadedClusteringHandle = await worker.load(stored);
+    const loadedMapped: ImageData = await loaded.quantize(imageData, 4);
+    const loadedBytes: Uint8Array = await loaded.quantize(bytes, 4, { colorSpace: 'rgb' });
+    const loadedIndexed = await loaded.quantizeToIndices(bytes, 4, { transparent: true });
+    await loaded.getPalette(4);
+    void [loadedMapped, loadedBytes, loadedIndexed];
     void [stored, new Palette(bytes, 'oklab'), q, palette, mse, indexed, x, y, z, p, code, e, run, o, like, cut, mapped];
 }
 
+// @ts-expect-error a loaded handle takes the image, then k
+declare const loadedHandle: LoadedClusteringHandle; loadedHandle.quantize(4);
+// @ts-expect-error a loaded handle has no getClustering
+loadedHandle.getClustering();
 // @ts-expect-error getInfo was renamed
 declare const h: ClusteringHandle; h.getInfo();
 void main;

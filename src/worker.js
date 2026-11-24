@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -585,7 +585,7 @@ const makeWorker = (options, allowScript) => {
     // Whether a value is an image where a palette size was expected (a pixel array, an ImageData or `{data, ...}`).
     const looksLikeImage = (value) => value !== null && typeof value === 'object' && (isUint8Array(value) || isUint8ClampedArray(value) || isImageData(value) || 'data' in value);
     // Builds the handle object for what the worker keeps under `id`: `kind` is 'image' (from `cluster`: an image and its
-    // clustering) and, later, 'clustering'. `output` turns a mapped result back into the type of the image given.
+    // clustering) or 'clustering' (from `load`: a clustering alone). `output` turns a mapped result back into the type of the image given.
     const makeHandle = (id, kind, output) => {
         let released = false;
         // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
@@ -610,7 +610,6 @@ const makeWorker = (options, allowScript) => {
             ? Promise.reject(fail('invalid-argument', `Invalid k: this handle holds an image (from worker.cluster) and maps it with ${name}(k); pass k, not an image. To map other images with a stored clustering, use worker.load(clustering).`, 'k'))
             : null;
         const handle = {
-            getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
             getPalette: (k, ...extra) => plain('handleGetPalette', 'getPalette', [k], extra),
             getSwatches: (k, ...extra) => plain('handleGetSwatches', 'getSwatches', [k], extra),
             getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
@@ -618,7 +617,7 @@ const makeWorker = (options, allowScript) => {
             // the thread to reject with the main entry's own error.
             chooseFrom: (palette, k, chooseOptions) => {
                 let taken;
-                try {taken = takeControls(chooseOptions, true);} catch (error) {return Promise.reject(error);}
+                try {taken = takeControls(chooseOptions, false);} catch (error) {return Promise.reject(error);}
                 const sent = taken.onProgress !== undefined ? {...taken.options, onProgress: null} : taken.options;
                 return use('handleChooseFrom', [palette, k, sent], {signal: taken.signal});
             },
@@ -635,10 +634,43 @@ const makeWorker = (options, allowScript) => {
         };
         if (kind === 'image') {
             Object.assign(handle, {
+                getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
                 quantize: (k, mapOptions) => imageAsK('quantize', k) || (async () => output(await withControls('handleQuantize', [k], mapOptions)))(),
                 quantizeToIndices: (k, mapOptions) => imageAsK('quantizeToIndices', k) || withControls('handleQuantizeToIndices', [k], mapOptions),
                 quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),
                 quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions),
+            });
+        }
+        if (kind === 'clustering') {
+            // The handle holds no image: each call maps the image it is given, and returns the type of that image.
+            const mapping = (name, method, mapped) => (image, k, mapOptions) => {
+                if (typeof image === 'number') {return Promise.reject(fail('invalid-argument', "Invalid image: this handle holds a clustering, not an image (from worker.load); pass the image, then k.", 'image'));}
+                const origin = new Error();
+                return (async () => {
+                    if (released || !handle) {throw fail('invalid-handle', "Invalid handle: it was released.");}
+                    const {options, signal, onProgress} = takeControls(mapOptions);
+                    if (signal && signal.aborted) {
+                        // As the functions on the worker do: a wrong argument is reported before the abort.
+                        try {
+                            await invoke(method, [id, own(send(image)), k, options], [], origin, {check: true});
+                        } catch (error) {
+                            if (isCodedError(error) && error.argument !== undefined) {throw error;}
+                        }
+                        throw abortReason(signal);
+                    }
+                    const warning = bareImageWarning(image);
+                    const byteLength = warning ? image.byteLength : 0;
+                    let sent = send(image);
+                    const ahead = !ready();
+                    if (ahead) {sent = take(sent);}
+                    const result = await invoke(method, [id, sent, ahead ? own(k) : k, options], pixelBuffers(sent), origin, {signal, onProgress});
+                    if (warning) {warnOnce(warning, byteLength);}
+                    return mapped ? rebuild(image)(result) : result;
+                })();
+            };
+            Object.assign(handle, {
+                quantize: mapping('quantize', 'handleQuantizeImage', true),
+                quantizeToIndices: mapping('quantizeToIndices', 'handleQuantizeToIndicesImage', false),
             });
         }
         // `await using handle = await worker.cluster(image)` releases it at the end of the block.
@@ -672,6 +704,28 @@ const makeWorker = (options, allowScript) => {
             }
             if (warning) {warnOnce(warning, byteLength);}
             return makeHandle(id, 'image', rebuild(image));
+        })();
+    };
+
+    // Keeps a stored clustering in the worker, for cutting it and mapping images with it without sending it again.
+    instance.load = (clustering, ...extra) => {
+        const origin = new Error();
+        return (async () => {
+            // Checked, and the bytes taken, before anything is awaited (see `own`): a damaged clustering, a palette or an
+            // image is reported here, and nothing is posted.
+            if (extra.length > 0) {throw fail('invalid-argument', "Invalid arguments: load takes the clustering only. Options go to the handle's methods.", 'options');}
+            readHeader(clustering);
+            const id = nextHandle++;
+            const sent = ready() ? clustering : take(clustering);
+            liveHandles++;
+            try {
+                await invoke('load', [id, sent], pixelBuffers(sent), origin);
+            } catch (error) {
+                liveHandles--;
+                if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
+                throw error;
+            }
+            return makeHandle(id, 'clustering');
         })();
     };
 

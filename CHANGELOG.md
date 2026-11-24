@@ -4,6 +4,8 @@
 
 ### Added
 - **`clustering.chooseFrom(palette, k, options?)`** chooses the `k` entries of a fixed palette (threads, bricks, inks) that best represent the clustered image, returning their positions and colours (`{ indices, palette }`). It is the guides' `chooseThreads` + `improveThreads` recipe moved into the library, with one change: the result always has exactly `k` entries. `colorSpace` (default `'rgb'`) and `signal` are its options.
+- **`handle.chooseFrom(palette, k, options?)`** on a worker handle from `worker.cluster`: the clustering method of the same name, run in the worker (`colorSpace` and `signal`). A number or an image where the wrong kind of handle expects one now says which handle it is holding.
+- **`worker.load(clustering)`** keeps a stored clustering in the worker and returns a `LoadedClusteringHandle`: `getPalette(k)`, `getSwatches(k)`, `getClusteringInfo()`, `chooseFrom(palette, k, options?)`, `quantize(image, k, options?)` and `quantizeToIndices(image, k, options?)`, with `release()` and `await using`. It replaces one-off `worker.getPaletteFromClustering(clustering, k)` calls, which send the clustering every time. The mapping methods take `signal` and `onProgress`. The clustering is checked and its bytes taken at the call, so a damaged clustering, a palette or an image rejects with `invalid-clustering` before anything is posted.
 
 ## 3.7.2
 

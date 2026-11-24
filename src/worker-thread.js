@@ -6,7 +6,7 @@ import {MARK, mark, revive, isPalette, silenceWarnings} from './shared.js';
 // The caller's side checks for warnings and gives them (PRINCIPLES "Warnings"), so this copy stays quiet.
 silenceWarnings();
 
-// Images kept in the worker by `cluster`, with their clusterings, by handle id.
+// Images kept in the worker by `cluster`, with their clusterings, and clusterings alone from `load`, by handle id.
 const handles = new Map();
 
 const handle = (id) => {
@@ -36,6 +36,7 @@ const methods = {
     cluster: async (id, image, options) => {
         handles.set(id, {image, clustering: await ac.getClustering(image, options)});
     },
+    load: async (id, clustering) => {handles.set(id, {clustering: new ac.Clustering(clustering)});},
     release: async (id) => {handles.delete(id);},
     handleGetClustering: async (id) => new ac.Clustering(handle(id).clustering),
     handleGetPalette: async (id, k) => ac.getPaletteFromClustering(handle(id).clustering, k),
@@ -44,6 +45,8 @@ const methods = {
     handleChooseFrom: async (id, palette, k, options) => handle(id).clustering.chooseFrom(palette, k, options),
     handleQuantize: async (id, k, options) => ac.quantizeFromClustering(handle(id).image, handle(id).clustering, k, options),
     handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesFromClustering(handle(id).image, handle(id).clustering, k, options),
+    handleQuantizeImage: async (id, image, k, options) => ac.quantizeFromClustering(image, handle(id).clustering, k, options),
+    handleQuantizeToIndicesImage: async (id, image, k, options) => ac.quantizeToIndicesFromClustering(image, handle(id).clustering, k, options),
     handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
     handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
 };
@@ -63,7 +66,7 @@ const optionsIndex = {
     getClustering: 1, getPalette: 2, getSwatches: 2, quantize: 2, quantizeFromClustering: 3, quantizeWithPalette: 2,
     quantizeToIndices: 2, quantizeToIndicesFromClustering: 3, quantizeToIndicesWithPalette: 2,
     cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2, handleQuantizeWithPalette: 2, handleQuantizeToIndicesWithPalette: 2,
-    handleChooseFrom: 3,
+    handleChooseFrom: 3, handleQuantizeImage: 3, handleQuantizeToIndicesImage: 3,
 };
 
 // One AbortController per call that can be cancelled, by call id. It exists from the moment the call arrives, so a call

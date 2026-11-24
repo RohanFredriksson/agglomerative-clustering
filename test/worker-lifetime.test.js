@@ -55,6 +55,16 @@ await released();
 await settle();
 results.afterReleased = threads();
 
+// A loaded handle is reclaimed like an image handle.
+const keepLoaded = async () => {const worker = createWorker(); return worker.load(await worker.buildClustering(image));};
+let loaded = await keepLoaded();
+await settle();
+results.loadedWorks = (await loaded.getPalette(3)).length === 9;
+results.withLoaded = threads();
+loaded = null;
+await settle();
+results.afterLoaded = threads();
+
 console.log(JSON.stringify(results));
 `;
 
@@ -75,6 +85,9 @@ describe('workers that are dropped', () => {
             expect(results.withHandle).toBe(results.base + 1);
             expect(results.afterHandle).toBe(results.base);
             expect(results.afterReleased).toBe(results.base);
+            expect(results.loadedWorks).toBe(true);
+            expect(results.withLoaded).toBe(results.base + 1);
+            expect(results.afterLoaded).toBe(results.base);
         } finally {
             rmSync(folder, { recursive: true, force: true });
         }

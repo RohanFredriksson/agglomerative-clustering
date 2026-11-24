@@ -30,6 +30,16 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     release(): Promise<void>;
     [Symbol.asyncDispose](): Promise<void>;
 }
+export interface LoadedClusteringHandle {
+    getPalette(k: number): Promise<Palette>;
+    getSwatches(k: number): Promise<Swatches>;
+    getClusteringInfo(): Promise<ClusteringInfo>;
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+    quantize<Image extends ImageLike>(image: Image, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    quantizeToIndices(image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    release(): Promise<void>;
+    [Symbol.asyncDispose](): Promise<void>;
+}
 export interface AgglomerativeWorker {
     init(options?: InitOptions): Promise<void>;
     buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
@@ -48,6 +58,7 @@ export interface AgglomerativeWorker {
     quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
+    load(clustering: Clustering | Uint8Array): Promise<LoadedClusteringHandle>;
     terminate(): Promise<void>;
     [Symbol.asyncDispose](): Promise<void>;
 }

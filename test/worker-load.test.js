@@ -1,0 +1,142 @@
+// worker.load(clustering): a handle for a stored clustering, kept in the worker (3.8).
+import { describe, it, expect, afterAll, vi } from 'vitest';
+import { Worker } from 'worker_threads';
+import * as ac from '../dist/index.mjs';
+import { createWorker } from '../dist/worker.mjs';
+
+const width = 32, height = 24;
+const image = new Uint8Array(width * height * 4);
+for (let p = 0; p < width * height; p++) {
+    const x = p % width, y = Math.floor(p / width);
+    image.set([x * 8, y * 10, (x * y) & 255, x % 9 === 0 ? 0 : x % 4 === 0 ? 100 : 255], p * 4);
+}
+
+const worker = createWorker();
+afterAll(() => worker.terminate());
+
+const imageData = () => new ImageData(new Uint8ClampedArray(image), width, height);
+
+describe('worker.load', () => {
+
+    it('matches the deprecated function forms byte for byte', async () => {
+        for (const clusterOptions of [{}, { colorSpace: 'oklab' }]) {
+            const clustering = await ac.buildClustering(image, clusterOptions);
+            await using loaded = await worker.load(clustering);
+            for (const k of [4, 16]) {
+                expect(await loaded.getPalette(k)).toEqual(await worker.getPaletteFromClustering(clustering, k));
+                expect(await loaded.getSwatches(k)).toEqual(await worker.getSwatchesFromClustering(clustering, k));
+                for (const o of [{}, { transparent: true }, { colorSpace: 'rgb' }, { dither: true, width }]) {
+                    const label = JSON.stringify([clusterOptions, k, o]);
+                    // `transparent` is for the indexed output only.
+                    if (!o.transparent) {expect(await loaded.quantize(image, k, o), label).toEqual(await worker.quantizeFromClustering(image, clustering, k, o));}
+                    expect(await loaded.quantizeToIndices(image, k, o), label).toEqual(await worker.quantizeToIndicesFromClustering(image, clustering, k, o));
+                }
+            }
+            expect(await loaded.getClusteringInfo()).toEqual(await worker.getClusteringInfo(clustering));
+        }
+    });
+
+    it('returns the type of the image it is given', async () => {
+        const clustering = await ac.buildClustering(image);
+        await using loaded = await worker.load(clustering);
+        expect(await loaded.quantize(image, 4)).toBeInstanceOf(Uint8Array);
+        const data = await loaded.quantize(imageData(), 4);
+        expect(data).toBeInstanceOf(ImageData);
+        expect(data.width).toBe(width);
+        const raw = await loaded.quantize({ data: image.filter((_, i) => i % 4 !== 3), format: 'rgb' }, 4);
+        expect(raw.format).toBe('rgb');
+        // One handle maps different images.
+        expect((await loaded.quantize(image.slice(0, 16 * 4), 4)).length).toBe(16 * 4);
+    });
+
+    it('rejects a damaged clustering, a palette or an image before posting', async () => {
+        const clustering = await ac.buildClustering(image);
+        await worker.getClusteringInfo(clustering);
+        const damaged = clustering.slice();
+        damaged[40] ^= 0xFF;
+        const posts = vi.spyOn(Worker.prototype, 'postMessage');
+        try {
+            for (const bad of [damaged, await ac.buildPalette(image, 4), image, new Uint8Array(3), 'x', null]) {
+                await expect(worker.load(bad)).rejects.toMatchObject({ code: 'invalid-clustering', argument: 'clustering' });
+            }
+            expect(posts).not.toHaveBeenCalled();
+        } finally {
+            posts.mockRestore();
+        }
+    });
+
+    it('takes the bytes at the call', async () => {
+        for (const fresh of [createWorker(), worker]) {
+            const clustering = await ac.buildClustering(image);
+            const expected = await ac.getPaletteFromClustering(clustering, 6);
+            const pending = fresh.load(clustering.slice());
+            const copy = clustering.slice();
+            const loading = fresh.load(copy);
+            copy.fill(0);
+            await pending;
+            const loaded = await loading;
+            expect(await loaded.getPalette(6)).toEqual(expected);
+            await loaded.release();
+            if (fresh !== worker) {await fresh.terminate();}
+        }
+    });
+
+    it('extra arguments to load are an error', async () => {
+        const clustering = await ac.buildClustering(image);
+        await expect(worker.load(clustering, {})).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
+    });
+
+    it('a number where the image goes says what the handle holds', async () => {
+        const clustering = await ac.buildClustering(image);
+        await using loaded = await worker.load(clustering);
+        const message = "Invalid image: this handle holds a clustering, not an image (from worker.load); pass the image, then k.";
+        await expect(loaded.quantize(4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message });
+        await expect(loaded.quantizeToIndices(4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message });
+    });
+
+    it('signal and onProgress work on its mapping methods', async () => {
+        const clustering = await ac.buildClustering(image);
+        await using loaded = await worker.load(clustering);
+        const reason = new Error('stop');
+        await expect(loaded.quantize(image, 4, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
+        await expect(loaded.quantizeToIndices(image, 4, { signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
+        await expect(loaded.quantize(image, 0, { signal: AbortSignal.abort(reason) })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k' });
+        const seen = [];
+        await loaded.quantize(image, 4, { onProgress: (p) => seen.push(p) });
+        expect(seen.at(-1)).toBe(1);
+        const seenIndices = [];
+        await loaded.quantizeToIndices(image, 4, { onProgress: (p) => seenIndices.push(p) });
+        expect(seenIndices.at(-1)).toBe(1);
+    });
+
+    it('release, await using, and calls after release', async () => {
+        const clustering = await ac.buildClustering(image);
+        const loaded = await worker.load(clustering);
+        await loaded.release();
+        await loaded.release();
+        for (const call of [() => loaded.getPalette(4), () => loaded.getSwatches(4), () => loaded.getClusteringInfo(), () => loaded.quantize(image, 4), () => loaded.quantizeToIndices(image, 4), () => loaded.chooseFrom(new Uint8Array(6), 1)]) {
+            await expect(call()).rejects.toMatchObject({ code: 'invalid-handle' });
+        }
+        let kept;
+        {
+            await using inBlock = await worker.load(clustering);
+            kept = inBlock;
+            expect((await inBlock.getPalette(4)).length).toBe(12);
+        }
+        await expect(kept.getPalette(4)).rejects.toMatchObject({ code: 'invalid-handle' });
+    });
+
+    it('has no getClustering and no …WithPalette methods', async () => {
+        await using loaded = await worker.load(await ac.buildClustering(image));
+        for (const name of ['getClustering', 'quantizeWithPalette', 'quantizeToIndicesWithPalette']) {expect(loaded[name]).toBeUndefined();}
+    });
+
+    it('chooseFrom on a loaded handle equals clustering.chooseFrom', async () => {
+        const clustering = await ac.buildClustering(image);
+        const fixed = new Uint8Array([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 200, 200, 0]);
+        await using loaded = await worker.load(clustering);
+        expect(await loaded.chooseFrom(fixed, 3)).toEqual(await clustering.chooseFrom(fixed, 3));
+        expect(await loaded.chooseFrom(fixed, 3, { colorSpace: 'oklab' })).toEqual(await clustering.chooseFrom(fixed, 3, { colorSpace: 'oklab' }));
+    });
+
+});

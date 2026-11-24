@@ -103,6 +103,7 @@ describe('the declarations', () => {
         const membersMarked = (interfaceName) => checker.getPropertiesOfType(declaredType(interfaceName === 'Clustering' ? 'index.d.ts' : 'worker.d.ts', interfaceName)).filter(isDeprecated).map((p) => p.name).sort();
         expect(membersMarked('AgglomerativeWorker')).toEqual(Object.keys(deprecated).sort());
         expect(membersMarked('ClusteringHandle')).toEqual([]);
+        expect(membersMarked('LoadedClusteringHandle')).toEqual([]);
         expect(membersMarked('Clustering')).toEqual([]);
     });
 
@@ -152,7 +153,7 @@ describe('the worker entry', () => {
         const mainFunctions = Object.keys(main).filter((name) => typeof main[name] === 'function' && !/^[A-Z]/.test(name) && !helpers.includes(name));
         for (const name of Object.keys(main).filter((name) => typeof main[name] !== 'function' || helpers.includes(name))) {expect(worker[name], name).toBe(main[name]);}
         expect(Object.keys(worker).sort()).toEqual([...Object.keys(main), 'createWorker', 'terminate'].sort());
-        expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'terminate'].sort());
+        expect(Object.keys(instance).sort()).toEqual([...mainFunctions, 'cluster', 'load', 'terminate'].sort());
         expect(propertyNames(declaredType('worker.d.ts', 'AgglomerativeWorker'))).toEqual(Object.keys(instance).sort());
     });
 
@@ -160,6 +161,12 @@ describe('the worker entry', () => {
         const handle = await instance.cluster(image);
         expect(Object.keys(handle).sort()).toEqual(propertyNames(declaredType('worker.d.ts', 'ClusteringHandle')).filter((name) => name !== 'then'));
         await handle.release();
+    });
+
+    it('gives loaded handles exactly the methods their type declares', async () => {
+        const loaded = await instance.load(await main.buildClustering(image));
+        expect(Object.keys(loaded).sort()).toEqual(propertyNames(declaredType('worker.d.ts', 'LoadedClusteringHandle')).filter((name) => name !== 'then'));
+        await loaded.release();
     });
 
     it('routes signal and onProgress for every function that takes an image', async () => {

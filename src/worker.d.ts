@@ -90,6 +90,31 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     [Symbol.asyncDispose](): Promise<void>;
 }
 
+/**
+ * A stored clustering, kept in the worker (from `worker.load`): cut it and map images with it without sending it again.
+ * It holds no image, so the mapping methods take the image, then k (`cluster` keeps the image and maps it with `quantize(k)`).
+ * There is no `getClustering()`: you passed the clustering in and still have it.
+ */
+export interface LoadedClusteringHandle {
+    getPalette(k: number): Promise<Palette>;
+    getSwatches(k: number): Promise<Swatches>;
+    getClusteringInfo(): Promise<ClusteringInfo>;
+    /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
+    chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
+    /** Maps `image` to the k-colour palette of the kept clustering. Returns the same type as the image given. */
+    quantize<Image extends ImageLike>(image: Image, k: number, options?: MappingOptions): Promise<ImageResult<Image>>;
+    /** Maps `image` to indices into the k-colour palette of the kept clustering. */
+    quantizeToIndices(image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
+    /**
+     * Frees the clustering in the worker. Later calls on the handle fail. Call it when you are done, or declare the
+     * handle with `await using`, which does. A handle that is dropped without either is freed once it is garbage-collected,
+     * but when that happens is up to the JavaScript engine.
+     */
+    release(): Promise<void>;
+    /** The same as `release()`, for `await using`. Present where the runtime has `Symbol.asyncDispose`. */
+    [Symbol.asyncDispose](): Promise<void>;
+}
+
 /** The main entry's functions, run in a worker, plus handles and `terminate`. */
 export interface AgglomerativeWorker {
     /** Loads the module in the worker. `wasm` is the only option, and `createWorker({ wasm })` does the same. */
@@ -117,6 +142,11 @@ export interface AgglomerativeWorker {
     quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Clusters `image` and keeps it, with its clustering, in the worker. */
     cluster<Image extends ImageLike>(image: Image, options?: ClusteringOptions): Promise<ClusteringHandle<ImageResult<Image>>>;
+    /**
+     * Keeps a stored clustering in the worker and gives a handle for cutting it and mapping images with it. The bytes are
+     * checked and taken at the call (copied, or moved with `transfer: true`), so you may change the array at once.
+     */
+    load(clustering: Clustering | Uint8Array): Promise<LoadedClusteringHandle>;
     /** Stops the worker. Calls still waiting are rejected, and later calls fail. */
     terminate(): Promise<void>;
     /** The same as `terminate()`, for `await using worker = createWorker()`. Present where the runtime has `Symbol.asyncDispose`. */
