@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 3.7.2
+
+Output and the API are unchanged; a progress bug is fixed, two error messages are clearer, and the guides' fixed-palette recipe goes back to RGB scoring and counts stitches.
 
 ### Fixed
 - **Progress while mapping stopped rising above 4.3 million pixels**, then jumped to 1 at the end: on a 6.3-megapixel photo it sat at 0.68 for the last third of the mapping. The mapping job worked out its progress in 32-bit integers, which overflowed. Results and cancelling were unaffected. Found by an exploratory round on 3.7.1.
