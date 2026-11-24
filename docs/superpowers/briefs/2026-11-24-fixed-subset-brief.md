@@ -81,3 +81,5 @@ Both found that the brief first said scoring in `colorSpace` "removes trap 1" an
 ## Recommendation
 
 **Recipe now; build later only if the maintainer wants it for a named use case.** The recipe can close every trap the data show: OKLab scoring with the measured rule, ranking, the function forms for the worker entry, and an api.md pointer. That is about 80 tested lines in the guides. A built-in adds no quality over that, and would have to settle a scoring-space default against the library's RGB convention, promise a heuristic search's output, and add four names. If the maintainer names a use case that needs it off the main thread (a live slider), build the smaller shape: the clustering form, its method, the worker function and a handle method, in JavaScript, with the scoring space decided in the spec.
+
+**Decision (2026-11-24):** recipe. The maintainer: "ok sure recipe now". The guides' `improveThreads` scores in OKLab by default, returns the threads heaviest first, and uses the function forms; the API reference points to it; the built-in stays under ROADMAP "Considered" with these numbers.

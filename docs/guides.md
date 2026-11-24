@@ -455,20 +455,24 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
 - **Colour space is a choice here too, and the answer differs from clustering.** `'oklab'` keeps skin tones from going olive when mapping *without* dithering. With small palettes of widely spaced inks (e-ink, grey levels), dither in light with the function above and leave `colorSpace` out: without it every method makes photos too light, and OKLab more so in black and white.
 - **Choosing N colours from a fixed set** (the 12 threads that best represent a photo out of 400) has no function of its own, but two short functions do it.
   - **`chooseThreads`** cuts the clustering, snaps each cut colour to its nearest thread, and cuts finer until N distinct threads appear. After clustering it takes about a millisecond. On the Kodak photos with large charts it beat "the N most used threads" by about 3 to 4 dB PSNR at 6 to 12 threads; the gain shrinks as N grows.
-  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. It measures distance in sRGB values, so with very few inks (4 of 26 in testing) it can make the mean ΔE2000 slightly worse; if you map with `colorSpace: 'oklab'`, compare the two choices on your image. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image, and each pass sweeps the swatches once per thread in the chart: 18 ms for 12 of 584 threads and 30 ms for 40, 25 to 37 ms for 12 to 40 of 1000 (medians on the Kodak photos, under 60 ms at worst)<!-- bench/spikes/fixed-subset-speed/speed.mjs → results-speed.txt -->. Both functions call the clustering's methods, which run on the calling thread with the main entry (see [Clustering methods](api.md#clustering-methods)): with only the worker entry imported, they reject with `wasm-load-failed`, so import the main entry where you call them. Skip it when `chooseThreads` is good enough.
+  - **`improveThreads`** then swaps threads in and out while a swap brings the mapped image closer to the photo, and returns the threads heaviest first. It can find a thread that serves several of the image's colours at once, which snapping each cut colour can't. On the 24 Kodak photos with a 584-colour chart it added 0.4 to 0.45 dB PSNR at 6 and 12 threads (0.25 at 24), was better on 22 to 24 of the 24 photos and worse on none, and gained more with dithering. On the page it shows as a closer match in large soft areas such as backgrounds and skin. It works on 1024 swatches, so its time doesn't grow with the image.
+  - **Which space to measure in.** `improveThreads` measures distance in OKLab by default, which chooses threads closer to the photo by eye, whichever space you then map in. Pass `'rgb'` to choose by sRGB values instead, which is what PSNR measures. On the 24 Kodak photos, mapped in RGB without dithering, OKLab lowered the mean ΔE2000 for 4 of 26 pigments from 23.3 to 18.7 (better on 22 photos, worse on 2), for 16 of 78 bricks from 10.0 to 9.3 (23 and 0), and for 12 of 584 threads from 7.13 to 6.87 (17 and 6), at 0.3 to 1.7 dB less PSNR<!-- bench/spikes/fixed-subset-oklab/measure.mjs → results.txt -->. On a dense chart of 1000 colours spread evenly over the RGB cube, and with error diffusion and few threads, the two are about even, so compare both on your images there.
+  - **Speed:** each pass sweeps the swatches once per thread in the chart: 21 ms for 12 of 584 threads and 45 ms for 40, 30 to 56 ms for 12 to 40 of 1000 (medians on the Kodak photos, 84 ms at worst; with `'rgb'`, 17 to 38 ms)<!-- bench/spikes/fixed-subset-oklab/speed.mjs → results-speed.txt -->. Both functions use the function forms (`getPaletteFromClustering`, `getSwatchesFromClustering`), which both entries export: import them from `agglomerative-clustering/worker` to cluster and cut off the page (the search itself, in JavaScript, runs where you call it). Skip `improveThreads` when `chooseThreads` is good enough.
 
   ```js
-  import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
+  // The same functions are in both entries: import them from 'agglomerative-clustering/worker' to run the clustering off the page.
+  import { buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
   const clustering = await buildClustering(image);
   const chosen = await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 12));
-  // chosen: indices into `threads` (flat RGB). Swapped-in threads take their predecessors' places, so the order is arbitrary.
+  // chosen: indices into `threads` (flat RGB), heaviest first. For exact counts per thread (a shopping list), map the
+  // image with quantizeToIndicesWithPalette and count the indices: dithering changes them.
 
   // The indices of n threads that represent the clustered image well.
   async function chooseThreads(clustering, threads, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-      const cut = await clustering.getPalette(k);
+      const cut = await getPaletteFromClustering(clustering, k);
       // The cut palette as an image of one pixel per colour, mapped to the threads.
       const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
       // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
@@ -477,15 +481,17 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
     return chosen;   // can be fewer than n for an image with few colours
   }
 
-  // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
-  async function improveThreads(clustering, threads, chosen) {
-    const { palette: colors, weights } = await clustering.getSwatches(1024);
+  // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches, and returns
+  // them heaviest first. `space`: 'oklab' (closer by eye) or 'rgb' (closer in sRGB values, which PSNR measures).
+  async function improveThreads(clustering, threads, chosen, space = 'oklab') {
+    const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+    const a = coordinates(threads, space), b = coordinates(colors, space);
     const m = weights.length, t = threads.length / 3, n = chosen.length;
     const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
     for (let j = 0; j < t; j++) {
       for (let i = 0; i < m; i++) {
-        const dr = threads[3 * j] - colors[3 * i], dg = threads[3 * j + 1] - colors[3 * i + 1], db = threads[3 * j + 2] - colors[3 * i + 2];
-        distance[j * m + i] = dr * dr + dg * dg + db * db;
+        const dx = a[3 * j] - b[3 * i], dy = a[3 * j + 1] - b[3 * i + 1], dz = a[3 * j + 2] - b[3 * i + 2];
+        distance[j * m + i] = dx * dx + dy * dy + dz * dz;
       }
     }
     chosen = [...chosen];
@@ -518,9 +524,29 @@ const { indices } = await quantizeToIndicesWithPalette({ data, format: 'rgba', w
           if (error < lowest) {lowest = error; best = [s, j];}
         }
       }
-      if (!best) {return chosen;}
-      chosen[best[0]] = best[1];
+      if (best) {chosen[best[0]] = best[1]; continue;}
+      // Done: heaviest first, by the swatch weight each thread serves (an estimate of its share of the pixels).
+      const served = new Float64Array(n);
+      for (let i = 0; i < m; i++) {served[nearest[i]] += weights[i];}
+      return chosen.map((j, s) => [j, served[s]]).sort((x, y) => y[1] - x[1]).map(([j]) => j);
     }
+  }
+
+  // Colours (3 bytes each) as coordinates to measure distance in: OKLab, or the sRGB values themselves.
+  function coordinates(rgb, space) {
+    if (space === 'rgb') {return Float64Array.from(rgb);}
+    const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const out = new Float64Array(rgb.length);
+    for (let i = 0; i < rgb.length; i += 3) {
+      const r = linear(rgb[i]), g = linear(rgb[i + 1]), b = linear(rgb[i + 2]);
+      const l = Math.cbrt(0.4122214708 * r + 0.5363329343 * g + 0.0514459929 * b);
+      const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+      const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+      out[i] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+      out[i + 1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+      out[i + 2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    }
+    return out;
   }
   ```
 - **Transparent pixels** map to whichever entry is nearest their colour values (often black, as fully transparent pixels are often stored as black, but not always) unless you pass `transparent`, which appends an entry for them (so a 1- or 2-bit panel has no room for it): composite the image onto your background first.
