@@ -167,7 +167,7 @@ The main entry runs in every extension context: a Manifest V3 service worker, an
 
 ## Plugins and single-file hosts: Figma, VS Code, Obsidian
 
-Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wasm` and worker script can't sit next to it. Embed them, and say where everything is: in these hosts the package can't find its own files. (Tested against stand-ins for these hosts: a sandboxed iframe, a Node host process, an Electron renderer. Not inside the apps themselves.)
+Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wasm` and worker script can't sit next to it. Embed them, and say where everything is: in these hosts the package can't find its own files. That means passing `wasm` (the bytes) to `init` for the main entry and to each `createWorker`, and for a worker also its `script`, as a `data:` URL. (Tested against stand-ins for these hosts: a sandboxed iframe, a Node host process, an Electron renderer. Not inside the apps themselves.)
 
 - **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 86 KB, 115 KB as base64, and 53 KB gzipped then base64<!-- bench/spikes/slicing-mapping/results-size.txt -->.
 - **Smaller: embed it gzipped.** With esbuild, a plugin gzips the module as it bundles, so the import stays `agglomerative-clustering/clustering.wasm` and can't go stale after an upgrade. With another toolchain, gzip the file on every build (`gzip -9k`) and import the `.gz` with the binary loader (in esbuild, `--loader:.gz=binary`).
@@ -192,9 +192,33 @@ Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wa
   ```
 
   A bundle of the main entry went from 161 KB to 102 KB, or from 71 KB to 59 KB where the host gzips it anyway; decompressing took 2.3 ms in Chromium<!-- bench/spikes/wasm-gzip/recipe.mjs → results-recipe.txt; browser.mjs → results-browser.txt -->. `DecompressionStream` is in every current browser and Electron; Figma's plugin main thread wasn't checked, so decompress in the plugin's UI iframe there, or embed the module as is. Bytes passed still gzipped give `wasm-load-failed` saying so.
-- **The worker script as a `data:` URL.** Bundle `node_modules/agglomerative-clustering/dist/worker-thread.mjs` into one ES module (esbuild `--bundle --format=esm`) and pass it as `createWorker({ script: 'data:text/javascript;base64,…', wasm: bytes })`. In a sandboxed iframe (Figma's UI) a `blob:` worker fails in Chromium; a `data:` one works. The main entry alone is often enough for a plugin's images, and needs only the bytes.
+- **The worker script as a `data:` URL.** In a sandboxed iframe (Figma's UI) a `blob:` worker fails in Chromium; a `data:` one works. The main entry alone is often enough for a plugin's images, and needs only the bytes. For a worker, this esbuild plugin bundles the package's worker script into a module of its own, which the package doesn't export by name, and gives it to your code as a `data:` URL. That bundle doesn't hold the `.wasm`, so pass the bytes as well:
+
+  ```js
+  // worker-script.mjs (Node, at build time): add workerScript to the build's plugins, next to gzipWasm
+  import { build } from 'esbuild';
+  import { createRequire } from 'node:module';
+  import { dirname, join } from 'node:path';
+  const workerThread = join(dirname(createRequire(import.meta.url).resolve('agglomerative-clustering/package.json')), 'dist', 'worker-thread.mjs');
+  export const workerScript = { name: 'worker-script', setup(b) {
+    b.onResolve({ filter: /^worker-script$/ }, () => ({ path: 'worker-script', namespace: 'worker-script' }));
+    b.onLoad({ filter: /.*/, namespace: 'worker-script' }, async () => {
+      const { outputFiles } = await build({ entryPoints: [workerThread], bundle: true, format: 'esm', target: 'es2022', write: false });
+      return { contents: `export default ${JSON.stringify(`data:text/javascript;base64,${Buffer.from(outputFiles[0].contents).toString('base64')}`)};` };
+    });
+  } };
+  ```
+
+  ```js
+  // in the plugin, with `wasm` decompressed as above (or the bytes as they are)
+  import script from 'worker-script';
+  import { createWorker } from 'agglomerative-clustering/worker';
+  const worker = createWorker({ script, wasm });
+  ```
+
+  The worker's script is always an ES module, whatever format the rest of the plugin is bundled in. Its path, `dist/worker-thread.mjs`, isn't part of the API ([stability](stability.md)) and can change in a minor release; if a build stops finding it after an upgrade, look in the package's `dist/` for the worker script's new name.
 - **VS Code.** The extension host is Node: bundle your extension with the package external and ship it in `node_modules`, or bundle it and pass a path to a `.wasm` you ship (`init({ wasm: path.join(context.extensionPath, 'dist', 'clustering.wasm') })`); a bundled extension otherwise looks for the package from the working directory, which is not your extension's. A webview's CSP needs `'wasm-unsafe-eval'` in `script-src`, and `worker-src` for the worker entry.
-- **Obsidian** ships `main.js`, `manifest.json` and `styles.css` only, so embed the `.wasm` bytes. Its renderer has Node's globals and a real `Worker`, so both entries work once given the bytes (and, for workers, the `data:` script).
+- **Obsidian** ships `main.js`, `manifest.json` and `styles.css` only, so embed the `.wasm` bytes. `main.js` is CommonJS: bundle it with `format: 'cjs'` (and, as CommonJS has no top-level `await`, decompress and `init` inside your plugin's `onload`). Its renderer has Node's globals and a real `Worker`, so both entries work once given the bytes (and, for workers, the `data:` script).
 - **Get it wrong** and the error says so: a bundled main entry without its `.wasm` fails with `wasm-load-failed` asking for `init({ wasm })`, and a worker without its script with `worker-failed` naming `createWorker({ script })`.
 
 ## Testing code that uses it
