@@ -69,8 +69,11 @@ export interface SharedInitOptions extends InitOptions {
 /** An image and its clustering, kept in the worker so re-cutting and re-mapping them copies nothing across. */
 export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
     getClustering(): Promise<Clustering>;
+    /** The k-colour palette of the clustering. */
     getPalette(k: number): Promise<Palette>;
+    /** Palette, weights and shares of the k-colour cut. */
     getSwatches(k: number): Promise<Swatches>;
+    /** The error curve and totals of the clustering. */
     getClusteringInfo(): Promise<ClusteringInfo>;
     /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
     chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;
@@ -96,8 +99,11 @@ export interface ClusteringHandle<Image extends ImageLike = ImageLike> {
  * There is no `getClustering()`: you passed the clustering in and still have it.
  */
 export interface LoadedClusteringHandle {
+    /** The k-colour palette of the clustering. */
     getPalette(k: number): Promise<Palette>;
+    /** Palette, weights and shares of the k-colour cut. */
     getSwatches(k: number): Promise<Swatches>;
+    /** The error curve and totals of the clustering. */
     getClusteringInfo(): Promise<ClusteringInfo>;
     /** The main entry's `clustering.chooseFrom`, run in the worker on the kept clustering: picks `k` entries of a fixed palette. Takes `colorSpace` and `signal`. */
     chooseFrom(palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;

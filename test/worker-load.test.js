@@ -139,4 +139,32 @@ describe('worker.load', () => {
         expect(await loaded.chooseFrom(fixed, 3, { colorSpace: 'oklab' })).toEqual(await clustering.chooseFrom(fixed, 3, { colorSpace: 'oklab' }));
     });
 
+    it('with transfer: true moves the clustering, before the worker has started and once it is running, and the handle still cuts', async () => {
+        const clustering = await ac.buildClustering(image);
+        const expected = await ac.getPalette(image, 5);
+        const moving = createWorker({ transfer: true });
+        try {
+            // A clustering that is a whole buffer of its own: not yet started, the bytes are moved out of the caller's hands at once.
+            const first = new Uint8Array(clustering);
+            const pending = moving.load(first);
+            expect(first.length).toBe(0);
+            await using early = await pending;
+            expect(await early.getPalette(5)).toEqual(expected);
+            // Running: posting moves them, as it does for an image.
+            const second = new Uint8Array(clustering);
+            await using later = await moving.load(second);
+            expect(second.length).toBe(0);
+            expect(await later.getPalette(5)).toEqual(expected);
+            // A view into part of a larger buffer is copied, not moved.
+            const inside = new Uint8Array(clustering.length + 8);
+            inside.set(clustering, 4);
+            const view = inside.subarray(4, 4 + clustering.length);
+            await using copied = await moving.load(view);
+            expect(view.length).toBe(clustering.length);
+            expect(await copied.getPalette(5)).toEqual(expected);
+        } finally {
+            await moving.terminate();
+        }
+    });
+
 });

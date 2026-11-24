@@ -263,7 +263,7 @@ describe('recipes in the guides', () => {
     // Pixels per chosen thread, most used first, leaving out threads no pixel was mapped to (it happens, more often with
     // 'oklab'). `options` are quantizeToIndicesWithPalette's: dither as you will stitch, and pass `transparent: true` for
     // an image with transparent areas, or they are counted to the nearest thread.
-    async function countThreads(image, threads, choice, options) {
+    async function countThreads(image, choice, options) {
       const { indices, transparentIndex } = await quantizeToIndicesWithPalette(image, choice.palette, options);
       const counts = new Array(choice.indices.length).fill(0);
       for (const s of indices) {if (s !== transparentIndex) {counts[s]++;}}
@@ -324,13 +324,13 @@ describe('recipes in the guides', () => {
         for (const options of [undefined, { colorSpace: 'oklab' }]) {
             const choice = await clustering.chooseFrom(threads, 3, options);
             expect(choice.indices).toEqual([2, 4, 5]);
-            expect(await countThreads(image, threads, choice, { transparent: true })).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }]);
+            expect(await countThreads(image, choice, { transparent: true })).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 2, count: 10 }]);
         }
         // Without `transparent`, the transparent pixels (stored black) go to their nearest thread; and a thread no pixel
         // is nearest to (white, here) is left out.
         const wide = await clustering.chooseFrom(threads, 5);
         expect(wide.indices).toEqual([0, 1, 2, 4, 5]);
-        expect(await countThreads(image, threads, wide)).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 0, count: 10 }, { thread: 2, count: 10 }]);   // ties keep the ascending order
+        expect(await countThreads(image, wide)).toEqual([{ thread: 4, count: 50 }, { thread: 5, count: 30 }, { thread: 0, count: 10 }, { thread: 2, count: 10 }]);   // ties keep the ascending order
     });
 
     it('the guides\' chooseFrom call gives the same choice through a loaded worker handle', async () => {

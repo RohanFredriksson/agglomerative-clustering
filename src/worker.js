@@ -615,6 +615,8 @@ const makeWorker = (options, allowScript) => {
             getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
             // Takes the signal only: the main entry's chooseFrom takes no progress callback, so one given crosses as null for
             // the thread to reject with the main entry's own error.
+            // That relies on the thread injecting a progress poster only for calls that have one (see `optionsIndex` in
+            // worker-thread.js): the null is then the only onProgress it sees, so its own option check rejects it.
             chooseFrom: (palette, k, chooseOptions) => {
                 let taken;
                 try {taken = takeControls(chooseOptions, false);} catch (error) {return Promise.reject(error);}

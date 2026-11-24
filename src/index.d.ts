@@ -147,15 +147,15 @@ export class Clustering extends Uint8Array {
     constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
     /** Only a type: what makes a `Clustering` different from a palette or other bytes to the compiler. */
     readonly [clusteringBrand]: true;
-    /** The k-colour palette, as `getPaletteFromClustering(this, k)`. Takes no options. Runs on the calling thread, with the main entry. */
+    /** The k-colour palette of this clustering. Takes no options. Runs on the calling thread, with the main entry. */
     getPalette(this: Clustering, k: number): Promise<Palette>;
-    /** Palette, weights and shares, as `getSwatchesFromClustering(this, k)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    /** Palette, weights and shares of the k-colour cut. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
     getSwatches(this: Clustering, k: number): Promise<Swatches>;
-    /** The error curve and totals, as `getClusteringInfo(this)`. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
+    /** The error curve and totals of this clustering. Needs a 3.x clustering. Runs on the calling thread, with the main entry. */
     getClusteringInfo(this: Clustering): Promise<ClusteringInfo>;
-    /** Maps `image` to the k-colour palette, as `quantizeFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    /** Maps `image` to this clustering's k-colour palette, returning the image's type. Runs on the calling thread, with the main entry. */
     quantize<I extends ImageLike>(this: Clustering, image: I, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
-    /** Indexed output, as `quantizeToIndicesFromClustering(image, this, k, options)`. Runs on the calling thread, with the main entry. */
+    /** Maps `image` to this clustering's k-colour palette as palette indices. Runs on the calling thread, with the main entry. */
     quantizeToIndices(this: Clustering, image: ImageLike, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
     /** Chooses the k entries of `palette` that best represent the clustered image: their positions and colours. Runs on the calling thread, with the main entry. */
     chooseFrom(this: Clustering, palette: PaletteLike, k: number, options?: ChooseOptions): Promise<PaletteChoice>;

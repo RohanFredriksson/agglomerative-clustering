@@ -103,13 +103,15 @@ async function run() {
     try {
         checks.loadAndChooseFrom = typeof worker.load !== 'function' || await (async () => {
             const loaded = await worker.load(clustering);
-            const chart = await ac.getPalette(image, 12);
-            const viaHandle = await loaded.chooseFrom(chart, 6);
-            const viaMethod = await clustering.chooseFrom(chart, 6);
-            const same = equal(await loaded.getPalette(8), await clustering.getPalette(8))
-                && equal(viaHandle.indices, viaMethod.indices) && equal(viaHandle.palette, viaMethod.palette);
-            await loaded.release();
-            return same;
+            try {
+                const chart = await ac.getPalette(image, 12);
+                const viaHandle = await loaded.chooseFrom(chart, 6);
+                const viaMethod = await clustering.chooseFrom(chart, 6);
+                return equal(await loaded.getPalette(8), await clustering.getPalette(8))
+                    && equal(viaHandle.indices, viaMethod.indices) && equal(viaHandle.palette, viaMethod.palette);
+            } finally {
+                await loaded.release();
+            }
         })();
     } catch (error) {
         checks.loadAndChooseFrom = false;

@@ -14,6 +14,7 @@ Upgrading from an earlier major version, and replacing names deprecated along th
 | `quantizeFromClustering(image, c, k)` | `c.quantize(image, k)` | `….quantize(image, k)` |
 | `quantizeToIndicesFromClustering(image, c, k)` | `c.quantizeToIndices(image, k)` | `….quantizeToIndices(image, k)` |
 
+- **A loaded handle has no `…WithPalette` methods and no `getClustering()`.** It holds no image, and you already have the clustering; to map with a palette use `worker.quantizeWithPalette(image, palette)` (see [the worker entry](api.md#worker-entry)).
 - **The methods give the same results, defaults and errors.** The image still comes first in the mapping methods, as in the function forms. A clustering read from storage has no methods until `new Clustering(bytes)`.
 - **A one-off call in a worker** (`await worker.getPaletteFromClustering(c, k)`) becomes `await using loaded = await worker.load(c)` and a call on `loaded`: one copy of the clustering is sent, and you can cut it as often as you like.
 - **Mocks and spies:** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`; spy on the method of a real clustering instead.

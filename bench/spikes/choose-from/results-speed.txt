@@ -1,0 +1,17 @@
+24 Kodak photos; clustering.chooseFrom, ms: median, max
+threads (584), k = 12, rgb           17.6    41.2
+threads (584), k = 12, oklab         22.1    41.9
+threads (584), k = 24, rgb           24.3    43.0
+threads (584), k = 24, oklab         33.5    43.0
+threads (584), k = 40, rgb           33.9    42.1
+threads (584), k = 40, oklab         48.8    56.0
+dense (1000), k = 12, rgb            25.5    39.4
+dense (1000), k = 12, oklab          30.4    49.2
+dense (1000), k = 24, rgb            31.4    46.5
+dense (1000), k = 24, oklab          47.7    67.1
+dense (1000), k = 40, rgb            47.5    62.7
+dense (1000), k = 40, oklab          64.0    86.2
+random (4096), k = 12, rgb          109.8   216.2
+random (4096), k = 12, oklab        167.9   315.8
+random (4096), k = 40, rgb          250.4   360.9
+random (4096), k = 40, oklab        304.1   471.0
