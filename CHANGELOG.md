@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 3.7.0
 
 `signal` and `onProgress` now work while mapping, in every function that takes an image and in both entries. Output is unchanged; an abort during mapping now rejects instead of letting the call finish (see Changed).
 
