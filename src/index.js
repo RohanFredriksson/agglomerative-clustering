@@ -467,7 +467,8 @@ const check = (k) => {
 //   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
 //   dither:     false (default), true or a strength in [0, 1] (Floyd-Steinberg), a method name, or { method, strength, steps } (see parseDither)
 //   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
-//   signal, onProgress: an AbortSignal and a progress callback, which make the clustering run in slices (see clusterInSlices)
+//   signal, onProgress: an AbortSignal and a progress callback, which make the clustering and the mapping run in slices
+//               (see clusterInSlices and mapInSlices)
 //   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255: pixels with alpha below it are left out of clustering (and the rest count whole);
 //               indexed output also gives them their own entry, which counts towards k
 
@@ -485,7 +486,7 @@ const parseOptions = (options, allowed, image) => {
     for (const key of Object.keys(options)) {
         if (!allowed.includes(key)) {
             const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
-                : key === 'onProgress' && allowed.includes('signal') ? ' The functions that only map pixels take just signal, checked before they start: for progress, map the image in strips of rows (https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#cancelling-or-showing-progress-while-mapping-a-large-image).' : '';
+                : '';
             throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
         }
     }
@@ -554,9 +555,7 @@ const parseOptions = (options, allowed, image) => {
 const controlOptions = ['signal', 'onProgress'];
 const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
 const quantizeOptions = [...clusterOptions, 'dither', 'width'];
-// The functions that only map pixels take just `signal`, checked before they start: mapping runs in one piece (milliseconds
-// for a photo, seconds for a large image dithered; the guides show how to map in strips or cancel through a worker).
-const mapOptions = ['colorSpace', 'dither', 'width', 'signal'];
+const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
 const quantizeIndexOptions = quantizeOptions;
 const mapIndexOptions = [...mapOptions, 'transparent'];
 
@@ -617,7 +616,7 @@ const call = (wasm, buffers, fn, precision) => {
 };
 
 // ----- Interruptible work -------------------------------------------------------------------------------------------
-// A call given a `signal` or an `onProgress` runs its clustering in slices of about `sliceMs` milliseconds, giving the
+// A call given a `signal` or an `onProgress` runs its clustering and its mapping in slices of about `sliceMs` milliseconds, giving the
 // event loop a turn between them: the signal is checked (and progress reported) each time, other tasks can run, and
 // in a worker thread the cancel message is read. Without either the call runs in one go, as it always did. The
 // result is the same either way: the slices are the same steps in the same order.
@@ -655,6 +654,20 @@ const reporter = (o) => {
 
 const isControlled = (o) => o.signal !== undefined || o.onProgress !== undefined;
 
+// The share of quantize's and quantizeToIndices' progress that clustering takes, the rest being mapping. It only shapes
+// the progress bar, so it is internal and can be retuned. Mapping's time relative to clustering's, measured on the 24
+// Kodak photos (medians; bench/spikes/slicing-mapping/split.mjs → results-split.txt): undithered 0.1, Floyd–Steinberg
+// 0.45, Atkinson 0.37, ordered 0.8 at 16 steps and about proportional to the steps; clustering below full precision is
+// about 2.5 times faster. Steps not given are 64 for a palette of two colours, else 16, as in the C.
+const mappingCost = [0.45, 0.37];
+const clusteringShare = (o, k) => {
+    const dithered = o.dither > 0 && o.width > 0;
+    const ordered = dithered && o.ditherMethod === 2;
+    const steps = o.ditherSteps || (k <= 2 ? 64 : 16);
+    const cost = (!dithered ? 0.1 : ordered ? 0.8 * steps / 16 : mappingCost[o.ditherMethod]) * (o.precision < 8 ? 2.5 : 1);
+    return 1 / (1 + cost);
+};
+
 // Clusters in slices and returns the clustering. `share` is the part of the whole call's progress this takes.
 const clusterInSlices = async (wasm, image, o, report, share) => {
     checkAborted(o.signal);
@@ -682,6 +695,52 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
     } finally {
         if (!aborted) {
             if (job) {wasm._clustering_job_free(job);}
+            wasm._free(imagePointer);
+            retireIfLarge(wasm);
+        }
+    }
+};
+
+// Maps in slices and returns the output's payload, as `call` does for the one-shot exports. The palette is
+// `source.palette`, or cut from `source.clustering` to `source.k` colours (a negative `colorSpace` then matches in the
+// clustering's space). `indices` chooses indexed output, with `cutoff`. Progress goes from `from` to 1. A call that
+// finishes in its first slice doesn't yield.
+const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, report, from) => {
+    checkAborted(o.signal);
+    const bytes = source.palette || source.clustering;
+    const imagePointer = allocate(wasm, image.data.length);
+    let sourcePointer = 0;
+    let job = 0;
+    let aborted = false;
+    try {
+        sourcePointer = allocate(wasm, bytes.length);
+        wasm.HEAPU8.set(image.data, imagePointer);
+        wasm.HEAPU8.set(bytes, sourcePointer);
+        const palette = source.palette ? sourcePointer : 0, clustering = source.clustering ? sourcePointer : 0;
+        job = wasm._mapping_job_start(imagePointer, image.data.length, codes[image.format], palette, source.palette ? bytes.length : 0, clustering, source.clustering ? bytes.length : 0, source.k || 0, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, indices ? 1 : 0, cutoff);
+        if (!job) {throw fail('invalid-clustering', "Invalid clustering: its records don't fit together, so it is damaged or isn't a clustering. Cluster the image again.", 'clustering');}
+        // The job has its own copy of the palette, so the source can go now.
+        wasm._free(sourcePointer);
+        sourcePointer = 0;
+        report(from);
+        while (true) {
+            const progress = wasm._mapping_job_step(job, sliceMs);
+            if (progress >= 1000) {break;}
+            report(from + (1 - from) * progress / 1000);
+            await yieldNow();
+            checkAborted(o.signal);
+        }
+        const pointer = wasm._mapping_job_result(job);
+        try {return unpack(wasm, pointer);} finally {wasm._free(pointer);}
+    } catch (error) {
+        if (!isAbort(error)) {throw error;}
+        aborted = true;
+        discard(wasm);
+        throw outOfMemory(image.data.length, o.precision);
+    } finally {
+        if (!aborted) {
+            if (job) {wasm._mapping_job_free(job);}
+            if (sourcePointer) {wasm._free(sourcePointer);}
             wasm._free(imagePointer);
             retireIfLarge(wasm);
         }
@@ -865,9 +924,9 @@ export const quantize = async (image, k, options) => {
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(wasm, image, o, report, 0.9);
-        checkAborted(o.signal);
-        const mapped = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width)));
+        const share = clusteringShare(o, k);
+        const clustering = await clusterInSlices(wasm, image, o, report, share);
+        const mapped = wrap(await mapInSlices(wasm, image, {clustering, k}, o.colorSpace, false, 0, o, report, share));
         report(1);
         return mapped;
     }
@@ -890,6 +949,13 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
 
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const mapped = wrap(await mapInSlices(wasm, image, {clustering, k}, colorSpace, false, 0, o, report, 0));
+        report(1);
+        return mapped;
+    }
+
     const result = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width)));
     return result;
 
@@ -909,6 +975,13 @@ export const quantizeWithPalette = async (image, palette, options) => {
     const wasm = Module || await acquire();
     checkAborted(o.signal);
 
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const mapped = wrap(await mapInSlices(wasm, image, {palette}, space, false, 0, o, report, 0));
+        report(1);
+        return mapped;
+    }
+
     const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width)));
     return result;
 
@@ -926,9 +999,9 @@ export const quantizeToIndices = async (image, k, options) => {
 
     if (isControlled(o)) {
         const report = reporter(o);
-        const clustering = await clusterInSlices(wasm, image, o, report, 0.9);
-        checkAborted(o.signal);
-        const indexed = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, o.colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent)), original, colorSpaceName(o.colorSpace));
+        const share = clusteringShare(o, k);
+        const clustering = await clusterInSlices(wasm, image, o, report, share);
+        const indexed = unpackIndices(await mapInSlices(wasm, image, {clustering, k}, o.colorSpace, true, o.transparent, o, report, share), original, colorSpaceName(o.colorSpace));
         report(1);
         return indexed;
     }
@@ -954,6 +1027,13 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
     // The cutoff the clustering was made with is the default, so clustering and mapping agree unless a cutoff is named.
     const cutoff = o.transparentGiven ? o.transparent : header.transparent;
 
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const indexed = unpackIndices(await mapInSlices(wasm, image, {clustering, k}, colorSpace, true, cutoff, o, report, 0), original, colorSpaceName(header.colorSpace));
+        report(1);
+        return indexed;
+    }
+
     const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, cutoff)), original, colorSpaceName(header.colorSpace));
     return result;
 
@@ -973,6 +1053,13 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     warn(o.signal);
     const wasm = Module || await acquire();
     checkAborted(o.signal);
+
+    if (isControlled(o)) {
+        const report = reporter(o);
+        const indexed = unpackIndices(await mapInSlices(wasm, image, {palette}, space, true, o.transparent, o, report, 0), original, paletteSpace);
+        report(1);
+        return indexed;
+    }
 
     const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent)), original, paletteSpace);
     return result;

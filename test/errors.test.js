@@ -84,7 +84,7 @@ describe('which argument an error is about', () => {
                 expect(await argumentOf(entry.getPaletteFromClustering(new Uint8Array(5), 2))).toBe('clustering');
                 expect(await argumentOf(entry.quantizeWithPalette(image, [300, 0, 0]))).toBe('palette');
                 expect(await argumentOf(entry.quantizeWithPalette(image, clustering))).toBe('palette');
-                expect(await argumentOf(entry.quantizeFromClustering(image, clustering, 4, { onProgress() {} }))).toBe('options.onProgress');
+                expect(await argumentOf(entry.quantizeFromClustering(image, clustering, 4, { onProgress: 5 }))).toBe('options.onProgress');
             }
         } finally {
             await worker.terminate();

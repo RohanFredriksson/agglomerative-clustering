@@ -19,12 +19,13 @@ async function main() {
     // @ts-expect-error A worker's own init takes no script: it is chosen with createWorker({ script }).
     await worker.init({ script: 'x.mjs' });
     const handle: ClusteringHandle<ImageData> = await worker.cluster(imageData, { signal: controller.signal, onProgress: (p) => void p });
-    const q: ImageData = await handle.quantize(8, { dither: true, signal: controller.signal });
+    const q: ImageData = await handle.quantize(8, { dither: true, signal: controller.signal, onProgress: (p) => void p });
     const palette: Palette = await handle.getPalette(8);
     const info = await handle.getClusteringInfo();
     const mse: Float64Array = info.mse;
     const indexed = await handle.quantizeToIndices(16, { transparent: 128 });
     const edited: ImageData = await handle.quantizeWithPalette(palette, { dither: true, signal: controller.signal });
+    await worker.quantizeToIndicesWithPalette(imageData, palette, { onProgress: (p) => void p });
     const editedIndexed = await handle.quantizeToIndicesWithPalette(palette, { transparent: true });
     void [edited, editedIndexed];
     await handle.release();

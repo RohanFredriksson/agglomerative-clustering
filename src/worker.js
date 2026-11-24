@@ -284,7 +284,7 @@ const initOptions = (options, allowScript) => {
 
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
-const takeControls = (options, progressAllowed = true, ditherAllowed = true) => {
+const takeControls = (options, ditherAllowed = true) => {
     // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
     // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
@@ -303,12 +303,12 @@ const takeControls = (options, progressAllowed = true, ditherAllowed = true) => 
         options.dither = copy;
     }
     // The signal and the progress callback can't cross to the worker, so they are kept here and the worker gets its own.
-    // A wrong one (or a callback where only a signal is taken) crosses as `null` instead, which the worker's validation
+    // A wrong one crosses as `null` instead, which the worker's validation
     // rejects with the main entry's error, after the image and k: the main entry checks the options last. (This relies on
     // those messages not echoing the value: if they ever say what they got, send a stand-in that reads the same.)
     const {signal, onProgress} = options;
     const badSignal = signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function');
-    const badProgress = onProgress !== undefined && (!progressAllowed || typeof onProgress !== 'function');
+    const badProgress = onProgress !== undefined && typeof onProgress !== 'function';
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
     if (badSignal || badProgress) {
         return {options: {...rest, ...(badSignal ? {signal: null} : {}), ...(badProgress ? {onProgress: null} : {})}, signal: undefined, onProgress: undefined};
@@ -331,10 +331,8 @@ const abortReason = (signal) => signal.reason !== undefined ? signal.reason : ne
 
 const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
-// These only map pixels, so they take a signal but no progress callback (see mapOptions in index.js).
 // The functions that only cluster, and so take no dither option.
 const clusteringOnlyFunctions = ['getClustering', 'getPalette', 'getSwatches'];
-const mappingOnlyFunctions = ['quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
 const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
 
 // Calls each worker's `abandon` once the worker made by createWorker() has been garbage-collected (see `abandoned`).
@@ -527,7 +525,7 @@ const makeWorker = (options, allowScript) => {
             const origin = new Error();
             return (async () => {
                 const position = optionsPosition[name];
-                const {options, signal, onProgress} = takeControls(rest[position], !mappingOnlyFunctions.includes(name), !clusteringOnlyFunctions.includes(name));
+                const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
                 let args = rest.slice();
                 if (position < args.length) {args[position] = options;}
                 if (signal && signal.aborted) {
@@ -585,7 +583,7 @@ const makeWorker = (options, allowScript) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
-            const {options, signal, onProgress} = takeControls(clusterOptions, true, false);
+            const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const warning = bareImageWarning(image);
@@ -616,7 +614,7 @@ const makeWorker = (options, allowScript) => {
             // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
             const withControls = (method, leading, mapOptions) => {
                 let taken;
-                try {taken = takeControls(mapOptions, false);} catch (error) {return Promise.reject(error);}
+                try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
                 return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
             };
             // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,

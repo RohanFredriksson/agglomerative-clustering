@@ -16,7 +16,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread.
 - **Accurate and fast.** The lowest average error of the six JavaScript quantizers we benchmarked, at about the speed of libimagequant ([benchmarks](#benchmarks)).
-- **Small and portable.** About 82 KB of WebAssembly (40 KB gzipped)<!-- bench/spikes/wasm-size/results-size.txt -->, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
+- **Small and portable.** About 86 KB of WebAssembly (41 KB gzipped)<!-- bench/spikes/slicing-mapping/results-size.txt -->, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.
 
 ## Install
 

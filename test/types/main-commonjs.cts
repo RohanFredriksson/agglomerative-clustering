@@ -45,6 +45,10 @@ async function main() {
     const c: RawImage = await quantize(raw, 8);
     const d: Uint8Array = await quantizeFromClustering(bytes, clustering, 8, { signal: controller.signal });
     const e: ImageData = await quantizeWithPalette(imageData, palette);
+    // From 3.7.0 the functions that map take onProgress too.
+    const mappedWithProgress: ImageData = await quantizeWithPalette(imageData, palette, { dither: 'ordered', signal: controller.signal, onProgress: (p) => void p });
+    void mappedWithProgress;
+    await clustering.quantize(imageData, 4, { onProgress: (p) => void p });
 
     const indexed: IndexedImage = await quantizeToIndices(imageData, 255, { transparent: true });
     const cutoff: IndexedImage = await quantizeToIndices(bytes, 255, { transparent: 200, signal: controller.signal });

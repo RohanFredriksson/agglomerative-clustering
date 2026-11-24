@@ -2,7 +2,23 @@
 
 ## Unreleased
 
+`signal` and `onProgress` now work while mapping, in every function that takes an image and in both entries. Output is unchanged; an abort during mapping now rejects instead of letting the call finish (see Changed).
+
+### Added
+- **`onProgress` on the functions that map** (`quantizeWithPalette`, `quantizeFromClustering`, `quantizeToIndicesWithPalette`, `quantizeToIndicesFromClustering`, the `Clustering` methods `quantize` and `quantizeToIndices`, and the worker entry's functions and handle methods). It was rejected with `invalid-argument`. `quantize` and `quantizeToIndices` now report through the mapping too, where they stopped at about 0.9 until the end.
+- **`signal` takes effect while mapping.** With `signal` or `onProgress`, mapping runs in slices of about 10 ms, with every dither method, as clustering does, so an abort stops it within a slice. In the worker entry the thread now stops too, so calls queued behind a cancelled mapping start at once. Slices measured 10 to 16 ms on a 6.3-megapixel photo and 4 megapixels of noise, up to 39 ms with ordered dithering at 64 steps and 4096 colours<!-- bench/spikes/slicing-mapping/slices.mjs → results-slices.txt -->. The result is byte for byte the same as one call's.
+- In TypeScript, `MappingOptions` (and so `MappingIndexOptions`) now extends `ProgressOptions` instead of `CancelOptions`.
+
+### Changed
+- **An abort during mapping now rejects** with the signal's reason. Before, the mapping finished and the call resolved (in the worker entry, the caller already got the rejection at once). The docs listed this as a limitation, "Mapping can't be interrupted"; docs/stability.md now says that how soon an abort takes effect can improve in a minor release.
+- **Calls that pass only `signal` to a function that maps are sliced**, which yields to the event loop between slices. They take within about 3% of the time of one call from 768×512 up, and under 0.3 ms more on a 64×64 image; a call that finishes in its first slice doesn't yield<!-- bench/spikes/slicing-mapping/overhead.mjs → results-overhead.txt -->. Calls without `signal` or `onProgress` are unchanged, and as fast as in 3.6.0.
+
+### Performance
+- The WebAssembly is 3.8 KB larger: 86 KB, 41 KB gzipped (it was 82 KB and 40 KB)<!-- bench/spikes/slicing-mapping/results-size.txt -->.
+
 ### Docs
+- **The guides' recipes for cancelling and showing progress while mapping are gone**: `mapCancellably` (a worker of its own) and `mapInStrips` (strips of rows). Pass `signal` and `onProgress` instead. If you copied them, you can delete them; they still work. The strips left a faint seam at each strip edge with error diffusion and made ordered dithering up to 40% slower; the built-in slices are exact and cost about 3%. For 3.6 and older, the guides link the recipes' last version.
+- The guides' "Workers" section no longer says that a call already mapping finishes, and drops the render loop built around it. The API reference's "In a worker the work in the worker stops too" is now true for mapping; until now it held only for clustering.
 - **Choosing N colours from a fixed palette is 5 to 25 times faster.** The guides' `improveThreads` scored every (thread, position) swap with its own pass over the swatches; it now gets every position's score for a thread from one pass. It chooses the same threads (tested against the old search), and takes 18 ms for 12 of 584 threads and 37 ms for 40 of 1000, where it took 149 and 907 ms<!-- bench/spikes/fixed-subset-speed/speed.mjs → results-speed.txt -->. Copy the new version if you use it. The guides no longer suggest a Web Worker of your own for large charts, and say that the recipe needs the main entry.
 
 ## 3.6.0

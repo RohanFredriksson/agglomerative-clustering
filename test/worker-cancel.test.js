@@ -85,9 +85,9 @@ describe('a worker call with a signal or onProgress', () => {
         expect(thirdResult).toEqual(await ac.buildPalette(small, 4));
     }, 60000);
 
-    it('skips cancelled calls queued behind mapping calls, which run in one piece', async () => {
-        // Mapping doesn't yield to the event loop the way a sliced clustering does, so a cancel can only be read between
-        // calls. Ten slow mappings sent at once with the first nine cancelled at once should cost about one mapping.
+    it('skips cancelled calls queued behind mapping calls', async () => {
+        // Ten slow mappings sent at once with the first nine cancelled at once should cost about one mapping: the queued
+        // ones are skipped (and from 3.7.0 the one running, sliced, would stop too).
         const handle = await worker.cluster(noise(300, 200, 3));
         const dither = { method: 'ordered', steps: 32 };
         const one = await timed(handle.quantize(64, { dither }));
@@ -122,7 +122,9 @@ describe('a worker call with a signal or onProgress', () => {
 
         const handle = await worker.cluster(small, { signal: new AbortController().signal });
         expect(await handle.quantize(4, { signal: new AbortController().signal })).toEqual(await worker.quantizeFromClustering(small, await ac.buildClustering(small), 4));
-        await expect(handle.quantize(4, { onProgress: () => {} })).rejects.toMatchObject({ code: 'invalid-argument' });
+        const progress = [];
+        expect(await handle.quantize(4, { onProgress: (v) => progress.push(v) })).toEqual(await worker.quantizeFromClustering(small, await ac.buildClustering(small), 4));
+        expect(progress[progress.length - 1]).toBe(1);
         const aborted = new AbortController();
         aborted.abort();
         await expect(handle.quantize(4, { signal: aborted.signal })).rejects.toMatchObject({ name: 'AbortError' });

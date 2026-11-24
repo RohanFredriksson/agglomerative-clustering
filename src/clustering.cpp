@@ -780,11 +780,7 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 
 }
 
-// Maps each pixel to its nearest palette colour, matching in `color_space`. With `dither` > 0 the
-// remaining error is diffused to neighbouring pixels (serpentine Floyd-Steinberg, scaled by `dither`), which
-// needs the image's `width`. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1
-// when the palette is empty.
-// What map_pixels does with each pixel's index: write its colour (_quantize) or the index itself (_quantize_indices). One
+// What a MappingJob does with each pixel's index: write its colour (_quantize) or the index itself (_quantize_indices). One
 // type with a mode, not a template parameter, so the pixel loops are compiled once (they are most of the module; two
 // copies cost about 19 KB of WebAssembly). The mode test is the same for every pixel, so it predicts perfectly.
 struct PixelSink {
@@ -815,417 +811,614 @@ struct PixelSink {
     }
 };
 
-void map_pixels(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, const PixelSink& emit) {
+// The mapping of one image to one palette, run in slices (see step): everything that lives across pixels, set up once
+// in the constructor, so a slice resumes exactly where the last one stopped. Without a time budget step() runs the
+// whole image in one go, never reading the clock: the one-shot exports (_quantize, _quantize_indices) take exactly
+// the steps they always did. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1 when the
+// palette is empty. With `dither` > 0 the remaining error is diffused to neighbouring pixels (see the methods below),
+// which needs the image's `width`.
+class MappingJob {
 
-    const ColorCoordinates space(color_space);
-    std::vector<AgglomerativeClustering::KDTree::Point> points;
+    typedef AgglomerativeClustering::KDTree::Point Point;
+    static constexpr int memo_bits = 14;
+    enum class Method {plain, floyd_steinberg, atkinson, ordered};
+
+    const uint8_t* image_data;
+    ColorSpace color_space;
+    ColorCoordinates space;
+    PixelLayout L;
+    size_t pixels;
+    size_t width;
+    size_t height = 0;
+    int skip_below;
+    PixelSink emit;
+    Method method = Method::plain;
+    size_t cursor = 0;  // how many pixels are done, in the order the method visits them (serpentine rows dithered)
+
+    std::vector<Point> points;
     std::vector<uint32_t> keys;
     // The indexes are built over distinct colours only: a supplied palette can repeat a colour any number of times, and
     // equal entries would all land in the same cell lists and tree leaves, making each lookup a pass over the repeats
     // (a 200,000-entry palette of one colour took seconds for a thousand pixels). Equal entries tie, and ties go to
     // the first of them, so `first[u]` is the palette index of distinct colour `u`'s first occurrence.
     std::vector<int32_t> first;
-    AgglomerativeClustering::AgglomerativeHistogram seen;
-
-    for (size_t i = 0; i + 2 < palette_length; i += 3) {
-        const uint32_t key = (uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]);
-        if (seen.add(key) < points.size()) {continue;}
-        points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
-        keys.push_back(key);
-        first.push_back(int32_t(i / 3));
-    }
-
-    // Up to 1024 colours a lazily built cell index answers lookups fastest (2.5 to 3 times faster than the k-d tree
-    // from 257 to 1024 colours, on photos and random palettes). Each cell it builds costs a pass over the palette, so
-    // larger palettes (only through a custom palette) use the k-d tree, which wins from about 4096. Both give the same
-    // answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
-    const bool small = points.size() <= 1024;
+    bool small = true;
     AgglomerativeClustering::PaletteIndex cells;
     AgglomerativeClustering::KDTree tree;
-    if (small) {cells.build(points, keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {tree.build(points, keys);}
-    auto lookup = [&](const AgglomerativeClustering::KDTree::Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
-
-    const PixelLayout L = layout_of(image_format);
-    const int increment = L.stride;
-    size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
-
     // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
     // pixels skip the lookup. A colour always maps to the same palette entry, so the output is unchanged.
-    constexpr int memo_bits = 14;
-    std::vector<uint32_t> memo_keys(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
-    std::vector<int32_t> memo_values(size_t(1) << memo_bits);
-    auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
-        uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
-        uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
-        if (memo_keys[slot] != key) {
-            memo_keys[slot] = key;
-            memo_values[slot] = lookup(space.match(r, g, b));
-        }
-        return memo_values[slot];
-    };
+    std::vector<uint32_t> memo_keys;
+    std::vector<int32_t> memo_values;
 
-    // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
-    auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
+    // Dithering (see step for what each is)
+    float strength = 0.0f, limit = 0.0f, near = 0.0f, most = 0.0f;
+    std::vector<uint32_t> match_keys;
+    std::vector<Point> match_values;
+    std::vector<float> current, next;  // Floyd-Steinberg: the error for this row and the next
+    size_t atkinson_stride = 0;
+    std::vector<float> rows;           // Atkinson: three rows of error
+    // Ordered
+    size_t steps = 0;
+    float recipe_strength = 0.0f;
+    int recipe_bits = 0;
+    std::vector<uint32_t> recipe_keys;
+    std::vector<int32_t> recipes;
+    std::vector<uint64_t> brightness;
+    typedef int32_t i32x4 __attribute__((vector_size(16)));
+    bool scan = false;
+    size_t groups = 0;
+    std::vector<i32x4> scan_r, scan_g, scan_b;
+    std::vector<int32_t> scan_index;
 
-    if (dither <= 0.0 || width <= 0 || pixels % size_t(width) != 0 || points.empty()) {
-        for (size_t p = 0; p < pixels; p++) {
-            const uint8_t* pixel = image_data + p * increment;
-            emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
-        }
-        return;
-    }
+public:
 
-    // Error for the current and next rows, one pixel of padding on each side so neighbours need no checks.
-    const size_t height = pixels / size_t(width);
-    std::vector<float> current(3 * (size_t(width) + 2), 0.0f), next(3 * (size_t(width) + 2), 0.0f);
-    const float strength = float(std::min(dither, 1.0));
-    const float limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
-    // The colour a pixel should take (its own plus the error it was given) can lie outside the cube. Close to it (dark areas
-    // next to the palette's darkest colour) it is clamped to the cube, as most dithering does, and matched through the
-    // index. Further out, the palette can't reach the image's colours (saturated cyan with a 7-colour e-ink palette):
-    // clamping there would throw away the error that should move the next pixels to other entries, so the same entry
-    // (blue, for cyan) would be picked every time. There the target is kept as it is and matched exactly, by a pass over
-    // the palette: rare with palettes extracted from the image, and cheap with the small ones that can't cover it. The
-    // error a pixel receives is limited in length (not per channel, which would push it into a corner where several
-    // entries tie), so out-of-reach colours don't build it up without end and smear it across the image.
-    const float near = limit / 8.0f;
-    const float most = limit;
-    auto nearest_outside = [&](const float* wanted) {
-        int32_t best = 0;
-        double best_distance = std::numeric_limits<double>::infinity();
-        for (size_t i = 0; i < points.size(); i++) {
-            double distance = 0.0;
-            for (int c = 0; c < 3; c++) {
-                const double d = double(wanted[c]) - double(points[i][c]);
-                distance += d * d;
-            }
-            // Exact ties go to the smaller packed RGB key, as in the indexes (and the first of equal entries).
-            if (distance < best_distance || (distance == best_distance && keys[i] < keys[best])) {
-                best = int32_t(i);
-                best_distance = distance;
-            }
-        }
-        return best;
-    };
+    MappingJob(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, const PixelSink& emit)
+        : image_data(image_data), color_space(color_space), space(color_space), L(layout_of(image_format)), width(width > 0 ? size_t(width) : 0), skip_below(skip_below), emit(emit) {
 
-    // OKLab conversion costs three cube roots, so dithering in OKLab memoises each pixel's coordinates the same
-    // way as the lookups above.
-    std::vector<uint32_t> match_keys(color_space == ColorSpace::rgb ? 0 : size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
-    std::vector<AgglomerativeClustering::KDTree::Point> match_values(match_keys.size());
-    auto match = [&](uint8_t r, uint8_t g, uint8_t b) -> AgglomerativeClustering::KDTree::Point {
-        if (color_space == ColorSpace::rgb) {return {r, g, b};}
-        uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
-        uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
-        if (match_keys[slot] != key) {
-            match_keys[slot] = key;
-            match_values[slot] = space.match(r, g, b);
+        this->pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
+        AgglomerativeClustering::AgglomerativeHistogram seen;
+        for (size_t i = 0; i + 2 < palette_length; i += 3) {
+            const uint32_t key = (uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]);
+            if (seen.add(key) < this->points.size()) {continue;}
+            this->points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
+            this->keys.push_back(key);
+            this->first.push_back(int32_t(i / 3));
         }
-        return match_values[slot];
-    };
 
-    // The colour a pixel should take is its own plus the error it was given, that error limited in length (see `most`).
-    // Clears the error once read.
-    auto carry = [&](const AgglomerativeClustering::KDTree::Point& base, float* e, float* wanted) {
-        const float length = std::sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
-        const float scale = length > most ? most / length : 1.0f;
-        for (int c = 0; c < 3; c++) {
-            wanted[c] = float(base[c]) + e[c] * scale;
-            e[c] = 0.0f;
-        }
-    };
+        // Up to 1024 colours a lazily built cell index answers lookups fastest (2.5 to 3 times faster than the k-d tree
+        // from 257 to 1024 colours, on photos and random palettes). Each cell it builds costs a pass over the palette, so
+        // larger palettes (only through a custom palette) use the k-d tree, which wins from about 4096. Both give the same
+        // answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
+        this->small = this->points.size() <= 1024;
+        if (this->small) {this->cells.build(this->points, this->keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {this->tree.build(this->points, this->keys);}
+        this->memo_keys.assign(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+        this->memo_values.resize(size_t(1) << memo_bits);
 
-    // The distinct-colour index nearest a wanted colour in matching coordinates, by the rule described above: near the
-    // cube it is clamped to the cube (in place, so the error left over is measured from the clamped colour) and looked
-    // up in the index; further out it is matched exactly, unclamped. Every method picks its colours through this.
-    auto pick = [&](float* wanted) -> int32_t {
-        bool outside = false;
-        for (int c = 0; c < 3; c++) {
-            if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
-        }
-        if (outside) {return nearest_outside(wanted);}
-        AgglomerativeClustering::KDTree::Point target;
-        for (int c = 0; c < 3; c++) {
-            wanted[c] = std::clamp(wanted[c], 0.0f, limit);
-            target[c] = uint16_t(std::lround(wanted[c]));
-        }
-        return color_space == ColorSpace::rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
-    };
+        if (dither <= 0.0 || this->width == 0 || this->pixels % this->width != 0 || this->points.empty()) {return;}
 
-    if (dither_method == 2) {
-        // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `steps` palette entries whose average is
-        // close to it, built by picking the entry nearest the colour plus the error carried so far, `steps` times. The
-        // recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8 Bayer matrix points to, so two
-        // colours blend in steps + 1 shades. A pixel's colour depends only on its own colour and position, so a still area
-        // of an animation dithers the same way in every frame, whatever changes elsewhere.
-        static constexpr uint8_t bayer[8][8] = {
-            { 0, 32,  8, 40,  2, 34, 10, 42}, {48, 16, 56, 24, 50, 18, 58, 26},
-            {12, 44,  4, 36, 14, 46,  6, 38}, {60, 28, 52, 20, 62, 30, 54, 22},
-            { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
-            {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
-        // Steps 0 is the default: 64 for two colours, where every one of the matrix's 65 shades shows on a smooth
-        // gradient (black and white), and 16 otherwise, where colours are closer together and 16 is where more steps
-        // stop paying for their time (each doubling about doubles it).
-        const size_t steps = dither_steps > 0 ? size_t(dither_steps) : points.size() <= 2 ? 64 : 16;
-        // The error a recipe carries is scaled by an internal strength, which the strength given maps to through a table
-        // per step count. Ordered dithering responds very steeply to it (with 64 steps, 0.01 already does a third of
-        // what 1 does), and more steeply the more steps there are. The table was measured so that the share of pixels a
-        // strength changes, against full strength, follows Floyd-Steinberg's at 0.05, 0.1, 0.25, 0.5 and 0.75 (on
-        // photos, gradients and a grey ramp, with black and white, four greys, seven e-ink inks, and 4 and 16 colours
-        // from each image), so a strength means about the same for every method. Between the knots it is interpolated
-        // geometrically, as the response is roughly logarithmic in the internal strength.
-        static constexpr double knot_strengths[7] = {0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0};
-        static constexpr double knot_internal[6][7] = {
-            {0.0, 0.0322, 0.0669, 0.167, 0.408, 0.691, 1.0},      // 2 steps
-            {0.0, 0.0180, 0.0392, 0.102, 0.278, 0.570, 1.0},      // 4
-            {0.0, 0.00930, 0.0208, 0.0576, 0.166, 0.411, 1.0},    // 8
-            {0.0, 0.00463, 0.0108, 0.0304, 0.0938, 0.285, 1.0},   // 16
-            {0.0, 0.00241, 0.00555, 0.0158, 0.0505, 0.179, 1.0},  // 32
-            {0.0, 0.00124, 0.00283, 0.00811, 0.0272, 0.107, 1.0}, // 64
-        };
-        size_t row = 0;
-        for (size_t m = steps; m > 2; m >>= 1) {row++;}
-        double internal = 1.0;
-        for (size_t k = 1; k < 7; k++) {
-            if (double(strength) <= knot_strengths[k]) {
-                const double t = (double(strength) - knot_strengths[k - 1]) / (knot_strengths[k] - knot_strengths[k - 1]);
-                const double low = knot_internal[row][k - 1], high = knot_internal[row][k];
-                internal = low == 0.0 ? t * high : low * std::pow(high / low, t);
-                break;
-            }
-        }
-        const float recipe_strength = float(internal);
-        // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (8 MB of
-        // entries, plus 4 MB of keys at 2 steps down to 0.5 MB at 16). Above that it holds 2^17, since a photo has 50,000
-        // to 100,000 colours and a slot two colours share is a recipe built twice: 16 MB of entries at 32 steps and 32 MB
-        // at 64 (the default for black and white), plus 0.5 MB of keys. It never holds more than twice the image's pixels,
-        // so a small image doesn't pay for a large table. A recipe depends on nothing but its colour, so the table
-        // changes speed only.
-        int recipe_bits = 21;
-        for (size_t m = steps; m > 1; m >>= 1) {recipe_bits--;}
-        recipe_bits = std::max(recipe_bits, 17);
-        int image_bits = 1;
-        while (image_bits < recipe_bits && (size_t(1) << image_bits) < 2 * pixels) {image_bits++;}
-        recipe_bits = std::max(4, std::min(recipe_bits, image_bits));
-        std::vector<uint32_t> recipe_keys(size_t(1) << recipe_bits, std::numeric_limits<uint32_t>::max());
-        std::vector<int32_t> recipes((size_t(1) << recipe_bits) * steps);
-        // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
-        // smaller packed RGB key, so the order, and the output, don't depend on the palette's order.
-        // Both go into one 64-bit order key per entry, so a comparison is one load and one compare.
-        std::vector<uint64_t> brightness(points.size());
-        for (size_t i = 0; i < points.size(); i++) {
-            const auto& point = points[i];
-            const uint32_t luma = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
-            brightness[i] = uint64_t(luma) << 32 | keys[i];
-        }
-        auto darker = [&](int32_t a, int32_t b) {return brightness[size_t(a)] < brightness[size_t(b)];};
-        // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For RGB
-        // palettes up to 96 colours a step compares the target with every colour, four at a time: squared 8-bit RGB
-        // distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a group, so
-        // keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the earlier
-        // position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`. The limit was
-        // measured on video frames (bench/spikes/recipe-reuse/sizes.mjs): the scan is 7-21% faster than the index from 65
-        // to 96 colours, about even at 128 and slower above (30% at 255).
-        typedef int32_t i32x4 __attribute__((vector_size(16)));
-        const bool scan = color_space == ColorSpace::rgb && points.size() <= 96;
-        const size_t groups = scan ? (points.size() + 3) / 4 : 0;
-        std::vector<i32x4> scan_r(groups), scan_g(groups), scan_b(groups);
-        std::vector<int32_t> scan_index(groups * 4, 0);
-        if (scan) {
-            std::vector<int32_t> order(points.size());
-            for (size_t i = 0; i < order.size(); i++) {order[i] = int32_t(i);}
-            AgglomerativeClustering::insertion_sort(order.data(), order.size(), [&](int32_t a, int32_t b) {return keys[size_t(a)] < keys[size_t(b)];});
-            for (size_t i = 0; i < groups * 4; i++) {
-                // Unused lanes repeat the last colour: never strictly nearer than it, and later in order, so never chosen.
-                const int32_t source = order[std::min(i, order.size() - 1)];
-                scan_r[i / 4][i % 4] = points[size_t(source)][0];
-                scan_g[i / 4][i % 4] = points[size_t(source)][1];
-                scan_b[i / 4][i % 4] = points[size_t(source)][2];
-                scan_index[i] = source;
-            }
-        }
-        auto scan_nearest = [&](const int32_t* target) -> int32_t {
-            const i32x4 tr = {target[0], target[0], target[0], target[0]};
-            const i32x4 tg = {target[1], target[1], target[1], target[1]};
-            const i32x4 tb = {target[2], target[2], target[2], target[2]};
-            i32x4 best = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
-            i32x4 best_group = {0, 0, 0, 0};
-            for (size_t g = 0; g < groups; g++) {
-                const i32x4 dr = scan_r[g] - tr, dg = scan_g[g] - tg, db = scan_b[g] - tb;
-                const i32x4 distance = dr * dr + dg * dg + db * db;
-                const i32x4 nearer = distance < best;
-                best = nearer ? distance : best;
-                const int32_t gi = int32_t(g);
-                const i32x4 here = {gi, gi, gi, gi};
-                best_group = nearer ? here : best_group;
-            }
-            size_t chosen = 0;
-            int32_t chosen_distance = INT32_MAX;
-            for (int lane = 0; lane < 4; lane++) {
-                const size_t position = size_t(best_group[lane]) * 4 + size_t(lane);
-                if (best[lane] < chosen_distance || (best[lane] == chosen_distance && position < chosen)) {
-                    chosen_distance = best[lane];
-                    chosen = position;
+        this->height = this->pixels / this->width;
+        this->strength = float(std::min(dither, 1.0));
+        this->limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
+        // The colour a pixel should take (its own plus the error it was given) can lie outside the cube. Close to it (dark
+        // areas next to the palette's darkest colour) it is clamped to the cube, as most dithering does, and matched
+        // through the index. Further out, the palette can't reach the image's colours (saturated cyan with a 7-colour
+        // e-ink palette): clamping there would throw away the error that should move the next pixels to other entries,
+        // so the same entry (blue, for cyan) would be picked every time. There the target is kept as it is and matched
+        // exactly, by a pass over the palette: rare with palettes extracted from the image, and cheap with the small
+        // ones that can't cover it. The error a pixel receives is limited in length (not per channel, which would push
+        // it into a corner where several entries tie), so out-of-reach colours don't build it up without end and smear
+        // it across the image.
+        this->near = this->limit / 8.0f;
+        this->most = this->limit;
+        // OKLab conversion costs three cube roots, so dithering in OKLab memoises each pixel's coordinates the same
+        // way as the lookups.
+        this->match_keys.assign(color_space == ColorSpace::rgb ? 0 : size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+        this->match_values.resize(this->match_keys.size());
+
+        if (dither_method == 2) {
+            this->method = Method::ordered;
+            // Steps 0 is the default: 64 for two colours, where every one of the matrix's 65 shades shows on a smooth
+            // gradient (black and white), and 16 otherwise, where colours are closer together and 16 is where more steps
+            // stop paying for their time (each doubling about doubles it).
+            this->steps = dither_steps > 0 ? size_t(dither_steps) : this->points.size() <= 2 ? 64 : 16;
+            // The error a recipe carries is scaled by an internal strength, which the strength given maps to through a
+            // table per step count. Ordered dithering responds very steeply to it (with 64 steps, 0.01 already does a
+            // third of what 1 does), and more steeply the more steps there are. The table was measured so that the share
+            // of pixels a strength changes, against full strength, follows Floyd-Steinberg's at 0.05, 0.1, 0.25, 0.5 and
+            // 0.75 (on photos, gradients and a grey ramp, with black and white, four greys, seven e-ink inks, and 4 and 16
+            // colours from each image), so a strength means about the same for every method. Between the knots it is
+            // interpolated geometrically, as the response is roughly logarithmic in the internal strength.
+            static constexpr double knot_strengths[7] = {0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0};
+            static constexpr double knot_internal[6][7] = {
+                {0.0, 0.0322, 0.0669, 0.167, 0.408, 0.691, 1.0},      // 2 steps
+                {0.0, 0.0180, 0.0392, 0.102, 0.278, 0.570, 1.0},      // 4
+                {0.0, 0.00930, 0.0208, 0.0576, 0.166, 0.411, 1.0},    // 8
+                {0.0, 0.00463, 0.0108, 0.0304, 0.0938, 0.285, 1.0},   // 16
+                {0.0, 0.00241, 0.00555, 0.0158, 0.0505, 0.179, 1.0},  // 32
+                {0.0, 0.00124, 0.00283, 0.00811, 0.0272, 0.107, 1.0}, // 64
+            };
+            size_t row = 0;
+            for (size_t m = this->steps; m > 2; m >>= 1) {row++;}
+            double internal = 1.0;
+            for (size_t k = 1; k < 7; k++) {
+                if (double(this->strength) <= knot_strengths[k]) {
+                    const double t = (double(this->strength) - knot_strengths[k - 1]) / (knot_strengths[k] - knot_strengths[k - 1]);
+                    const double low = knot_internal[row][k - 1], high = knot_internal[row][k];
+                    internal = low == 0.0 ? t * high : low * std::pow(high / low, t);
+                    break;
                 }
             }
-            return scan_index[chosen];
+            this->recipe_strength = float(internal);
+            // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (8 MB
+            // of entries, plus 4 MB of keys at 2 steps down to 0.5 MB at 16). Above that it holds 2^17, since a photo has
+            // 50,000 to 100,000 colours and a slot two colours share is a recipe built twice: 16 MB of entries at 32
+            // steps and 32 MB at 64 (the default for black and white), plus 0.5 MB of keys. It never holds more than
+            // twice the image's pixels, so a small image doesn't pay for a large table. A recipe depends on nothing but
+            // its colour, so the table changes speed only.
+            int bits = 21;
+            for (size_t m = this->steps; m > 1; m >>= 1) {bits--;}
+            bits = std::max(bits, 17);
+            int image_bits = 1;
+            while (image_bits < bits && (size_t(1) << image_bits) < 2 * this->pixels) {image_bits++;}
+            this->recipe_bits = std::max(4, std::min(bits, image_bits));
+            this->recipe_keys.assign(size_t(1) << this->recipe_bits, std::numeric_limits<uint32_t>::max());
+            this->recipes.resize((size_t(1) << this->recipe_bits) * this->steps);
+            // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
+            // smaller packed RGB key, so the order, and the output, don't depend on the palette's order. Both go into
+            // one 64-bit order key per entry, so a comparison is one load and one compare.
+            this->brightness.resize(this->points.size());
+            for (size_t i = 0; i < this->points.size(); i++) {
+                const Point& point = this->points[i];
+                const uint32_t luma = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
+                this->brightness[i] = uint64_t(luma) << 32 | this->keys[i];
+            }
+            // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For
+            // RGB palettes up to 96 colours a step compares the target with every colour, four at a time: squared 8-bit
+            // RGB distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a
+            // group, so keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the
+            // earlier position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`.
+            // The limit was measured on video frames (bench/spikes/recipe-reuse/sizes.mjs): the scan is 7-21% faster
+            // than the index from 65 to 96 colours, about even at 128 and slower above (30% at 255).
+            this->scan = color_space == ColorSpace::rgb && this->points.size() <= 96;
+            this->groups = this->scan ? (this->points.size() + 3) / 4 : 0;
+            this->scan_r.resize(this->groups);
+            this->scan_g.resize(this->groups);
+            this->scan_b.resize(this->groups);
+            this->scan_index.assign(this->groups * 4, 0);
+            if (this->scan) {
+                std::vector<int32_t> order(this->points.size());
+                for (size_t i = 0; i < order.size(); i++) {order[i] = int32_t(i);}
+                AgglomerativeClustering::insertion_sort(order.data(), order.size(), [&](int32_t a, int32_t b) {return this->keys[size_t(a)] < this->keys[size_t(b)];});
+                for (size_t i = 0; i < this->groups * 4; i++) {
+                    // Unused lanes repeat the last colour: never strictly nearer than it, and later in order, so never chosen.
+                    const int32_t source = order[std::min(i, order.size() - 1)];
+                    this->scan_r[i / 4][i % 4] = this->points[size_t(source)][0];
+                    this->scan_g[i / 4][i % 4] = this->points[size_t(source)][1];
+                    this->scan_b[i / 4][i % 4] = this->points[size_t(source)][2];
+                    this->scan_index[i] = source;
+                }
+            }
+        } else if (dither_method == 1) {
+            // Atkinson: three rows of error, with two pixels of padding on each side so no neighbour needs a check.
+            this->method = Method::atkinson;
+            this->atkinson_stride = 3 * (this->width + 4);
+            this->rows.assign(3 * this->atkinson_stride, 0.0f);
+        } else {
+            // Floyd-Steinberg: error for the current and next rows, one pixel of padding on each side.
+            this->method = Method::floyd_steinberg;
+            this->current.assign(3 * (this->width + 2), 0.0f);
+            this->next.assign(3 * (this->width + 2), 0.0f);
+        }
+    }
+
+    // How far the mapping has got, from 0 to 999.
+    int progress() const {
+        return this->pixels == 0 ? 0 : int(std::min<size_t>(999, this->cursor * 1000 / this->pixels));
+    }
+
+    // Maps pixels until `deadline` (with `timed`) or the end, and returns whether the whole image is done. The clock is
+    // read every 16,384 pixels without dithering and every 1,024 with it (a dithered pixel costs more; ordered also reads
+    // it after every 64 recipes it builds), and
+    // a slice may end anywhere in a row: everything the dithering methods carry from pixel to pixel is in the error
+    // rows and recipe table, which are members.
+    bool step(bool timed, double deadline) {
+        // The hot loops read these through local pointers: the output is written through a uint8_t pointer, which could
+        // alias the job's own fields, so reading them through `this` would reload them after every pixel.
+        const uint8_t* const image = this->image_data;
+        const PixelLayout L = this->L;
+        const size_t increment = size_t(L.stride);
+        // A reference, not a copy: a local copy let its body be inlined at every call site below (4 KB of WebAssembly)
+        // for no measured speed.
+        const PixelSink& emit = this->emit;
+        const ColorCoordinates space = this->space;
+        const size_t start = this->cursor;
+        const Point* const points = this->points.data();
+        const size_t count = this->points.size();
+        const uint32_t* const keys = this->keys.data();
+        const int32_t* const first = this->first.data();
+        uint32_t* const memo_keys = this->memo_keys.data();
+        int32_t* const memo_values = this->memo_values.data();
+        const bool small = this->small;
+        AgglomerativeClustering::PaletteIndex& cells = this->cells;
+        const AgglomerativeClustering::KDTree& tree = this->tree;
+        const bool rgb = this->color_space == ColorSpace::rgb;
+        const int skip_below = this->skip_below;
+        const size_t width = this->width;
+
+        auto lookup = [&](const Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
+        auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
+            uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+            uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+            if (memo_keys[slot] != key) {
+                memo_keys[slot] = key;
+                memo_values[slot] = lookup(space.match(r, g, b));
+            }
+            return memo_values[slot];
         };
-        auto pick_recipe = [&](float* wanted) -> int32_t {
-            if (!scan) {return pick(wanted);}
+        // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
+        auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
+
+        if (this->method == Method::plain) {
+            constexpr size_t check = 16384;
+            const size_t pixels = this->pixels;
+            for (size_t p = start; p < pixels; p++) {
+                if (timed && p > start && (p & (check - 1)) == 0 && emscripten_get_now() >= deadline) {this->cursor = p; return false;}
+                const uint8_t* pixel = image + p * increment;
+                emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+            }
+            this->cursor = this->pixels;
+            return true;
+        }
+
+        const float strength = this->strength, limit = this->limit, near = this->near, most = this->most;
+        const size_t height = this->height;
+        // Whether a slice should end before the pixel `done` pixels into the image (see step's comment).
+        constexpr size_t check = 1024;
+        auto stop = [&](size_t done) {return timed && done > start && (done & (check - 1)) == 0 && emscripten_get_now() >= deadline;};
+        uint32_t* const match_keys = this->match_keys.data();
+        Point* const match_values = this->match_values.data();
+        auto nearest_outside = [&](const float* wanted) {
+            int32_t best = 0;
+            double best_distance = std::numeric_limits<double>::infinity();
+            for (size_t i = 0; i < count; i++) {
+                double distance = 0.0;
+                for (int c = 0; c < 3; c++) {
+                    const double d = double(wanted[c]) - double(points[i][c]);
+                    distance += d * d;
+                }
+                // Exact ties go to the smaller packed RGB key, as in the indexes (and the first of equal entries).
+                if (distance < best_distance || (distance == best_distance && keys[i] < keys[best])) {
+                    best = int32_t(i);
+                    best_distance = distance;
+                }
+            }
+            return best;
+        };
+        auto match = [&](uint8_t r, uint8_t g, uint8_t b) -> Point {
+            if (rgb) {return {r, g, b};}
+            uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+            uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+            if (match_keys[slot] != key) {
+                match_keys[slot] = key;
+                match_values[slot] = space.match(r, g, b);
+            }
+            return match_values[slot];
+        };
+        // The colour a pixel should take is its own plus the error it was given, that error limited in length (see
+        // `most`). Clears the error once read.
+        auto carry = [&](const Point& base, float* e, float* wanted) {
+            const float length = std::sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+            const float scale = length > most ? most / length : 1.0f;
+            for (int c = 0; c < 3; c++) {
+                wanted[c] = float(base[c]) + e[c] * scale;
+                e[c] = 0.0f;
+            }
+        };
+        // The distinct-colour index nearest a wanted colour in matching coordinates, by the rule described in the
+        // constructor: near the cube it is clamped to the cube (in place, so the error left over is measured from the
+        // clamped colour) and looked up in the index; further out it is matched exactly, unclamped. Every method picks
+        // its colours through this.
+        auto pick = [&](float* wanted) -> int32_t {
             bool outside = false;
             for (int c = 0; c < 3; c++) {
                 if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
             }
-            int32_t target[3];
-            if (outside) {
-                // Far outside the cube the target is matched as it is, unclamped (see `pick`). At full strength it is a
-                // whole number (whole colours plus whole errors), and then the scan's integer distances are the exact ones
-                // nearest_outside computes in doubles, as long as they fit in 32 bits: a target within 20,000 of the cube
-                // keeps every squared distance under 1.3 billion.
-                for (int c = 0; c < 3; c++) {
-                    const float whole = std::nearbyint(wanted[c]);
-                    if (whole != wanted[c] || std::fabs(whole) > 20000.0f) {return nearest_outside(wanted);}
-                    target[c] = int32_t(whole);
-                }
-                return scan_nearest(target);
-            }
+            if (outside) {return nearest_outside(wanted);}
+            Point target;
             for (int c = 0; c < 3; c++) {
                 wanted[c] = std::clamp(wanted[c], 0.0f, limit);
-                target[c] = int32_t(std::lround(wanted[c]));
+                target[c] = uint16_t(std::lround(wanted[c]));
             }
-            return scan_nearest(target);
+            return rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
         };
-        for (size_t y = 0; y < height; y++) {
-            for (size_t x = 0; x < size_t(width); x++) {
-                const size_t p = y * size_t(width) + x;
-                const uint8_t* pixel = image_data + p * increment;
-                if (L.alpha && pixel[3] < skip_below) {
-                    emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
-                    continue;
-                }
-                const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
-                const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
-                int32_t* recipe = &recipes[size_t(slot) * steps];
-                if (recipe_keys[slot] != key) {
-                    recipe_keys[slot] = key;
-                    const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
-                    float e[3] = {0.0f, 0.0f, 0.0f};
-                    for (size_t i = 0; i < steps; i++) {
-                        float wanted[3];
-                        for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
-                        const int32_t chosen = pick_recipe(wanted);
-                        recipe[i] = chosen;
-                        for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
-                    }
-                    AgglomerativeClustering::insertion_sort(recipe, steps, darker);
-                }
-                emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
-            }
-        }
-        return;
-    }
 
-    if (dither_method == 1) {
-        // Atkinson: serpentine like Floyd-Steinberg, but 1/8 of the error goes to each of six neighbours (two ahead, three
-        // on the next row, one two rows down) and the remaining quarter is dropped, which keeps highlights and shadows
-        // clean. Three rows of error, with two pixels of padding on each side so no neighbour needs a check.
-        const size_t stride = 3 * (size_t(width) + 4);
-        std::vector<float> rows(3 * stride, 0.0f);
-        for (size_t y = 0; y < height; y++) {
-            float* row0 = &rows[(y % 3) * stride];
-            float* row1 = &rows[((y + 1) % 3) * stride];
-            float* row2 = &rows[((y + 2) % 3) * stride];
+        if (this->method == Method::ordered) {
+            // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `steps` palette entries whose average
+            // is close to it, built by picking the entry nearest the colour plus the error carried so far, `steps` times.
+            // The recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8 Bayer matrix points to,
+            // so two colours blend in steps + 1 shades. A pixel's colour depends only on its own colour and position, so
+            // a still area of an animation dithers the same way in every frame, whatever changes elsewhere.
+            static constexpr uint8_t bayer[8][8] = {
+                { 0, 32,  8, 40,  2, 34, 10, 42}, {48, 16, 56, 24, 50, 18, 58, 26},
+                {12, 44,  4, 36, 14, 46,  6, 38}, {60, 28, 52, 20, 62, 30, 54, 22},
+                { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
+                {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
+            const size_t steps = this->steps;
+            const float recipe_strength = this->recipe_strength;
+            const int recipe_bits = this->recipe_bits;
+            uint32_t* const recipe_keys = this->recipe_keys.data();
+            int32_t* const recipes = this->recipes.data();
+            const uint64_t* const brightness = this->brightness.data();
+            const bool scan = this->scan;
+            const size_t groups = this->groups;
+            const i32x4* const scan_r = this->scan_r.data();
+            const i32x4* const scan_g = this->scan_g.data();
+            const i32x4* const scan_b = this->scan_b.data();
+            const int32_t* const scan_index = this->scan_index.data();
+            auto darker = [&](int32_t a, int32_t b) {return brightness[size_t(a)] < brightness[size_t(b)];};
+            // Inlined by force here and in pick_recipe: in a function this size the compiler kept them out of line, and
+            // ordered dithering at 16 colours took 7% longer than when map_pixels was one function (3.6.0).
+            auto scan_nearest = [&](const int32_t* target) __attribute__((always_inline)) -> int32_t {
+                const i32x4 tr = {target[0], target[0], target[0], target[0]};
+                const i32x4 tg = {target[1], target[1], target[1], target[1]};
+                const i32x4 tb = {target[2], target[2], target[2], target[2]};
+                i32x4 best = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
+                i32x4 best_group = {0, 0, 0, 0};
+                for (size_t g = 0; g < groups; g++) {
+                    const i32x4 dr = scan_r[g] - tr, dg = scan_g[g] - tg, db = scan_b[g] - tb;
+                    const i32x4 distance = dr * dr + dg * dg + db * db;
+                    const i32x4 nearer = distance < best;
+                    best = nearer ? distance : best;
+                    const int32_t gi = int32_t(g);
+                    const i32x4 here = {gi, gi, gi, gi};
+                    best_group = nearer ? here : best_group;
+                }
+                size_t chosen = 0;
+                int32_t chosen_distance = INT32_MAX;
+                for (int lane = 0; lane < 4; lane++) {
+                    const size_t position = size_t(best_group[lane]) * 4 + size_t(lane);
+                    if (best[lane] < chosen_distance || (best[lane] == chosen_distance && position < chosen)) {
+                        chosen_distance = best[lane];
+                        chosen = position;
+                    }
+                }
+                return scan_index[chosen];
+            };
+            auto pick_recipe = [&](float* wanted) __attribute__((always_inline)) -> int32_t {
+                if (!scan) {return pick(wanted);}
+                bool outside = false;
+                for (int c = 0; c < 3; c++) {
+                    if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
+                }
+                int32_t target[3];
+                if (outside) {
+                    // Far outside the cube the target is matched as it is, unclamped (see `pick`). At full strength it is
+                    // a whole number (whole colours plus whole errors), and then the scan's integer distances are the
+                    // exact ones nearest_outside computes in doubles, as long as they fit in 32 bits: a target within
+                    // 20,000 of the cube keeps every squared distance under 1.3 billion.
+                    for (int c = 0; c < 3; c++) {
+                        const float whole = std::nearbyint(wanted[c]);
+                        if (whole != wanted[c] || std::fabs(whole) > 20000.0f) {return nearest_outside(wanted);}
+                        target[c] = int32_t(whole);
+                    }
+                    return scan_nearest(target);
+                }
+                for (int c = 0; c < 3; c++) {
+                    wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+                    target[c] = int32_t(std::lround(wanted[c]));
+                }
+                return scan_nearest(target);
+            };
+            // A recipe of many steps over a large palette can take tens of microseconds, so the clock is also read after
+            // every 64 recipes built.
+            size_t built = 0;
+            for (size_t y = start / width; y < height; y++) {
+                for (size_t x = y == start / width ? start % width : 0; x < width; x++) {
+                    const size_t p = y * width + x;
+                    if (stop(p)) {this->cursor = p; return false;}
+                    const uint8_t* pixel = image + p * increment;
+                    if (L.alpha && pixel[3] < skip_below) {
+                        emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+                        continue;
+                    }
+                    const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
+                    const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
+                    int32_t* recipe = &recipes[size_t(slot) * steps];
+                    if (recipe_keys[slot] != key) {
+                        recipe_keys[slot] = key;
+                        const Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
+                        float e[3] = {0.0f, 0.0f, 0.0f};
+                        for (size_t i = 0; i < steps; i++) {
+                            float wanted[3];
+                            for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
+                            const int32_t chosen = pick_recipe(wanted);
+                            recipe[i] = chosen;
+                            for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
+                        }
+                        AgglomerativeClustering::insertion_sort(recipe, steps, darker);
+                        if (timed && (++built & 63) == 0 && emscripten_get_now() >= deadline) {
+                            emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
+                            this->cursor = p + 1;
+                            return false;
+                        }
+                    }
+                    emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
+                }
+            }
+            this->cursor = this->pixels;
+            return true;
+        }
+
+        if (this->method == Method::atkinson) {
+            // Atkinson: serpentine like Floyd-Steinberg, but 1/8 of the error goes to each of six neighbours (two ahead,
+            // three on the next row, one two rows down) and the remaining quarter is dropped, which keeps highlights and
+            // shadows clean.
+            const size_t stride = this->atkinson_stride;
+            float* const rows = this->rows.data();
+            for (size_t y = start / width; y < height; y++) {
+                float* row0 = &rows[(y % 3) * stride];
+                float* row1 = &rows[((y + 1) % 3) * stride];
+                float* row2 = &rows[((y + 2) % 3) * stride];
+                const bool forward = y % 2 == 0;
+                for (size_t i = y == start / width ? start % width : 0; i < width; i++) {
+                    if (stop(y * width + i)) {this->cursor = y * width + i; return false;}
+                    const size_t x = forward ? i : width - 1 - i;
+                    const size_t p = y * width + x;
+                    const uint8_t* pixel = image + p * increment;
+                    float* e = &row0[3 * (x + 2)];
+                    if (L.alpha && pixel[3] < skip_below) {
+                        emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+                        for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
+                        continue;
+                    }
+                    float wanted[3];
+                    carry(match(pixel[L.r], pixel[1], pixel[L.b]), e, wanted);
+                    const int32_t index = pick(wanted);
+                    emit(p, palette_index(index));
+                    const ptrdiff_t ahead = forward ? 3 : -3;
+                    float* below = &row1[3 * (x + 2)];
+                    float* under = &row2[3 * (x + 2)];
+                    for (int c = 0; c < 3; c++) {
+                        const float error = (wanted[c] - float(points[index][c])) * strength * (1.0f / 8.0f);
+                        e[c + ahead] += error;
+                        e[c + 2 * ahead] += error;
+                        below[c - ahead] += error;
+                        below[c] += error;
+                        below[c + ahead] += error;
+                        under[c] += error;
+                    }
+                }
+                std::fill(row0, row0 + stride, 0.0f);
+            }
+            this->cursor = this->pixels;
+            return true;
+        }
+
+        // Floyd-Steinberg, serpentine.
+        for (size_t y = start / width; y < height; y++) {
             const bool forward = y % 2 == 0;
-            for (size_t i = 0; i < size_t(width); i++) {
-                const size_t x = forward ? i : size_t(width) - 1 - i;
-                const size_t p = y * size_t(width) + x;
-                const uint8_t* pixel = image_data + p * increment;
-                float* e = &row0[3 * (x + 2)];
+            float* const current = this->current.data();
+            float* const next = this->next.data();
+            for (size_t i = y == start / width ? start % width : 0; i < width; i++) {
+                if (stop(y * width + i)) {this->cursor = y * width + i; return false;}
+                const size_t x = forward ? i : width - 1 - i;
+                const size_t p = y * width + x;
+                const uint8_t* pixel = image + p * increment;
+                float* e = &current[3 * (x + 1)];
+                // Transparent pixels (alpha below `skip_below`) neither take error nor pass any on: their colour isn't seen.
                 if (L.alpha && pixel[3] < skip_below) {
                     emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
                     for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
                     continue;
                 }
+                // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
+                // is the one that best cancels it; mixing spaces lets error pile up into streaks.
+                const Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
                 float wanted[3];
-                carry(match(pixel[L.r], pixel[1], pixel[L.b]), e, wanted);
+                carry(base, e, wanted);
                 const int32_t index = pick(wanted);
                 emit(p, palette_index(index));
                 const ptrdiff_t ahead = forward ? 3 : -3;
-                float* below = &row1[3 * (x + 2)];
-                float* under = &row2[3 * (x + 2)];
+                float* below = &next[3 * (x + 1)];
                 for (int c = 0; c < 3; c++) {
-                    const float error = (wanted[c] - float(points[index][c])) * strength * (1.0f / 8.0f);
-                    e[c + ahead] += error;
-                    e[c + 2 * ahead] += error;
-                    below[c - ahead] += error;
-                    below[c] += error;
-                    below[c + ahead] += error;
-                    under[c] += error;
+                    float error = (wanted[c] - float(points[index][c])) * strength;
+                    e[c + ahead] += error * (7.0f / 16.0f);
+                    below[c - ahead] += error * (3.0f / 16.0f);
+                    below[c] += error * (5.0f / 16.0f);
+                    below[c + ahead] += error * (1.0f / 16.0f);
                 }
             }
-            std::fill(row0, row0 + stride, 0.0f);
+            std::swap(this->current, this->next);
+            std::fill(this->next.begin(), this->next.end(), 0.0f);
         }
-        return;
+        this->cursor = this->pixels;
+        return true;
     }
 
-    for (size_t y = 0; y < height; y++) {
-        const bool forward = y % 2 == 0;
-        for (size_t i = 0; i < size_t(width); i++) {
-            const size_t x = forward ? i : size_t(width) - 1 - i;
-            const size_t p = y * size_t(width) + x;
-            const uint8_t* pixel = image_data + p * increment;
-            float* e = &current[3 * (x + 1)];
-            // Transparent pixels (alpha below `skip_below`) neither take error nor pass any on: their colour isn't seen.
-            if (L.alpha && pixel[3] < skip_below) {
-                emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
-                for (int c = 0; c < 3; c++) {e[c] = 0.0f;}
-                continue;
-            }
-            // Error is carried in the matching coordinates (8-bit RGB values, or OKLab), so the colour chosen
-            // is the one that best cancels it; mixing spaces lets error pile up into streaks.
-            const AgglomerativeClustering::KDTree::Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
-            float wanted[3];
-            carry(base, e, wanted);
-            const int32_t index = pick(wanted);
-            emit(p, palette_index(index));
-            const ptrdiff_t ahead = forward ? 3 : -3;
-            float* below = &next[3 * (x + 1)];
-            for (int c = 0; c < 3; c++) {
-                float error = (wanted[c] - float(points[index][c])) * strength;
-                e[c + ahead] += error * (7.0f / 16.0f);
-                below[c - ahead] += error * (3.0f / 16.0f);
-                below[c] += error * (5.0f / 16.0f);
-                below[c + ahead] += error * (1.0f / 16.0f);
-            }
+};
+
+// What a mapping call returns, made in slices: the output buffer (length-prefixed, see allocate_variable_size), what
+// the indexed header needs, and the job that fills it. `colours` chooses _quantize's output (the mapped image, in the
+// input's format with alpha preserved; black for an empty palette) or _quantize_indices' (see there). The image must
+// stay allocated until the mapping is done.
+class MappingTask {
+
+    std::vector<uint8_t> entries;  // the palette (for indices, with any added entries); it must outlive the job
+    uint8_t* packed = nullptr;
+    std::unique_ptr<MappingJob> job;
+
+public:
+
+    MappingTask(bool colours, const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int cutoff) {
+        const PixelLayout L = layout_of(image_format);
+        const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
+        if (colours) {
+            // Its own copy of the palette, which the output's colours are read from, so the caller's can go.
+            this->entries.assign(palette, palette + palette_length);
+            this->packed = allocate_variable_size(pixels * size_t(L.stride));
+            const PixelSink sink = {true, L, image_data, this->packed + 4, this->entries.data(), 0, 0, false, -1};
+            this->job.reset(new MappingJob(image_data, image_length, image_format, this->entries.data(), palette_length, color_space, dither, dither_method, dither_steps, width, 1, sink));
+            return;
         }
-        std::swap(current, next);
-        std::fill(next.begin(), next.end(), 0.0f);
+        // Each pixel's palette index instead of its colour. The length-prefixed payload is [entries (u32), transparent
+        // index (i32, -1 for none), index bytes (u32)], then the palette (3 bytes per entry), then one little-endian index
+        // of `index bytes` (1, 2 or 4) per pixel. With a `cutoff` (1-255) and input with alpha (RGBA or BGRA) that has
+        // pixels with alpha below it, those pixels get an extra black entry appended after the palette, which takes no
+        // part in matching (the callers cut the palette one colour smaller to make room, see colours_for_entries: `k`
+        // counts the entries of the result); every other pixel maps to its nearest colour, fully opaque. Without one
+        // (0), all pixels map to their nearest colour like any other pixel. An empty palette stays empty unless some
+        // pixel needs an entry to point at, in which case it becomes a single black entry, as _quantize maps it: so an
+        // empty image has an empty palette, and a fully transparent image with a cutoff has just the transparent entry
+        // (index 0).
+        this->entries.assign(palette, palette + palette_length / 3 * 3);
+        bool transparent = false;
+        if (cutoff > 0 && L.alpha) {
+            for (size_t p = 0; p < pixels && !transparent; p++) {transparent = image_data[p * 4 + 3] < cutoff;}
+        }
+        bool needs_entry = false;
+        for (size_t p = 0; p < pixels && !needs_entry; p++) {needs_entry = !(transparent && image_data[p * 4 + 3] < cutoff);}
+        if (this->entries.empty() && needs_entry) {this->entries.assign(3, 0);}
+        const size_t colour_count = this->entries.size() / 3;
+        const int32_t transparent_index = transparent ? int32_t(colour_count) : -1;
+        if (transparent) {this->entries.insert(this->entries.end(), 3, 0);}
+        const size_t count = this->entries.size() / 3;
+        const uint32_t index_bytes = count <= 256 ? 1 : count <= 65536 ? 2 : 4;
+
+        const size_t header = 12;
+        this->packed = allocate_variable_size(header + this->entries.size() + pixels * index_bytes);
+        uint8_t* output = this->packed + 4;
+        auto write32 = [](uint8_t* at, uint32_t value) {for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}};
+        write32(output, uint32_t(count));
+        write32(output + 4, uint32_t(transparent_index));
+        write32(output + 8, index_bytes);
+        if (!this->entries.empty()) {std::memcpy(output + header, this->entries.data(), this->entries.size());}
+        uint8_t* indices = output + header + this->entries.size();
+
+        const PixelSink sink = {false, L, image_data, indices, nullptr, index_bytes, cutoff, transparent, transparent_index};
+        this->job.reset(new MappingJob(image_data, image_length, image_format, this->entries.data(), colour_count * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, sink));
     }
 
-}
+    ~MappingTask() {free(this->packed);}
 
-// Maps the image to the palette (see map_pixels) and returns the mapped image, in the input's format with alpha
-// preserved, as a length-prefixed buffer (see allocate_variable_size) so the output is written once, in place.
-// With an empty palette every pixel becomes black.
+    bool step(bool timed, double deadline) {return this->job->step(timed, deadline);}
+    int progress() const {return this->job->progress();}
+
+    // The output, which the caller frees. Only once the mapping is done.
+    uint8_t* take() {
+        uint8_t* result = this->packed;
+        this->packed = nullptr;
+        return result;
+    }
+
+};
+
+// Maps the image to the palette in one go (see MappingTask).
 uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width) {
-    const PixelLayout L = layout_of(image_format);
-    const int increment = L.stride;
-    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / increment : 0;
-    uint8_t* packed = allocate_variable_size(pixels * increment);
-    uint8_t* output = packed + 4;
-    const PixelSink sink = {true, L, image_data, output, palette, 0, 0, false, -1};
-    map_pixels(image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 1, sink);
-    return packed;
+    MappingTask task(true, image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 0);
+    task.step(false, 0);
+    return task.take();
 }
 
-// Maps the image to the palette (see map_pixels) and returns each pixel's palette index instead of its colour.
-// The length-prefixed payload is [entries (u32), transparent index (i32, -1 for none), index bytes (u32)], then
-// the palette (3 bytes per entry), then one little-endian index of `index bytes` (1, 2 or 4) per pixel.
-// With a `cutoff` (1-255) and input with alpha (RGBA or BGRA) that has pixels with alpha below it, those pixels get an extra black entry
-// appended after the palette, which takes no part in matching (the callers cut the palette one colour smaller to make room, see
-// colours_for_entries: `k` counts the entries of the result); every other pixel maps to its nearest colour,
-// fully opaque. Without one (0), all pixels map to their nearest colour like any other pixel. An empty palette stays empty unless some pixel needs an entry to point at, in which case it becomes a
-// single black entry, as _quantize maps it: so an empty image has an empty palette, and a fully transparent image
-// with a cutoff has just the transparent entry (index 0).
 // Whether indexed output with this cutoff will have a transparent entry: the image has alpha and some pixel is below it.
 bool has_transparent_entry(const uint8_t* image_data, int image_length, int image_format, int cutoff) {
     if (cutoff <= 0 || !layout_of(image_format).alpha || image_length < 4) {return false;}
@@ -1239,37 +1432,11 @@ int colours_for_entries(const uint8_t* image_data, int image_length, int image_f
     return has_transparent_entry(image_data, image_length, image_format, cutoff) ? std::max(1, k - 1) : k;
 }
 
+// Maps the image to the palette in one go and returns each pixel's palette index (see MappingTask for the layout).
 uint8_t* _quantize_indices(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int cutoff) {
-    const PixelLayout L = layout_of(image_format);
-    const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
-
-    std::vector<uint8_t> entries(palette, palette + palette_length / 3 * 3);
-    bool transparent = false;
-    if (cutoff > 0 && L.alpha) {
-        for (size_t p = 0; p < pixels && !transparent; p++) {transparent = image_data[p * 4 + 3] < cutoff;}
-    }
-    bool needs_entry = false;
-    for (size_t p = 0; p < pixels && !needs_entry; p++) {needs_entry = !(transparent && image_data[p * 4 + 3] < cutoff);}
-    if (entries.empty() && needs_entry) {entries.assign(3, 0);}
-    const size_t colours = entries.size() / 3;
-    const int32_t transparent_index = transparent ? int32_t(colours) : -1;
-    if (transparent) {entries.insert(entries.end(), 3, 0);}
-    const size_t count = entries.size() / 3;
-    const uint32_t index_bytes = count <= 256 ? 1 : count <= 65536 ? 2 : 4;
-
-    const size_t header = 12;
-    uint8_t* packed = allocate_variable_size(header + entries.size() + pixels * index_bytes);
-    uint8_t* output = packed + 4;
-    auto write32 = [](uint8_t* at, uint32_t value) {for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}};
-    write32(output, uint32_t(count));
-    write32(output + 4, uint32_t(transparent_index));
-    write32(output + 8, index_bytes);
-    if (!entries.empty()) {std::memcpy(output + header, entries.data(), entries.size());}
-    uint8_t* indices = output + header + entries.size();
-
-    const PixelSink sink = {false, L, image_data, indices, nullptr, index_bytes, cutoff, transparent, transparent_index};
-    map_pixels(image_data, image_length, image_format, entries.data(), colours * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, sink);
-    return packed;
+    MappingTask task(false, image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, cutoff);
+    task.step(false, 0);
+    return task.take();
 }
 
 extern "C" {
@@ -1303,6 +1470,42 @@ uint8_t* clustering_job_result(ClusteringJob* job) {
 EMSCRIPTEN_KEEPALIVE
 void clustering_job_free(ClusteringJob* job) {
     delete job;
+}
+
+// A mapping run in slices (see MappingJob): start it, step it until it returns 1000, take the result, free it. The
+// palette is given (`palette_data`) or, when `clustering_data` isn't null, cut from that clustering to `k` colours (for
+// indexed output `k` counts the transparent entry, see colours_for_entries), and a negative `color_space` then matches
+// in the clustering's space. `indices` 0 gives _quantize's output, 1 _quantize_indices' (with `cutoff`). Returns null
+// when the clustering's records don't fit together. The image must stay allocated until the job is done.
+EMSCRIPTEN_KEEPALIVE
+MappingTask* mapping_job_start(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette_data, int palette_length, const uint8_t* clustering_data, int clustering_length, int k, int color_space, double dither, int dither_method, int dither_steps, int width, int indices, int cutoff) {
+    std::vector<uint8_t> palette;
+    ColorSpace space = ColorSpace(color_space < 0 ? 0 : color_space);
+    if (clustering_data) {
+        bool valid = false;
+        palette = _get_palette_from_clustering(clustering_data, size_t(clustering_length), indices ? colours_for_entries(image_data, image_length, image_format, cutoff, k) : k, valid);
+        if (!valid) {return nullptr;}
+        if (color_space < 0) {space = read_clustering(clustering_data, size_t(clustering_length)).color_space;}
+    } else {
+        palette.assign(palette_data, palette_data + (palette_length > 0 ? palette_length : 0));
+    }
+    return new MappingTask(indices == 0, image_data, image_length, image_format, palette.data(), palette.size(), space, dither, dither_method, dither_steps, width, cutoff);
+}
+
+// Maps for about `budget_ms` milliseconds; returns 1000 when finished, else the progress so far (0 to 999).
+EMSCRIPTEN_KEEPALIVE
+int mapping_job_step(MappingTask* task, double budget_ms) {
+    return task->step(true, emscripten_get_now() + budget_ms) ? 1000 : task->progress();
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* mapping_job_result(MappingTask* task) {
+    return task->take();
+}
+
+EMSCRIPTEN_KEEPALIVE
+void mapping_job_free(MappingTask* task) {
+    delete task;
 }
 
 EMSCRIPTEN_KEEPALIVE
