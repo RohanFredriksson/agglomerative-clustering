@@ -84,7 +84,13 @@ const isBrowserLike = () => typeof document !== 'undefined' || typeof WorkerGlob
 const deployAdvice = "In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the bundler or file tracer may have left the package's dist/ files out: include node_modules/agglomerative-clustering/dist in the function's files, or leave the package unbundled (external).";
 // Emscripten appends advice about its own debug build, which doesn't apply to this package's users.
 const assertionsAdvice = /\s*\(?Build with -sASSERTIONS for more info\.?\)?/;
-const wasmLoadFailed = (cause, given) => {
+// Whether init({ wasm }) was given bytes that start with gzip's magic (1f 8b): a gzipped module passed without decompressing.
+const isGzipped = (wasm) => {
+    const tag = Object.prototype.toString.call(wasm);
+    const bytes = tag === '[object ArrayBuffer]' ? new Uint8Array(wasm) : ArrayBuffer.isView(wasm) ? new Uint8Array(wasm.buffer, wasm.byteOffset, wasm.byteLength) : null;
+    return bytes !== null && bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+};
+const wasmLoadFailed = (cause, given, gzipped = false) => {
     const text = String(cause && cause.message !== undefined ? cause.message : cause).split('\n')[0];
     // Emscripten wraps a failed compile in Aborted(...), which is how it stops itself, not part of the reason.
     let reason = text.replace(assertionsAdvice, '').trim().replace(/\.+$/, '');
@@ -111,6 +117,10 @@ const wasmLoadFailed = (cause, given) => {
         advice = "A Content-Security-Policy blocks compiling WebAssembly: add 'wasm-unsafe-eval' to the script-src of the policy that applies. That is the page's for a page and for the worker entry's worker (also when started from a content script, whose worker follows the page's policy); for a browser extension's own pages, offscreen document and service worker, it is content_security_policy.extension_pages in the manifest.";
     } else if (!hasSimd()) {
         advice = "This engine has no WebAssembly SIMD, which the module needs (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 16.4 or newer).";
+    } else if (gzipped) {
+        // Engines word this differently (V8 and Firefox name the magic number, Safari doesn't), so it goes by the bytes.
+        reason = `the bytes given to init({ wasm }) are gzipped, not a WebAssembly module (${reason})`;
+        advice = "These bytes are gzipped (they start with 1f 8b): decompress them first, for example with new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(), and pass the result (see Plugins and single-file hosts in https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).";
     } else if (/magic (word|number)|BufferSource argument is empty|wasm validation error: at offset [0-4]:/i.test(text)) {
         // What a 404 page, or a server's fallback HTML page, looks like once it has been compiled as WebAssembly.
         if (given === true) {
@@ -255,7 +265,7 @@ const acquire = async (options) => {
                 // build, say) leaves it pointing at a file that isn't there. The package's own copy is then looked for the
                 // way Node resolves packages, from the working directory; if that fails too, the first error is reported.
                 const fallback = wasm === undefined && isNodeLike ? await packagedWasm().catch(() => null) : null;
-                if (!fallback) {throw wasmLoadFailed(error, typeof wasm === 'string' ? wasm : isURL(wasm) ? wasm.href : wasm !== undefined);}
+                if (!fallback) {throw wasmLoadFailed(error, typeof wasm === 'string' ? wasm : isURL(wasm) ? wasm.href : wasm !== undefined, isGzipped(wasm));}
                 instance = await instantiate(fallback).catch(() => {throw wasmLoadFailed(error, false);});
             }
             checkWasmVersion(instance);

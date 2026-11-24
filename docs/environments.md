@@ -169,7 +169,21 @@ The main entry runs in every extension context: a Manifest V3 service worker, an
 
 Some hosts load a plugin as one file, or a few fixed ones, so the package's `.wasm` and worker script can't sit next to it. Embed them, and say where everything is: in these hosts the package can't find its own files. (Tested against stand-ins for these hosts: a sandboxed iframe, a Node host process, an Electron renderer. Not inside the apps themselves.)
 
-- **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 86 KB, 115 KB as base64, and 53 KB gzipped then base64<!-- bench/spikes/slicing-mapping/results-size.txt --> (decompress it with `DecompressionStream` before passing it).
+- **The `.wasm` as bytes.** Import it with your bundler's binary loader (esbuild: `--loader:.wasm=binary`, importing `agglomerative-clustering/clustering.wasm`) and pass the bytes: `init({ wasm: bytes })` for the main entry, `createWorker({ wasm: bytes })` for a worker. Set esbuild's `target` (such as `es2022`), or the decoder it emits may use `Uint8Array.fromBase64`, which not every runtime has. The file is about 86 KB, 115 KB as base64, and 53 KB gzipped then base64<!-- bench/spikes/slicing-mapping/results-size.txt -->.
+- **Smaller: embed it gzipped.** With esbuild, a plugin gzips the module as it bundles, so the import stays `agglomerative-clustering/clustering.wasm` and can't go stale after an upgrade (other toolchains: `gzip -9k` the file as a build step, every build):
+
+  ```js
+  import { gzipSync } from 'node:zlib';
+  import { readFileSync } from 'node:fs';
+  const gzipWasm = { name: 'gzip-wasm', setup(build) {
+    build.onLoad({ filter: /clustering\.wasm$/ }, (args) => ({ contents: gzipSync(readFileSync(args.path), { level: 9 }), loader: 'binary' }));
+  } };
+  // in the plugin: `gz` is the imported clustering.wasm, now gzipped
+  const wasm = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  await init({ wasm });
+  ```
+
+  A bundle of the main entry went from 161 KB to 102 KB, or from 71 KB to 59 KB where the host gzips it anyway; decompressing took 2.3 ms in Chromium<!-- bench/spikes/wasm-gzip/recipe.mjs → results-recipe.txt; browser.mjs → results-browser.txt -->. `DecompressionStream` is in every current browser and Electron; Figma's plugin main thread wasn't checked, so decompress in the plugin's UI iframe there, or embed the module as is. Bytes passed still gzipped give `wasm-load-failed` saying so.
 - **The worker script as a `data:` URL.** Bundle `node_modules/agglomerative-clustering/dist/worker-thread.mjs` into one ES module (esbuild `--bundle --format=esm`) and pass it as `createWorker({ script: 'data:text/javascript;base64,…', wasm: bytes })`. In a sandboxed iframe (Figma's UI) a `blob:` worker fails in Chromium; a `data:` one works. The main entry alone is often enough for a plugin's images, and needs only the bytes.
 - **VS Code.** The extension host is Node: bundle your extension with the package external and ship it in `node_modules`, or bundle it and pass a path to a `.wasm` you ship (`init({ wasm: path.join(context.extensionPath, 'dist', 'clustering.wasm') })`); a bundled extension otherwise looks for the package from the working directory, which is not your extension's. A webview's CSP needs `'wasm-unsafe-eval'` in `script-src`, and `worker-src` for the worker entry.
 - **Obsidian** ships `main.js`, `manifest.json` and `styles.css` only, so embed the `.wasm` bytes. Its renderer has Node's globals and a real `Worker`, so both entries work once given the bytes (and, for workers, the `data:` script).

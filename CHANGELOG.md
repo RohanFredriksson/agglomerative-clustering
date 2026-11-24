@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **`init({ wasm })` given gzipped bytes** now says so in its `wasm-load-failed` message and shows how to decompress them, in every engine (it checks the bytes for gzip's `1f 8b`).
+
+### Docs
+- **Plugins and single-file hosts:** embedding the module gzipped, with a six-line esbuild plugin and two runtime lines (a 161 KB plugin bundle becomes 102 KB).
+
 ## 3.7.0
 
 `signal` and `onProgress` now work while mapping, in every function that takes an image and in both entries. Output is unchanged; an abort during mapping now rejects instead of letting the call finish (see Changed).
