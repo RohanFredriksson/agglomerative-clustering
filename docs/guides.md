@@ -382,7 +382,7 @@ slider.oninput = async () => {
 
 Calls to one worker run in order, and re-mapping a large image takes a while (0.2 to 0.3 s at 12 megapixels, about 1 s dithered), so without the `signal` a fast drag queues up every size it passed through and the picture keeps changing after the slider stops. Re-cutting alone (`handle.getPalette(k)`, `handle.getSwatches(k)`) takes well under a millisecond and needs none of this.
 
-Cancelling stops a call already mapping within about 10 ms (from 3.7.0) and skips calls still waiting their turn, so the picture stays close behind the slider with every dither method, even ordered dithering with many steps (a second or more; see [Choosing a dither method](api.md#choosing-a-dither-method)).
+Cancelling stops a call already mapping within a slice, about 10 ms (from 3.7.0) and skips calls still waiting their turn, so the picture stays close behind the slider with every dither method, even ordered dithering with many steps (a second or more; see [Choosing a dither method](api.md#choosing-a-dither-method)).
 
 - **Bundlers.** The worker is started with `new Worker(new URL('./worker-thread.mjs', import.meta.url))`, which Vite, webpack 5, Rsbuild and Next.js pick up. Angular, plain esbuild and Rollup need the script copied for them: see [Angular, esbuild, Rollup and other bundlers](environments.md#angular-esbuild-rollup-and-other-bundlers).
 - **Terminate the workers you create.** A worker you make with `createWorker()` keeps its thread until `terminate()` (or `await using worker = createWorker()`). The shared worker behind the exported functions needs nothing.
@@ -396,6 +396,7 @@ The rest is in the [worker entry reference](api.md#worker-entry).
 Mapping a large image can take seconds: a 6-megapixel photo (3072×2048) took 0.2 s with 256 colours undithered, 2.6 s with Floyd–Steinberg and 7.5 s with ordered dithering. Pass `signal` and `onProgress` to any function that maps, as to the ones that cluster: the mapping then runs in slices, checking the signal and reporting progress between them, with the same result as one call for every dither method ([Cancelling and progress](api.md#cancelling-and-progress)).
 
 ```js
+const controller = new AbortController();  // cancel with controller.abort()
 const indexed = await quantizeToIndicesWithPalette(image, palette, {
   dither: 'ordered',
   signal: controller.signal,

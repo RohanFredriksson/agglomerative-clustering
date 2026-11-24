@@ -284,7 +284,7 @@ const initOptions = (options, allowScript) => {
 
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
-const takeControls = (options, progressAllowed = true, ditherAllowed = true) => {
+const takeControls = (options, ditherAllowed = true) => {
     // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
     // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
     if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
@@ -308,7 +308,7 @@ const takeControls = (options, progressAllowed = true, ditherAllowed = true) => 
     // those messages not echoing the value: if they ever say what they got, send a stand-in that reads the same.)
     const {signal, onProgress} = options;
     const badSignal = signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function');
-    const badProgress = onProgress !== undefined && (!progressAllowed || typeof onProgress !== 'function');
+    const badProgress = onProgress !== undefined && typeof onProgress !== 'function';
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
     if (badSignal || badProgress) {
         return {options: {...rest, ...(badSignal ? {signal: null} : {}), ...(badProgress ? {onProgress: null} : {})}, signal: undefined, onProgress: undefined};
@@ -525,7 +525,7 @@ const makeWorker = (options, allowScript) => {
             const origin = new Error();
             return (async () => {
                 const position = optionsPosition[name];
-                const {options, signal, onProgress} = takeControls(rest[position], true, !clusteringOnlyFunctions.includes(name));
+                const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
                 let args = rest.slice();
                 if (position < args.length) {args[position] = options;}
                 if (signal && signal.aborted) {
@@ -583,7 +583,7 @@ const makeWorker = (options, allowScript) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
-            const {options, signal, onProgress} = takeControls(clusterOptions, true, false);
+            const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const warning = bareImageWarning(image);

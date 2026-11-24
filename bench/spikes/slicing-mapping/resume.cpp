@@ -1,5 +1,6 @@
 // Every resumable step of the mapping stopped at every chance: a MappingTask stepped with a deadline already past
-// (each clock check ends the slice: every 65,536 pixels undithered, every row dithered) for every method, both
+// (each clock check ends the slice: every 16,384 pixels undithered, every 1,024 dithered, and after every 64 ordered
+// recipes) for every method, both
 // outputs, palettes on the cell index and the k-d tree, and odd shapes, compared byte for byte with the one-shot
 // _quantize and _quantize_indices. Built with AddressSanitizer and UBSan by resume.mjs.
 #include "../../../src/clustering.cpp"

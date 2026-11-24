@@ -138,8 +138,8 @@ async function run() {
     checks.workerAbortFreesWorker = equal(next.value, await ac.getPaletteFromClustering(await ac.getClustering(image), 4)) && next.ms < fullTime.ms * 0.5;
     await cancelWorker.terminate();
 
-    // Cancelled calls queued behind a mapping call, which runs in one piece, never run: ten slow mappings sent at once,
-    // the first nine cancelled at once, cost about one.
+    // Cancelled calls queued behind a mapping call never run: ten slow mappings sent at once, the first nine cancelled at
+    // once, cost about one.
     const queueWorker = createWorker();
     const queued = await queueWorker.cluster(noise(300, 200, 9));
     const slow = { method: 'ordered', steps: 32 };

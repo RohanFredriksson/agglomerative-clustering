@@ -127,6 +127,17 @@ describe('mapping in slices gives one call\'s result', () => {
         expect(progress.sliced()).toBe(true);
     }, 60_000);
 
+    it('a slice can end mid-row with every method (a very wide image)', async () => {
+        const wide = picture(200000, 2, 17), palette = paletteOf(48, 6);
+        for (const [, options] of methods) {
+            for (const colorSpace of ['rgb', 'oklab']) {
+                const progress = watch();
+                same(await quantizeToIndicesWithPalette(wide, palette, { ...options, colorSpace, transparent: true, onProgress: progress.onProgress }), await quantizeToIndicesWithPalette(wide, palette, { ...options, colorSpace, transparent: true }));
+                expect(progress.sliced()).toBe(true);
+            }
+        }
+    }, 120_000);
+
     it('a width of 1, and an image one row high', async () => {
         const palette = paletteOf(16, 4);
         for (const [w, h] of [[1, 3000], [3000, 1]]) {
@@ -181,6 +192,37 @@ describe('aborting while mapping', () => {
             await worker.terminate();
         }
     }, 60_000);
+
+    it('in the worker entry\'s handle methods: progress, ImageData back as ImageData, and aborts part way', async () => {
+        const worker = createWorker();
+        try {
+            const imageData = new ImageData(new Uint8ClampedArray(big.data), big.width, big.height);
+            const handle = await worker.cluster(imageData, { precision: 5 });
+            const palette = paletteOf(64, 12);
+            const calls = [
+                (o) => handle.quantize(64, { ...slow, ...o }),
+                (o) => handle.quantizeToIndices(64, { ...slow, ...o }),
+                (o) => handle.quantizeWithPalette(palette, { ...slow, ...o }),
+                (o) => handle.quantizeToIndicesWithPalette(palette, { ...slow, ...o }),
+            ];
+            const one = await calls[0]({});
+            for (const [i, call] of calls.entries()) {
+                if (i === 0) {
+                    const progress = watch();
+                    const result = await call({ onProgress: progress.onProgress });
+                    expect(result).toBeInstanceOf(ImageData);
+                    same(result, one);
+                    expect(progress.sliced()).toBe(true);
+                    expect(progress.values.at(-1)).toBe(1);
+                }
+                const controller = new AbortController();
+                const outcome = await call({ signal: controller.signal, onProgress: (v) => {if (v > 0) {controller.abort();}} }).then(() => 'resolved', (e) => e.name);
+                expect(outcome).toBe('AbortError');
+            }
+        } finally {
+            await worker.terminate();
+        }
+    }, 120_000);
 
     it('a small call with a signal finishes without giving up its turn', async () => {
         const palette = paletteOf(16, 1), small = picture(32, 32);

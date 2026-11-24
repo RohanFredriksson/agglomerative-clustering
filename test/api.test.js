@@ -46,8 +46,6 @@ const parameterNames = (fileName, functionName) => signaturesOf(fileName, functi
 // Exports that are functions, as opposed to constants such as `version`.
 const functionExports = (fileName) => valueExports(fileName).filter((name) => signaturesOf(fileName, name).length > 0);
 
-// Functions that only map pixels: they take `signal` but not `onProgress`.
-
 // The image functions of the main entry: the ones whose first parameter is the image.
 const imageFunctions = functionExports('index.d.ts').filter((name) => parameterNames('index.d.ts', name)[0] === 'image').sort();
 
