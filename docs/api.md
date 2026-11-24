@@ -499,7 +499,7 @@ The function form of `clustering.quantizeToIndices(image, k, options)`. The same
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
 ### `quantizeToIndicesWithPalette(image, palette, options?): Promise<IndexedImage>`
-The same as `quantizeToIndices`, with a palette you supply. The result's `palette` is the palette you give, in its order, so each index is a position in it. There is no `k`: the transparent entry is added after the palette you give, so a 256-colour palette gives 257 entries.
+The same as `quantizeToIndices`, with a palette you supply. The result's `palette` is the palette you give, in its order, so each index is a position in it. There is no `k`: the transparent entry is added after the palette you give, so a 256-colour palette gives 257 entries. To use only some of a large chart (the 12 threads out of 400 that best match a photo, the bricks to buy), choose them first: see [Fixed palettes](guides.md#fixed-palettes-e-ink-thread-bricks) in the guides.
 
 Options: `colorSpace` (defaults to the palette's own), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
