@@ -3,6 +3,7 @@ import {
     buildClustering, buildPalette, quantize, quantizeToIndices, quantizeWithPalette, quantizeFromClustering,
     quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 const random = (seed) => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 
@@ -42,7 +43,7 @@ describe('a call with a signal or onProgress gives the same result as without', 
             expect(await buildClustering(image, { ...options, onProgress: () => {} })).toEqual(reference);
         }
         expect(await buildClustering(image, { onProgress: () => {} })).toEqual(expected);
-    }, 60000);
+    }, timeLimit(60000));
 
     it('getPalette, quantize and the indexed functions', async () => {
         const signal = new AbortController().signal;
@@ -58,7 +59,7 @@ describe('a call with a signal or onProgress gives the same result as without', 
         expect((await quantize(imageData, 6, { signal })).data).toEqual((await quantize(imageData, 6)).data);
         const rgb = { data: new Uint8Array(3 * 300).map((_, i) => (i * 37) & 255), format: 'rgb' };
         expect(await buildPalette(rgb, 5, { signal })).toEqual(await buildPalette(rgb, 5));
-    }, 60000);
+    }, timeLimit(60000));
 
     it('the functions that only map pixels', async () => {
         const clustering = await buildClustering(image);

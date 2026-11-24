@@ -5,13 +5,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildClustering, getClusteringInfo, buildPalette, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesFromClustering } from '../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
+import { timeLimit } from './timeout.js';
 
 let image, clustering, maxColors;
 beforeAll(async () => {
     image = (await getImageRgba(await ensureImage(KODAK_IMAGES[13]))).rgba;
     clustering = await buildClustering(image);
     maxColors = (await getClusteringInfo(clustering)).maxColors;
-}, 120000);
+}, timeLimit(120000));
 
 // The colours of the k clusters, followed by index through the records' parent fields, independently of the library's cut.
 const clusterColours = (k) => {
@@ -47,7 +48,7 @@ describe('palettes at very large k (kodim14)', () => {
             expect(new Set(keys).size, `k = ${k}: no colour twice`).toBe(keys.length);
             for (const key of keys) {expect(expected.has(key), `k = ${k}`).toBe(true);}
         }
-    }, 120000);
+    }, timeLimit(120000));
 
     it('gives the same palette from the image as from the clustering, and swatches and indices that agree', async () => {
         for (const k of [54469, maxColors]) {
@@ -59,6 +60,6 @@ describe('palettes at very large k (kodim14)', () => {
             const indexed = await quantizeToIndicesFromClustering(image, clustering, k);
             expect(indexed.palette).toEqual(palette);
         }
-    }, 120000);
+    }, timeLimit(120000));
 
 });

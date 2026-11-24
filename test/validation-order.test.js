@@ -4,6 +4,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import * as main from '../dist/index.mjs';
 import * as workerEntry from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 const image = new Uint8Array(4 * 16).fill(100);
 const aborted = () => {const controller = new AbortController(); controller.abort(); return controller.signal;};
@@ -83,7 +84,7 @@ describe('an aborted signal with nothing else wrong', () => {
         } finally {
             await busy.terminate();
         }
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('leaves the image with the caller, even when the worker transfers', async () => {
         const moving = workerEntry.createWorker({ transfer: true });

@@ -8,6 +8,7 @@ import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { build } from 'esbuild';
+import { timeLimit } from './timeout.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const wasm = resolve(root, 'dist/clustering.wasm');
@@ -29,7 +30,7 @@ const run = async (option, name) => {
     });
     const file = join(folder, `${name}.cjs`);
     writeFileSync(file, result.outputFiles[0].text);
-    const ran = spawnSync(process.execPath, [file], { cwd: folder, encoding: 'utf8', timeout: 60000 });
+    const ran = spawnSync(process.execPath, [file], { cwd: folder, encoding: 'utf8', timeout: timeLimit(60000) });
     return `${ran.stdout}${ran.stderr}`.trim();
 };
 
@@ -39,7 +40,7 @@ describe('init({ wasm }) in a CommonJS bundle for Node', () => {
         expect(await run(`{ wasm: ${JSON.stringify(wasm)} }`, 'path')).toBe('6');
         expect(await run(`{ wasm: ${JSON.stringify(pathToFileURL(wasm).href)} }`, 'file-url')).toBe('6');
         expect(await run(`{ wasm: new URL(${JSON.stringify(pathToFileURL(wasm).href)}) }`, 'url')).toBe('6');
-    }, 60000);
+    }, timeLimit(60000));
 
     it('names the path when the file is not there, and says what to do without one', async () => {
         const missing = join(folder, 'nowhere', 'clustering.wasm');
@@ -50,6 +51,6 @@ describe('init({ wasm }) in a CommonJS bundle for Node', () => {
         expect(unset).toMatch(/^wasm-load-failed: /);
         expect(unset).toContain('init({ wasm: path })');
         expect(unset).not.toMatch(/Invalid URL/);
-    }, 60000);
+    }, timeLimit(60000));
 
 });

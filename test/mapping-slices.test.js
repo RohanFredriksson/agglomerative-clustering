@@ -7,6 +7,7 @@ import {
     quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
 } from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
+import { timeLimit } from './timeout.js';
 
 const random = (seed) => () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
 
@@ -78,7 +79,7 @@ describe('mapping in slices gives one call\'s result', () => {
                 same(await run({ onProgress: progress.onProgress }), await run({}));
                 expect(progress.values.at(-1)).toBe(1);
             }
-        }, 60_000);
+        }, timeLimit(60_000));
     }
 
     it('takes several slices on these images (so the cases above test slicing)', async () => {
@@ -97,7 +98,7 @@ describe('mapping in slices gives one call\'s result', () => {
                 expect(values.every((v, i) => i === 0 || v > values[i - 1])).toBe(true);
             }
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('every input format and ImageData, with colour and index output', async () => {
         const palette = paletteOf(40, 5);
@@ -110,7 +111,7 @@ describe('mapping in slices gives one call\'s result', () => {
         const sliced = await quantizeWithPalette(imageData, palette, { dither: 'atkinson', onProgress: () => {} });
         expect(sliced).toBeInstanceOf(ImageData);
         same(sliced, await quantizeWithPalette(imageData, palette, { dither: 'atkinson' }));
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('a palette over 1024 colours (the k-d tree), and an empty palette for a transparent image', async () => {
         const palette = paletteOf(3000, 7);
@@ -118,14 +119,14 @@ describe('mapping in slices gives one call\'s result', () => {
         same(await quantizeToIndicesWithPalette(image, palette, { onProgress: () => {} }), await quantizeToIndicesWithPalette(image, palette));
         const clear = { data: new Uint8Array(64 * 64 * 4), format: 'rgba', width: 64 };
         same(await quantizeToIndicesWithPalette(clear, new Uint8Array(0), { transparent: true, onProgress: () => {} }), await quantizeToIndicesWithPalette(clear, new Uint8Array(0), { transparent: true }));
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('without dithering, a large image passed without a width is sliced too (it may stop mid-row)', async () => {
         const big = picture(2000, 1500, 9), bare = big.data;
         const palette = paletteOf(1000, 3), progress = watch();
         same(await quantizeWithPalette(bare, palette, { onProgress: progress.onProgress }), await quantizeWithPalette(bare, palette));
         expect(progress.sliced()).toBe(true);
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('a slice can end mid-row with every method (a very wide image)', async () => {
         const wide = picture(200000, 2, 17), palette = paletteOf(48, 6);
@@ -136,7 +137,7 @@ describe('mapping in slices gives one call\'s result', () => {
                 expect(progress.sliced()).toBe(true);
             }
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('a width of 1, and an image one row high', async () => {
         const palette = paletteOf(16, 4);
@@ -173,7 +174,7 @@ describe('aborting while mapping', () => {
             expect(seen).toBeGreaterThan(0);
             expect(seen).toBeLessThan(1);
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('in the worker entry, stops the thread: a call queued behind a cancelled mapping starts within a slice', async () => {
         const worker = createWorker();
@@ -191,7 +192,7 @@ describe('aborting while mapping', () => {
         } finally {
             await worker.terminate();
         }
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('in the worker entry\'s handle methods: progress, ImageData back as ImageData, and aborts part way', async () => {
         const worker = createWorker();
@@ -222,7 +223,7 @@ describe('aborting while mapping', () => {
         } finally {
             await worker.terminate();
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('a small call with a signal finishes without giving up its turn', async () => {
         const palette = paletteOf(16, 1), small = picture(32, 32);

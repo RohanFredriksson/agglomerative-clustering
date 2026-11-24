@@ -4,6 +4,7 @@ import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
 import { Palette, buildSwatches, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
+import { timeLimit } from './timeout.js';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -257,18 +258,6 @@ describe('recipes in the guides', () => {
 
     // "Fixed palettes": choosing N colours from a fixed set. The two functions are the guides' own, and the test checks
     // that their text matches the guides' (ignoring indentation), so the two can't drift apart.
-    async function chooseThreads(clustering, threads, n) {
-      let chosen = [];
-      for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-        const cut = await clustering.getPalette(k);
-        // The cut palette as an image of one pixel per colour, mapped to the threads.
-        const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
-        // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
-        chosen = [...new Set(indices)].slice(0, n);
-      }
-      return chosen;   // can be fewer than n for an image with few colours
-    }
-
     // The search as the guides had it until 3.6.0: every (thread, position) pair scored by its own pass over the
     // swatches. A reference for the fast version below, which must choose the same threads.
     async function plainImproveThreads(clustering, threads, chosen) {
@@ -308,15 +297,31 @@ describe('recipes in the guides', () => {
       }
     }
 
-    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches.
-    async function improveThreads(clustering, threads, chosen) {
-      const { palette: colors, weights } = await clustering.getSwatches(1024);
+    // The indices of n threads that represent the clustered image well.
+    async function chooseThreads(clustering, threads, n) {
+      let chosen = [];
+      for (let k = n; k <= 4 * n && chosen.length < n; k++) {
+        const cut = await getPaletteFromClustering(clustering, k);
+        // The cut palette as an image of one pixel per colour, mapped to the threads.
+        const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
+        // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
+        chosen = [...new Set(indices)].slice(0, n);
+      }
+      return chosen;   // can be fewer than n for an image with few colours
+    }
+
+    // Swaps threads in and out of `chosen` while that brings the image closer, measured on 1024 swatches, and returns
+    // them heaviest first. `space`: 'oklab' (closer by eye) or 'rgb' (closer in sRGB values, which PSNR measures).
+    async function improveThreads(clustering, threads, chosen, space = 'oklab') {
+      if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
+      const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+      const a = coordinates(threads, space), b = coordinates(colors, space);
       const m = weights.length, t = threads.length / 3, n = chosen.length;
       const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i
       for (let j = 0; j < t; j++) {
         for (let i = 0; i < m; i++) {
-          const dr = threads[3 * j] - colors[3 * i], dg = threads[3 * j + 1] - colors[3 * i + 1], db = threads[3 * j + 2] - colors[3 * i + 2];
-          distance[j * m + i] = dr * dr + dg * dg + db * db;
+          const dx = a[3 * j] - b[3 * i], dy = a[3 * j + 1] - b[3 * i + 1], dz = a[3 * j + 2] - b[3 * i + 2];
+          distance[j * m + i] = dx * dx + dy * dy + dz * dz;
         }
       }
       chosen = [...chosen];
@@ -349,9 +354,29 @@ describe('recipes in the guides', () => {
             if (error < lowest) {lowest = error; best = [s, j];}
           }
         }
-        if (!best) {return chosen;}
-        chosen[best[0]] = best[1];
+        if (best) {chosen[best[0]] = best[1]; continue;}
+        // Done: heaviest first, by the swatch weight each thread serves (an estimate of its share of the pixels).
+        const served = new Float64Array(n);
+        for (let i = 0; i < m; i++) {served[nearest[i]] += weights[i];}
+        return chosen.map((j, s) => [j, served[s]]).sort((x, y) => y[1] - x[1]).map(([j]) => j);
       }
+    }
+
+    // Colours (3 bytes each) as coordinates to measure distance in: OKLab, or the sRGB values themselves.
+    function coordinates(rgb, space) {
+      if (space === 'rgb') {return Float64Array.from(rgb);}
+      const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      const out = new Float64Array(rgb.length);
+      for (let i = 0; i < rgb.length; i += 3) {
+        const r = linear(rgb[i]), g = linear(rgb[i + 1]), b = linear(rgb[i + 2]);
+        const l = Math.cbrt(0.4122214708 * r + 0.5363329343 * g + 0.0514459929 * b);
+        const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+        const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+        out[i] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+        out[i + 1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+        out[i + 2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+      }
+      return out;
     }
 
     it('the thread-choosing functions are the ones in the guides', async () => {
@@ -360,7 +385,7 @@ describe('recipes in the guides', () => {
         // A function's lines, trimmed: from its declaration to the closing brace at the declaration's indentation.
         const source = (text, name) => {
             const lines = text.split('\n');
-            const start = lines.findIndex((line) => line.trim().startsWith(`async function ${name}(`));
+            const start = lines.findIndex((line) => new RegExp(`^\\s*(async )?function ${name}\\(`).test(line));
             expect(start, `${name} is in the file`).toBeGreaterThanOrEqual(0);
             const indent = lines[start].match(/^ */)[0];
             const end = lines.findIndex((line, i) => i > start && line === `${indent}}`);
@@ -368,7 +393,7 @@ describe('recipes in the guides', () => {
             return lines.slice(start, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
-        for (const name of ['chooseThreads', 'improveThreads']) {expect(source(test, name)).toBe(source(guides, name));}
+        for (const name of ['chooseThreads', 'improveThreads', 'coordinates']) {expect(source(test, name)).toBe(source(guides, name));}
     });
 
     it('chooses n threads from a fixed set, beats the n most used threads, and the swaps never make it worse', async () => {
@@ -395,14 +420,15 @@ describe('recipes in the guides', () => {
             const top = Array.from(used.keys()).sort((a, b) => used[b] - used[a]).slice(0, n);
             expect(await error(pick(chosen))).toBeLessThan(await error(pick(top)));
 
-            const improved = await improveThreads(clustering, threads, chosen);
+            // Scored in RGB, the error this test measures (OKLab scoring may raise it: see the guides).
+            const improved = await improveThreads(clustering, threads, chosen, 'rgb');
             expect(improved).toHaveLength(n);
             expect(new Set(improved).size).toBe(n);
             expect(await error(pick(improved))).toBeLessThanOrEqual(await error(pick(chosen)));
         }
     });
 
-    it('improveThreads chooses the same threads as the plain search, one pass per (thread, position) pair', async () => {
+    it('improveThreads in RGB chooses the same threads as the plain search, one pass per (thread, position) pair', async () => {
         const w = 48, h = 32, photo = new Uint8Array(w * h * 4);
         let seed = 7;
         const rnd = () => ((seed = Math.imul(seed, 1103515245) + 12345) >>> 8) / 16777216;
@@ -414,8 +440,58 @@ describe('recipes in the guides', () => {
         const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
         for (const n of [1, 3, 6, 12, 24]) {
             const chosen = await chooseThreads(clustering, threads, n);
-            expect(await improveThreads(clustering, threads, chosen)).toEqual(await plainImproveThreads(clustering, threads, chosen));
+            expect((await improveThreads(clustering, threads, chosen, 'rgb')).sort((x, y) => x - y)).toEqual((await plainImproveThreads(clustering, threads, chosen)).sort((x, y) => x - y));
         }
+    });
+
+    it('improveThreads returns the threads heaviest first, in OKLab (the default) and RGB', async () => {
+        // 60, 30 and 10 pixels of three colours, and a chart holding near matches for them among distractors.
+        const data = new Uint8Array(100 * 4);
+        for (let p = 0; p < 100; p++) {data.set(p < 10 ? [200, 40, 40, 255] : p < 40 ? [40, 160, 60, 255] : [30, 40, 150, 255], 4 * p);}
+        const threads = new Uint8Array([0, 0, 0, 255, 255, 255, 202, 42, 38, 128, 128, 128, 28, 42, 152, 38, 158, 62, 250, 250, 0]);
+        const clustering = await buildClustering({ data, format: 'rgba', width: 10 });
+        for (const space of ['oklab', 'rgb']) {
+            const chosen = await improveThreads(clustering, threads, [0, 1, 3], space);
+            expect(chosen).toEqual([4, 5, 2]);   // blue (60 pixels), green (30), red (10)
+        }
+    });
+
+    it('improveThreads in OKLab never makes the error it measures worse than its start', async () => {
+        const w = 48, h = 32, photo = new Uint8Array(w * h * 4);
+        let seed = 3;
+        const rnd = () => ((seed = Math.imul(seed, 1103515245) + 12345) >>> 8) / 16777216;
+        for (let p = 0; p < w * h; p++) {photo.set([Math.round(255 * rnd()), Math.round(100 + 50 * rnd()), Math.round(60 + 4 * (p % w)), 255], 4 * p);}
+        const threads = new Uint8Array(3 * 90).map(() => Math.floor(256 * rnd()));
+        const clustering = await buildClustering({ data: photo, format: 'rgba', width: w });
+        const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+        const a = coordinates(threads, 'oklab'), b = coordinates(colors, 'oklab');
+        const error = (chosen) => weights.reduce((sum, wt, i) => sum + wt * Math.min(...chosen.map((j) => (a[3 * j] - b[3 * i]) ** 2 + (a[3 * j + 1] - b[3 * i + 1]) ** 2 + (a[3 * j + 2] - b[3 * i + 2]) ** 2)), 0);
+        for (const n of [3, 8]) {
+            const start = await chooseThreads(clustering, threads, n);
+            const improved = await improveThreads(clustering, threads, start);
+            expect(new Set(improved).size).toBe(n);
+            expect(error(improved)).toBeLessThanOrEqual(error(start));
+        }
+    });
+
+    it('the guides\' thread functions run with the worker entry\'s functions and give the same threads', async () => {
+        const { readFile } = await import('fs/promises');
+        const guides = (await readFile(new URL('../docs/guides.md', import.meta.url), 'utf8')).split('\n');
+        const source = (name) => {
+            const start = guides.findIndex((l) => new RegExp(`^\\s*(async )?function ${name}\\(`).test(l));
+            const indent = guides[start].match(/^ */)[0];
+            return guides.slice(start, guides.findIndex((l, i) => i > start && l === `${indent}}`) + 1).join('\n');
+        };
+        const make = (entry) => new Function('getPaletteFromClustering', 'getSwatchesFromClustering', 'quantizeToIndicesWithPalette',
+            `${source('chooseThreads')}\n${source('improveThreads')}\n${source('coordinates')}\nreturn { chooseThreads, improveThreads };`)(entry.getPaletteFromClustering, entry.getSwatchesFromClustering, entry.quantizeToIndicesWithPalette);
+        const worker = await import('../dist/worker.mjs');
+        const viaWorker = make(worker);
+        const data = new Uint8Array(40 * 30 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i * 37) % 251));
+        const threads = new Uint8Array(3 * 60).map((_, i) => (i * 97) % 256);
+        const clustering = await worker.buildClustering({ data, format: 'rgba', width: 40 });
+        const chosen = await viaWorker.improveThreads(clustering, threads, await viaWorker.chooseThreads(clustering, threads, 6));
+        expect(chosen).toEqual(await improveThreads(clustering, threads, await chooseThreads(clustering, threads, 6)));
+        await expect(viaWorker.improveThreads(clustering, threads, chosen, 'RGB')).rejects.toThrow(/Invalid space/);
     });
 
     it('improveThreads handles an image with fewer colours than n, and one with none visible', async () => {
@@ -1006,7 +1082,7 @@ console.log(gz.length, palette.length / 3);`);
                 mainFields: ['module', 'main'], external: ['node:*'], plugins: [{ name: 'this-package', setup(b) {
                     b.onResolve({ filter: /^agglomerative-clustering(\/clustering\.wasm)?$/ }, (args) => ({ path: args.path.endsWith('.wasm') ? `${dist}clustering.wasm` : `${dist}index.mjs` }));
                 } }, gzipWasm], outfile: join(folder, 'out.mjs'), logLevel: 'error' });
-            const run = spawnSync(process.execPath, [join(folder, 'out.mjs')], { encoding: 'utf8', timeout: 60000 });
+            const run = spawnSync(process.execPath, [join(folder, 'out.mjs')], { encoding: 'utf8', timeout: timeLimit(60000) });
             expect(run.stderr).toBe('');
             const [embedded, colours] = run.stdout.trim().split(' ').map(Number);
             expect(colours).toBe(4);

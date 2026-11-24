@@ -14,6 +14,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { init, buildClustering, getPaletteFromClustering, quantize, quantizeWithPalette, quantizeToIndices, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
+import { timeLimit } from './timeout.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOLDEN_PATH = resolve(__dirname, 'golden.json');
@@ -67,7 +68,7 @@ beforeAll(async () => {
         const { rgba, width, height } = await getImageRgba(await ensureImage(image));
         images[image.name] = { rgba, width, height };
     }
-}, 120_000);
+}, timeLimit(120_000));
 
 afterAll(() => {
     if (update) {writeFileSync(GOLDEN_PATH, JSON.stringify(actual, null, 2) + '\n');}
@@ -87,7 +88,7 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
             check(`${name}/clustering/${label}`, clustering);
             for (const k of [16, 256]) {check(`${name}/palette/${label}/${k}`, await getPaletteFromClustering(clustering, k));}
         }
-    }, 60_000);
+    }, timeLimit(60_000));
 
     it('quantized images', async () => {
         const { rgba, width } = images[name];
@@ -116,7 +117,7 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
         check(`${name}/indices/rgb/16/dither-ordered/transparent`, indexed(await quantizeToIndices(rgba, 16, { dither: 'ordered', width, transparent: true })));
         check(`${name}/indices/oklab/16/dither-atkinson`, indexed(await quantizeToIndices(rgba, 16, { colorSpace: 'oklab', dither: 'atkinson', width })));
         check(`${name}/indices/oklab/400`, indexed(await quantizeToIndicesWithPalette(rgba, large, { colorSpace: 'oklab' })));
-    }, 60_000);
+    }, timeLimit(60_000));
 
 });
 

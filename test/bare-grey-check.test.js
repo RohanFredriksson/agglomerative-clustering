@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { encode, decode } from 'fast-png';
 import { bareLayout, bareImageWarning, resetWarnings } from '../dist/shared.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
+import { timeLimit } from './timeout.js';
 
 const luma = (r, g, b) => Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
 // Interleave per-pixel bytes from functions of the pixel index.
@@ -21,7 +22,7 @@ beforeAll(async () => {
     const grey = new Uint8Array(width * height);
     for (let p = 0; p < grey.length; p++) {grey[p] = luma(rgba[4 * p], rgba[4 * p + 1], rgba[4 * p + 2]);}
     kodak = { rgba, width, height, grey };
-}, 120_000);
+}, timeLimit(120_000));
 
 // A soft-edged icon (a shaded disc with an anti-aliased edge, transparent outside), as an emoji or app icon would be
 const icon = (side) => {

@@ -7,6 +7,7 @@ import * as ac from '../dist/index.mjs';
 import * as dropIn from '../dist/worker.mjs';
 import { createWorker } from '../dist/worker.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
+import { timeLimit } from './timeout.js';
 
 // Swaps bytes 0 and 2 of every 4-byte pixel: RGBA to BGRA, and back.
 const toBgra = (pixels) => {
@@ -48,7 +49,7 @@ beforeAll(async () => {
     for (const [name, sets] of Object.entries(cases)) {
         for (const o of sets) {clustered.push([name, o, await ac.buildClustering(images[name].rgba, o), await ac.buildClustering(images[name].bgra, o)]);}
     }
-}, 300_000);
+}, timeLimit(300_000));
 
 // The one-shot functions cluster on every call, so they run on the small images only.
 const small = ['synthetic', 'opaque'];
@@ -93,7 +94,7 @@ describe('BGRA input behaves as the same image in RGBA', () => {
                 }
             }
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('maps BGRA to the RGBA result with R and B swapped', async () => {
         for (const [name, o, clustering] of clustered) {
@@ -115,7 +116,7 @@ describe('BGRA input behaves as the same image in RGBA', () => {
                 }
             }
         }
-    }, 120_000);
+    }, timeLimit(120_000));
 
     it('takes the sliced path for BGRA with the same results', async () => {
         const { bgra } = images.synthetic;
@@ -283,7 +284,7 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
                 }
             }
         }
-    }, 300_000);
+    }, timeLimit(300_000));
 
     it('maps x formats to the rgb result with 255 in the fourth byte', async () => {
         for (const [name, order, fourth] of variants) {
@@ -305,7 +306,7 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
                 }
             }
         }
-    }, 300_000);
+    }, timeLimit(300_000));
 
     it('maps a bgrx result back to itself when read as bgra', async () => {
         const x = xOf('synthetic', 'bgr', 0);

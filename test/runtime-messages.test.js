@@ -8,6 +8,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { timeLimit } from './timeout.js';
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
 const entry = pathToFileURL(join(dist, 'index.mjs')).href;
@@ -18,7 +19,7 @@ const runScript = (source, wrap = (file) => [process.execPath, [file]]) => {
         const file = join(folder, 'run.mjs');
         writeFileSync(file, source);
         const [command, args] = wrap(file);
-        const run = spawnSync(command, args, { encoding: 'utf8', timeout: 60000 });
+        const run = spawnSync(command, args, { encoding: 'utf8', timeout: timeLimit(60000) });
         return `${run.stdout}${run.stderr}`;
     } finally {
         rmSync(folder, { recursive: true, force: true });

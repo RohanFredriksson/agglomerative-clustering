@@ -6,6 +6,7 @@
 - **`init({ wasm })` given gzipped bytes** now says so in its `wasm-load-failed` message and shows how to decompress them, in every engine (it checks the bytes for gzip's `1f 8b`).
 
 ### Docs
+- **The guides' fixed-palette recipe now picks colours closer by eye.** The guides' `improveThreads` now measures distance in OKLab by default, which lowered the mean ΔE2000 on the Kodak photos for 4 of 26 pigments from 23.3 to 18.7, 16 of 78 bricks from 10.0 to 9.3 and 12 of 584 threads from 7.13 to 6.87, at 0.3 to 1.7 dB less PSNR<!-- bench/spikes/fixed-subset-oklab/measure.mjs → results.txt -->; pass `'rgb'` for the old choice. It returns the threads heaviest first, and both functions use `getPaletteFromClustering` and `getSwatchesFromClustering`, so they also work with only the worker entry. Copy the new version if you use it. The API reference's `quantizeToIndicesWithPalette` now points to it.
 - **Plugins and single-file hosts:** embedding the module gzipped, with a six-line esbuild plugin and two runtime lines (a 161 KB plugin bundle becomes 102 KB).
 
 ## 3.7.0
