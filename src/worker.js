@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy} from './shared.js';
+import {version, fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -243,12 +243,6 @@ const pixelBuffers = (sent) => {
 // Rebuilds an error that happened in the worker: same name, message and code as the main entry gives for the same
 // input, the stack of the call that failed (`origin`, made when the call was sent), and the worker's own stack as `cause`.
 const remoteError = (info, origin) => {
-    // A worker script from another version (3.x's thread, with the old wire names) answers a method it doesn't know with
-    // this message; the caller's arguments are fine, so it is not reported as one.
-    const unknown = /^Unknown method '(.*)'\.$/.exec(info.message);
-    if (unknown) {
-        info = {...info, message: `The worker script is from another version of agglomerative-clustering ('${unknown[1]}' is unknown to it). Use the worker-thread.mjs from this version.`, code: 'worker-failed', argument: undefined};
-    }
     const error = new Error(info.message);
     if (info.name && info.name !== 'Error') {error.name = info.name;}
     if (info.code !== undefined) {error.code = info.code;}
@@ -396,6 +390,9 @@ const makeWorker = (options, allowScript) => {
     const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
     let initial = initialWasm === undefined ? null : {wasm: initialWasm};
     let initialising = null;
+    // Whether the worker script has said it is this version (the first message to every worker), and that exchange.
+    let shaken = false;
+    let shaking = null;
 
     let connection = null;
     let starting = null;
@@ -414,7 +411,7 @@ const makeWorker = (options, allowScript) => {
     let nextHandle = 1;
     const pending = new Map();
     // Whether a call made now is posted before it returns (see `own`).
-    const ready = () => connection !== null && !initial;
+    const ready = () => connection !== null && shaken && !initial;
     // The image of a call made before the worker is ready: with `transfer: true` its buffer is moved out of the caller's
     // hands at once (a structured clone that transfers it, so the caller's array empties now, as it would on posting),
     // otherwise copied.
@@ -446,6 +443,8 @@ const makeWorker = (options, allowScript) => {
         connection = null;
         starting = null;
         initialising = null;
+        shaken = false;
+        shaking = null;
         if (initialWasm !== undefined) {initial = {wasm: initialWasm};}
         const calls = [...pending.values()];
         pending.clear();
@@ -501,6 +500,27 @@ const makeWorker = (options, allowScript) => {
             // The worker may have failed in the instant between starting and being adopted; it has been dropped then.
             if (waitingFor !== generation) {throw fail('worker-failed', 'Worker failed while starting.');}
             connection = connection || started;
+        }
+        if (!shaken) {
+            // The first message to a worker: its script must be this version's (an older thread answers `handshake` as an
+            // unknown method; a 3.4-3.8 one would otherwise run calls but never see their signals or progress callbacks).
+            // Nothing else is posted before it answers, so a mismatch is reported to every call waiting on the worker.
+            if (!shaking) {
+                const mine = generation;
+                shaking = post('handshake', [], [], origin).then((theirs) => {
+                    if (theirs === version) {shaken = true; return;}
+                    throw theirs;
+                }, (error) => {
+                    if (error && error.code === 'worker-failed') {throw error;}
+                    throw undefined;
+                }).catch((theirs) => {
+                    if (theirs instanceof Error) {throw theirs;}
+                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Use the worker-thread.mjs from this version.`;
+                    if (mine === generation) {lose(reason);}
+                    throw fail('worker-failed', reason);
+                });
+            }
+            await shaking;
         }
         if (initial && !(method === 'init' && args.length > 0 && args[0].wasm !== undefined)) {
             initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
@@ -565,6 +585,10 @@ const makeWorker = (options, allowScript) => {
         instance[name] = (image, ...rest) => {
             const origin = new Error();
             return (async () => {
+                // A bare RGB or grey array is refused first, as in the main entry (before the options are read, an abort is
+                // honoured, or anything is posted or a transfer can empty the array).
+                const bare = bareImageError(image);
+                if (bare) {throw bare;}
                 const position = optionsPosition[name];
                 const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
                 let args = rest.slice();
@@ -579,9 +603,6 @@ const makeWorker = (options, allowScript) => {
                     }
                     throw abortReason(signal);
                 }
-                // A bare RGB or grey array is refused here, before anything is posted or a transfer can empty it.
-                const bare = bareImageError(image);
-                if (bare) {throw bare;}
                 let sent = send(image);
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
@@ -677,6 +698,8 @@ const makeWorker = (options, allowScript) => {
                 const origin = new Error();
                 return (async () => {
                     if (released || !handle) {throw fail('invalid-handle', "Invalid handle: it was released.");}
+                    const bare = bareImageError(image);
+                    if (bare) {throw bare;}
                     const {options, signal, onProgress} = takeControls(mapOptions);
                     if (signal && signal.aborted) {
                         // As the functions on the worker do: a wrong argument is reported before the abort.
@@ -687,8 +710,6 @@ const makeWorker = (options, allowScript) => {
                         }
                         throw abortReason(signal);
                     }
-                    const bare = bareImageError(image);
-                    if (bare) {throw bare;}
                     let sent = send(image);
                     const ahead = !ready();
                     if (ahead) {sent = take(sent);}
@@ -711,10 +732,10 @@ const makeWorker = (options, allowScript) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
-            const {options, signal, onProgress} = takeControls(clusterOptions, false);
-            // The image is checked before the abort, as the main entry does.
+            // The image is checked before the options and the abort, as the main entry does.
             const bare = bareImageError(image);
             if (bare) {throw bare;}
+            const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = ready() ? send(image) : take(send(image));

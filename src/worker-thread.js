@@ -1,7 +1,7 @@
 // Runs inside the worker started by worker.js: receives calls, runs them with the main entry, and posts results
 // back, transferring every result buffer. Imports `./index.mjs`, which exists only in dist/ (like clustering.js).
 import * as ac from './index.mjs';
-import {MARK, mark, revive, isPalette} from './shared.js';
+import {version, MARK, mark, revive, isPalette} from './shared.js';
 
 // Images kept in the worker by `cluster`, with their clusterings, and clusterings alone from `load`, by handle id.
 const handles = new Map();
@@ -30,6 +30,8 @@ const functions = Object.fromEntries(Object.entries(ac).filter(([name, value]) =
 
 const methods = {
     ...functions,
+    // The first message every worker entry sends: which version this script is.
+    handshake: async () => version,
     cluster: async (id, image, options) => {
         handles.set(id, {image, clustering: await ac.buildClustering(image, options)});
     },

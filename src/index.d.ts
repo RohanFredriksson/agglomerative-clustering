@@ -17,7 +17,8 @@ export type ImageFormat = 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx';
  * newer format version or one using a colour space it doesn't know, or an older one that lacks what was asked for),
  * `out-of-memory`, `wasm-load-failed` (the WebAssembly module could not be loaded or compiled: a missing or blocked file, a
  * browser without SIMD, or a `.wasm` from another version of the library), and in the worker entry
- * `worker-terminated`, `worker-failed` and `invalid-handle`.
+ * `worker-terminated`, `worker-failed` (the worker could not start, crashed, or runs a script from another version of the
+ * package) and `invalid-handle`.
  */
 export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed'
     | 'worker-terminated' | 'worker-failed' | 'invalid-handle';

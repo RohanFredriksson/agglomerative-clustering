@@ -48,9 +48,9 @@ writeFileSync(file, source);
 
 // 4. A CommonJS copy, dist/clustering.cjs, for module systems that can't require() an ES module: Jest's (in its default
 //    CommonJS mode, with or without jsdom) throws "Must use import to load ES Module", and can't run import() at all
-//    without --experimental-vm-modules. index.cjs requires the ES glue first, which Node (20.19 and later) and every
+//    without --experimental-vm-modules. index.cjs requires the ES glue first, which Node (22.12 and later) and every
 //    bundler accept, and this copy only when that throws, so it only ever runs in Node-like runtimes. It reaches Node's
-//    modules through process.getBuiltinModule (Node 20.16 and later, Bun, Deno, and Jest's sandbox) rather than
+//    modules through process.getBuiltinModule (Node 22 and later, Bun, Deno, and Jest's sandbox) rather than
 //    require("node:fs"), so a bundler that sees both requires in index.cjs finds nothing here to resolve.
 const replaceOnce = (text, name, pattern, replace) => {
     const found = text.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)) || [];

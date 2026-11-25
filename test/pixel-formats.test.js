@@ -263,9 +263,10 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
     it('clusters, cuts, weighs and indexes x formats as rgb', async () => {
         for (const [name, order, fourth] of variants) {
             const rgb = rgbOf(name), x = xOf(name, order, fourth);
-            for (const withTransparent of cases[name]) {
-                // these formats have no alpha, so `transparent` as an option throws (test/transparent-formats.test.js)
-                const { transparent: _unused, ...o } = withTransparent;
+            // these formats have no alpha, so `transparent` as an option throws (test/transparent-formats.test.js): the sets
+            // that only differ by it are the same case here
+            const withoutTransparent = [...new Set(cases[name].map(({ transparent, ...rest }) => JSON.stringify(rest)))].map((text) => JSON.parse(text));
+            for (const o of withoutTransparent) {
                 const label = `${name} ${order}x ${fourth} ${JSON.stringify(o)}`;
                 const fromRgb = await ac.buildClustering(rgb, o), fromX = await ac.buildClustering(x, o);
                 expect(compare(fromX, fromRgb), label).toBe(0);

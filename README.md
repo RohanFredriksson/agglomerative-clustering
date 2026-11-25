@@ -24,7 +24,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 npm install agglomerative-clustering
 ```
 
-Upgrading? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md). From 3.3, three functions have new names, and the old ones keep working until 4.0. From 2.x, one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
+Upgrading? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md). From 3.x, 4.0 removed the get… and …FromClustering functions, turned two warnings into errors (a bare RGB or grey array, and `transparent` on a format with no alpha), and needs Node 22.12+: see [From 3.x to 4.0](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md#from-3x-to-40). From 2.x, one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
 
 It runs on Node 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
 

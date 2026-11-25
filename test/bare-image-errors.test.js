@@ -170,3 +170,33 @@ describe('worker entry', () => {
         }
     });
 });
+
+describe('the image is checked before the options, in both entries', () => {
+    it('reports a bare RGB array before an invalid option, from functions, handles and cluster', async () => {
+        const message = texts('12,288').rgb;
+        // a fresh array: earlier tests in this file may have transferred the shared ones
+        const bareRgb = new Uint8Array(side * side * 3);
+        for (let p = 0; p < side * side; p++) {bareRgb.set(hsv((p % side) / side, 0.85, 0.3 + 0.7 * Math.floor(p / side) / side), p * 3);}
+        // options the worker entry itself refuses (a dither setting that can't be sent), which it used to report first
+        const bad = { dither: { method: () => {} } };
+        const worker = createWorker();
+        try {
+            const handle = await worker.load(await buildClustering(bareRgba));
+            try {
+                const calls = [
+                    () => buildPalette(bareRgb, 8, bad),
+                    () => worker.buildPalette(bareRgb, 8, bad),
+                    () => worker.quantize(bareRgb, 8, bad),
+                    () => worker.cluster(bareRgb, bad),
+                    () => handle.quantize(bareRgb, 8, bad),
+                    () => handle.quantizeToIndices(bareRgb, 8, bad),
+                ];
+                for (const call of calls) {await expect(call()).rejects.toMatchObject(expected(message));}
+            } finally {
+                await handle.release();
+            }
+        } finally {
+            await worker.terminate();
+        }
+    });
+});

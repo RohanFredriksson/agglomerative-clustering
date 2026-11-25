@@ -219,6 +219,15 @@ describe('createWorker', () => {
             expect(error.message.startsWith(`Invalid ${argument}: it cannot be sent to the worker (`)).toBe(true);
         }
         await expect(worker.buildPalette(Promise.resolve(image), 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
+        // A handle's methods post the handle's id first, so the argument names are offset by one.
+        const handle = await worker.cluster(image);
+        try {
+            const error = await handle.quantize(Symbol('k')).catch((caught) => caught);
+            expect(error).toMatchObject({ code: 'invalid-argument', argument: 'k' });
+            expect(error.message.startsWith('Invalid k: it cannot be sent to the worker (')).toBe(true);
+        } finally {
+            await handle.release();
+        }
         expect(await worker.buildPalette(image, 4)).toEqual(await ac.buildPalette(image, 4));
     });
 

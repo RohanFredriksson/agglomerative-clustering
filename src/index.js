@@ -67,7 +67,7 @@ const hasSimd = () => {
     try {return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array(simdProbe));} catch (error) {return false;}
 };
 // Node itself (or Bun), not a runtime that imitates it: Cloudflare Workers with nodejs_compat and Deno also define
-// process.versions.node, but their navigator.userAgent says what they are (Node 20 has no navigator at all).
+// process.versions.node, but their navigator.userAgent says what they are (old Node versions have no navigator at all).
 const isNodeLike = !!(globalThis.process && globalThis.process.versions && globalThis.process.versions.node)
     && (typeof navigator === 'undefined' || /^(Node\.js|Bun)\//.test(String(navigator.userAgent)));
 // A browser page or worker, as opposed to a server-side runtime that isn't Node (Cloudflare Workers, Vercel's edge runtime,

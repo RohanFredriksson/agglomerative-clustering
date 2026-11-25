@@ -4,7 +4,7 @@ Upgrading from an earlier major version, and replacing names deprecated along th
 
 ## From 3.x to 4.0
 
-4.0 is built in two parts, and the first beta has the first: premultiplied input, an image object that rejects keys it doesn't know, and result types that keep the input's. The removal of the deprecated names is in [Removed names](#removed-names-34-and-38-deprecations) below. Code that passes only `Uint8Array`s and `ImageData`s changes in nothing; each item below is a cost for code that passes `{ data, format }` objects.
+4.0 was built in two parts, and both are in: premultiplied input, an image object that rejects keys it doesn't know, and result types that keep the input's (part 1); the removal of the deprecated names, and errors where 3.x warned or ignored a mistake (part 2). The removed names are in [Removed names](#removed-names-34-and-38-deprecations) below. Output for every input that still works is unchanged: palettes, weights and mapped images are the same as 3.8's. What can affect any code, whatever it passes: a bare `Uint8Array` that looks like RGB or grey, `transparent` on a format with no alpha, the removed names, a worker script from another version, and Node 22.12+. The type items (a reused variable, `interface X extends RawImage`, the `data` type) and the unknown-key and `premultiplied` items are costs for code that passes `{ data, format }` objects.
 
 - **A variable reused across calls with different inputs stops compiling.** A result now has the input's exact type, so `let image = { data, format: 'rgba' as const }` can't be assigned an object with `format: 'bgra'`, or one with `width` after one without. Annotate it as `RawImage`:
 
@@ -45,7 +45,7 @@ Upgrading from an earlier major version, and replacing names deprecated along th
 - **Mocks and spies:** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`; spy on the method of a real clustering instead. A `vi.mock` factory that lists `getPalette` needs `buildPalette` now.
 - **A class that implements `AgglomerativeWorker`** (a typed fake, or a wrapper) drops `getClustering`, `getPalette`, `getSwatches` and the five `…FromClustering` methods, which the interface no longer lists. A fake that types itself as `Pick<AgglomerativeWorker, 'buildPalette' | 'cluster'>` is spared this.
 - **`getClusteringInfo` as a function is gone, the method stays.** `clustering.getClusteringInfo()` and a handle's `getClusteringInfo()` are unchanged.
-- **A worker script from 3.x (`createWorker({ script })`, `init({ script })`).** The worker's calls to cluster an image are now named `buildClustering`, `buildPalette` and `buildSwatches` on the wire, so a `worker-thread.mjs` copied from 3.x doesn't know them: the call rejects with `worker-failed` ("The worker script is from another version…"). Copy the `worker-thread.mjs` of this version next to your bundle instead. Workers that start the package's own script are unaffected.
+- **A worker script from another version (`createWorker({ script })`, `init({ script })`).** The first message the worker entry sends to a worker asks which version its script is. A `worker-thread.mjs` from 3.x (or any version other than this one, including a stale copy a bundler made) answers differently, and every call on that worker rejects with `worker-failed` ("The worker script is from another version of agglomerative-clustering (…)"). Copy the `worker-thread.mjs` of this version next to your bundle instead. Workers that start the package's own script are unaffected.
 
 ## From 2.x to 3.0
 
