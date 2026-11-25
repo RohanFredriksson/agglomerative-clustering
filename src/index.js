@@ -28,7 +28,7 @@ const formatHint = (format) => {
     const lower = format.toLowerCase();
     if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
     if (lower === 'xrgb' || lower === 'rgb24') {return " Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'.";}
-    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).";}
+    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: pass it as 'bgra' with premultiplied: true (see Input in the API docs).";}
     if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
     return '';
 };

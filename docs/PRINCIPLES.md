@@ -22,7 +22,7 @@ It takes decoded pixels in the byte layouts that real sources produce (`imageFor
 
 - **Encoding files:** palette PNG and GIF writers (fast-png, gifenc). The guides show how to use them.
 - **Decoding files:** sharp, the browser (`createImageBitmap`) and squoosh's codecs do it; the guides have a recipe for each environment. An encoded file passed as pixels is recognised and rejected with a message (Settled decisions).
-- **Image processing that isn't quantization:** resizing, compositing onto a background, colour management. Converting premultiplied pixels is a recipe until 4.0, where it is planned.
+- **Image processing that isn't quantization:** resizing, compositing onto a background, colour management. Premultiplied input is read with `premultiplied: true` (4.0); converting premultiplied pixels to straight output is a recipe in the guides.
 - **Application policy:** worker pools and their queueing, smoothing palettes across video frames, picking a palette size for the user. These depend on the app, so they are recipes.
 - **Neighbouring jobs that other tools do better:** compression-tuned PNG pipelines (libimagequant, pngquant), a few vivid "dominant" UI colours (color-thief, node-vibrant), palettes with translucent entries.
 
@@ -106,6 +106,7 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it);
   - built-in swatch helpers: a ranking function, an ordering option on swatches, a one-call dominant colour (the guides' `rankSwatches` recipe covers them).
   - a built-in palette-size suggestion or elbow heuristic (the guides' `sizeForError` and `sizeForScore` recipes cover it).
-- **Deferred to 4.0** (ROADMAP "4.0"): premultiplied alpha, with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types; `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image; the bare-image warnings (`rgb-as-rgba`, `gray-as-rgba`) becoming `invalid-argument` errors.
+- **Done in 4.0 part 1** (ROADMAP "4.0"): premultiplied alpha (`premultiplied: true`), with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types. Straight output from a premultiplied source is a recipe, not an option (decided 2026-11-25).
+- **Deferred to 4.0** (ROADMAP "4.0"): `alpha` and `transparent` throwing on formats without alpha; removing the `get…` names of the functions that cluster an image; the bare-image warnings (`rgb-as-rgba`, `gray-as-rgba`) becoming `invalid-argument` errors.
 
 When the maintainer settles a new question, it is added here, or to the ROADMAP if it is a plan or a deferral, in the same change.

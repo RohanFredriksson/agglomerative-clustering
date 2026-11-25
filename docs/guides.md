@@ -615,6 +615,38 @@ const text = wcagContrast(background.hex, '#000') > wcagContrast(background.hex,
 
 The colours come back as sRGB bytes whatever `colorSpace` they were clustered in; that option only changes how pixels are grouped, so the picks can differ between the two (see [Choosing a colour space](api.md#choosing-a-colour-space)).
 
+### Straight pixels from a premultiplied source
+
+A premultiplied image (`premultiplied: true`) comes back premultiplied, which is right for where it came from (Electron's `createFromBitmap`, Cairo, WIC) and wrong for a destination that wants straight pixels: `new ImageData` and `putImageData`, the JavaScript PNG encoders, sharp's default raw input. For those, map to indices and write each pixel's palette colour with the input's alpha. The result is exactly what `quantize` gives for the same picture as straight pixels (0 pixels differ), and the loop adds under 1% to the call (55 ms on 12 megapixels, against 7.5 s for the mapping). <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt -->
+
+```js
+import { quantizeToIndices } from 'agglomerative-clustering';
+
+// Straight RGBA bytes from a premultiplied 'rgba' or 'bgra' image, mapped to k colours.
+async function toStraight(image, k, options) {
+  const { indices, palette } = await quantizeToIndices(image, k, options);   // indexed output is straight
+  const { data, format } = image;
+  const [red, blue] = format === 'bgra' ? [2, 0] : [0, 2];                  // the palette is RGB
+  const out = new Uint8ClampedArray(data.length);                           // what ImageData wants
+  for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
+    const s = indices[i] * 3;
+    out[o + red] = palette[s]; out[o + 1] = palette[s + 1]; out[o + blue] = palette[s + 2];
+    out[o + 3] = data[o + 3];                                               // alpha comes from the input
+  }
+  return out;
+}
+
+const straight = await toStraight({ data, format: 'rgba', width, height, premultiplied: true }, 16);
+ctx.putImageData(new ImageData(straight, width, height), 0, 0);
+```
+
+Four things to keep:
+
+- **Take alpha from the input, not the palette.** Palette entries are RGB, so alpha from there makes every pixel opaque.
+- **Don't pass `transparent`.** It adds an entry after the palette, which the loop would read as `undefined` and write as 0. A pixel's alpha is already kept pixel for pixel.
+- **Swap for `'bgra'`**, as the loop does; without it red and blue are exchanged.
+- **Don't un-premultiply the mapped output instead.** It reads as "undo what the library did", but the colours were rounded once to premultiply and a second time to undo it: below alpha 16 every pixel is off, by up to 120 per channel, and a 16-colour result has 1,171 colours. <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt --> The loop above has none of that.
+
 ## Moving from color-thief, node-vibrant, image-q or get-image-colors
 
 This library takes **decoded pixels**, not files, URLs or image elements: decode first ([Decoding image files](#decoding-image-files)), and see [Input](api.md#input) for the formats.
