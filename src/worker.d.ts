@@ -123,7 +123,10 @@ export interface LoadedClusteringHandle {
 
 /** The main entry's functions, run in a worker, plus handles and `terminate`. */
 export interface AgglomerativeWorker {
-    /** Loads the module in the worker. `wasm` is the only option, and `createWorker({ wasm })` does the same. */
+    /**
+     * Records `wasm` (the only option; `createWorker({ wasm })` does the same) and warms the worker up. Resolves once the
+     * options are recorded, without waiting for the worker: a worker that can't start or load fails the calls that follow.
+     */
     init(options?: InitOptions): Promise<void>;
     /** The main entry's `buildClustering`, run in this worker. */
     buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
@@ -161,8 +164,9 @@ export function terminate(): Promise<void>;
 
 // The main entry's functions, run in one shared worker started on first use.
 /**
- * The main entry's `init`, run in the shared worker (see `createWorker` for a worker of your own). It also takes the
- * shared worker's `script`, before any other call.
+ * The main entry's `init` for the shared worker (see `createWorker` for a worker of your own). It also takes the
+ * shared worker's `script`, before any other call. It checks the options, records them and resolves, so it is safe
+ * without `await`: a worker that can't start or load fails the calls that follow, not `init`.
  */
 export function init(options?: SharedInitOptions): Promise<void>;
 /** The main entry's `buildClustering`, run in the shared worker (see `createWorker` for a worker of your own). */

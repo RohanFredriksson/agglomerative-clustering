@@ -154,7 +154,8 @@ const start = async (receive, chosen) => {
         ? inZip(error)
             ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).${versions}`
             : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.${versions}`
-        : error.message}));
+        // Any other failure to start or load (a link error from a script of another version, say) gets the same advice.
+        : `${String(error && error.message).split('\n')[0].replace(/\.$/, '')}.${versions}`}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
     return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => worker.ref(), unref: () => worker.unref()};
@@ -384,7 +385,7 @@ const makeWorker = (options, allowScript) => {
     // The worker script to start instead of the package's own (see scriptOption); set by init({ script }) for the shared one.
     let script = options.script === undefined ? null : scriptOption(options.script);
     // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
-    const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
+    let initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
     let initial = initialWasm === undefined ? null : {wasm: initialWasm};
     let initialising = null;
     // Whether the worker script has said it is this version (the first message to every worker), and that exchange.
@@ -515,7 +516,7 @@ const makeWorker = (options, allowScript) => {
                 }).catch((theirs) => {
                     if (theirs instanceof Error) {throw theirs;}
                     if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
-                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Use the worker-thread.mjs from this version.`;
+                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Serve all of the package's dist/ files from this version.`;
                     if (mine === generation) {lose(reason);}
                     throw fail('worker-failed', reason);
                 });
@@ -634,7 +635,17 @@ const makeWorker = (options, allowScript) => {
                 checked = rest;
             }
         } catch (error) {return Promise.reject(error);}
-        return invoke('init', checked === undefined || Object.keys(checked).length === 0 ? [] : [checked], [], origin).then(() => undefined);
+        if (terminated) {return Promise.reject(fail('worker-terminated', "Worker terminated."));}
+        // The options are only recorded: `wasm` is sent as the worker's first call (see `initial`), and a worker that can't
+        // start or load fails the calls, which is where a caller handles it. So init() can't leave a rejection nobody
+        // awaits (it is often written as a setup line). The warm-up below is started and its failure dropped for the same reason.
+        if (checked !== undefined && checked.wasm !== undefined) {
+            initialWasm = checked.wasm;
+            initial = {wasm: initialWasm};
+            initialising = null;
+        }
+        invoke('init', [], [], origin).catch(() => {});
+        return Promise.resolve();
     };
 
     // Whether a value is an image where a palette size was expected (a pixel array, an ImageData or `{data, ...}`).

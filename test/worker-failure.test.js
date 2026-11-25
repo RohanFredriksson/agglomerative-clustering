@@ -50,7 +50,9 @@ describe('the shared worker', () => {
 
     it('passes init its options', async () => {
         await expect(dropIn.init({ wasm: 5 })).rejects.toMatchObject({ code: 'invalid-argument' });
-        await expect(dropIn.init({ wasm: join(folder, 'no-such-file.wasm') })).rejects.toBeTruthy();
+        // A wasm that can't be loaded is the next call's failure, not init's: init only records it.
+        await expect(dropIn.init({ wasm: join(folder, 'no-such-file.wasm') })).resolves.toBeUndefined();
+        await expect(dropIn.buildPalette(image, 4)).rejects.toMatchObject({ code: 'wasm-load-failed' });
         await dropIn.terminate();
         // And it still starts normally afterwards.
         expect((await dropIn.buildPalette(image, 4)).length).toBeGreaterThan(0);

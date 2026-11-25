@@ -122,7 +122,7 @@ describe('a worker script from another version', () => {
         return { script, done: () => rmSync(folder, { recursive: true, force: true }) };
     };
     const calls = (worker) => [() => worker.buildPalette(image, 4), () => worker.buildClustering(image), () => worker.buildSwatches(image, 4)];
-    const message = (theirs) => `The worker script is from another version of agglomerative-clustering (${theirs}; this is ${main.version}). Use the worker-thread.mjs from this version.`;
+    const message = (theirs) => `The worker script is from another version of agglomerative-clustering (${theirs}; this is ${main.version}). Serve all of the package's dist/ files from this version.`;
 
     // A thread from before 3.4 has no build… names and no handshake: it answers every call as a method it doesn't know.
     it('that knows no handshake or build… names rejects every call with worker-failed, and does not hang', async () => {

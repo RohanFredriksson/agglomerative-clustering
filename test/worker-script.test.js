@@ -111,6 +111,55 @@ describe('init({ script }) for the shared worker', () => {
 
 });
 
+describe('init({ script }) leaves nothing unhandled', () => {
+
+    it('as a setup line without await: a script that cannot start fails the calls, not the process', () => {
+        const { status, output } = runModule(`
+            import * as ac from ${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)};
+            ac.init({ script: '/nonexistent/worker-thread.mjs' });
+            const code = await ac.buildPalette({ data: new Uint8Array(16).fill(9), format: 'rgba' }, 2).then(() => 'ok', (error) => error.code);
+            console.log(code);
+            await ac.terminate();
+        `);
+        expect(output).toBe('worker-failed');
+        expect(status).toBe(0);
+    });
+
+    it('awaited, it resolves once the options are recorded, and the next call rejects with worker-failed', () => {
+        const { status, output } = runModule(`
+            import * as ac from ${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)};
+            const first = await ac.init({ script: '/nonexistent/worker-thread.mjs' }).then(() => 'resolved', (error) => error.code);
+            const code = await ac.buildPalette({ data: new Uint8Array(16).fill(9), format: 'rgba' }, 2).then(() => 'ok', (error) => error.code);
+            const bad = await ac.init({ wasm: 5 }).then(() => 'resolved', (error) => error.code + ' ' + error.argument);
+            console.log(first, code, bad);
+            await ac.terminate();
+        `);
+        expect(output).toBe('resolved worker-failed invalid-argument options.wasm');
+        expect(status).toBe(0);
+    });
+
+});
+
+describe('a worker script that fails to link, in Node', () => {
+
+    // A stale 3.8 worker-thread.mjs next to 4.0 files fails at link time (a named export that no longer exists).
+    it('is worker-failed, with the different-versions hint and the engine text', async () => {
+        const stale = join(folder, 'stale');
+        cpSync(dist, stale, { recursive: true });
+        writeFileSync(join(stale, 'worker-thread.mjs'), "import { noSuchExport } from './index.mjs';\nconsole.log(noSuchExport);\n");
+        const worker = createWorker({ script: join(stale, 'worker-thread.mjs') });
+        try {
+            const error = await worker.buildPalette(image, 4).catch((caught) => caught);
+            expect(error.code).toBe('worker-failed');
+            expect(error.message).toContain('noSuchExport');
+            expect(error.message).toContain('from different versions of agglomerative-clustering: serve all of dist/ from this version');
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+});
+
 describe('choosing worker_threads or a Web Worker', () => {
 
     // jsdom and happy-dom define `window` (but no Worker) in Node: the worker entry still uses worker_threads.
