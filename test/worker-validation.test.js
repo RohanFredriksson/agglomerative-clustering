@@ -113,8 +113,7 @@ describe('the worker entry reports a wrong argument as the main entry does', () 
                             const args = { ...defaults, [role]: value };
                             const expected = await caught(() => mainCall(args));
                             const got = await caught(() => workerCall(args));
-                            if (expected === 'resolved') { continue; }
-                            try { expect(got, `${label}, ${role} ${what}`).toEqual(expected); } catch (error) { failures.push(error.message); }
+                            try { expect(expected, `${label}, ${role} ${what}: the main entry accepts it`).not.toBe('resolved'); expect(got, `${label}, ${role} ${what}`).toEqual(expected); } catch (error) { failures.push(error.message); }
                         }
                     }
                     expect(failures).toEqual([]);
@@ -159,12 +158,52 @@ describe('the worker entry reports a wrong argument as the main entry does', () 
 
 describe('a cold worker (its first call, made before it has started)', () => {
     it.each(asOptions.slice(0, 5))('gives the main entry\'s error for options: %s', async (_, value) => {
+        const calls = [
+            [(api) => api.buildPalette(pixels(), 2, value), (cold) => cold.buildPalette(pixels(), 2, value)],
+            [(api) => api.quantize(pixels(), 2, value), (cold) => cold.quantize(pixels(), 2, value)],
+            [(api) => api.buildClustering(pixels(), value), (cold) => cold.cluster(pixels(), value)],
+        ];
+        for (const [mainCall, coldCall] of calls) {
+            const cold = createWorker();
+            try {
+                const expected = await caught(() => mainCall(ac));
+                expect(expected).not.toBe('resolved');
+                expect(await caught(() => coldCall(cold))).toEqual(expected);
+            } finally { await cold.terminate(); }
+        }
+    });
+
+    it('gives the main entry\'s error for a quantize call with a bad option', async () => {
         const cold = createWorker();
         try {
-            const expected = await caught(() => ac.buildPalette(pixels(), 2, value));
-            expect(await caught(() => cold.buildPalette(pixels(), 2, value))).toEqual(expected);
-            expect((await caught(() => createWorker().cluster(pixels(), value)))).toEqual(await caught(() => ac.buildClustering(pixels(), value)));
+            const expected = await caught(() => ac.quantize(pixels(), 2, { colorSpace: 'x' }));
+            expect(expected).toMatchObject({ code: 'invalid-argument', argument: 'options.colorSpace' });
+            expect(await caught(() => cold.quantize(pixels(), 2, { colorSpace: 'x' }))).toEqual(expected);
         } finally { await cold.terminate(); }
+    });
+});
+
+describe('a palette with no colours on a handle, with an aborted signal', () => {
+    // The handle keeps the image's size, not its pixels, so the thread decides whether the empty palette has pixels to map.
+    const empty = new Uint8Array(0);
+    const optionsFor = (method) => method === 'quantizeToIndicesWithPalette' ? [{ signal: aborted() }, { signal: aborted(), transparent: 128 }] : [{ signal: aborted() }];
+    it('is the main entry\'s error when the image has visible pixels, and the abort when it has none', async () => {
+        const seen = pixels();
+        const clear = { ...pixels(), data: new Uint8Array(64) };
+        const handle = await plain.cluster(seen);
+        const none = await plain.cluster(clear);
+        try {
+            for (const method of ['quantizeWithPalette', 'quantizeToIndicesWithPalette']) {
+                for (const [name, image, h] of [['visible', pixels(), handle], ['clear', { ...pixels(), data: new Uint8Array(64) }, none]]) {
+                    for (const o of optionsFor(method)) {
+                        const expected = await caught(() => ac[method](image, empty, o));
+                        const got = await caught(() => h[method](empty, o));
+                        expect(got, `${method} ${name}`).toEqual(expected);
+                        expect(expected.code === 'invalid-argument', `${method} ${name}`).toBe(name === 'visible');
+                    }
+                }
+            }
+        } finally { await handle.release(); await none.release(); }
     });
 });
 

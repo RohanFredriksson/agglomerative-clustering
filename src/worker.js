@@ -658,6 +658,16 @@ const makeWorker = (options, allowScript) => {
                 if (lead === 'palette') {checkPalette(leading[0]);} else {checkK(leading[0]);}
                 taken = takeControls(mapOptions, keys, shape);
             } catch (error) {return Promise.reject(error);}
+            // A palette with no colours is wrong only if the image has pixels to map to it, which the thread knows (this side keeps
+            // the image's size only). So with a signal already aborted, the thread checks the call, as the functions do, and the abort
+            // is reported when that finds nothing wrong.
+            if (lead === 'palette' && leading[0].length === 0 && taken.signal && taken.signal.aborted) {
+                const aborted = taken.signal;
+                return use(method, [...leading, taken.options], {check: true}).then(() => {throw abortReason(aborted);}, (error) => {
+                    if (isCodedError(error) && error.argument !== undefined) {throw error;}
+                    throw abortReason(aborted);
+                });
+            }
             return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
         };
         // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,
