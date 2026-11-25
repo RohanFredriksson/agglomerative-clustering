@@ -206,25 +206,27 @@ describe('createWorker', () => {
         await dropIn.terminate();
     });
 
-    it('reports arguments that cannot be sent to the worker as invalid, naming the argument, and keeps working', async () => {
+    it('reports arguments that cannot be cloned as the main entry reports them, and keeps working', async () => {
+        // The worker entry runs the main entry's own checks before posting (test/worker-validation.test.js compares them all),
+        // so a function, Symbol or class where an option, k or a palette belongs never reaches structured cloning: every value
+        // that passes the checks can be posted, which leaves the "cannot be sent" error as a safety net with no way in.
         const cases = [
-            [() => worker.buildPalette(image, 4, { bogus: () => {} }), 'options'],
-            [() => worker.buildPalette(image, Symbol('k')), 'k'],
-            [() => worker.quantizeWithPalette(image, class Palette {}), 'palette'],
-            // A clustering is checked by readHeader before it is posted and is always a Uint8Array, so none can fail to clone.
+            [() => worker.buildPalette(image, 4, { bogus: () => {} }), 'options.bogus', "Invalid option 'bogus'"],
+            [() => worker.buildPalette(image, Symbol('k')), 'k', 'Invalid k: '],
+            [() => worker.quantizeWithPalette(image, class Palette {}), 'palette', 'Invalid palette: '],
         ];
-        for (const [bad, argument] of cases) {
+        for (const [bad, argument, start] of cases) {
             const error = await bad().catch((caught) => caught);
             expect(error).toMatchObject({ code: 'invalid-argument', argument });
-            expect(error.message.startsWith(`Invalid ${argument}: it cannot be sent to the worker (`)).toBe(true);
+            expect(error.message.startsWith(start)).toBe(true);
+            expect(error.message).not.toContain('cannot be sent');
         }
         await expect(worker.buildPalette(Promise.resolve(image), 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
-        // A handle's methods post the handle's id first, so the argument names are offset by one.
         const handle = await worker.cluster(image);
         try {
             const error = await handle.quantize(Symbol('k')).catch((caught) => caught);
             expect(error).toMatchObject({ code: 'invalid-argument', argument: 'k' });
-            expect(error.message.startsWith('Invalid k: it cannot be sent to the worker (')).toBe(true);
+            expect(error.message.startsWith('Invalid k: ')).toBe(true);
         } finally {
             await handle.release();
         }

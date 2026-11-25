@@ -54,7 +54,7 @@ describe('a worker fails like the main entry', () => {
         expect(error.message).toBe(expected.message);
         expect(error.code).toBe(expected.code);
         expect(error.stack).toContain('errors.test');
-        expect(error.cause?.message).toBe(expected.message);
+        // checked on the caller's side, before anything is posted, so there is no remote stack to attach as a cause
     });
 
     // `worker.load` checks the bytes on the caller's side (there is no remote stack to attach as a cause).

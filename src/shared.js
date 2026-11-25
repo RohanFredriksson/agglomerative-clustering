@@ -755,3 +755,179 @@ export const revive = (value) => {
     for (const key of Object.keys(value)) {value[key] = reviveOne(value[key]);}
     return value;
 };
+
+
+// ----- Arguments both entries check ------------------------------------------------------------------------------------
+// What the main entry checks about k and the options before it does any work, kept here so the worker entry runs the very same
+// checks, in the same order, before it posts anything.
+export const alphaModeCodes = {'ignore': 0, 'weight': 1};
+
+// Returns k, validated. Any k above the number of colours means all of them, so it is capped at the largest value
+// the WASM side holds (a larger one would overflow its int).
+export const checkK = (k) => {
+
+    if (typeof k !== 'number' || !Number.isInteger(k) || k <= 0) {
+        // A string is the usual slip (an input's `value`), so it gets its own fix.
+        const got = typeof k === 'string' ? ` Got the string ${JSON.stringify(k.length > 20 ? `${k.slice(0, 20)}…` : k)}: convert it first, e.g. Number(input.value).`
+            : typeof k === 'number' ? ` Got ${k}.` : ` Got ${k === null ? 'null' : typeof k}.`;
+        throw fail('invalid-argument', `Invalid k: must be a whole number of colours, 1 or more.${got}`, 'k');
+    }
+    return Math.min(k, 0x7FFFFFFF);
+
+}
+
+// Validates `options` against the keys a function accepts and fills in defaults:
+//   colorSpace: 'rgb' (default) or 'oklab', the space colours are clustered and matched in; when mapping with a
+//               clustering, the default is the space the clustering was made in (code -1)
+//   alpha:      'weight' (default) counts RGBA pixels in proportion to their opacity; 'ignore' counts every pixel
+//   precision:  bits per channel, 1-8 (default 8, exact); lower values group similar colours before clustering
+//   dither:     false (default), true or a strength in [0, 1] (Floyd-Steinberg), a method name, or { method, strength, steps } (see parseDither)
+//   width:      image width in pixels, needed to dither a Uint8Array or a RawImage without `width`
+//   signal, onProgress: an AbortSignal and a progress callback, which make the clustering and the mapping run in slices
+//               (see clusterInSlices and mapInSlices)
+//   transparent: false (default), true (cutoff 128) or a cutoff from 1 to 255: pixels with alpha below it are left out of clustering (and the rest count whole);
+//               indexed output also gives them their own entry, which counts towards k
+
+// The settings of dither, which a caller may write as options of their own; naming one of these gets a pointer to the
+// object form.
+const ditherSettings = ['ditherMethod', 'ditherStrength', 'ditherSteps', 'method', 'strength', 'steps', 'mix'];
+
+export const parseOptions = (options, allowed, image) => {
+
+    if (options === undefined) {options = {};}
+    if (!isOptionsObject(options)) {
+        throw fail('invalid-argument', "Invalid options: expected an object.", 'options');
+    }
+    options = snapshot(options);
+    for (const key of Object.keys(options)) {
+        if (!allowed.includes(key)) {
+            const hint = allowed.includes('dither') && ditherSettings.includes(key) ? ' Dithering settings go inside the dither option: dither: { method, strength, steps }.'
+                : '';
+            throw fail('invalid-argument', `Invalid option '${key}': expected one of ${allowed.join(', ')}.${hint}`, `options.${key}`);
+        }
+    }
+
+    const colorSpace = options.colorSpace === undefined ? 'rgb' : options.colorSpace;
+    if (!colorSpaces.includes(colorSpace)) {
+        throw fail('invalid-argument', "Invalid colorSpace: must be 'rgb' or 'oklab'.", 'options.colorSpace');
+    }
+
+    const alpha = options.alpha === undefined ? 'weight' : options.alpha;
+    if (!alphaModes.includes(alpha)) {
+        throw fail('invalid-argument', "Invalid alpha: must be 'weight' or 'ignore'.", 'options.alpha');
+    }
+
+    const precision = options.precision === undefined ? 8 : options.precision;
+    if (typeof precision !== 'number' || !Number.isInteger(precision) || precision < 1 || precision > 8) {
+        throw fail('invalid-argument', "Invalid precision: must be an integer from 1 to 8.", 'options.precision');
+    }
+
+    const {strength: dither, method: ditherMethod, steps: ditherSteps} = parseDither(options.dither);
+
+    // The image's own width and options.width are two sources for one fact: they may repeat each other, but not disagree
+    // (a wrong row length would dither without an error, as long as it divides the pixel count).
+    if (options.width !== undefined && image && image.width !== undefined && options.width !== image.width) {
+        throw fail('invalid-argument', `Invalid width: options.width (${describe(options.width)}) does not match the image's width (${image.width}).`, 'options.width');
+    }
+    if (options.width !== undefined && image) {
+        checkSize(image.data.length / channels(image.format), options.width, 'width', 'options.width');
+    }
+    const width = options.width !== undefined ? options.width : image ? image.width : undefined;
+    if (dither > 0) {
+        const stride = channels(image.format);
+        if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
+            throw fail('invalid-argument', "Invalid width: dithering needs the image width, as `options.width` or the image's `width`.", 'options.width');
+        }
+        if ((image.data.length / stride) % width !== 0) {
+            throw fail('invalid-argument', "Invalid width: the image's pixel count is not a multiple of it.", 'options.width');
+        }
+    }
+
+    const signal = options.signal;
+    if (signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function')) {
+        throw fail('invalid-argument', "Invalid signal: must be an AbortSignal.", 'options.signal');
+    }
+    const onProgress = options.onProgress;
+    if (onProgress !== undefined && typeof onProgress !== 'function') {
+        throw fail('invalid-argument', "Invalid onProgress: must be a function.", 'options.onProgress');
+    }
+
+    // The alpha cutoff for indexed output: 0 for none, else the pixels with alpha below it are transparent.
+    const transparentOption = options.transparent === undefined ? false : options.transparent;
+    const transparent = transparentOption === false ? 0 : transparentOption === true ? 128 : transparentOption;
+    if (!Number.isInteger(transparent) || transparent < 0 || transparent > 255 || (transparent === 0 && transparentOption !== false)) {
+        throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.", 'options.transparent');
+    }
+
+    checkTransparentFormat(image, options);
+
+    // A cutoff replaces opacity weighting (pixels count whole or not at all), so naming both would leave one of them ignored.
+    if (transparent > 0 && options.alpha !== undefined) {
+        throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.", 'options');
+    }
+
+    return {colorSpace: colorSpaceCodes[colorSpace], colorSpaceGiven: options.colorSpace !== undefined, alpha: alphaModeCodes[alpha], precision, dither, ditherMethod, ditherSteps, width: dither > 0 ? width : 0, transparent, transparentGiven: options.transparent !== undefined, signal, onProgress};
+
+};
+
+const controlOptions = ['signal', 'onProgress'];
+// `transparent: true` or a cutoff on a format with no alpha channel can't mean anything (no pixel is transparent), so it is
+// an error rather than a silent no-op. Only the call's own options count: a clustering's stored cutoff never reaches here.
+const checkTransparentFormat = (image, options) => {
+    if (!image || hasAlpha(image.format) || options.transparent === undefined || options.transparent === false) {return;}
+    const hint = image.format === 'rgbx' || image.format === 'bgrx' ? " If the fourth byte really is alpha, use 'rgba' or 'bgra'." : '';
+    throw fail('invalid-argument', `Invalid transparent: '${image.format}' has no alpha, so no pixel can be transparent. Leave transparent out (false is accepted).${hint}`, 'options.transparent');
+};
+
+export const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
+export const quantizeOptions = [...clusterOptions, 'dither', 'width'];
+export const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
+export const quantizeIndexOptions = quantizeOptions;
+export const mapIndexOptions = [...mapOptions, 'transparent'];
+
+// What a bare typed array passed as an image must be, in the order the main entry checks it: not a clustering or a palette,
+// then (when it is not detached, which the caller reports) for a Uint8Array not the bytes of an image file and a whole number
+// of RGBA pixels, and no other kind of array. The bare-RGB and grey check (bareImageError) follows, in the caller.
+export const checkPixelArray = (image) => {
+    if (isClustering(image) || isPalette(image)) {
+        const what = isClustering(image) ? 'a clustering (from buildClustering)' : 'a palette';
+        const fix = isClustering(image) ? 'To cut a palette from it, use clustering.getPalette(k) (or clustering.quantize(image, k) to map an image with it).' : 'To map an image to it, use quantizeWithPalette(image, palette).';
+        throw fail('invalid-argument', `Invalid image: this is ${what}, not pixels. ${fix}`, 'image');
+    }
+    if (isDetached(image)) {return;}
+    if (isUint8Array(image)) {
+        const encoded = sniffImageFormat(image);
+        if (encoded) {
+            throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode them to pixels first and pass those ("Decoding image files" in the guides has a recipe for Node, browsers and edge runtimes). If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
+        }
+        if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
+        return;
+    }
+    throw fail('invalid-argument', "Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.", 'image');
+};
+
+// An empty palette is what getPalette gives for an image with no visible pixels, and mapping such an image with it is
+// fine. Mapping visible pixels to it has no answer (they would all come out black), so that is an error. `cutoff` is the
+// alpha from which an RGBA pixel needs a colour.
+export const checkNotEmpty = (palette, image, cutoff) => {
+    if (palette.length > 0) {return;}
+    const data = image.data;
+    let visible = hasAlpha(image.format) ? false : data.length > 0;
+    for (let i = 3; !visible && hasAlpha(image.format) && i < data.length; i += 4) {visible = data[i] >= cutoff;}
+    if (visible) {throw fail('invalid-argument', "Invalid palette: it is empty, but the image has visible pixels to map to it.", 'palette');}
+};
+
+// What clustering.chooseFrom checks about its palette and k, in order: the palette is flat RGB bytes and not empty, k is a
+// whole number of colours and no more than the palette has. Returns k.
+export const checkChoice = (palette, k) => {
+    checkPalette(palette);
+    if (palette.length === 0) {
+        throw fail('invalid-argument', "Invalid palette: it is empty; give at least one RGB entry (3 bytes).", 'palette');
+    }
+    const count = palette.length / 3;
+    k = checkK(k);
+    if (k > count) {
+        throw fail('invalid-argument', `Invalid k: ${k} is more than the ${count} entries in the palette; use ${count} or fewer.`, 'k');
+    }
+    return k;
+};
