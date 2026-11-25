@@ -19,7 +19,7 @@ Most setups need nothing: Node, Vite, webpack 5, Rsbuild, SvelteKit, Nuxt and Ne
 
 ## Where it runs
 
-Node 20.19+ and 22.12+ (CI tests Node 20, 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite, webpack 5 and Parcel 2 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS, loads `dist/` from another origin as a page using a CDN does, starts the worker entry from a sandboxed iframe, and runs both entries under Jest. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
+Node 22.12+ (CI tests Node 22 and 24, on Linux and Windows), and browsers with WebAssembly SIMD: Chrome and Edge 91, Firefox 89, Safari 16.4 or newer ([support table](https://caniuse.com/wasm-simd)). CI bundles a test page with Vite, webpack 5 and Parcel 2 and runs it in Chromium, Firefox and WebKit on Linux and in Safari on macOS, loads `dist/` from another origin as a page using a CDN does, starts the worker entry from a sandboxed iframe, and runs both entries under Jest. In a browser without SIMD, or where the `.wasm` is blocked or missing, `init` and every other call reject with a `wasm-load-failed` error.
 
 Checked by hand, not in CI: Deno 2.9, Bun 1.4, Cloudflare Workers (Wrangler, workerd), Vercel's edge runtime, the AWS Lambda Node image, pnpm and Yarn Plug'n'Play, SvelteKit, Nuxt, Astro, React Router, Angular and Next.js.
 
@@ -121,7 +121,7 @@ const worker = createWorker({
 
 ## Serverless functions: AWS Lambda, Vercel, Netlify
 
-Both entries run in Node functions (checked in the AWS Lambda Node 20 image, with a read-only code directory, and with the file tracers Vercel and Netlify use). Unbundled, with `node_modules` in the package or a layer, nothing is needed. Bundled:
+Both entries run in Node functions (checked in the AWS Lambda Node 22 image, with a read-only code directory, and with the file tracers Vercel and Netlify use). Unbundled, with `node_modules` in the package or a layer, nothing is needed. Bundled:
 
 - **An ES module bundle** finds `clustering.wasm` next to itself: copy `node_modules/agglomerative-clustering/dist/clustering.wasm` beside the bundle. **A CommonJS bundle** has lost the package's own location: pass `init({ wasm: path })`, with a path to the copy you ship.
 - **The worker entry** needs `worker-thread.mjs` and the files it imports: leave the package external, or ship a copy of `dist/` and pass `createWorker({ script: path })`. Netlify's esbuild bundler moves them apart, so list the package in `external_node_modules`.

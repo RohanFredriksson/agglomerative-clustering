@@ -26,7 +26,7 @@ npm install agglomerative-clustering
 
 Upgrading? See [Migrating](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/migrating.md). From 3.3, three functions have new names, and the old ones keep working until 4.0. From 2.x, one function was renamed, and palettes and images are the same as 2.0's, with one documented exception.
 
-It runs on Node 20.19+ and 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
+It runs on Node 22.12+, and in browsers with WebAssembly SIMD (Chrome and Edge 91, Firefox 89, Safari 16.4). Deno, Bun, Cloudflare Workers, serverless functions, Electron and browser extensions work too: see [Environments](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/environments.md).
 
 ## Usage
 
