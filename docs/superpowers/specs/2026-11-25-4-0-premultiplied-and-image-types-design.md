@@ -1,6 +1,6 @@
 # 4.0, part 1: premultiplied input, `RawImage` by format, unknown image keys, narrowed results
 
-Date: 2026-11-25. Status: revised after review (builder check, three stewards, `user-advocate`, cold reader), for approval.
+Date: 2026-11-25. Status: approved by the maintainer on 2026-11-25, except "No straight-output override", which is open: the maintainer is weighing straight output from premultiplied input (value brief `docs/superpowers/briefs/2026-11-25-premultiplied-straight-output-brief.md`).
 
 ## Intent
 
@@ -21,7 +21,7 @@ No value brief: the capability, its users and the recipe's cost were established
   - Measured: with a 64 KB table per direction, a pass over a 12 MP image takes 5 ms when every pixel is opaque (skipped), 18 ms un-premultiplying and 17 ms premultiplying with every alpha value present, against 52 and 27 ms with integer division<!-- bench/spikes/premultiplied/pass.cpp, run.mjs → results.txt -->. Clustering that image takes seconds, so the cost is a few percent at most on translucent images and close to nothing on opaque ones.
 - **Node 20 is dropped in 4.0 (2026-11-25, maintainer).** `engines` becomes `>=22.12.0` (the floor for `require(esm)`, which the CommonJS build needs), CI tests 22 and 24. Node 20 reached end of life on 2026-04-30; users on it stay on 3.8. 3.8 is the last 3.x minor, so under CLAUDE.md "Branches and releases" it is the line that gets patches, on request after 4.0.0, from `patch/3.8.N` branched off the last 3.8 tag and published to `v3.8-latest`, with fixes cherry-picked to master. In part 2's plan, which also updates CLAUDE.md's `engines` and CI-matrix lines, `docs/migrating.md` ("Node 20.19+ or 22.12+") and `docs/environments.md` (the AWS Lambda Node 20 check). Recorded in the ROADMAP's 4.0 section with this spec.
 - **Every function that takes an image takes `premultiplied`** (builder check, `roadmap-steward`): the clustering functions (`buildClustering`, `buildPalette`, `buildSwatches`), `quantize`, `quantizeToIndices`, `quantizeWithPalette`, `quantizeToIndicesWithPalette`, the `Clustering` methods, image handles (the handle keeps the image object, flag included) and loaded handles' mapping methods. Mapped output (`quantize`, `quantizeWithPalette`, and their methods and handles) is premultiplied again; indexed output and palettes are straight.
-- **No straight-output override** (`user-advocate`): premultiplied in means premultiplied out for mapped images, always. A caller who reads a premultiplied source and writes to a straight destination (an `ImageData`, a PNG encoder) un-premultiplies the output, or converts the input before the call as in 3.x. Accepted, and stated in the docs; an option can be added later without breaking anything if it is asked for.
+- **Open: straight output** (`user-advocate`; the maintainer has not decided, 2026-11-25). The draft below is the reviewed default, pending the value brief. **No straight-output override**: premultiplied in means premultiplied out for mapped images, always. A caller who reads a premultiplied source and writes to a straight destination (an `ImageData`, a PNG encoder) un-premultiplies the output, or converts the input before the call as in 3.x. Accepted, and stated in the docs; an option can be added later without breaking anything if it is asked for.
 
 ## The API
 
