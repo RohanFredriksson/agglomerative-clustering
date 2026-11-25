@@ -185,9 +185,12 @@ describe('a worker script that throws, in Node', () => {
 
 describe('init({ wasm }) twice in a row', () => {
 
+    // The warm-up call that init starts resends the newer location anyway, which hides the race this guards against
+    // (clearing the newer `wasm` when the older send finishes), so this test can't fail on the old code: it checks the
+    // outcome only.
     // A stub thread that logs the locations it is sent and answers an init slowly, so a newer one can be recorded while the
     // older is on its way.
-    it('keeps the newer location when the older one finishes later', async () => {
+    it('sends the newest wasm location last', async () => {
         const stubFolder = mkdtempSync(join(tmpdir(), 'init-race-'));
         const script = join(stubFolder, 'worker-thread.mjs');
         writeFileSync(script, `

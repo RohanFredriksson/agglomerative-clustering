@@ -108,7 +108,7 @@ const start = async (receive, chosen) => {
         // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
         // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
         const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
-        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }). The worker's files can also be from different versions of agglomerative-clustering: serve all of dist/ from this version.";
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }). The worker's files can also be from different versions of agglomerative-clustering. Serve all of the package's dist/ files from this version.";
         let worker, source = null;
         try {
             if (opaque) {
