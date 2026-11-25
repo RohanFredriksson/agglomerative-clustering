@@ -70,19 +70,19 @@ describe('BGRA input behaves as the same image in RGBA', () => {
             }
         }
         for (const [name, o, fromRgba, fromBgra] of clustered) {
-            expect(await ac.getClusteringInfo(fromBgra), `${name} ${JSON.stringify(o)}`).toEqual(await ac.getClusteringInfo(fromRgba));
+            expect(await fromBgra.getClusteringInfo(), `${name} ${JSON.stringify(o)}`).toEqual(await fromRgba.getClusteringInfo());
         }
     });
 
     it('indexes BGRA as RGBA', async () => {
         for (const [name, o, clustering] of clustered) {
             const { rgba, bgra } = images[name];
-            const palette = await ac.getPaletteFromClustering(clustering, 12);
+            const palette = await clustering.getPalette(12);
             const transparent = o.transparent ? { transparent: o.transparent } : {};
             for (const dither of ditherSets) {
                 const label = `${name} ${JSON.stringify(o)} ${JSON.stringify(dither)}`;
                 const calls = [
-                    (image) => ac.quantizeToIndicesFromClustering(image, clustering, 16, { ...mapOnly(o), dither, ...transparent }),
+                    (image) => clustering.quantizeToIndices(image, 16, { ...mapOnly(o), dither, ...transparent }),
                     (image) => ac.quantizeToIndicesWithPalette(image, palette, { ...mapOnly(o), dither, ...transparent }),
                 ];
                 if (small.includes(name)) {calls.push((image) => ac.quantizeToIndices(image, 16, { ...o, dither }));}
@@ -99,11 +99,11 @@ describe('BGRA input behaves as the same image in RGBA', () => {
     it('maps BGRA to the RGBA result with R and B swapped', async () => {
         for (const [name, o, clustering] of clustered) {
             const { rgba, bgra } = images[name];
-            const palette = await ac.getPaletteFromClustering(clustering, 12);
+            const palette = await clustering.getPalette(12);
             for (const dither of ditherSets) {
                 const label = `${name} ${JSON.stringify(o)} ${JSON.stringify(dither)}`;
                 const calls = [
-                    (image) => ac.quantizeFromClustering(image, clustering, 16, { ...mapOnly(o), dither }),
+                    (image) => clustering.quantize(image, 16, { ...mapOnly(o), dither }),
                     (image) => ac.quantizeWithPalette(image, palette, { ...mapOnly(o), dither }),
                 ];
                 if (small.includes(name)) {calls.push((image) => ac.quantize(image, 16, { ...o, dither }));}
@@ -134,11 +134,11 @@ describe('BGRA input behaves as the same image in RGBA', () => {
         const big = new Uint8ClampedArray(bytes.length + 16);
         big.set(bytes, 8);
         const view = new Uint8ClampedArray(big.buffer, 8, bytes.length);
-        expect(await ac.buildPalette({ data: view, format: 'bgra' }, 16)).toEqual(await ac.getPalette({ data: new Uint8Array(bytes), format: 'bgra' }, 16));
+        expect(await ac.buildPalette({ data: view, format: 'bgra' }, 16)).toEqual(await ac.buildPalette({ data: new Uint8Array(bytes), format: 'bgra' }, 16));
     });
 
     it('handles empty and fully transparent BGRA images', async () => {
-        expect((await ac.getPalette({ data: new Uint8Array(0), format: 'bgra' }, 4)).length).toBe(0);
+        expect((await ac.buildPalette({ data: new Uint8Array(0), format: 'bgra' }, 4)).length).toBe(0);
         const clear = { data: new Uint8Array([10, 20, 30, 0, 40, 50, 60, 0]), format: 'bgra' };
         expect((await ac.buildPalette(clear, 4)).length).toBe(0);
         await expect(ac.quantizeWithPalette(clear, new Uint8Array(0))).resolves.toBeTruthy();
@@ -186,7 +186,7 @@ describe('BGRA through the worker entry', () => {
         expect(compare(await handle.getClustering(), clustering)).toBe(0);
         const fromHandle = await handle.quantize(8);
         expect(fromHandle.format).toBe('bgra');
-        expect(compare(fromHandle.data, (await ac.quantizeFromClustering(bgra, clustering, 8)).data)).toBe(0);
+        expect(compare(fromHandle.data, (await clustering.quantize(bgra, 8)).data)).toBe(0);
         const palette = await ac.buildPalette(bgra, 5);
         expect(compare((await handle.quantizeWithPalette(palette)).data, (await ac.quantizeWithPalette(bgra, palette)).data)).toBe(0);
     });
@@ -210,10 +210,10 @@ describe('BGRA validation', () => {
 
     for (const [entry, api] of [['main', ac], ['worker', dropIn]]) {
         it(`reports bad BGRA images from the ${entry} entry`, async () => {
-            await expect(api.getPalette({ data: new Uint8Array(6), format: 'bgra' }, 2)).rejects.toMatchObject({
+            await expect(api.buildPalette({ data: new Uint8Array(6), format: 'bgra' }, 2)).rejects.toMatchObject({
                 message: "Invalid image data: length must be a multiple of 4 for 'bgra'.", code: 'invalid-argument', argument: 'image',
             });
-            await expect(api.getPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
+            await expect(api.buildPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
                 message: "Invalid format: got 'argb'; it must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'. Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: pass it as 'bgra' with premultiplied: true (see Input in the API docs).", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.quantize({ data: new Uint8Array(16), format: 'bgra' }, 2, { dither: true })).rejects.toMatchObject({
@@ -269,11 +269,11 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
                 const label = `${name} ${order}x ${fourth} ${JSON.stringify(o)}`;
                 const fromRgb = await ac.buildClustering(rgb, o), fromX = await ac.buildClustering(x, o);
                 expect(compare(fromX, fromRgb), label).toBe(0);
-                expect(await ac.getClusteringInfo(fromX), label).toEqual(await ac.getClusteringInfo(fromRgb));
-                expect(await ac.getPaletteFromClustering(fromX, 16), label).toEqual(await ac.getPaletteFromClustering(fromRgb, 16));
-                expect(await ac.getSwatchesFromClustering(fromX, 16), label).toEqual(await ac.getSwatchesFromClustering(fromRgb, 16));
-                const indexed = await ac.quantizeToIndicesFromClustering(x, fromX, 16, { ...mapOnly(o) });
-                const expected = await ac.quantizeToIndicesFromClustering(rgb, fromRgb, 16, { ...mapOnly(o) });
+                expect(await fromX.getClusteringInfo(), label).toEqual(await fromRgb.getClusteringInfo());
+                expect(await fromX.getPalette(16), label).toEqual(await fromRgb.getPalette(16));
+                expect(await fromX.getSwatches(16), label).toEqual(await fromRgb.getSwatches(16));
+                const indexed = await fromX.quantizeToIndices(x, 16, { ...mapOnly(o) });
+                const expected = await fromRgb.quantizeToIndices(rgb, 16, { ...mapOnly(o) });
                 expect(indexed.transparentIndex, label).toBe(null);
                 expect(indexed.palette, label).toEqual(expected.palette);
                 expect(compare(indexed.indices, expected.indices), label).toBe(0);
@@ -292,11 +292,11 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
         for (const [name, order, fourth] of variants) {
             const rgb = rgbOf(name), x = xOf(name, order, fourth);
             const clustering = await ac.buildClustering(rgb);
-            const palette = await ac.getPaletteFromClustering(clustering, 12);
+            const palette = await clustering.getPalette(12);
             for (const dither of ditherSets) {
                 const label = `${name} ${order}x ${fourth} ${JSON.stringify(dither)}`;
                 const calls = [
-                    (image) => ac.quantizeFromClustering(image, clustering, 16, { dither }),
+                    (image) => clustering.quantize(image, 16, { dither }),
                     (image) => ac.quantizeWithPalette(image, palette, { dither }),
                 ];
                 if (small.includes(name)) {calls.push((image) => ac.quantize(image, 16, { dither }));}
@@ -354,17 +354,17 @@ describe('ImageData validation and image hints', () => {
                 message: "Invalid image: this ImageData holds 'bgra' pixels, and an ImageData is read as 8-bit RGBA. Pass { data: imageData.data, format: 'bgra', width, height } instead." });
             // skia-canvas stores its canonical spellings ('RGBA8888', 'BGRA8888', 'RGB888x') as well as the short ones.
             for (const colorType of ['RGB888x', 'rgb'])  {
-                await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`)
+                await expect(api.buildPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`)
                     .rejects.toMatchObject({ message: expect.stringContaining("format: 'rgbx'") });
             }
-            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'BGRA8888' }), 2), entry)
+            await expect(api.buildPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'BGRA8888' }), 2), entry)
                 .rejects.toMatchObject({ message: expect.stringContaining("format: 'bgra'") });
             for (const colorType of ['RGBA8888', 'rgba8888', 'RGBA']) {
-                await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`).resolves.toBeTruthy();
+                await expect(api.buildPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType }), 2), `${entry} ${colorType}`).resolves.toBeTruthy();
             }
-            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'gray8' }), 2), entry)
+            await expect(api.buildPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'gray8' }), 2), entry)
                 .rejects.toMatchObject({ message: expect.stringContaining("Ask for colorType 'rgba'.") });
-            await expect(api.getPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgba' }), 2), entry).resolves.toBeTruthy();
+            await expect(api.buildPalette(new FakeImageData(new Uint8ClampedArray(16), 2, 2, { colorType: 'rgba' }), 2), entry).resolves.toBeTruthy();
         }
     });
 
@@ -391,16 +391,16 @@ describe('ImageData validation and image hints', () => {
         ];
         for (const [entry, api] of entries) {
             for (const [format, hint] of tries) {
-                await expect(api.getPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({
+                await expect(api.buildPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({
                     code: 'invalid-argument', argument: 'image', message: expect.stringContaining(`Invalid format: got '${format}'; it must be`),
                 });
-                await expect(api.getPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({ message: expect.stringContaining(hint) });
+                await expect(api.buildPalette({ data: new Uint8Array(12), format }, 2), `${entry} ${format}`).rejects.toMatchObject({ message: expect.stringContaining(hint) });
             }
         }
     });
 
     it('names every format when data has no format, and explains a VideoFrame', async () => {
-        await expect(ac.getPalette({ data: new Uint8Array(8) }, 2)).rejects.toMatchObject({ message: expect.stringContaining("add format: 'rgba' (or another of 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx') to use it as a RawImage") });
+        await expect(ac.buildPalette({ data: new Uint8Array(8) }, 2)).rejects.toMatchObject({ message: expect.stringContaining("add format: 'rgba' (or another of 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx') to use it as a RawImage") });
         const frame = { copyTo() {}, codedWidth: 2, displayWidth: 2, displayHeight: 2, close() {} };
         for (const [entry, api] of entries) {
             await expect(api.buildPalette(frame, 2), entry).rejects.toMatchObject({ message: expect.stringContaining("Got a VideoFrame: copy its pixels with frame.copyTo(buffer, { format: 'BGRA' }) and pass { data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }") });

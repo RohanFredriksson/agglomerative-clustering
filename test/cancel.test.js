@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-    buildClustering, buildPalette, quantize, quantizeToIndices, quantizeWithPalette, quantizeFromClustering,
-    quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
-} from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 const random = (seed) => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -65,9 +62,9 @@ describe('a call with a signal or onProgress gives the same result as without', 
         const clustering = await buildClustering(image);
         const palette = await buildPalette(image, 8);
         const signal = new AbortController().signal;
-        expect(await quantizeFromClustering(image, clustering, 8, { signal })).toEqual(await quantizeFromClustering(image, clustering, 8));
+        expect(await clustering.quantize(image, 8, { signal })).toEqual(await clustering.quantize(image, 8));
         expect(await quantizeWithPalette(image, palette, { signal })).toEqual(await quantizeWithPalette(image, palette));
-        expect(await quantizeToIndicesFromClustering(image, clustering, 8, { signal })).toEqual(await quantizeToIndicesFromClustering(image, clustering, 8));
+        expect(await clustering.quantizeToIndices(image, 8, { signal })).toEqual(await clustering.quantizeToIndices(image, 8));
         expect(await quantizeToIndicesWithPalette(image, palette, { signal })).toEqual(await quantizeToIndicesWithPalette(image, palette));
     });
 

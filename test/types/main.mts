@@ -1,10 +1,6 @@
 // Consumer type tests, compiled by `npm run test:types` against the built declarations (dist/*.d.ts, *.d.cts) with strict mode and
 // skipLibCheck off, under nodenext (ESM and CommonJS importers) and bundler resolution. `@ts-expect-error` lines must NOT compile.
-import {
-    version, formatVersion, Palette, Clustering, errorCodes, isCodedError, init, buildClustering, buildPalette, getPaletteFromClustering, buildSwatches, getSwatchesFromClustering, getClusteringInfo,
-    quantize, quantizeFromClustering, quantizeWithPalette,
-    quantizeToIndices, quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
-} from 'agglomerative-clustering';
+import { version, formatVersion, Palette, Clustering, errorCodes, isCodedError, init, buildClustering, buildPalette, buildSwatches, quantize, quantizeWithPalette, quantizeToIndices, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 import type { ImageLike, RawImage, ClusteringInfo, IndexedImage, ErrorCode, CodedError, ProgressOptions, InitOptions, QuantizeIndexOptions, Swatches, ColorSpace, ErrorArgument, ChooseOptions, PaletteChoice } from 'agglomerative-clustering';
 
 declare const bytes: Uint8Array;
@@ -25,12 +21,12 @@ async function main() {
 
     const clustering: Clustering = await buildClustering(imageData, { colorSpace: 'oklab', precision: 6, alpha: 'ignore', signal: controller.signal, onProgress: (p: number) => void p });
     const palette: Palette = await buildPalette(bytes, 16, { signal: controller.signal });
-    const cut: Palette = await getPaletteFromClustering(clustering, 8);
-    const swatches: Swatches = await getSwatchesFromClustering(clustering, 8);
+    const cut: Palette = await clustering.getPalette(8);
+    const swatches: Swatches = await clustering.getSwatches(8);
     const weights: Float64Array = swatches.weights;
     const shares: Float64Array = (await buildSwatches(imageData, 8, { signal: controller.signal })).shares;
     void shares;
-    const info: ClusteringInfo = await getClusteringInfo(clustering);
+    const info: ClusteringInfo = await clustering.getClusteringInfo();
     const libraryVersion: string = version;
     const stored: number = formatVersion;
     // A stored clustering in an older format than this build writes: cluster the image again.
@@ -45,7 +41,7 @@ async function main() {
     const a: Uint8Array = await quantize(bytes, 8, { dither: true, width: 10, onProgress: () => {} });
     const b: ImageData = await quantize(imageData, 8, { colorSpace: 'oklab' });
     const c: RawImage = await quantize(raw, 8);
-    const d: Uint8Array = await quantizeFromClustering(bytes, clustering, 8, { signal: controller.signal });
+    const d: Uint8Array = await clustering.quantize(bytes, 8, { signal: controller.signal });
     const e: ImageData = await quantizeWithPalette(imageData, palette);
     // From 3.7.0 the functions that map take onProgress too.
     const mappedWithProgress: ImageData = await quantizeWithPalette(imageData, palette, { dither: 'ordered', signal: controller.signal, onProgress: (p) => void p });
@@ -57,7 +53,7 @@ async function main() {
     const t: number | null = indexed.transparentIndex;
     const bits: 8 | 16 | 32 = indexed.indexBits;
     const idx: Uint8Array | Uint16Array | Uint32Array = indexed.indices;
-    await quantizeToIndicesFromClustering(imageData, clustering, 8, { transparent: false });
+    await clustering.quantizeToIndices(imageData, 8, { transparent: false });
     await quantizeToIndicesWithPalette(raw, palette, { transparent: 1 });
 
     // A palette knows its colour space and is a Uint8Array; stored bytes become a Clustering by construction
@@ -65,7 +61,7 @@ async function main() {
     const withEntry = await quantizeToIndices(bytes, 8, { transparent: true });
     const reusable: Palette = withEntry.colors;
     await quantizeToIndicesWithPalette(bytes, reusable, { transparent: true });
-    const recorded: false | number = (await getClusteringInfo(clustering)).transparent;
+    const recorded: false | number = (await clustering.getClusteringInfo()).transparent;
     void [reusable, recorded];
     const asBytes: Uint8Array = palette;
     const typed: Clustering = new Clustering(plainBytes);
@@ -74,7 +70,7 @@ async function main() {
     await quantizeWithPalette(imageData, made);
     await quantizeWithPalette(imageData, plainBytes);
     await quantizeWithPalette(imageData, [0, 0, 0, 255, 255, 255]);
-    await getPaletteFromClustering(typed, 4);
+    await typed.getPalette(4);
     void [space, asBytes, slice];
     const code: ErrorCode = 'invalid-argument';
     // isCodedError narrows an unknown catch value, with no cast; errorCodes is the list of every code.
@@ -93,9 +89,9 @@ async function main() {
 // Palettes and clusterings are different types: a plain Uint8Array is not a Clustering, and neither is a Palette
 declare const plainBytes: Uint8Array;
 // @ts-expect-error stored bytes need `new Clustering(bytes)` to be typed as a clustering
-getPaletteFromClustering(plainBytes, 4);
+plainBytes.getPalette(4);
 // @ts-expect-error a palette is not a clustering
-getPaletteFromClustering(await buildPalette(bytes, 4), 4);
+(await buildPalette(bytes, 4)).getPalette(4);
 // @ts-expect-error a clustering is not a palette
 quantizeWithPalette(bytes, aClustering);
 // @ts-expect-error nor in the indexed form
@@ -107,8 +103,8 @@ declare const oldInfo: ClusteringInfo; oldInfo.errors;
 // transparent is a clustering option (and an indexed-output one), but the functions that only map don't take it
 quantize(bytes, 4, { transparent: true });
 declare const aClustering: Clustering;
-// @ts-expect-error transparent is not a mapping option for quantizeFromClustering
-quantizeFromClustering(bytes, aClustering, 4, { transparent: true });
+// @ts-expect-error transparent is not a mapping option for Clustering.quantize
+aClustering.quantize(bytes, 4, { transparent: true });
 // @ts-expect-error wrong signal type
 buildClustering(bytes, { signal: 'abort' });
 // @ts-expect-error cutoff must be boolean or number
@@ -158,9 +154,3 @@ declare const mine: Mine;
 mine.getPalette(4);
 void methods;
 void main;
-
-// The names before 3.4.0 still compile (deprecated, the same functions).
-import { getClustering, getPalette, getSwatches } from 'agglomerative-clustering';
-const before340: [typeof buildClustering, typeof buildPalette, typeof buildSwatches] = [getClustering, getPalette, getSwatches];
-void before340;
-void getPalette(bytes, 4);

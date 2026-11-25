@@ -31,9 +31,12 @@ describe('a worker gives the same results as the main entry', () => {
         const clustering = await worker.buildClustering(image, options);
         expect(clustering).toEqual(await ac.buildClustering(image, options));
         expect(await worker.buildPalette(image, 12, options)).toEqual(await ac.buildPalette(image, 12, options));
-        expect(await worker.getPaletteFromClustering(clustering, 7)).toEqual(await ac.getPaletteFromClustering(clustering, 7));
-        expect(await worker.getSwatchesFromClustering(clustering, 7)).toEqual(await ac.getSwatchesFromClustering(clustering, 7));
-        expect(await worker.getClusteringInfo(clustering)).toEqual(await ac.getClusteringInfo(clustering));
+        const loaded = await worker.load(clustering);
+        try {
+            expect(await loaded.getPalette(7)).toEqual(await clustering.getPalette(7));
+            expect(await loaded.getSwatches(7)).toEqual(await clustering.getSwatches(7));
+            expect(await loaded.getClusteringInfo()).toEqual(await clustering.getClusteringInfo());
+        } finally {await loaded.release();}
     });
 
     it('for mapped images, in the type they were given', async () => {
@@ -41,7 +44,8 @@ describe('a worker gives the same results as the main entry', () => {
         const palette = await ac.buildPalette(image, 5);
         expect(await worker.quantize(image, 8)).toEqual(await ac.quantize(image, 8));
         expect(await worker.quantize(raw, 8, { dither: true })).toEqual(await ac.quantize(raw, 8, { dither: true }));
-        expect(await worker.quantizeFromClustering(raw, clustering, 6)).toEqual(await ac.quantizeFromClustering(raw, clustering, 6));
+        const loaded = await worker.load(clustering);
+        try {expect(await loaded.quantize(raw, 6)).toEqual(await clustering.quantize(raw, 6));} finally {await loaded.release();}
         expect(await worker.quantizeWithPalette(image, palette, { colorSpace: 'oklab' })).toEqual(await ac.quantizeWithPalette(image, palette, { colorSpace: 'oklab' }));
 
         const imageData = new ImageData(new Uint8ClampedArray(image), width, height);
@@ -55,7 +59,8 @@ describe('a worker gives the same results as the main entry', () => {
         const clustering = await ac.buildClustering(image);
         const palette = await ac.buildPalette(image, 5);
         expect(await worker.quantizeToIndices(raw, 300, { transparent: true })).toEqual(await ac.quantizeToIndices(raw, 300, { transparent: true }));
-        expect(await worker.quantizeToIndicesFromClustering(image, clustering, 6)).toEqual(await ac.quantizeToIndicesFromClustering(image, clustering, 6));
+        const loaded = await worker.load(clustering);
+        try {expect(await loaded.quantizeToIndices(image, 6)).toEqual(await clustering.quantizeToIndices(image, 6));} finally {await loaded.release();}
         expect(await worker.quantizeToIndicesWithPalette(image, palette)).toEqual(await ac.quantizeToIndicesWithPalette(image, palette));
     });
 
@@ -69,7 +74,7 @@ describe('a worker gives the same results as the main entry', () => {
         await expect(worker.quantize(image, 0)).rejects.toThrow('Invalid k');
         await expect(worker.buildClustering({ data: image, format: 'argb' })).rejects.toThrow('Invalid format');
         await expect(worker.buildClustering(null)).rejects.toThrow('Invalid image');
-        await expect(worker.getPaletteFromClustering(new Uint8Array(5), 2)).rejects.toThrow('Invalid clustering');
+        await expect(worker.load(new Uint8Array(5))).rejects.toThrow('Invalid clustering');
         await expect(worker.quantize(image, 4, { colour: 'rgb' })).rejects.toThrow("Invalid option 'colour'");
     });
 
@@ -81,11 +86,11 @@ describe('handles', () => {
         const handle = await worker.cluster(image, { colorSpace: 'oklab' });
         const clustering = await ac.buildClustering(image, { colorSpace: 'oklab' });
         expect(await handle.getClustering()).toEqual(clustering);
-        expect(await handle.getPalette(9)).toEqual(await ac.getPaletteFromClustering(clustering, 9));
-        expect(await handle.getSwatches(9)).toEqual(await ac.getSwatchesFromClustering(clustering, 9));
-        expect(await handle.getClusteringInfo()).toEqual(await ac.getClusteringInfo(clustering));
-        expect(await handle.quantize(9, { dither: true, width })).toEqual(await ac.quantizeFromClustering(image, clustering, 9, { dither: true, width }));
-        expect(await handle.quantizeToIndices(9, { transparent: true })).toEqual(await ac.quantizeToIndicesFromClustering(image, clustering, 9, { transparent: true }));
+        expect(await handle.getPalette(9)).toEqual(await clustering.getPalette(9));
+        expect(await handle.getSwatches(9)).toEqual(await clustering.getSwatches(9));
+        expect(await handle.getClusteringInfo()).toEqual(await clustering.getClusteringInfo());
+        expect(await handle.quantize(9, { dither: true, width })).toEqual(await clustering.quantize(image, 9, { dither: true, width }));
+        expect(await handle.quantizeToIndices(9, { transparent: true })).toEqual(await clustering.quantizeToIndices(image, 9, { transparent: true }));
         await handle.release();
         await expect(handle.getPalette(2)).rejects.toThrow('released');
     });
@@ -184,7 +189,7 @@ describe('createWorker', () => {
         expect(second).toEqual(image);
         // Small Node Buffers share a pool that can never be transferred.
         const pooled = Buffer.from(image.subarray(0, 64));
-        expect(await moving.buildPalette(pooled, 2)).toEqual(await ac.getPalette(new Uint8Array(pooled), 2));
+        expect(await moving.buildPalette(pooled, 2)).toEqual(await ac.buildPalette(new Uint8Array(pooled), 2));
         expect(pooled.length).toBe(64);
         // A buffer of its own is still transferred, also when kept by a handle.
         const own = image.slice();
@@ -205,9 +210,8 @@ describe('createWorker', () => {
         for (const bad of [
             () => worker.buildPalette(image, 4, { bogus: () => {} }),
             () => worker.buildPalette(image, Symbol('k')),
-            () => worker.getPalette(Promise.resolve(image), 4),
+            () => worker.buildPalette(Promise.resolve(image), 4),
             () => worker.quantizeWithPalette(image, class Palette {}),
-            () => worker.getPaletteFromClustering({ toJSON() {}, fn() {} }, 2),
         ]) {
             await expect(bad()).rejects.toMatchObject({ code: 'invalid-argument' });
         }

@@ -26,9 +26,9 @@ describe('exported lists of names', () => {
     });
 
     it('holds names the options accept', async () => {
-        for (const colorSpace of ac.colorSpaces) {await expect(ac.getPalette(imageIn('rgba'), 2, { colorSpace })).resolves.toBeTruthy();}
-        for (const format of ac.imageFormats) {await expect(ac.getPalette(imageIn(format), 2)).resolves.toBeTruthy();}
-        for (const alpha of ac.alphaModes) {await expect(ac.getPalette(imageIn('rgba'), 2, { alpha })).resolves.toBeTruthy();}
+        for (const colorSpace of ac.colorSpaces) {await expect(ac.buildPalette(imageIn('rgba'), 2, { colorSpace })).resolves.toBeTruthy();}
+        for (const format of ac.imageFormats) {await expect(ac.buildPalette(imageIn(format), 2)).resolves.toBeTruthy();}
+        for (const alpha of ac.alphaModes) {await expect(ac.buildPalette(imageIn('rgba'), 2, { alpha })).resolves.toBeTruthy();}
         for (const method of ac.ditherMethods) {await expect(ac.quantize(imageIn('rgba'), 2, { dither: method })).resolves.toBeTruthy();}
         for (const steps of ac.ditherSteps) {await expect(ac.quantize(imageIn('rgba'), 2, { dither: { method: 'ordered', steps } })).resolves.toBeTruthy();}
     });

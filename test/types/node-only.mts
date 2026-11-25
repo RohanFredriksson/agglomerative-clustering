@@ -18,7 +18,7 @@ export async function run() {
     const f = await createWorker().cluster(raw);
     const g: RawImage = await f.quantize(4);
     const indexed = await quantizeToIndices(buffer, 8, { transparent: true, signal: new AbortController().signal });
-    const info = await getClusteringInfo(await buildClustering(bytes));
+    const info = await (await buildClustering(bytes)).getClusteringInfo();
     const mse: Float64Array = info.mse;
     await init({ wasm: 'clustering.wasm' });
     await init({ wasm: new Uint8Array(8) });

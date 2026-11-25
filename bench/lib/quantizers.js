@@ -35,7 +35,7 @@ export async function agglomerative(name = 'agglomerative', distPath = 'dist/ind
         paletteSweep: async (image, ks) => {
             const clustering = await (ac.buildClustering ?? ac.getClustering)(image.rgba, ...cluster);
             const palettes = [];
-            for (const k of ks) {palettes.push(await ac.getPaletteFromClustering(clustering, k));}
+            for (const k of ks) {palettes.push(await (clustering.getPalette ? clustering.getPalette(k) : ac.getPaletteFromClustering(clustering, k)));}
             return palettes;
         },
         quantize: (image, k) => ac.quantize(image.rgba, k, ...quantizeOptions(image)),

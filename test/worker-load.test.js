@@ -23,21 +23,21 @@ const imageData = () => new ImageData(new Uint8ClampedArray(image), width, heigh
 
 describe('worker.load', () => {
 
-    it('matches the deprecated function forms byte for byte', async () => {
+    it('matches the Clustering methods byte for byte', async () => {
         for (const clusterOptions of [{}, { colorSpace: 'oklab' }]) {
             const clustering = await ac.buildClustering(image, clusterOptions);
             const loaded = track(await worker.load(clustering));
             for (const k of [4, 16]) {
-                expect(await loaded.getPalette(k)).toEqual(await worker.getPaletteFromClustering(clustering, k));
-                expect(await loaded.getSwatches(k)).toEqual(await worker.getSwatchesFromClustering(clustering, k));
+                expect(await loaded.getPalette(k)).toEqual(await clustering.getPalette(k));
+                expect(await loaded.getSwatches(k)).toEqual(await clustering.getSwatches(k));
                 for (const o of [{}, { transparent: true }, { colorSpace: 'rgb' }, { dither: true, width }]) {
                     const label = JSON.stringify([clusterOptions, k, o]);
                     // `transparent` is for the indexed output only.
-                    if (!o.transparent) {expect(await loaded.quantize(image, k, o), label).toEqual(await worker.quantizeFromClustering(image, clustering, k, o));}
-                    expect(await loaded.quantizeToIndices(image, k, o), label).toEqual(await worker.quantizeToIndicesFromClustering(image, clustering, k, o));
+                    if (!o.transparent) {expect(await loaded.quantize(image, k, o), label).toEqual(await clustering.quantize(image, k, o));}
+                    expect(await loaded.quantizeToIndices(image, k, o), label).toEqual(await clustering.quantizeToIndices(image, k, o));
                 }
             }
-            expect(await loaded.getClusteringInfo()).toEqual(await worker.getClusteringInfo(clustering));
+            expect(await loaded.getClusteringInfo()).toEqual(await clustering.getClusteringInfo());
         }
     });
 
@@ -56,7 +56,7 @@ describe('worker.load', () => {
 
     it('rejects a damaged clustering, a palette or an image before posting', async () => {
         const clustering = await ac.buildClustering(image);
-        await worker.getClusteringInfo(clustering);
+        await (await worker.load(clustering)).release();   // starts the worker before the spy
         const damaged = clustering.slice();
         damaged[40] ^= 0xFF;
         const posts = vi.spyOn(Worker.prototype, 'postMessage');
@@ -73,7 +73,7 @@ describe('worker.load', () => {
     it('takes the bytes at the call', async () => {
         for (const fresh of [createWorker(), worker]) {
             const clustering = await ac.buildClustering(image);
-            const expected = await ac.getPaletteFromClustering(clustering, 6);
+            const expected = await clustering.getPalette(6);
             const pending = fresh.load(clustering.slice());
             const copy = clustering.slice();
             const loading = fresh.load(copy);
@@ -147,7 +147,7 @@ describe('worker.load', () => {
 
     it('with transfer: true moves the clustering, before the worker has started and once it is running, and the handle still cuts', async () => {
         const clustering = await ac.buildClustering(image);
-        const expected = await ac.getPalette(image, 5);
+        const expected = await ac.buildPalette(image, 5);
         const moving = createWorker({ transfer: true });
         try {
             // A clustering that is a whole buffer of its own: not yet started, the bytes are moved out of the caller's hands at once.

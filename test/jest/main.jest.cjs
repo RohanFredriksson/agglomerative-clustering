@@ -1,24 +1,21 @@
 // Run by test/jest.test.js under Jest's default CommonJS mode (node and jsdom environments).
-const { getPalette, getClustering, getPaletteFromClustering, quantize, quantizeToIndicesWithPalette, Clustering, version } = require('agglomerative-clustering');
+const { buildPalette, buildClustering, quantize, quantizeToIndicesWithPalette, Clustering, version } = require('agglomerative-clustering');
 
 // Red, blue, green, red.
 const image = new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255]);
 
 test('loads the WebAssembly module and clusters', async () => {
     expect(typeof version).toBe('string');
-    expect(Array.from(await getPalette(image, 3)).sort()).toEqual([0, 0, 0, 0, 0, 0, 255, 255, 255]);
-    const clustering = await getClustering(image);
+    expect(Array.from(await buildPalette(image, 3)).sort()).toEqual([0, 0, 0, 0, 0, 0, 255, 255, 255]);
+    const clustering = await buildClustering(image);
     expect(new Clustering(clustering)).toBeInstanceOf(Uint8Array);
-    expect((await getPaletteFromClustering(clustering, 2)).length).toBe(6);
+    expect((await clustering.getPalette(2)).length).toBe(6);
 });
 
-test('the 3.4.0 names are the old names, in Jest\'s module system too', async () => {
+test('the build names work in Jest\'s module system too', async () => {
     const ac = require('agglomerative-clustering');
-    for (const [old, now] of [['getClustering', 'buildClustering'], ['getPalette', 'buildPalette'], ['getSwatches', 'buildSwatches']]) {
-        expect(typeof ac[now]).toBe('function');
-        expect(ac[old]).toBe(ac[now]);
-    }
-    expect(Array.from(await ac.buildPalette(image, 3))).toEqual(Array.from(await ac.getPalette(image, 3)));
+    for (const name of ['buildClustering', 'buildPalette', 'buildSwatches']) {expect(typeof ac[name]).toBe('function');}
+    expect((await ac.buildPalette(image, 3)).length).toBeGreaterThan(0);
 });
 
 test('maps pixels', async () => {
@@ -28,5 +25,5 @@ test('maps pixels', async () => {
 });
 
 test('gives the coded errors', async () => {
-    await expect(getPalette(image, 0)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k' });
+    await expect(buildPalette(image, 0)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k' });
 });

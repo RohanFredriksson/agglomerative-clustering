@@ -43,14 +43,14 @@ describe('Palette', () => {
         for (const colorSpace of ['rgb', 'oklab']) {
             const clustering = await ac.buildClustering(photo, { colorSpace });
             expect((await ac.buildPalette(photo, 5, { colorSpace })).colorSpace).toBe(colorSpace);
-            expect((await ac.getPaletteFromClustering(clustering, 5)).colorSpace).toBe(colorSpace);
+            expect((await clustering.getPalette(5)).colorSpace).toBe(colorSpace);
             expect((await ac.buildSwatches(photo, 5, { colorSpace })).palette.colorSpace).toBe(colorSpace);
-            expect((await ac.getSwatchesFromClustering(clustering, 5)).palette.colorSpace).toBe(colorSpace);
+            expect((await clustering.getSwatches(5)).palette.colorSpace).toBe(colorSpace);
             expect((await ac.quantizeToIndices(photo, 5, { colorSpace })).palette.colorSpace).toBe(colorSpace);
-            expect((await ac.quantizeToIndicesFromClustering(photo, clustering, 5)).palette.colorSpace).toBe(colorSpace);
+            expect((await clustering.quantizeToIndices(photo, 5)).palette.colorSpace).toBe(colorSpace);
             // the palette of an indexed result was made in the clustering's space, whatever space it was matched in
             const other = colorSpace === 'rgb' ? 'oklab' : 'rgb';
-            expect((await ac.quantizeToIndicesFromClustering(photo, clustering, 5, { colorSpace: other })).palette.colorSpace).toBe(colorSpace);
+            expect((await clustering.quantizeToIndices(photo, 5, { colorSpace: other })).palette.colorSpace).toBe(colorSpace);
         }
         expect((await ac.buildPalette(photo, 5)).colorSpace).toBe('rgb');
     });
@@ -76,9 +76,9 @@ describe('Palette', () => {
         expect(await ac.quantizeWithPalette(photo, oklab, { colorSpace: 'rgb' })).toEqual(inRgb);   // naming one wins
         expect(await ac.quantizeWithPalette(photo, new Uint8Array(oklab))).toEqual(inRgb);          // plain bytes: RGB
         expect((await ac.quantizeToIndicesWithPalette(photo, oklab)).indices).toEqual((await ac.quantizeToIndicesWithPalette(photo, new Uint8Array(oklab), { colorSpace: 'oklab' })).indices);
-        // and it is what quantizeFromClustering does by default, so the two ways of mapping agree
+        // and it is what Clustering.quantize does by default, so the two ways of mapping agree
         const clustering = await ac.buildClustering(photo, { colorSpace: 'oklab' });
-        expect(await ac.quantizeWithPalette(photo, await ac.getPaletteFromClustering(clustering, 12))).toEqual(await ac.quantizeFromClustering(photo, clustering, 12));
+        expect(await ac.quantizeWithPalette(photo, await clustering.getPalette(12))).toEqual(await clustering.quantize(photo, 12));
         // an indexed result keeps its palette's space
         expect((await ac.quantizeToIndicesWithPalette(photo, oklab)).palette.colorSpace).toBe('oklab');
     });
@@ -117,9 +117,7 @@ describe('Clustering', () => {
         const typed = new Clustering(stored);
         expect(typed).toBeInstanceOf(Clustering);
         expect(typed).toEqual(clustering);
-        expect(await ac.getPaletteFromClustering(typed, 6)).toEqual(await ac.getPaletteFromClustering(clustering, 6));
-        // plain bytes are still accepted by the functions, so stored clusterings keep working in JavaScript
-        expect(await ac.getPaletteFromClustering(stored, 6)).toEqual(await ac.getPaletteFromClustering(clustering, 6));
+        expect(await typed.getPalette(6)).toEqual(await clustering.getPalette(6));
         for (const bad of [new Uint8Array(5), new Uint8Array(0), new Uint8Array(clustering.subarray(0, 8)).fill(0)]) {
             expect(() => new Clustering(bad)).toThrow(expect.objectContaining({ code: 'invalid-clustering' }));
         }
@@ -151,11 +149,8 @@ describe('Clustering', () => {
             expect(error.code).toBe('invalid-argument');
             expect(error.message).toContain('this is a clustering');
         }
-        for (const call of [(p) => ac.getPaletteFromClustering(p, 2), (p) => ac.getSwatchesFromClustering(p, 2), (p) => ac.getClusteringInfo(p), (p) => ac.quantizeFromClustering(photo, p, 2), (p) => ac.quantizeToIndicesFromClustering(photo, p, 2)]) {
-            const error = await call(palette).catch((e) => e);
-            expect(error.code).toBe('invalid-clustering');
-            expect(error.message).toContain('this is a palette');
-        }
+        const error = await (async () => new Clustering(palette))().catch((e) => e);
+        expect(error.code).toBe('invalid-clustering');
     });
 
 });
@@ -184,7 +179,9 @@ describe('across entries and copies of the library', () => {
             expect(palette).toEqual(await ac.buildPalette(photo, 12, { colorSpace: 'oklab' }));
             const clustering = await worker.buildClustering(photo, { colorSpace: 'oklab' });
             expect(clustering).toBeInstanceOf(Clustering);
-            const swatches = await worker.getSwatchesFromClustering(clustering, 12);
+            const loaded = await worker.load(clustering);
+            const swatches = await loaded.getSwatches(12);
+            await loaded.release();
             expect(swatches.palette).toBeInstanceOf(Palette);
             expect(swatches.palette.colorSpace).toBe('oklab');
             const indexed = await worker.quantizeToIndices(photo, 12, { colorSpace: 'oklab' });
@@ -258,7 +255,7 @@ describe('colors of an indexed result', () => {
         expect(opaque.colors).toEqual(opaque.palette);
         expect(opaque.colors.colorSpace).toBe('oklab');
         const clustering = await ac.buildClustering(sprite, { transparent: true, colorSpace: 'oklab' });
-        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8)).colors.colorSpace).toBe('oklab');
+        expect((await clustering.quantizeToIndices(sprite, 8)).colors.colorSpace).toBe('oklab');
         expect((await ac.quantizeToIndicesWithPalette(sprite, opaque.colors)).colors.colorSpace).toBe('oklab');
     });
 
@@ -283,31 +280,31 @@ describe('the transparent cutoff a clustering was made with', () => {
     for (let i = 0; i < 400; i++) {sprite.set([(i * 7) & 255, (i * 13) & 255, (i * 29) & 255, [0, 90, 150, 255][i % 4]], i * 4);}
 
     it('is recorded, and reported by getClusteringInfo', async () => {
-        expect((await ac.getClusteringInfo(await ac.buildClustering(sprite))).transparent).toBe(false);
-        expect((await ac.getClusteringInfo(await ac.buildClustering(sprite, { transparent: true }))).transparent).toBe(128);
-        expect((await ac.getClusteringInfo(await ac.buildClustering(sprite, { transparent: 200 }))).transparent).toBe(200);
-        expect((await ac.getClusteringInfo(await ac.buildClustering(sprite, { transparent: false }))).transparent).toBe(false);
+        expect((await (await ac.buildClustering(sprite)).getClusteringInfo()).transparent).toBe(false);
+        expect((await (await ac.buildClustering(sprite, { transparent: true })).getClusteringInfo()).transparent).toBe(128);
+        expect((await (await ac.buildClustering(sprite, { transparent: 200 })).getClusteringInfo()).transparent).toBe(200);
+        expect((await (await ac.buildClustering(sprite, { transparent: false })).getClusteringInfo()).transparent).toBe(false);
         // an RGB image has no alpha for a cutoff to apply to, so none is recorded (and asking for one throws)
-        expect((await ac.getClusteringInfo(await ac.buildClustering({ data: new Uint8Array(30), format: 'rgb' }))).transparent).toBe(false);
+        expect((await (await ac.buildClustering({ data: new Uint8Array(30), format: 'rgb' })).getClusteringInfo()).transparent).toBe(false);
         // clusterings from 2.x had no such option (nor weights, so getClusteringInfo rejects them; mapping reads them as none)
-        await expect(ac.getClusteringInfo(new Uint8Array([0xAC, 2, 0, 8]))).rejects.toMatchObject({ code: 'unsupported-version' });
+        await expect(new Clustering(new Uint8Array([0xAC, 2, 0, 8])).getClusteringInfo()).rejects.toMatchObject({ code: 'unsupported-version' });
     });
 
     it('is the default cutoff when mapping to indices, so clustering and mapping agree', async () => {
         for (const cutoff of [true, 128, 200]) {
             const clustering = await ac.buildClustering(sprite, { transparent: cutoff });
-            const viaClustering = await ac.quantizeToIndicesFromClustering(sprite, clustering, 8);
-            expect(viaClustering).toEqual(await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: cutoff }));
+            const viaClustering = await clustering.quantizeToIndices(sprite, 8);
+            expect(viaClustering).toEqual(await clustering.quantizeToIndices(sprite, 8, { transparent: cutoff }));
             expect(viaClustering).toEqual(await ac.quantizeToIndices(sprite, 8, { transparent: cutoff }));
         }
         const clustering = await ac.buildClustering(sprite, { transparent: 200 });
-        const defaulted = await ac.quantizeToIndicesFromClustering(sprite, clustering, 8);
+        const defaulted = await clustering.quantizeToIndices(sprite, 8);
         // a cutoff named at mapping wins over the recorded one, and false turns it off
-        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: 100 })).indices.filter((i) => i === 7).length)
+        expect((await clustering.quantizeToIndices(sprite, 8, { transparent: 100 })).indices.filter((i) => i === 7).length)
             .toBeLessThan(defaulted.indices.filter((i) => i === 7).length);
-        expect((await ac.quantizeToIndicesFromClustering(sprite, clustering, 8, { transparent: false })).transparentIndex).toBeNull();
+        expect((await clustering.quantizeToIndices(sprite, 8, { transparent: false })).transparentIndex).toBeNull();
         // a clustering made without a cutoff keeps today's behaviour: no transparent entry unless asked for
-        expect((await ac.quantizeToIndicesFromClustering(sprite, await ac.buildClustering(sprite), 8)).transparentIndex).toBeNull();
+        expect((await (await ac.buildClustering(sprite)).quantizeToIndices(sprite, 8)).transparentIndex).toBeNull();
     });
 
     it('is carried through a worker handle', async () => {
@@ -345,6 +342,6 @@ describe('one implementation behind both entries', () => {
         const palette = vm.runInNewContext('new Uint8Array([10, 20, 30, 200, 100, 50])');
         expect((await ac.quantizeWithPalette(foreign, palette)).length).toBe(64);
         const clustering = vm.runInNewContext('(bytes) => new Uint8Array(bytes)')(await ac.buildClustering(foreign));
-        expect((await ac.getClusteringInfo(clustering)).maxColors).toBeGreaterThan(0);
+        expect((await new Clustering(clustering).getClusteringInfo()).maxColors).toBeGreaterThan(0);
     });
 });
