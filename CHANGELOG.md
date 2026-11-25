@@ -2,7 +2,7 @@
 
 ## 4.0.0 (in beta: 4.0.0-beta.2)
 
-Premultiplied input, stricter image objects and result types that keep the input's. This is the first part of 4.0; the removals and new errors planned for it come in later betas. Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
+Premultiplied input, stricter image objects and result types that keep the input's. This is 4.0 in two parts: premultiplied input and the image types, then the removals and new errors (Node 20, the bare-image warnings, `transparent` on formats without alpha, the `…FromClustering` and `get…` functions). Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
 
 ### Breaking
 - **Node 22.12 or newer.** `engines` is `>=22.12.0` (was `^20.19.0 || >=22.12.0`), the Babel targets say `node >= 22.12`, and CI tests Node 22 and 24. Node 20 reached end of life on 2026-04-30. Node 20 users stay on 3.8, which is patched on request. See [Migrating](docs/migrating.md#from-3x-to-40).

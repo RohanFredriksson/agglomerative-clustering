@@ -63,8 +63,8 @@ describe('the removed names', () => {
             for (const name of ['getPaletteFromClustering', 'getSwatchesFromClustering']) {
                 expect(new RegExp(`\\b${name}\\b`).test(text), `${file} still has ${name}`).toBe(false);
             }
-            expect(/export\s+(const|function)\s+(getPalette|getClusteringInfo)\b/.test(text), `${file} exports a removed name`).toBe(false);
-            expect(/\bexports\.(getPalette|getClusteringInfo|quantizeFromClustering|quantizeToIndicesFromClustering)\b/.test(text), `${file} exports a removed name (CommonJS)`).toBe(false);
+            expect(/export\s+(const|function)\s+(getClustering|getPalette|getSwatches|getClusteringInfo)\b/.test(text), `${file} exports a removed name`).toBe(false);
+            expect(/\bexports\.(getClustering|getPalette|getSwatches|getClusteringInfo|quantizeFromClustering|quantizeToIndicesFromClustering)\b/.test(text), `${file} exports a removed name (CommonJS)`).toBe(false);
         }
     });
 

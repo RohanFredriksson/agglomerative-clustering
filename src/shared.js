@@ -485,7 +485,7 @@ let engine = null;
 // The first main entry evaluated keeps the slot: it is the one an app loads and gives `init({ wasm })`, so a later copy
 // (a duplicated chunk, a query-string import) doesn't re-point every clustering at a module of its own that isn't set up.
 export const setEngine = (value) => {if (engine === null) {engine = value;}};
-// Each method's call shape and its function form, for messages.
+// Each method's call shape and the loaded-handle form that serves it off the thread, for messages.
 const methodNames = {
     getPalette: ['getPalette(k)', "a loaded handle's getPalette: (await worker.load(clustering)).getPalette(k)"],
     getSwatches: ['getSwatches(k)', "a loaded handle's getSwatches: (await worker.load(clustering)).getSwatches(k)"],
