@@ -243,6 +243,12 @@ const pixelBuffers = (sent) => {
 // Rebuilds an error that happened in the worker: same name, message and code as the main entry gives for the same
 // input, the stack of the call that failed (`origin`, made when the call was sent), and the worker's own stack as `cause`.
 const remoteError = (info, origin) => {
+    // A worker script from another version (3.x's thread, with the old wire names) answers a method it doesn't know with
+    // this message; the caller's arguments are fine, so it is not reported as one.
+    const unknown = /^Unknown method '(.*)'\.$/.exec(info.message);
+    if (unknown) {
+        info = {...info, message: `The worker script is from another version of agglomerative-clustering ('${unknown[1]}' is unknown to it). Use the worker-thread.mjs from this version.`, code: 'worker-failed', argument: undefined};
+    }
     const error = new Error(info.message);
     if (info.name && info.name !== 'Error') {error.name = info.name;}
     if (info.code !== undefined) {error.code = info.code;}
@@ -338,16 +344,15 @@ const sendable = (value) => {
 };
 
 // Where the options sit among a function's arguments after the image (see takeControls).
-const optionsPosition = {getClustering: 0, getPalette: 1, getSwatches: 1, quantize: 1, quantizeFromClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesFromClustering: 2, quantizeToIndicesWithPalette: 1};
+const optionsPosition = {buildClustering: 0, buildPalette: 1, buildSwatches: 1, quantize: 1, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithPalette: 1};
 
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
-const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
-const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
+const imageFunctions = ['buildClustering', 'buildPalette', 'buildSwatches', 'quantize', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithPalette'];
+const mappedImageFunctions = ['quantize', 'quantizeWithPalette'];
 // The functions that only cluster, and so take no dither option.
-const clusteringOnlyFunctions = ['getClustering', 'getPalette', 'getSwatches'];
-const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
+const clusteringOnlyFunctions = ['buildClustering', 'buildPalette', 'buildSwatches'];
 
 // Calls each worker's `abandon` once the worker made by createWorker() has been garbage-collected (see `abandoned`).
 const abandonment = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry((abandon) => abandon()) : null;
@@ -562,14 +567,6 @@ const makeWorker = (options, allowScript) => {
             })();
         };
     }
-    for (const name of otherFunctions) {
-        instance[name] = (...args) => invoke(name, ready() ? args : args.map(own), [], new Error());
-    }
-    // 3.4.0's names for the functions that cluster an image. The old names are the same functions, and they still name the
-    // call on the wire, so a worker script copied from an older version still understands it.
-    instance.buildClustering = instance.getClustering;
-    instance.buildPalette = instance.getPalette;
-    instance.buildSwatches = instance.getSwatches;
 
     instance.init = (initArgs) => {
         const origin = new Error();
@@ -776,17 +773,9 @@ export const terminate = async () => {
 
 export const init = (...args) => sharedWorker().init(...args);
 export const buildClustering = (...args) => sharedWorker().buildClustering(...args);
-export const getClustering = buildClustering;
 export const buildPalette = (...args) => sharedWorker().buildPalette(...args);
-export const getPalette = buildPalette;
-export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);
 export const buildSwatches = (...args) => sharedWorker().buildSwatches(...args);
-export const getSwatches = buildSwatches;
-export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
-export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);
-export const quantizeFromClustering = (...args) => sharedWorker().quantizeFromClustering(...args);
 export const quantizeWithPalette = (...args) => sharedWorker().quantizeWithPalette(...args);
 export const quantizeToIndices = (...args) => sharedWorker().quantizeToIndices(...args);
-export const quantizeToIndicesFromClustering = (...args) => sharedWorker().quantizeToIndicesFromClustering(...args);
 export const quantizeToIndicesWithPalette = (...args) => sharedWorker().quantizeToIndicesWithPalette(...args);

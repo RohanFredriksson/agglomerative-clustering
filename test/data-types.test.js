@@ -151,8 +151,8 @@ describe('Clustering', () => {
         }
         const error = await (async () => new Clustering(palette))().catch((e) => e);
         expect(error.code).toBe('invalid-clustering');
-        // The hint is given where the tag survives: a method called on a palette. (The constructor copies the bytes, so
-        // it only says the bytes are not a clustering.)
+        // The constructor checks for a palette before it copies the bytes, so it gives the same hint as the methods.
+        expect(error.message).toContain('this is a palette, not a clustering');
         const viaMethod = await clustering.getPalette.call(palette, 2).catch((e) => e);
         expect(viaMethod.code).toBe('invalid-clustering');
         expect(viaMethod.message).toContain('this is a palette');

@@ -4,7 +4,7 @@ Upgrading from an earlier major version, and replacing names deprecated along th
 
 ## From 3.x to 4.0
 
-4.0 is built in two parts, and the first beta has the first: premultiplied input, an image object that rejects keys it doesn't know, and result types that keep the input's. The removals listed under "Deprecated" below come in a later beta. Code that passes only `Uint8Array`s and `ImageData`s changes in nothing; each item below is a cost for code that passes `{ data, format }` objects.
+4.0 is built in two parts, and the first beta has the first: premultiplied input, an image object that rejects keys it doesn't know, and result types that keep the input's. The removal of the deprecated names is in [Removed names](#removed-names-34-and-38-deprecations) below. Code that passes only `Uint8Array`s and `ImageData`s changes in nothing; each item below is a cost for code that passes `{ data, format }` objects.
 
 - **A variable reused across calls with different inputs stops compiling.** A result now has the input's exact type, so `let image = { data, format: 'rgba' as const }` can't be assigned an object with `format: 'bgra'`, or one with `width` after one without. Annotate it as `RawImage`:
 
@@ -24,38 +24,28 @@ Upgrading from an earlier major version, and replacing names deprecated along th
 - **`transparent: true` (or a cutoff) on an image with no alpha throws.** In 3.x it did nothing for `'rgb'`, `'rgbx'` and `'bgrx'`; 4.0 throws `invalid-argument` on `'options.transparent'`, since no pixel of such an image can be transparent (and for a bitmap whose fourth byte is really alpha, `'rgba'` or `'bgra'` is the format). Leave `transparent` out for those images, or pass `false`. A shared options object like `{ transparent: false, alpha: 'ignore' }` still works with every format, and mapping an `'rgb'` image with a clustering made with `transparent` is unchanged.
 - **Node 22.12 or newer.** `engines` is now `>=22.12.0` (Node 20 reached end of life on 2026-04-30; 22.12 is the first 22 with `require()` of ES modules, which the CommonJS build needs). Node 20 users stay on 3.8, which is patched on request.
 
-## Deprecated in 3.8 (removed in 4.0)
+## Removed names (3.4 and 3.8 deprecations)
 
-3.8 deprecates the five functions that take a stored clustering, in both entries. They keep working through 3.x, with no warning at run time, and 4.0 removes them. Use the method on the main thread, and a loaded handle off it: `worker.load(clustering)` keeps one copy of the clustering in the worker, so a slider or a batch no longer sends the bytes with every call.
+4.0 removes the names 3.4 and 3.8 deprecated, in both entries and on workers. They were deprecated in the types only, with no warning at run time, so in plain JavaScript a missed one fails when it is called (`undefined is not a function`, including in CommonJS), and TypeScript reports the import. Search your code for each name in the first column.
 
-| Deprecated (both entries) | Main thread | Off the thread |
-|---|---|---|
-| `getPaletteFromClustering(c, k)` | `c.getPalette(k)` | `(await worker.load(c)).getPalette(k)` |
-| `getSwatchesFromClustering(c, k)` | `c.getSwatches(k)` | `….getSwatches(k)` |
-| `getClusteringInfo(c)` (the function) | `c.getClusteringInfo()` | `….getClusteringInfo()` |
-| `quantizeFromClustering(image, c, k)` | `c.quantize(image, k)` | `….quantize(image, k)` |
-| `quantizeToIndicesFromClustering(image, c, k)` | `c.quantizeToIndices(image, k)` | `….quantizeToIndices(image, k)` |
-
-- **A loaded handle has no `…WithPalette` methods and no `getClustering()`.** It holds no image, and you already have the clustering; to map with a palette use `worker.quantizeWithPalette(image, palette)` (see [the worker entry](api.md#worker-entry)).
-- **The methods give the same results, defaults and errors.** The image still comes first in the mapping methods, as in the function forms. A clustering read from storage has no methods until `new Clustering(bytes)`.
-- **A one-off call in a worker** (`await worker.getPaletteFromClustering(c, k)`) becomes `await using loaded = await worker.load(c)` and a call on `loaded`: one copy of the clustering is sent, and you can cut it as often as you like.
-- **Mocks and spies:** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`; spy on the method of a real clustering instead.
-- **`getClusteringInfo` as a function is deprecated, the method is not.** Only `getClusteringInfo(clustering)` goes; `clustering.getClusteringInfo()` and a handle's `getClusteringInfo()` stay.
-
-## Deprecated in 3.4 (removed in 4.0)
-
-3.4.0 gave the three functions that cluster an image verb names, so that from 4.0 a name starting with `get` only reads or cuts what it is given. The old names keep working through 3.x and are removed in 4.0.
-
-| Before 3.4 | From 3.4 |
+| Removed | 4.0 form |
 |---|---|
 | `getClustering(image, options?)` | `buildClustering(image, options?)` |
 | `getPalette(image, k, options?)` | `buildPalette(image, k, options?)` |
 | `getSwatches(image, k, options?)` | `buildSwatches(image, k, options?)` |
+| `getPaletteFromClustering(c, k)` | `c.getPalette(k)`; off the thread, `(await worker.load(c)).getPalette(k)` |
+| `getSwatchesFromClustering(c, k)` | `c.getSwatches(k)`; off the thread, `….getSwatches(k)` |
+| `getClusteringInfo(c)` (the function) | `c.getClusteringInfo()`; off the thread, `….getClusteringInfo()` |
+| `quantizeFromClustering(image, c, k, options?)` | `c.quantize(image, k, options?)`; off the thread, `….quantize(image, k, options?)` |
+| `quantizeToIndicesFromClustering(image, c, k, options?)` | `c.quantizeToIndices(image, k, options?)`; off the thread, `….quantizeToIndices(image, k, options?)` |
 
-- **Replace whole names, at calls that take an image first; nothing else changes.** That is `getPalette(image, …)`, `worker.getPalette(image, …)`, imports and mock factories. A plain-text replace would also rename names that stay (`getPaletteFromClustering`, `getClusteringInfo`, `handle.getClustering()`) to names that don't exist, which plain JavaScript only finds at run time; TypeScript reports them. Each old name is the same function as its new one (`getPalette === buildPalette`), in both entries, both module systems and on every `createWorker()` worker, with the same arguments, options, results and errors. TypeScript marks the old names deprecated, so editors strike them through and lint rules such as `@typescript-eslint/no-deprecated` flag them.
-- **Leave the methods alone.** `clustering.getPalette(k)`, `clustering.getSwatches(k)`, `clustering.getClusteringInfo()` and a worker handle's `handle.getClustering()`, `handle.getPalette(k)` and `handle.getSwatches(k)` keep their names: they read what the clustering or handle already holds. So do `getPaletteFromClustering`, `getSwatchesFromClustering` and `getClusteringInfo`, through 3.x.
-- **Update mock factories and spies with the call sites.** The two names are one function, but a mock replaces only the name it lists: a `vi.mock` factory that gives `getPalette` leaves `buildPalette` out, so a call through the new name fails (Vitest says `No "buildPalette" export is defined on the "agglomerative-clustering" mock`).
-- **A class that implements `AgglomerativeWorker`** (a typed fake, or a wrapper) needs both names until 4.0: add `buildClustering`, `buildPalette` and `buildSwatches`, and keep the old three, which the interface still lists. Renaming them instead gives "missing … getClustering, getPalette, getSwatches". A fake that types itself as `Pick<AgglomerativeWorker, 'buildPalette' | 'cluster'>`, listing only the members your code calls, is spared this churn. Calls to the old names on your own class are flagged by `no-deprecated` as well, because TypeScript carries the tag over from the interface.
+- **The first three are renames:** same arguments, options, results and errors. Replace whole names at calls that take an image first (`getPalette(image, …)`, `worker.getPalette(image, …)`, imports and mock factories). A plain-text replace would also rename names that stay (`clustering.getPalette(k)`, `handle.getClustering()`, `handle.getSwatches(k)`), which plain JavaScript only finds at run time.
+- **The five that took a clustering are now methods.** `clustering.getPalette(k)` and the rest give the same results, defaults and errors, but the clustering is the receiver, so it is checked first, and the image still comes first in the mapping methods (`c.quantize(image, k)`). A clustering read from storage has no methods until `new Clustering(bytes)`.
+- **A one-off call in a worker** (`await worker.getPaletteFromClustering(c, k)`) becomes `await using loaded = await worker.load(c)` and a call on `loaded`: one copy of the clustering is sent, and you can cut it as often as you like. A loaded handle has no `…WithPalette` methods and no `getClustering()` (it holds no image, and you already have the clustering); to map with a palette use `worker.quantizeWithPalette(image, palette)` (see [the worker entry](api.md#worker-entry)).
+- **Mocks and spies:** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`; spy on the method of a real clustering instead. A `vi.mock` factory that lists `getPalette` needs `buildPalette` now.
+- **A class that implements `AgglomerativeWorker`** (a typed fake, or a wrapper) drops `getClustering`, `getPalette`, `getSwatches` and the five `…FromClustering` methods, which the interface no longer lists. A fake that types itself as `Pick<AgglomerativeWorker, 'buildPalette' | 'cluster'>` is spared this.
+- **`getClusteringInfo` as a function is gone, the method stays.** `clustering.getClusteringInfo()` and a handle's `getClusteringInfo()` are unchanged.
+- **A worker script from 3.x (`createWorker({ script })`, `init({ script })`).** The worker's calls to cluster an image are now named `buildClustering`, `buildPalette` and `buildSwatches` on the wire, so a `worker-thread.mjs` copied from 3.x doesn't know them: the call rejects with `worker-failed` ("The worker script is from another version…"). Copy the `worker-thread.mjs` of this version next to your bundle instead. Workers that start the package's own script are unaffected.
 
 ## From 2.x to 3.0
 

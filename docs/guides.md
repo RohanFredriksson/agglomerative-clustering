@@ -461,7 +461,7 @@ const palette = await clustering.getPalette(8);
 ```
 
 - **Key it by the image and the options.** A clustering doesn't record which image it came from, so a stored one stays valid after the image changes; put what it depends on in the key (an id and a version of the image, and the options).
-- **Use the bytes as they come back.** A value read from storage is a plain `Uint8Array`: it has no methods until `new Clustering(bytes)`, and in TypeScript a cast (`stored as Clustering`) compiles but leaves it without them. The function forms of the methods take plain bytes too, but the ones that read a stored clustering are deprecated from 3.8 (see [Deprecated function forms](api.md#deprecated-function-forms)): wrap the bytes in `new Clustering(bytes)` and use its methods (`clustering.getPalette(8)`).
+- **Use the bytes as they come back.** A value read from storage is a plain `Uint8Array`: it has no methods until `new Clustering(bytes)`, and in TypeScript a cast (`stored as Clustering`) compiles but leaves it without them. Wrap the bytes in `new Clustering(bytes)` and use its methods (`clustering.getPalette(8)`), or off the thread `worker.load(bytes)`.
 - **Text stores** (`localStorage`, JSON): `JSON.stringify(clustering)` gives an object keyed by index, not bytes. Store base64 instead: in Node `Buffer.from(clustering).toString('base64')`, read back with `new Clustering(Buffer.from(text, 'base64'))`, and in browsers that have them, `clustering.toBase64()` and `Uint8Array.fromBase64(text)`.
 - **Size:** 0.3 to 1.5 MB for a 768×512 photo, and about a third of that with `precision: 6` (see [Storing a clustering](api.md#palette-and-clustering)).
 

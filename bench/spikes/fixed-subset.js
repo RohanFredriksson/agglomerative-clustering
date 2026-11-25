@@ -24,7 +24,7 @@ import { performance } from 'perf_hooks';
 import { dirname } from 'path';
 import { pathToFileURL } from 'url';
 import {
-    buildClustering, getPaletteFromClustering, getSwatchesFromClustering,
+    buildClustering,
     quantizeToIndicesWithPalette, quantizeWithPalette,
 } from '../../dist/index.mjs';
 import { loadImages } from '../lib/images.js';
@@ -142,7 +142,7 @@ export async function topN(image, F, n) {
 export async function recipe(clustering, F, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-        const cut = await getPaletteFromClustering(clustering, k);
+        const cut = await clustering.getPalette(k);
         if (count(cut) < k && chosen.length >= count(cut)) {break;}   // the image has fewer colours
         const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, F);
         chosen = [...new Set(indices)].slice(0, n);
@@ -288,8 +288,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
         if (img.name.startsWith('noise')) {continue;}
         const image = { data: img.rgba, format: 'rgba', width: img.width };
         const [clustering, clusterMs] = await time(() => buildClustering(image));
-        const [sw, swMs] = await time(() => getSwatchesFromClustering(clustering, M));
-        const swSnap = await getSwatchesFromClustering(clustering, SNAP_M);
+        const [sw, swMs] = await time(() => clustering.getSwatches(M));
+        const swSnap = await clustering.getSwatches(SNAP_M);
         for (const { name: paletteName, colours: F, n: ns } of PALETTES) {
             for (const n of ns) {
                 const methods = {

@@ -475,7 +475,7 @@ export const markPalette = (bytes, colorSpace) => {
     Object.defineProperty(bytes, inspect, {value: paletteView});
     return bytes;
 };
-// Methods on a clustering: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and so on. They are
+// Methods on a clustering: `clustering.getPalette(k)` cuts a palette from it, and so on. They are
 // non-enumerable own properties, added with the tags, so a clustering stays a plain Uint8Array (`toEqual` and
 // `deepStrictEqual` against plain bytes still pass), and slices and clones drop them as they drop the tags. They run on the
 // calling thread with the main entry's functions, which the main entry puts in `engine` when it is evaluated; the worker
@@ -487,11 +487,11 @@ let engine = null;
 export const setEngine = (value) => {if (engine === null) {engine = value;}};
 // Each method's call shape and its function form, for messages.
 const methodNames = {
-    getPalette: ['getPalette(k)', 'getPaletteFromClustering(clustering, k)'],
-    getSwatches: ['getSwatches(k)', 'getSwatchesFromClustering(clustering, k)'],
-    getClusteringInfo: ['getClusteringInfo()', 'getClusteringInfo(clustering)'],
-    quantize: ['quantize(image, k)', 'quantizeFromClustering(image, clustering, k)'],
-    quantizeToIndices: ['quantizeToIndices(image, k)', 'quantizeToIndicesFromClustering(image, clustering, k)'],
+    getPalette: ['getPalette(k)', "a loaded handle's getPalette: (await worker.load(clustering)).getPalette(k)"],
+    getSwatches: ['getSwatches(k)', "a loaded handle's getSwatches: (await worker.load(clustering)).getSwatches(k)"],
+    getClusteringInfo: ['getClusteringInfo()', "a loaded handle's getClusteringInfo: (await worker.load(clustering)).getClusteringInfo()"],
+    quantize: ['quantize(image, k)', "a loaded handle's quantize: (await worker.load(clustering)).quantize(image, k)"],
+    quantizeToIndices: ['quantizeToIndices(image, k)', "a loaded handle's quantizeToIndices: (await worker.load(clustering)).quantizeToIndices(image, k)"],
     chooseFrom: ['chooseFrom(palette, k, options?)', "a loaded handle's chooseFrom: (await worker.load(clustering)).chooseFrom(palette, k)"],
 };
 // Checks the receiver before anything else, since it is written first, then (for the mapping methods) that the image isn't
@@ -572,6 +572,8 @@ Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 // those of a Uint8Array (bytes to copy, or a buffer with an offset and length to view).
 export function Clustering(...args) {
     const [source] = args;
+    // A palette gets the same hint as from every other function, before its bytes are copied.
+    if (isPalette(source)) {readHeader(source);}
     // Bytes, or a buffer to view: never a number (a length would allocate and make an empty clustering) or anything a Uint8Array
     // would coerce. A plain array must hold byte values, as for a palette.
     const isBuffer = isArrayBufferLike(source);
@@ -657,7 +659,7 @@ const notAClustering = (clustering) => {
 
 export const readHeader = (clustering) => {
     if (isPalette(clustering)) {
-        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from buildPalette and getPaletteFromClustering; a clustering comes from buildClustering.", 'clustering');
+        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from buildPalette or clustering.getPalette(k); a clustering comes from buildClustering.", 'clustering');
     }
     if (!isUint8Array(clustering)) {
         throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from buildClustering.", 'clustering');
@@ -700,11 +702,11 @@ export const readHeader = (clustering) => {
     throw notAClustering(clustering);
 };
 
-// Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
+// Palettes are flat RGB bytes. An empty palette is allowed: it is what buildPalette gives for a fully transparent
 // image, and quantize maps such an image the same way.
 export const checkPalette = (palette) => {
     if (isClustering(palette)) {
-        throw fail('invalid-argument', "Invalid palette: this is a clustering (from buildClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.", 'palette');
+        throw fail('invalid-argument', "Invalid palette: this is a clustering (from buildClustering), not a palette. Cut a palette from it with clustering.getPalette(k), or map with clustering.quantize(image, k).", 'palette');
     }
     if (!isUint8Array(palette) && !isUint8ClampedArray(palette) && !Array.isArray(palette)) {
         throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.", 'palette');

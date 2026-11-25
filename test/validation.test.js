@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as ac from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
-import { buildClustering, buildPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 // A minimal valid 2x2 solid red RGBA image.
@@ -111,16 +111,18 @@ describe('typed array views', () => {
 
 describe('a palette passed where a clustering is expected', () => {
 
+    // The methods read their receiver, so they run on any bytes through `call`, as they would on a stored copy.
     it('is rejected for every palette size, instead of being mistaken for a clustering', async () => {
+        const real = await buildClustering(validImage);
         // 1.x clusterings were recognised by their length alone, so palettes of 1, 3, 4, 6, 7, 9 ... colours used to be
         // accepted as clusterings and returned nonsense.
         for (let colours = 1; colours <= 70; colours++) {
             const palette = await buildPalette(validImage, 4);
             const sized = new Uint8Array(colours * 3).map((_, i) => palette[i % palette.length]);
-            await expect(getPaletteFromClustering(sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
-            await expect(quantizeFromClustering(validImage, sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
+            await expect(real.getPalette.call(sized, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
+            await expect(real.quantize.call(sized, validImage, 2), `${colours} colours`).rejects.toMatchObject({ code: 'invalid-clustering' });
         }
-        await expect(getPaletteFromClustering(new Uint8Array(0), 2)).rejects.toMatchObject({ code: 'invalid-clustering' });
+        await expect(real.getPalette.call(new Uint8Array(0), 2)).rejects.toMatchObject({ code: 'invalid-clustering' });
     });
 
 });
@@ -216,17 +218,20 @@ describe('the order arguments are checked in', () => {
     const message = { image: 'Invalid image', clustering: 'Invalid clustering', palette: 'Invalid palette', k: 'Invalid k', options: "Invalid option 'nope'" };
     let clustering, palette;
     const signatures = {
-        getClustering: ['image', 'options'],
-        getPalette: ['image', 'k', 'options'],
-        getSwatches: ['image', 'k', 'options'],
-        getPaletteFromClustering: ['clustering', 'k'],
-        getSwatchesFromClustering: ['clustering', 'k'],
+        buildClustering: ['image', 'options'],
+        buildPalette: ['image', 'k', 'options'],
+        buildSwatches: ['image', 'k', 'options'],
         quantize: ['image', 'k', 'options'],
-        quantizeFromClustering: ['image', 'clustering', 'k', 'options'],
         quantizeWithPalette: ['image', 'palette', 'options'],
         quantizeToIndices: ['image', 'k', 'options'],
-        quantizeToIndicesFromClustering: ['image', 'clustering', 'k', 'options'],
         quantizeToIndicesWithPalette: ['image', 'palette', 'options'],
+    };
+    // The methods on Clustering take the clustering first, as written (`clustering.quantize(image, k)`), so it is checked first.
+    const methodSignatures = {
+        getPalette: ['clustering', 'k'],
+        getSwatches: ['clustering', 'k'],
+        quantize: ['clustering', 'image', 'k', 'options'],
+        quantizeToIndices: ['clustering', 'image', 'k', 'options'],
     };
 
     it('reports the first wrong argument of every function', async () => {
@@ -239,6 +244,13 @@ describe('the order arguments are checked in', () => {
                 const args = params.map((param, i) => (i < wrongFrom ? good[param] : bad[param]));
                 const error = await ac[name](...args).then(() => null, (e) => e);
                 expect(error && error.message, `${name} with ${params[wrongFrom]} and the rest wrong`).toContain(message[params[wrongFrom]]);
+            }
+        }
+        for (const [name, params] of Object.entries(methodSignatures)) {
+            for (let wrongFrom = 0; wrongFrom < params.length; wrongFrom++) {
+                const args = params.map((param, i) => (i < wrongFrom ? good[param] : bad[param]));
+                const error = await clustering[name].call(...args).then(() => null, (e) => e);
+                expect(error && error.message, `clustering.${name} with ${params[wrongFrom]} and the rest wrong`).toContain(message[params[wrongFrom]]);
             }
         }
     });

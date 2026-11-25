@@ -47,8 +47,10 @@ describe('bytes are read when the call is made', () => {
     it('in the main entry, for clusterings and palettes', async () => {
         const lib = await fresh();
         const clustering = new Uint8Array(await ac.buildClustering(solid(red)));
+        // The methods read their receiver, so a method of another clustering runs on plain bytes through `call`.
+        const method = new lib.Clustering(clustering).getPalette;
         const palette = new Uint8Array(red);
-        const cut = lib.getPaletteFromClustering(clustering, 2);
+        const cut = method.call(clustering, 2);
         const mapped = lib.quantizeWithPalette(solid(blue, 4), palette);
         clustering.fill(0);
         palette.set(blue);
@@ -107,9 +109,9 @@ describe('arguments in the wrong place', () => {
 
     it('rejects a clustering or a palette passed as the image', async () => {
         const clustering = await ac.buildClustering(solid(red));
-        const palette = await ac.getPalette(solid(red), 2);
+        const palette = await ac.buildPalette(solid(red), 2);
         for (const call of [() => ac.buildPalette(clustering, 4), () => ac.quantize(clustering, 4), () => ac.buildClustering(clustering)]) {
-            await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('getPaletteFromClustering') });
+            await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('clustering.getPalette(k)') });
         }
         await expect(ac.buildPalette(palette, 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('palette') });
     });
@@ -148,7 +150,7 @@ describe('detached buffers', () => {
             () => ({ data: detach(solid(red)), format: 'rgba' }),
             () => {const image = new ImageData(new Uint8ClampedArray(solid(red)), 10, 10); detach(image.data); return image;},
         ]) {
-            await expect(ac.getPalette(make(), 2)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('detached') });
+            await expect(ac.buildPalette(make(), 2)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image', message: expect.stringContaining('detached') });
         }
     });
 
@@ -205,16 +207,17 @@ describe('small things from the beta.1 testing', () => {
     it('rejects options passed to the functions that read a clustering, in both entries and on handles', async () => {
         const clustering = await ac.buildClustering(solid(red));
         for (const call of [
-            () => ac.getPaletteFromClustering(clustering, 4, { colorSpace: 'oklab' }),
-            () => ac.getSwatchesFromClustering(clustering, 4, {}),
-            () => ac.getClusteringInfo(clustering, { precision: 6 }),
+            () => clustering.getPalette(4, { colorSpace: 'oklab' }),
+            () => clustering.getSwatches(4, {}),
+            () => clustering.getClusteringInfo({ precision: 6 }),
         ]) {
             await expect(call()).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
         }
-        expect(await ac.getPaletteFromClustering(clustering, 4, undefined)).toEqual(await ac.getPaletteFromClustering(clustering, 4));
+        expect(await clustering.getPalette(4, undefined)).toEqual(await clustering.getPalette(4));
         const worker = createWorker();
         try {
-            await expect(worker.getPaletteFromClustering(clustering, 4, { dither: true })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
+            const loaded = await worker.load(clustering);
+            await expect(loaded.getPalette(4, { dither: true })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
             const handle = await worker.cluster(solid(red));
             await expect(handle.getPalette(4, { colorSpace: 'oklab' })).rejects.toMatchObject({ code: 'invalid-argument', argument: 'options' });
             await expect(handle.getSwatches(4, {})).rejects.toMatchObject({ code: 'invalid-argument' });
@@ -225,9 +228,9 @@ describe('small things from the beta.1 testing', () => {
     });
 
     it('says when k is a string, and how to convert it', async () => {
-        await expect(ac.getPalette(solid(red), '16')).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k', message: expect.stringContaining('Got the string "16"') });
-        await expect(ac.getPalette(solid(red), 2.5)).rejects.toThrow('Got 2.5');
-        await expect(ac.getPalette(solid(red), null)).rejects.toThrow('Got null');
+        await expect(ac.buildPalette(solid(red), '16')).rejects.toMatchObject({ code: 'invalid-argument', argument: 'k', message: expect.stringContaining('Got the string "16"') });
+        await expect(ac.buildPalette(solid(red), 2.5)).rejects.toThrow('Got 2.5');
+        await expect(ac.buildPalette(solid(red), null)).rejects.toThrow('Got null');
     });
 
     it('keeps the WebAssembly glue quiet when the module fails to load', async () => {
@@ -288,7 +291,7 @@ describe('ImageData from another implementation', () => {
         // Not just any object of that name: it must have an ImageData's shape.
         class Other {constructor() {this.data = new Uint8Array(4); this.width = 1; this.height = 1;}}
         Object.defineProperty(Other, 'name', { value: 'ImageData' });
-        await expect(ac.getPalette(new Other(), 1)).rejects.toMatchObject({ code: 'invalid-argument' });
+        await expect(ac.buildPalette(new Other(), 1)).rejects.toMatchObject({ code: 'invalid-argument' });
     });
 
     // Found by the fifth round (3.0.0-beta.5): Chromium's ImageData can hold float16 pixels (pixelFormat: 'rgba-float16'),
@@ -322,7 +325,7 @@ describe('messages', () => {
     });
 
     it('starts unsupported-version messages with "Unsupported clustering"', async () => {
-        const error = await ac.getPaletteFromClustering(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]), 2).catch((caught) => caught);
+        const error = await (async () => new ac.Clustering(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0])))().catch((caught) => caught);
         expect(error.code).toBe('unsupported-version');
         expect(error.message).toMatch(/^Unsupported clustering:/);
     });
@@ -349,7 +352,7 @@ describe('messages', () => {
         expect(error.code).toBe('out-of-memory');
         expect(error.message).toContain('2.00 GB');
         expect(error.message).toContain('1.9 GB');
-        expect(await ac.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
+        expect(await ac.buildPalette(solid(red), 1)).toEqual(new Uint8Array(red));
     });
 
     it('rejects input too large for the module in the worker entry too, before sending it', async () => {
@@ -357,10 +360,10 @@ describe('messages', () => {
         // code (invalid-argument) from the main entry's. Now both check the size first, with the same error.
         const worker = createWorker();
         try {
-            const error = await worker.getPalette({ data: new Uint8Array(2 ** 31), format: 'rgba' }, 2).catch((caught) => caught);
+            const error = await worker.buildPalette({ data: new Uint8Array(2 ** 31), format: 'rgba' }, 2).catch((caught) => caught);
             expect(error.code).toBe('out-of-memory');
             expect(error.message).toContain('1.9 GB');
-            expect(await worker.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
+            expect(await worker.buildPalette(solid(red), 1)).toEqual(new Uint8Array(red));
         } finally {
             await worker.terminate();
         }
@@ -386,7 +389,7 @@ describe('messages', () => {
             expect(error.message).not.toContain('working directory');
             const entry = await fresh();
             await entry.init({ wasm: `${base}/clustering.wasm` });
-            expect(await entry.getPalette(solid(red), 1)).toEqual(new Uint8Array(red));
+            expect(await entry.buildPalette(solid(red), 1)).toEqual(new Uint8Array(red));
         } finally {
             server.close();
         }

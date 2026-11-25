@@ -19,7 +19,7 @@ const inClusteringSpace = async (id, options, palette) => {
     if (options !== undefined && Object.prototype.toString.call(options) !== '[object Object]') {return options;}
     // A Palette knows the space it was made in; the main entry uses that unless one is named.
     if (isPalette(palette) && !(options && options.colorSpace !== undefined)) {return options;}
-    const {colorSpace} = await ac.getClusteringInfo(handle(id).clustering);
+    const {colorSpace} = await handle(id).clustering.getClusteringInfo();
     return {...options, colorSpace: options && options.colorSpace !== undefined ? options.colorSpace : colorSpace};
 };
 
@@ -31,19 +31,19 @@ const functions = Object.fromEntries(Object.entries(ac).filter(([name, value]) =
 const methods = {
     ...functions,
     cluster: async (id, image, options) => {
-        handles.set(id, {image, clustering: await ac.getClustering(image, options)});
+        handles.set(id, {image, clustering: await ac.buildClustering(image, options)});
     },
     load: async (id, clustering) => {handles.set(id, {clustering: new ac.Clustering(clustering)});},
     release: async (id) => {handles.delete(id);},
     handleGetClustering: async (id) => new ac.Clustering(handle(id).clustering),
-    handleGetPalette: async (id, k) => ac.getPaletteFromClustering(handle(id).clustering, k),
-    handleGetSwatches: async (id, k) => ac.getSwatchesFromClustering(handle(id).clustering, k),
-    handleGetClusteringInfo: async (id) => ac.getClusteringInfo(handle(id).clustering),
+    handleGetPalette: async (id, k) => handle(id).clustering.getPalette(k),
+    handleGetSwatches: async (id, k) => handle(id).clustering.getSwatches(k),
+    handleGetClusteringInfo: async (id) => handle(id).clustering.getClusteringInfo(),
     handleChooseFrom: async (id, palette, k, options) => handle(id).clustering.chooseFrom(palette, k, options),
-    handleQuantize: async (id, k, options) => ac.quantizeFromClustering(handle(id).image, handle(id).clustering, k, options),
-    handleQuantizeToIndices: async (id, k, options) => ac.quantizeToIndicesFromClustering(handle(id).image, handle(id).clustering, k, options),
-    handleQuantizeImage: async (id, image, k, options) => ac.quantizeFromClustering(image, handle(id).clustering, k, options),
-    handleQuantizeToIndicesImage: async (id, image, k, options) => ac.quantizeToIndicesFromClustering(image, handle(id).clustering, k, options),
+    handleQuantize: async (id, k, options) => handle(id).clustering.quantize(handle(id).image, k, options),
+    handleQuantizeToIndices: async (id, k, options) => handle(id).clustering.quantizeToIndices(handle(id).image, k, options),
+    handleQuantizeImage: async (id, image, k, options) => handle(id).clustering.quantize(image, k, options),
+    handleQuantizeToIndicesImage: async (id, image, k, options) => handle(id).clustering.quantizeToIndices(image, k, options),
     handleQuantizeWithPalette: async (id, palette, options) => ac.quantizeWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
     handleQuantizeToIndicesWithPalette: async (id, palette, options) => ac.quantizeToIndicesWithPalette(handle(id).image, palette, await inClusteringSpace(id, options, palette)),
 };
@@ -60,8 +60,8 @@ const buffers = (value) => {
 
 // Where the options sit among each method's arguments, to give them the call's signal and progress callback.
 const optionsIndex = {
-    getClustering: 1, getPalette: 2, getSwatches: 2, quantize: 2, quantizeFromClustering: 3, quantizeWithPalette: 2,
-    quantizeToIndices: 2, quantizeToIndicesFromClustering: 3, quantizeToIndicesWithPalette: 2,
+    buildClustering: 1, buildPalette: 2, buildSwatches: 2, quantize: 2, quantizeWithPalette: 2,
+    quantizeToIndices: 2, quantizeToIndicesWithPalette: 2,
     cluster: 2, handleQuantize: 2, handleQuantizeToIndices: 2, handleQuantizeWithPalette: 2, handleQuantizeToIndicesWithPalette: 2,
     handleChooseFrom: 3, handleQuantizeImage: 3, handleQuantizeToIndicesImage: 3,
 };

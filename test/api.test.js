@@ -51,19 +51,12 @@ const imageFunctions = functionExports('index.d.ts').filter((name) => parameterN
 
 // The option keys the runtime enforces, read from the error it gives for an unknown key.
 const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
-const clustering = await main.getClustering(image);
-const palette = await main.getPalette(image, 3);
+const clustering = await main.buildClustering(image);
+const palette = await main.buildPalette(image, 3);
 const callArguments = {
     buildClustering: [image], buildPalette: [image, 3], buildSwatches: [image, 3],
-    getClustering: [image], getPalette: [image, 3], getSwatches: [image, 3], quantize: [image, 3], quantizeFromClustering: [image, clustering, 3],
-    quantizeWithPalette: [image, palette], quantizeToIndices: [image, 3], quantizeToIndicesFromClustering: [image, clustering, 3],
-    quantizeToIndicesWithPalette: [image, palette],
+    quantize: [image, 3], quantizeWithPalette: [image, palette], quantizeToIndices: [image, 3], quantizeToIndicesWithPalette: [image, palette],
 };
-// The names the functions that cluster an image had before 3.4.0, and their new names. The old names are the same
-// functions, documented in one line under the "Deprecated names" heading of docs/api.md, and 4.0 removes them (and this map).
-const deprecated = { getClustering: 'buildClustering', getPalette: 'buildPalette', getSwatches: 'buildSwatches' };
-const deprecatedSection = /^### Deprecated names\n([^\n]*)\n?/m;
-
 // Calls of the old names in prose and examples. The methods on a clustering or a handle keep the names, so these tell the
 // functions apart by shape: a bare name (an import, a mock factory, a call), a dotted getPalette or getSwatches call with
 // two or more arguments (a worker's), or a dotted getClustering with an argument. A worker has no get… method but the
@@ -94,10 +87,9 @@ describe('the declarations', () => {
         expect(valueExports('worker.d.ts')).toEqual(Object.keys(worker).sort());
     });
 
-    it('mark exactly the old names deprecated, and never the methods that keep them', () => {
-        // The renamed 3.4.0 names, and (3.8) the …FromClustering function forms; the methods that replace them are not.
-        const fromClustering = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
-        const expected = [...Object.keys(deprecated), ...fromClustering].sort();
+    // 4.0 removed everything 3.x deprecated (the get… names of the functions that cluster, the …FromClustering functions).
+    it('mark nothing deprecated', () => {
+        const expected = [];
         const isDeprecated = (symbol) => resolved(symbol).getJsDocTags(checker).some((tag) => tag.name === 'deprecated');
         for (const fileName of ['index.d.ts', 'worker.d.ts']) {
             const marked = moduleExports(fileName).filter(isDeprecated).map((symbol) => symbol.name).sort();
@@ -214,7 +206,7 @@ const parameterNamesOfMember = (interfaceName, member) => {
 describe('the API reference (docs/api.md)', () => {
 
     it('documents every function', () => {
-        for (const name of [...Object.keys(worker), 'createWorker'].filter((name) => !(name in deprecated))) {
+        for (const name of [...Object.keys(worker), 'createWorker']) {
             // Functions are documented as `name(`; constants such as `version` have a heading of their own.
             const entry = typeof worker[name] === 'function' && !/^[A-Z]/.test(name) ? '`' + name + '(' : '`' + name + '`';
             expect(api.includes(entry), `docs/api.md has no entry for ${name}`).toBe(true);
@@ -223,28 +215,16 @@ describe('the API reference (docs/api.md)', () => {
 
     it('lists, for each function, exactly the options it accepts', async () => {
         const checked = [];
-        for (const name of Object.keys(callArguments).filter((name) => !(name in deprecated))) {
-            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? |(?![\\s\\S]))', 'm'));   // a section ends at the next heading or the end of the file (the deprecated function forms come last)
+        for (const name of Object.keys(callArguments)) {
+            const section = api.match(new RegExp('^###[^\\n]*`' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? |(?![\\s\\S]))', 'm'));   // a section ends at the next heading or the end of the file 
             expect(section, `docs/api.md has a section for ${name}`).not.toBeNull();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
             if (!line || /those of|theirs/.test(line)) {continue;}          // these point at another function's list
-            const listed = [...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).filter((word) => !/^(getPaletteFromClustering|quantizeFromClustering)$/.test(word)).sort();
+            const listed = [...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort();
             expect(listed, `Options listed for ${name}`).toEqual(await enforcedKeys(name));
             checked.push(name);
         }
-        expect(checked).toEqual(expect.arrayContaining(['buildClustering', 'buildPalette', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette']));
-    });
-
-    it('lists each deprecated name under its own heading, as the same function as its new name', () => {
-        const section = api.match(deprecatedSection);
-        expect(section, 'docs/api.md has a "### Deprecated names" heading with a line under it').not.toBeNull();
-        expect(api.includes('[deprecated names](#deprecated-names)'), 'the contents at the top of docs/api.md link the section').toBe(true);
-        for (const [old, now] of Object.entries(deprecated)) {
-            expect(section[1].includes('`' + old + '('), `the line gives ${old}'s signature`).toBe(true);
-            expect(section[1].includes('`' + now + '`'), `the line names ${now}`).toBe(true);
-            expect(main[old], old).toBe(main[now]);
-            expect(worker[old], `worker ${old}`).toBe(worker[now]);
-        }
+        expect(checked).toEqual(expect.arrayContaining(['buildClustering', 'buildPalette', 'quantize', 'quantizeWithPalette']));
     });
 
     it('stale-call patterns flag the old functions and spare the names that stay', () => {
@@ -256,7 +236,7 @@ describe('the API reference (docs/api.md)', () => {
 
     it('call the functions that cluster by their 3.4.0 names', () => {
         for (const file of [...userDocs, 'docs/how-it-works.md']) {
-            let text = file === 'docs/api.md' ? read(file).replace(deprecatedSection, '') : read(file);
+            let text = read(file);
             for (const phrase of intentional) {text = text.replaceAll(phrase, '');}
             const stale = text.split('\n').filter(staleCall);
             expect(stale, `${file} still calls an old name`).toEqual([]);
@@ -294,23 +274,18 @@ describe('methods on Clustering', () => {
     // The methods the class declares in index.d.ts.
     const clusteringClass = sourceOf('index.d.ts').statements.find((node) => ts.isClassDeclaration(node) && node.name?.text === 'Clustering');
     const declared = clusteringClass.members.filter(ts.isMethodDeclaration).map((member) => member.name.getText()).sort();
-    // A method's function form: its name with `FromClustering`, or the same name when the function already says it (getClusteringInfo).
-    const functionForm = (name) => (main[`${name}FromClustering`] ? `${name}FromClustering` : name);
-
     it('are declared exactly as they exist at run time', () => {
         expect(runtime.length).toBeGreaterThan(0);
         expect(declared).toEqual(runtime);
     });
 
-    // Methods with no function form (PRINCIPLES "Settled decisions"): new ones are methods only.
-    const methodOnly = ['chooseFrom'];
+    // The methods that take options, with arguments that reach their option check.
+    const methodArguments = { quantize: [image, 3], quantizeToIndices: [image, 3], chooseFrom: [new Uint8Array(30), 4] };
 
-    it('each have a function form in both entries, named by dropping FromClustering', () => {
-        for (const name of runtime.filter((name) => !methodOnly.includes(name))) {
-            const form = functionForm(name);
-            expect(typeof main[form], `${name} has a function form in the main entry`).toBe('function');
-            expect(typeof worker[form], `${name} has a function form in the worker entry`).toBe('function');
-            expect(form === name || form === `${name}FromClustering`, `${name}'s function form is ${name}FromClustering`).toBe(true);
+    it('each have a handle method on a loaded handle', () => {
+        const loaded = propertyNames(declaredType('worker.d.ts', 'LoadedClusteringHandle'));
+        for (const name of runtime) {
+            expect(loaded, `a loaded handle has ${name}`).toContain(name);
         }
     });
 
@@ -319,22 +294,9 @@ describe('methods on Clustering', () => {
         for (const name of runtime) {
             const section = api.match(new RegExp('^###[^\\n]*`clustering\\.' + name + '\\([^\\n]*\\n([\\s\\S]*?)(?=^###? )', 'm'));
             expect(section, `docs/api.md has a section for clustering.${name}`).not.toBeNull();
-            const form = functionForm(name);
-            if (methodOnly.includes(name)) {
-                const error = await clustering[name](new Uint8Array(30), 4, { __unknown__: true }).catch((e) => e);
-                const enforced = error.message.match(/expected one of (.*)\./)[1].split(', ').sort();
-                const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
-                expect(line, `clustering.${name} has an Options line`).toBeDefined();
-                expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
-                checked.push(name);
-                continue;
-            }
-            if (!callArguments[form]) {continue;}   // the cuts take no options
-            // The method enforces exactly what its function form does, and its Options line lists that.
-            const args = callArguments[form].filter((value) => value !== clustering);
-            const error = await clustering[name](...args, { __unknown__: true }).catch((e) => e);
-            const enforced = (error.message.match(/expected one of (.*)\./) || [])[1].split(', ').sort();
-            expect(enforced, `clustering.${name} enforces ${form}'s options`).toEqual(await enforcedKeys(form));
+            if (!methodArguments[name]) {continue;}   // the cuts take no options
+            const error = await clustering[name](...methodArguments[name], { __unknown__: true }).catch((e) => e);
+            const enforced = error.message.match(/expected one of (.*)\./)[1].split(', ').sort();
             const line = (section[1].match(/Options: ([^\n]*)/) || [])[1];
             expect(line, `clustering.${name} has an Options line`).toBeDefined();
             expect([...line.matchAll(/`(\w+)`/g)].map((m) => m[1]).sort(), `Options listed for clustering.${name}`).toEqual(enforced);
@@ -379,40 +341,6 @@ describe('the documentation files', () => {
             ];
             for (const [target, anchor] of links) {
                 expect(anchorsOf(read(target)).has(anchor), `${file} links to ${target}#${anchor}, which is not a heading`).toBe(true);
-            }
-        }
-    });
-});
-
-describe('deprecated …FromClustering functions', () => {
-    const names = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo', 'quantizeFromClustering', 'quantizeToIndicesFromClustering'];
-    // The declarations of the function forms: functions and consts at the top level, and the worker's methods that take
-    // a clustering (a handle's own `getClusteringInfo()` takes nothing and is not one).
-    const declarations = (file) => {
-        const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
-        const found = [];
-        const visit = (node) => {
-            let name;
-            if (ts.isFunctionDeclaration(node) && node.name) name = node.name.text;
-            else if (ts.isVariableStatement(node)) name = node.declarationList.declarations[0].name.text;
-            else if (ts.isMethodSignature(node) && node.parameters.length > 0) name = node.name.text;
-            if (name && names.includes(name)) found.push({ name, node });
-            ts.forEachChild(node, visit);
-        };
-        visit(source);
-        return { source, found };
-    };
-
-    it('the …FromClustering functions are deprecated in both entries', () => {
-        for (const file of ['src/index.d.ts', 'src/worker.d.ts']) {
-            const { source, found } = declarations(file);
-            for (const name of names) expect(found.some((d) => d.name === name), `${file} declares ${name}`).toBe(true);
-            for (const { name, node } of found) {
-                const comments = (ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? []).map((r) => source.text.slice(r.pos, r.end));
-                const doc = comments.filter((c) => c.startsWith('/**')).pop() ?? '';
-                expect(doc, `${file}: ${name} has @deprecated`).toContain('@deprecated');
-                expect(doc, `${file}: ${name} names the method`).toMatch(/clustering\.\w+\(/);
-                expect(doc, `${file}: ${name} names worker.load`).toMatch(/worker\.load/);
             }
         }
     });

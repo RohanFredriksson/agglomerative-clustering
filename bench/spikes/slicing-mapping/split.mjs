@@ -3,7 +3,7 @@
 // two) through dist/ on the 24 Kodak photos (768x512) and 1 MP of noise, for each dither method, at 16 and 256
 // colours and precision 8 and 6, and prints the clustering's share of the total: median, min and max.
 //   node bench/spikes/slicing-mapping/split.mjs > bench/spikes/slicing-mapping/results-split.txt
-import { buildClustering, quantizeFromClustering } from '../../../dist/index.mjs';
+import { buildClustering } from '../../../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../../fixtures/kodak.js';
 
 const best = async (run) => {let t = Infinity; for (let i = 0; i < 2; i++) {const t0 = performance.now(); await run(); t = Math.min(t, performance.now() - t0);} return t;};
@@ -22,7 +22,7 @@ for (const [set, images] of [['photos', photos], ['noise', [noise]]]) {
             for (const [name, dither] of methods) {
                 const shares = [];
                 for (let i = 0; i < images.length; i++) {
-                    const map = await best(() => quantizeFromClustering(images[i], clusterings[i], k, { dither }));
+                    const map = await best(() => clusterings[i].quantize(images[i], k, { dither }));
                     shares.push(times[i] / (times[i] + map));
                 }
                 console.log(`${set.padEnd(7)} ${String(precision).padStart(9)}  ${String(k).padStart(7)}  ${name.padEnd(16)}  ${q(shares, 0.5).toFixed(2).padStart(28)}  ${Math.min(...shares).toFixed(2)}  ${Math.max(...shares).toFixed(2)}`);

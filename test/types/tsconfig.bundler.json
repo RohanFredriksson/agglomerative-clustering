@@ -18,6 +18,7 @@
     "disposable.mts",
     "union.mts",
     "shapes.mts",
-    "premultiplied.mts"
+    "premultiplied.mts",
+    "removed.mts"
   ]
 }

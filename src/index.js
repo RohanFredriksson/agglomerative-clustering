@@ -338,7 +338,7 @@ const load = (image) => {
 
     if (isClustering(image) || isPalette(image)) {
         const what = isClustering(image) ? 'a clustering (from buildClustering)' : 'a palette';
-        const fix = isClustering(image) ? 'To cut a palette from it, use getPaletteFromClustering (or quantizeFromClustering to map an image with it).' : 'To map an image to it, use quantizeWithPalette(image, palette).';
+        const fix = isClustering(image) ? 'To cut a palette from it, use clustering.getPalette(k) (or clustering.quantize(image, k) to map an image with it).' : 'To map an image to it, use quantizeWithPalette(image, palette).';
         throw fail('invalid-argument', `Invalid image: this is ${what}, not pixels. ${fix}`, 'image');
     }
 
@@ -754,12 +754,11 @@ const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, 
 
 // The functions that read a clustering take no options: a clustering already says how it was made. An options object passed
 // anyway (say { colorSpace: 'oklab' }, expecting it to apply) would be silently ignored, so it is an error. undefined is fine.
-// `name` is how the caller wrote the call: the function, or the method (`clustering.getPalette`), whose message points at
-// the method form of mapping.
+// `name` is how the caller wrote the call (the method, `clustering.getPalette`), whose message points at the method form
+// of mapping.
 const noOptions = (name, extra) => {
     if (extra.some((value) => value !== undefined)) {
-        const alternative = name.startsWith('clustering.') ? 'clustering.quantize' : 'quantizeFromClustering';
-        throw fail('invalid-argument', `Invalid arguments: ${name} takes no options (a clustering already records its colour space, precision and cutoff). To map pixels with other options, use ${alternative}.`, 'options');
+        throw fail('invalid-argument', `Invalid arguments: ${name} takes no options (a clustering already records its colour space, precision and cutoff). To map pixels with other options, use clustering.quantize(image, k, options).`, 'options');
     }
 };
 
@@ -784,8 +783,6 @@ export const buildClustering = async (image, options) => {
     return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent), o.precision, image.premultiplied));
 
 };
-/** @deprecated The same function as buildClustering, its name before 3.4.0. Removed in 4.0. */
-export const getClustering = buildClustering;
 
 export const buildPalette = async (image, k, options) => {
 
@@ -807,10 +804,8 @@ export const buildPalette = async (image, k, options) => {
     return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent), o.precision, image.premultiplied), colorSpaceName(o.colorSpace));
 
 };
-/** @deprecated The same function as buildPalette, its name before 3.4.0. Removed in 4.0. */
-export const getPalette = buildPalette;
 
-// The cuts take the name they were called by, for their messages: the functions below, or the methods on Clustering.
+// The cuts take the name they were called by, for their messages: the methods on Clustering (or the function that cuts).
 const cutPalette = async (name, clustering, k, extra) => {
 
     const header = readHeader(clustering);
@@ -822,8 +817,6 @@ const cutPalette = async (name, clustering, k, extra) => {
     return markPalette(call(wasm, [clustering], (clusteringPointer) => wasm._get_palette_from_clustering(clusteringPointer, clustering.length, k)), colorSpaceName(header.colorSpace));
 
 };
-
-export const getPaletteFromClustering = (clustering, k, ...extra) => cutPalette('getPaletteFromClustering', clustering, k, extra);
 
 // The weight of each colour in the k-colour cut, in pixels (opacity-weighted), read from the clustering's records.
 const weightsOf = (wasm, clustering, header, k) => {
@@ -862,9 +855,7 @@ const cutSwatches = async (name, clustering, k, extra) => {
 
 };
 
-export const getSwatchesFromClustering = (clustering, k, ...extra) => cutSwatches('getSwatchesFromClustering', clustering, k, extra);
-
-// The same for an image: clusters it, then cuts, like getPalette.
+// The same for an image: clusters it, then cuts, like buildPalette.
 export const buildSwatches = async (image, k, options) => {
 
     image = imageCopy(image);
@@ -872,11 +863,9 @@ export const buildSwatches = async (image, k, options) => {
     // `load` only validates here (buildClustering loads again); both see the copy, so the caller's fields are read once.
     load(image);
     k = check(k);
-    return getSwatchesFromClustering(await buildClustering(image, options), k);
+    return cutSwatches('buildSwatches', await buildClustering(image, options), k, []);
 
 };
-/** @deprecated The same function as buildSwatches, its name before 3.4.0. Removed in 4.0. */
-export const getSwatches = buildSwatches;
 
 // What a clustering holds, read from its header and records without the WASM module. `mse[k - 1]` is the mean
 // squared error per channel of the k-colour clustering: each pixel's squared distance to its cluster's colour,
@@ -915,8 +904,6 @@ const readInfo = async (name, clustering, extra) => {
 
 };
 
-export const getClusteringInfo = (clustering, ...extra) => readInfo('getClusteringInfo', clustering, extra);
-
 export const quantize = async (image, k, options) => {
 
     image = imageCopy(image);
@@ -939,7 +926,7 @@ export const quantize = async (image, k, options) => {
 
 };
 
-export const quantizeFromClustering = async (image, clustering, k, options) => {
+const quantizeFromClustering = async (image, clustering, k, options) => {
 
     image = imageCopy(image);
     const wrap = getWrapper(image);
@@ -1011,7 +998,7 @@ export const quantizeToIndices = async (image, k, options) => {
 
 };
 
-export const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
+const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
 
     image = imageCopy(image);
     const original = image;

@@ -3,10 +3,7 @@
 // carry a CRC-32 (from 3.0.0-beta.2), so any such damage is reported; those from 3.0.0-beta.1 have none (zeros), and for
 // them the records are checked as they are replayed, so they can never give more than k colours or an error curve of NaN.
 import { describe, it, expect } from 'vitest';
-import {
-    Clustering, buildClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering,
-    quantizeToIndicesFromClustering,
-} from '../dist/index.mjs';
+import { Clustering, buildClustering } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 const width = 6, height = 6;   // 36 colours, a clustering of 760 bytes: small enough to flip every bit of
@@ -16,7 +13,14 @@ for (let p = 0; p < width * height; p++) {
     image.set([x * 40, y * 40, (x * y * 7) & 255, 255], p * 4);
 }
 const clustering = await buildClustering(image);
-const colors = (await getClusteringInfo(clustering)).maxColors;
+const colors = (await clustering.getClusteringInfo()).maxColors;
+// The methods read their receiver, so they run on any bytes (a slice, a damaged copy) through `call`: the same checks as on a
+// clustering of its own.
+const getPalette = (bytes, k) => clustering.getPalette.call(bytes, k);
+const getSwatches = (bytes, k) => clustering.getSwatches.call(bytes, k);
+const getClusteringInfo = (bytes) => clustering.getClusteringInfo.call(bytes);
+const quantizeWith = (bytes, k) => clustering.quantize.call(bytes, image, k);
+const quantizeToIndicesWith = (bytes, k) => clustering.quantizeToIndices.call(bytes, image, k);
 
 const crc32 = (bytes) => {
     let crc = 0xFFFFFFFF;
@@ -31,14 +35,14 @@ const storedChecksum = (bytes) => (bytes[17] | (bytes[18] << 8) | (bytes[19] << 
 // Every way of using a clustering, each expected to either work within its contract or reject with invalid-clustering.
 // Functions, so a caller can start only some of them (a started call that nobody awaits is an unhandled rejection).
 const uses = (bytes, k) => [
-    () => getPaletteFromClustering(bytes, k).then((palette) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
-    () => getSwatchesFromClustering(bytes, k).then(({ palette, shares }) => {
+    () => getPalette(bytes, k).then((palette) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
+    () => getSwatches(bytes, k).then(({ palette, shares }) => {
         expect(palette.length / 3).toBeLessThanOrEqual(k);
         for (const share of shares) {expect(Number.isFinite(share)).toBe(true);}
     }),
     () => getClusteringInfo(bytes).then(({ mse }) => {for (const value of mse || []) {expect(Number.isFinite(value)).toBe(true);}}),
-    () => quantizeFromClustering(image, bytes, k),
-    () => quantizeToIndicesFromClustering(image, bytes, k).then(({ palette }) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
+    () => quantizeWith(bytes, k),
+    () => quantizeToIndicesWith(bytes, k).then(({ palette }) => {expect(palette.length / 3).toBeLessThanOrEqual(k);}),
 ];
 
 describe('checksums', () => {
@@ -62,7 +66,7 @@ describe('checksums', () => {
                     expect(error.code, `byte ${at} bit ${bit}`).toMatch(/^(invalid-clustering|unsupported-version)$/);
                 }
                 if (constructed) {expect(at, `byte ${at} bit ${bit} was accepted`).toBe(2);}
-                await expect(getPaletteFromClustering(damaged, 256), `byte ${at} bit ${bit}`).rejects.toHaveProperty('code', expect.stringMatching(/^(invalid-clustering|unsupported-version)$/));
+                await expect(getPalette(damaged, 256), `byte ${at} bit ${bit}`).rejects.toHaveProperty('code', expect.stringMatching(/^(invalid-clustering|unsupported-version)$/));
             }
         }
     });
@@ -74,7 +78,7 @@ describe('checksums', () => {
             if (length === clustering[2]) {continue;}
             const damaged = clustering.slice();
             damaged[2] = length;
-            for (const read of [() => getPaletteFromClustering(damaged, 1), () => getSwatchesFromClustering(damaged, 1), () => getClusteringInfo(damaged)]) {
+            for (const read of [() => getPalette(damaged, 1), () => getSwatches(damaged, 1), () => getClusteringInfo(damaged)]) {
                 await expect(read(), `header length ${length}`).rejects.toHaveProperty('code', expect.stringMatching(/^(invalid-clustering|unsupported-version)$/));
             }
         }
@@ -115,7 +119,7 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
     unchecked.fill(0, 17, 21);
 
     it('still load', async () => {
-        expect(await getPaletteFromClustering(unchecked, 16)).toEqual(await getPaletteFromClustering(clustering, 16));
+        expect(await getPalette(unchecked, 16)).toEqual(await getPalette(clustering, 16));
     });
 
     // The bug found in exploratory testing: a flipped bit in the root colour cut to 257 colours at k = 256, which broke
@@ -141,7 +145,7 @@ describe('clusterings without a checksum (3.0.0-beta.1)', () => {
     it('reject a damaged root colour', async () => {
         const damaged = unchecked.slice();
         damaged[22] ^= 1;
-        await expect(getPaletteFromClustering(damaged, colors)).rejects.toMatchObject({ code: 'invalid-clustering' });
+        await expect(getPalette(damaged, colors)).rejects.toMatchObject({ code: 'invalid-clustering' });
     });
 
     it('reject a valid header followed by random bytes', async () => {
