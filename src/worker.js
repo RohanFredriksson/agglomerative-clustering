@@ -108,7 +108,7 @@ const start = async (receive, chosen) => {
         // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
         // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
         const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
-        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }). The worker's files can also be from different versions of agglomerative-clustering: serve all of dist/ from this version.";
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }). The worker's files can also be from different versions of agglomerative-clustering. Serve all of the package's dist/ files from this version.";
         let worker, source = null;
         try {
             if (opaque) {
@@ -146,7 +146,9 @@ const start = async (receive, chosen) => {
     const worker = new NodeWorker(await nodeWorkerScript(chosen), {execArgv: []});
     worker.on('message', receive);
     // A worker script that can't be found, or that can't find what it imports: a copy of dist/ split up or bundled away.
-    const versions = " The worker's files can also be from different versions of agglomerative-clustering: serve all of dist/ from this version.";
+    const versions = " The worker's files can also be from different versions of agglomerative-clustering. Serve all of the package's dist/ files from this version.";
+    // A link or load failure (a script of another version, a file the thread can't import): not a script that throws, nor a crash.
+    const linking = (error) => error && (/^ERR_(MODULE|REQUIRE|UNKNOWN_FILE|UNSUPPORTED|INVALID_MODULE|PACKAGE|IMPORT)/.test(String(error.code)) || /does not provide an export named|The requested module/.test(String(error.message)));
     const missing = (error) => error && (error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find module|import\.meta' outside a module|Qualified path resolution failed/.test(String(error.message)));
     // Yarn Plug'n'Play keeps packages in zip archives, which Node reads ES modules from only through Yarn's loader.
     const inZip = (error) => /\.zip[\\/]/.test(String(error && error.message));
@@ -154,7 +156,9 @@ const start = async (receive, chosen) => {
         ? inZip(error)
             ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).${versions}`
             : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.${versions}`
-        : error.message}));
+        // A link or load error gets the same advice; anything else (a script that throws, a crash) keeps its own message.
+        : linking(error) ? `${String(error.message).split('\n')[0].replace(/\.$/, '')}.${versions}`
+            : error && typeof error.message === 'string' ? error.message : `The worker thread threw a value that is not an Error.`, cause: error}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
     return {post: (message, transfer) => worker.postMessage(message, transfer), terminate: () => worker.terminate(), ref: () => worker.ref(), unref: () => worker.unref()};
@@ -316,7 +320,8 @@ const takeControls = (options, allowed, image) => {
     options = snapshot(options);
     // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
     // at all, for a Proxy or a function): read it here the way the main entry does, once, and validate and send the copy.
-    if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
+    // A function that takes no dither is left to parseOptions, which names the unknown key before the object is read.
+    if (allowed.includes('dither') && options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
         options.dither = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
     }
     const parsed = parseOptions(options, allowed, image);
@@ -384,7 +389,7 @@ const makeWorker = (options, allowScript) => {
     // The worker script to start instead of the package's own (see scriptOption); set by init({ script }) for the shared one.
     let script = options.script === undefined ? null : scriptOption(options.script);
     // Where the worker finds its .wasm: sent as the worker's first call, and repeated until it has succeeded.
-    const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
+    let initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
     let initial = initialWasm === undefined ? null : {wasm: initialWasm};
     let initialising = null;
     // Whether the worker script has said it is this version (the first message to every worker), and that exchange.
@@ -434,7 +439,7 @@ const makeWorker = (options, allowScript) => {
     // A worker that failed (could not start, crashed or exited) is dropped: the calls waiting on it get the failure, and
     // the next call starts a new one, which either works or fails the same clear way. Without this, later calls would be
     // posted to a thread that will never answer and hang forever. Handles kept in the dropped worker are gone with it.
-    const lose = (reason) => {
+    const lose = (reason, cause) => {
         const lost = connection;
         generation++;
         connection = null;
@@ -445,13 +450,13 @@ const makeWorker = (options, allowScript) => {
         if (initialWasm !== undefined) {initial = {wasm: initialWasm};}
         const calls = [...pending.values()];
         pending.clear();
-        for (const call of calls) {call.cleanup(); call.reject(fail('worker-failed', reason));}
+        for (const call of calls) {call.cleanup(); call.reject(cause === undefined ? fail('worker-failed', reason) : Object.assign(fail('worker-failed', reason), {cause}));}
         if (lost) {try {Promise.resolve(lost.terminate()).catch(() => {});} catch (ignored) {/* already gone */}}
     };
 
     const receive = (message) => {
         if (message.failure !== undefined) {
-            if (!terminated) {lose(`Worker failed: ${message.failure}`);}
+            if (!terminated) {lose(`Worker failed: ${message.failure}`, message.cause);}
             return;
         }
         const call = pending.get(message.id);
@@ -515,7 +520,7 @@ const makeWorker = (options, allowScript) => {
                 }).catch((theirs) => {
                     if (theirs instanceof Error) {throw theirs;}
                     if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
-                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Use the worker-thread.mjs from this version.`;
+                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Serve all of the package's dist/ files from this version.`;
                     if (mine === generation) {lose(reason);}
                     throw fail('worker-failed', reason);
                 });
@@ -523,7 +528,8 @@ const makeWorker = (options, allowScript) => {
             await shaking;
         }
         if (initial && !(method === 'init' && args.length > 0 && args[0].wasm !== undefined)) {
-            initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
+            const sending = initial;
+            initialising = initialising || post('init', [initial], [], origin).then(() => {if (initial === sending) {initial = null;}}, (error) => {initialising = null; throw error;});
             await initialising;
         }
         return post(method, args, transferable, origin, controls);
@@ -634,7 +640,17 @@ const makeWorker = (options, allowScript) => {
                 checked = rest;
             }
         } catch (error) {return Promise.reject(error);}
-        return invoke('init', checked === undefined || Object.keys(checked).length === 0 ? [] : [checked], [], origin).then(() => undefined);
+        if (terminated) {return Promise.reject(fail('worker-terminated', "Worker terminated."));}
+        // The options are only recorded: `wasm` is sent as the worker's first call (see `initial`), and a worker that can't
+        // start or load fails the calls, which is where a caller handles it. So init() can't leave a rejection nobody
+        // awaits (it is often written as a setup line). The warm-up below is started and its failure dropped for the same reason.
+        if (checked !== undefined && checked.wasm !== undefined) {
+            initialWasm = checked.wasm;
+            initial = {wasm: initialWasm};
+            initialising = null;
+        }
+        invoke('init', [], [], origin).catch(() => {});
+        return Promise.resolve();
     };
 
     // Whether a value is an image where a palette size was expected (a pixel array, an ImageData or `{data, ...}`).

@@ -9,7 +9,7 @@ import { join, resolve, dirname, relative } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { build } from 'esbuild';
 import { createWorker } from '../dist/worker.mjs';
-import { buildPalette } from '../dist/index.mjs';
+import { buildPalette, version } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,7 +66,7 @@ describe('createWorker({ script })', () => {
                 const error = await worker.buildPalette(image, 4).catch((caught) => caught);
                 expect(error.code).toBe('worker-failed');
                 expect(error.message).toContain('keep dist/ together');
-                expect(error.message).toContain('from different versions of agglomerative-clustering: serve all of dist/ from this version');
+                expect(error.message).toContain("Serve all of the package's dist/ files from this version.");
                 expect(error.message).toContain('createWorker({ script })');
             } finally {
                 await worker.terminate();
@@ -107,6 +107,116 @@ describe('init({ script }) for the shared worker', () => {
         `);
         expect(output).toBe('6 invalid-argument options.script accepted');
         expect(status).toBe(0);
+    });
+
+});
+
+describe('init({ script }) leaves nothing unhandled', () => {
+
+    it('as a setup line without await: a script that cannot start fails the calls, not the process', () => {
+        const { status, output } = runModule(`
+            import * as ac from ${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)};
+            ac.init({ script: '/nonexistent/worker-thread.mjs' });
+            const code = await ac.buildPalette({ data: new Uint8Array(16).fill(9), format: 'rgba' }, 2).then(() => 'ok', (error) => error.code);
+            console.log(code);
+            await ac.terminate();
+        `);
+        expect(output).toBe('worker-failed');
+        expect(status).toBe(0);
+    });
+
+    it('awaited, it resolves once the options are recorded, and the next call rejects with worker-failed', () => {
+        const { status, output } = runModule(`
+            import * as ac from ${JSON.stringify(pathToFileURL(join(dist, 'worker.mjs')).href)};
+            const first = await ac.init({ script: '/nonexistent/worker-thread.mjs' }).then(() => 'resolved', (error) => error.code);
+            const code = await ac.buildPalette({ data: new Uint8Array(16).fill(9), format: 'rgba' }, 2).then(() => 'ok', (error) => error.code);
+            const bad = await ac.init({ wasm: 5 }).then(() => 'resolved', (error) => error.code + ' ' + error.argument);
+            console.log(first, code, bad);
+            await ac.terminate();
+        `);
+        expect(output).toBe('resolved worker-failed invalid-argument options.wasm');
+        expect(status).toBe(0);
+    });
+
+});
+
+describe('a worker script that fails to link, in Node', () => {
+
+    // A stale 3.8 worker-thread.mjs next to 4.0 files fails at link time (a named export that no longer exists).
+    it('is worker-failed, with the different-versions hint and the engine text', async () => {
+        const stale = join(folder, 'stale');
+        cpSync(dist, stale, { recursive: true });
+        writeFileSync(join(stale, 'worker-thread.mjs'), "import { noSuchExport } from './index.mjs';\nconsole.log(noSuchExport);\n");
+        const worker = createWorker({ script: join(stale, 'worker-thread.mjs') });
+        try {
+            const error = await worker.buildPalette(image, 4).catch((caught) => caught);
+            expect(error.code).toBe('worker-failed');
+            expect(error.message).toContain('noSuchExport');
+            expect(error.message).toContain("Serve all of the package's dist/ files from this version.");
+            expect(String(error.cause && error.cause.message)).toContain('noSuchExport');
+        } finally {
+            await worker.terminate();
+        }
+    });
+
+});
+
+describe('a worker script that throws, in Node', () => {
+
+    it('keeps its own message, with no versions hint, and the error as the cause', async () => {
+        for (const [source, text] of [["throw new Error('broken on purpose');", 'broken on purpose'], ['throw undefined;', 'not an Error'], ["throw 'a string';", 'not an Error']]) {
+            const script = join(folder, 'throws.mjs');
+            writeFileSync(script, `${source}\n`);
+            const worker = createWorker({ script });
+            try {
+                const error = await worker.buildPalette(image, 4).catch((caught) => caught);
+                expect(error.code).toBe('worker-failed');
+                expect(error.message).toContain(text);
+                expect(error.message).not.toContain('undefined');
+                expect(error.message).not.toContain('dist/');
+                if (text === 'broken on purpose') {expect(error.cause.message).toBe(text);}
+            } finally {
+                await worker.terminate();
+            }
+        }
+    });
+
+});
+
+describe('init({ wasm }) twice in a row', () => {
+
+    // The warm-up call that init starts resends the newer location anyway, which hides the race this guards against
+    // (clearing the newer `wasm` when the older send finishes), so this test can't fail on the old code: it checks the
+    // outcome only.
+    // A stub thread that logs the locations it is sent and answers an init slowly, so a newer one can be recorded while the
+    // older is on its way.
+    it('sends the newest wasm location last', async () => {
+        const stubFolder = mkdtempSync(join(tmpdir(), 'init-race-'));
+        const script = join(stubFolder, 'worker-thread.mjs');
+        writeFileSync(script, `
+            import { parentPort } from 'node:worker_threads';
+            const seen = [];
+            parentPort.on('message', ({ id, method, args }) => {
+                if (method === 'handshake') {parentPort.postMessage({ id, result: ${JSON.stringify(version)} });}
+                else if (method === 'init') {
+                    if (args[0] && args[0].wasm) {seen.push(args[0].wasm);}
+                    setTimeout(() => parentPort.postMessage({ id, result: null }), 150);
+                } else {parentPort.postMessage({ id, result: seen });}
+            });
+        `);
+        const worker = createWorker({ script });
+        try {
+            await worker.init({ wasm: 'first.wasm' });
+            const first = worker.buildPalette(image, 2);     // sends the first location ...
+            await new Promise((done) => setTimeout(done, 50));
+            await worker.init({ wasm: 'second.wasm' });       // ... and a newer one is recorded while it is on its way
+            await first;
+            // The newer location is the last the thread has been sent, whatever the timing of the older one.
+            expect((await worker.buildPalette(image, 2)).at(-1)).toBe('second.wasm');
+        } finally {
+            await worker.terminate();
+            rmSync(stubFolder, { recursive: true, force: true });
+        }
     });
 
 });

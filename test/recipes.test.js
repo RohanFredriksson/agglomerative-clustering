@@ -198,18 +198,43 @@ describe('recipes in the guides', () => {
 
     // Decoded pixel by pixel: 3.0.0-beta.1's recipe passed a check that the PNG had a tRNS chunk, but fast-png writes only
     // the alphas below 255 and PNG applies them from entry 0, so its transparency landed on the wrong entry.
+    // The guides' forPng, as written there (checked below); its `toEntries` is `toColors` here.
+    const toEntries = toColors;
+    function forPng({ palette, indices, transparentIndex }) {
+      const t = transparentIndex ?? 0;
+      const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
+      const entries = toEntries(palette);
+      return {
+        data: indices.map(swap),
+        palette: entries.map((_, i) => [...entries[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
+      };
+    }
+
+    it('forPng is the function in the guides', async () => {
+        const { readFile } = await import('fs/promises');
+        const text = async (path) => (await readFile(new URL(path, import.meta.url), 'utf8')).split('\n');
+        const body = (lines) => {
+            const first = lines.findIndex((line) => line.trim().startsWith('function forPng('));
+            const indent = lines[first].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+            return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
+        };
+        expect(body(await text('./recipes.test.js'))).toBe(body(await text('../docs/guides.md')));
+    });
+
+    it('forPng leaves an opaque image as it is, with alpha 255', async () => {
+        const opaque = await quantizeToIndices({ data: new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]), format: 'rgba', width: 2, height: 1 }, 2);
+        const made = forPng(opaque);
+        expect(Array.from(made.data)).toEqual(Array.from(opaque.indices));
+        expect(made.palette.every((entry) => entry[3] === 255)).toBe(true);
+    });
+
     it('a palette PNG whose transparent pixels decode as transparent, and the rest as their colours', async () => {
         const { palette, indices, transparentIndex } = await quantizeToIndices(image, 256, { transparent: true });
         const colors = toColors(palette);
         expect(indices).toBeInstanceOf(Uint8Array);
         expect(transparentIndex).toBeGreaterThan(0);   // the case the old recipe got wrong
-        const t = transparentIndex ?? 0;
-        const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
-        const png = encodePng({
-            width: image.width, height: image.height, depth: 8, channels: 1,
-            data: indices.map(swap),
-            palette: colors.map((_, i) => [...colors[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
-        });
+        const png = encodePng({ width: image.width, height: image.height, depth: 8, channels: 1, ...forPng({ palette, indices, transparentIndex }) });
         const back = decodePng(png);
         expect(back.channels).toBe(1);
         for (let p = 0; p < indices.length; p++) {

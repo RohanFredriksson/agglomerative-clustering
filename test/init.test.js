@@ -86,7 +86,9 @@ describe('init({ wasm })', () => {
             writeFileSync(page, '<!doctype html><title>404 Not Found</title>');
             for (const worker of [false, true]) {
                 const target = worker ? createWorker() : await fresh();
-                const error = await target.init({ wasm: page }).catch((e) => e);
+                // A worker's init only records the location: the next call is the one that fails.
+                if (worker) {await target.init({ wasm: page });}
+                const error = await (worker ? target.buildPalette(new Uint8Array(16), 2) : target.init({ wasm: page })).catch((e) => e);
                 if (worker) {await target.terminate();}
                 expect(error.code).toBe('wasm-load-failed');
                 expect(error.message).toContain('is not WebAssembly');
