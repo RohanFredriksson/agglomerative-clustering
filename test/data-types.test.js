@@ -151,6 +151,15 @@ describe('Clustering', () => {
         }
         const error = await (async () => new Clustering(palette))().catch((e) => e);
         expect(error.code).toBe('invalid-clustering');
+        // The hint is given where the tag survives: a method called on a palette. (The constructor copies the bytes, so
+        // it only says the bytes are not a clustering.)
+        const viaMethod = await clustering.getPalette.call(palette, 2).catch((e) => e);
+        expect(viaMethod.code).toBe('invalid-clustering');
+        expect(viaMethod.message).toContain('this is a palette');
+        // a plain array must hold byte values
+        for (const bad of [[0xAC, 2, 0, 300], [0xAC, 2, 0, 'x'], [0xAC, 2, 0, 1.5]]) {
+            expect(() => new Clustering(bad)).toThrow(expect.objectContaining({ code: 'invalid-clustering', message: expect.stringContaining('byte values') }));
+        }
     });
 
 });

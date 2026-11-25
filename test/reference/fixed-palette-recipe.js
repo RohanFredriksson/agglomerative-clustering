@@ -1,4 +1,4 @@
-// The fixed-palette recipe of 3.7.2 (docs/guides.md, "Choosing colours from a fixed palette"), copied verbatim, as the
+// The fixed-palette recipe of 3.7.2 (docs/guides.md, "Choosing colours from a fixed palette"), adapted to the 4.0 methods (clustering.getPalette, getSwatches), as the
 // reference that clustering.chooseFrom is tested against. `entry` is the library module (the function the recipe calls);
 // returns the recipe's chooseThreads and improveThreads.
 export function recipe(entry) {

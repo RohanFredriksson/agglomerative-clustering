@@ -1,6 +1,6 @@
 // The shapes of results and inputs: what narrows, and which palette inputs the types accept. Uses only types that exist
 // without the DOM lib, so it is compiled in every configuration.
-import { buildClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes } from 'agglomerative-clustering';
+import { buildClustering, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes } from 'agglomerative-clustering';
 import { createWorker } from 'agglomerative-clustering/worker';
 import type { AlphaMode, ClusteringInfo, ColorSpace, DitherMethod, DitherSteps, ImageFormat, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
 

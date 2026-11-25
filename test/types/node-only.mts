@@ -1,6 +1,6 @@
 // A Node-only project: no DOM lib, so no global `ImageData`. The declarations must compile with `skipLibCheck` off,
 // and the types must stay precise (not fall back to `any`).
-import { quantize, quantizeToIndices, init, getClusteringInfo, buildClustering } from 'agglomerative-clustering';
+import { quantize, quantizeToIndices, init, buildClustering } from 'agglomerative-clustering';
 import { createWorker, quantize as workerQuantize } from 'agglomerative-clustering/worker';
 import type { ImageLike, PlatformImageData, RawImage } from 'agglomerative-clustering';
 

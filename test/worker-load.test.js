@@ -64,6 +64,8 @@ describe('worker.load', () => {
             for (const bad of [damaged, await ac.buildPalette(image, 4), image, new Uint8Array(3), 'x', null]) {
                 await expect(worker.load(bad)).rejects.toMatchObject({ code: 'invalid-clustering', argument: 'clustering' });
             }
+            await expect(worker.load(await ac.buildPalette(image, 4))).rejects.toMatchObject({ message: expect.stringContaining('this is a palette') });
+            await expect(worker.load({ toJSON() {}, fn() {} })).rejects.toMatchObject({ code: 'invalid-clustering', argument: 'clustering' });
             expect(posts).not.toHaveBeenCalled();
         } finally {
             posts.mockRestore();
