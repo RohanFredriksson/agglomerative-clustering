@@ -24,9 +24,23 @@ The library takes decoded pixels, not files: the bytes of a PNG or JPEG are reje
 |---|---|---|
 | Node | [sharp](https://sharp.pixelplumbing.com/) | everything below, including orientation and colour profiles |
 | Browsers | `createImageBitmap` | what the browser can show, including orientation and colour profiles (measured in Chromium) |
+| Node, without native modules | [pngjs](https://github.com/pngjs/pngjs) (PNG) and [jpeg-js](https://github.com/jpeg-js/jpeg-js) (JPEG), both pure JavaScript | pngjs: PNGs of every colour type and bit depth, expanded to 8-bit RGBA (16-bit scaled down); jpeg-js: JPEGs; neither applies orientation or colour profiles |
 | Edge runtimes such as Cloudflare Workers | [jsquash](https://github.com/jamsinclair/jSquash) (the Squoosh app's decoders, in WebAssembly) and [omggif](https://github.com/deanm/omggif) | PNG, JPEG, WebP and GIF, including orientation; not colour profiles |
 
 Each gives straight 8-bit RGBA whenever it decodes the file, so `format: 'rgba'` is right whatever the file holds (grey, palette, 1-bit or 16-bit PNGs). BMP, TIFF and HEIC files, which the library's error also recognises, weren't measured here: check your decoder's documentation (Chromium can't decode HEIC).
+
+pngjs and jpeg-js are in the table from their own documentation and source, not measured here:
+
+```js
+import { PNG } from 'pngjs';
+import jpeg from 'jpeg-js';
+
+const png = PNG.sync.read(pngBytes);                          // data: RGBA, 8 bits per channel
+const fromPng = { data: png.data, format: 'rgba', width: png.width, height: png.height };
+
+const decoded = jpeg.decode(jpegBytes, { useTArray: true });   // data: a Uint8Array of RGBA (formatAsRGBA is on by default)
+const fromJpeg = { data: decoded.data, format: 'rgba', width: decoded.width, height: decoded.height };
+```
 
 **In Node**, with sharp:
 
@@ -94,8 +108,8 @@ async function decodeImage(bytes) {
 Under `wrangler dev`, a 768×512 image decoded in 4–20 ms, and a 12-megapixel JPEG in 139 ms (`buildSwatches(image, 5, { precision: 6 })` then took about 400 ms more). The worker, with the library, came to 290 KB gzipped. Leave out the decoders you don't need; AVIF is `@jsquash/avif`, about 330 KB more gzipped.
 
 **What to watch for:**
-- **RGB bytes passed bare are an error.** sharp's plain `.raw()` gives RGB for a JPEG; a bare `Uint8Array` is read as RGBA, and the palette comes out wrong whenever the length happens to be a multiple of 4. Keep `.ensureAlpha()`, or pass `{ data, format: 'rgb', width }`. The library throws `invalid-argument` when it sees this.
-- **Decoders that return the file's own layout.** fast-png (good for writing palette PNGs, [below](#gifs-and-palette-pngs)) returns palette indices, 1 or 2 channels, 16-bit `Uint16Array`s and 1-, 2- and 4-bit rows still packed, as the file stores them. None of these is RGBA, and passed without `width`, some are accepted with no error. To read PNGs, use a decoder that expands them: the ones above, or pngjs in Node. To keep fast-png, see [below](#keeping-fast-png). The library [warns](api.md#warnings) when it sees grey bytes passed bare (an error from 4.0).
+- **RGB bytes passed bare are an error.** sharp's plain `.raw()` gives RGB for a JPEG; a bare `Uint8Array` is read as RGBA, and the palette comes out wrong whenever the length happens to be a multiple of 4. Keep `.ensureAlpha()`, or pass `{ data, format: 'rgb', width }`. The library throws `invalid-argument` when it sees this. It recognises RGB and grey from how the bytes look, so it can miss flat or graphic grey and some one-channel images: always pass grey expanded to RGBA.
+- **Decoders that return the file's own layout.** fast-png (good for writing palette PNGs, [below](#gifs-and-palette-pngs)) returns palette indices, 1 or 2 channels, 16-bit `Uint16Array`s and 1-, 2- and 4-bit rows still packed, as the file stores them. None of these is RGBA, and passed without `width`, some are accepted with no error. To read PNGs, use a decoder that expands them: the ones above, or pngjs in Node. To keep fast-png, see [below](#keeping-fast-png). The library rejects grey bytes passed bare with an `invalid-argument` error, but only when they look like grey: it can miss flat or graphic grey and some one-channel images, so always pass grey expanded to RGBA.
 - **Animations give their first frame** with sharp and in Chromium, and with omggif for a GIF on the edge; an animated WebP fails to decode on the edge (jsquash's "Decoding error"). For one palette across the frames, see [Animated GIFs and sets of images](#animated-gifs-and-sets-of-images).
 - **Colour profiles on the edge.** jsquash ignores a file's embedded profile, so a Display P3 photo (from recent iPhones and Macs) gives somewhat duller colours: its palette fitted the photo 1.47 times worse in mean squared error. sharp and browsers convert to sRGB.
 - **Partly transparent pixels in browsers** are stored premultiplied inside the canvas, so their colours are rounded on the way out: a pixel of alpha 3 can come back noticeably off. They count by their opacity, so palettes barely change (1.01 times the error on an alpha ramp), but mapped output shows it at faint edges. sharp and jsquash return them exactly.
@@ -103,11 +117,12 @@ Under `wrangler dev`, a 768×512 image decoded in 4–20 ms, and a 12-megapixel 
 
 ### Keeping fast-png
 
-To keep fast-png's `decode()`, turn its result into an image the library takes, and refuse what that can't cover (palette PNGs, which come back as indices plus a `palette`, 16-bit files, and grey rows below 8 bits):
+To keep fast-png's `decode()`, turn its result into an image the library takes, and refuse what that can't cover (palette PNGs, which come back as indices plus a `palette`, and rows below 8 bits, which stay packed). It shifts 16-bit files down to 8 bits (`>> 8`, keeping each sample's high byte):
 
 ```js
 function fastPngToImage({ data, width, height, channels, depth, palette }) {
-  if (palette || depth !== 8) throw new Error('needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)');
+  if (palette || depth < 8) throw new Error('needs a decoder that expands palette and packed PNGs (pngjs)');
+  if (depth === 16) data = Uint8Array.from(data, (v) => v >> 8); // 16-bit samples: keep each one's high byte
   if (channels === 4) return { data, format: 'rgba', width, height };
   if (channels === 3) return { data, format: 'rgb', width, height };
   const out = new Uint8Array(width * height * 4);

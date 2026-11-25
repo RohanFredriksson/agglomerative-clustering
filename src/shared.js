@@ -90,7 +90,7 @@ export const checkImageDataPixels = (image) => {
         }
         const needed = image.width * image.height * 4;
         if (image.data.length !== needed) {
-            throw fail('invalid-argument', `Invalid image: this ImageData's data has ${image.data.length} bytes, but ${image.width} x ${image.height} RGBA pixels need ${needed}.`, 'image');
+            throw fail('invalid-argument', `Invalid image: this ImageData's data has ${counted(image.data.length, 'byte', 'bytes')}, but ${image.width} x ${image.height} RGBA pixels need ${needed}.`, 'image');
         }
         return;
     }
@@ -237,9 +237,13 @@ export const imageCopy = (image) => {
 
 // What the main entry's `load` checks about an image object, from the copy imageCopy made, in its order: data's type, whether its
 // buffer is detached, then checkImageObject. The worker entry runs the same before it posts an image. Returns the premultiplied flag.
+// What to do with 16-bit pixels (a decoder's Uint16Array for a 16-bit PNG): the library reads 8 bits per channel.
+const sixteenBit = (data) => Object.prototype.toString.call(data) === '[object Uint16Array]'
+    ? ' 16-bit pixels (a Uint16Array, as decoders give for a 16-bit PNG) have to be shifted down to 8 bits first: Uint8Array.from(data, (v) => v >> 8).' : '';
+
 export const checkImageBody = (image) => {
     if (!isUint8Array(image.data) && !isUint8ClampedArray(image.data)) {
-        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
+        throw fail('invalid-argument', `Invalid image data: must be Uint8Array or Uint8ClampedArray.${sixteenBit(image.data)}`, 'image');
     }
     if (isDetached(image.data)) {
         throw detachedError('data');
@@ -269,6 +273,9 @@ const ditherMethodCodes = {'floyd-steinberg': 0, 'atkinson': 1, 'ordered': 2};
 // The method names and step counts, exported (like errorCodes) for code that builds options from a form.
 export const ditherMethods = Object.freeze(Object.keys(ditherMethodCodes));
 export const ditherSteps = Object.freeze([2, 4, 8, 16, 32, 64]);
+
+// A count with its noun in the right number, for messages: 1 byte, 2 bytes.
+export const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 // A short description of a value for an error message.
 export const describe = (value) => typeof value === 'string' ? `'${value}'`
@@ -465,7 +472,7 @@ export const bareImageError = (image) => {
 const inspect = Symbol.for('nodejs.util.inspect.custom');
 const view = (label) => function (depth, options, nodeInspect) {
     const plain = new Uint8Array(this.buffer, this.byteOffset, this.length);
-    return `${label(this)} ${typeof nodeInspect === 'function' ? nodeInspect(plain, options) : `[${plain.length} bytes]`}`;
+    return `${label(this)} ${typeof nodeInspect === 'function' ? nodeInspect(plain, options) : `[${counted(plain.length, 'byte', 'bytes')}]`}`;
 };
 const paletteView = view((palette) => `Palette(${palette.colorSpace})`);
 const clusteringView = view(() => 'Clustering');
@@ -648,13 +655,17 @@ const damaged = () => fail('invalid-clustering', "Invalid clustering: its bytes 
 // and a length of 0 or 3 more than a multiple of 9).
 const notAClustering = (clustering) => {
     const length = clustering.length;
+    // No bytes at all is not a 1.x clustering that lost its header: there is nothing to read.
+    if (length === 0) {
+        return fail('invalid-clustering', "Invalid clustering: it is empty (no bytes). A clustering comes from buildClustering, even for an image with no visible pixels.", 'clustering');
+    }
     if (clustering[0] !== 0xAC && (length % 9 === 0 || length % 9 === 3)) {
         return fail('invalid-clustering', "Invalid clustering: not a clustering from buildClustering. If it was stored by agglomerative-clustering 1.x, that format is no longer read: cluster the image again.", 'clustering');
     }
     if (clustering[0] === 0xAC && length >= 2 && (clustering[1] === 2 || clustering[1] === 3)) {
-        return fail('invalid-clustering', `Invalid clustering: it starts like a format ${clustering[1]} clustering, but its length or header doesn't fit one (${length} bytes): it was probably truncated or damaged. Cluster the image again.`, 'clustering');
+        return fail('invalid-clustering', `Invalid clustering: it starts like a format ${clustering[1]} clustering, but its length or header doesn't fit one (${counted(length, 'byte', 'bytes')}): it was probably truncated or damaged. Cluster the image again.`, 'clustering');
     }
-    return fail('invalid-clustering', `Invalid clustering: not a clustering from buildClustering (${length} bytes that don't start with a clustering header).`, 'clustering');
+    return fail('invalid-clustering', `Invalid clustering: not a clustering from buildClustering (${counted(length, 'byte', 'bytes')} that ${length === 1 ? "doesn't" : "don't"} start with a clustering header).`, 'clustering');
 };
 
 export const readHeader = (clustering) => {
@@ -903,7 +914,7 @@ export const checkPixelArray = (image) => {
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
         return;
     }
-    throw fail('invalid-argument', "Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.", 'image');
+    throw fail('invalid-argument', `Invalid image: a bare typed array must be a Uint8Array of RGBA bytes. For a Uint8ClampedArray such as imageData.data, pass the ImageData itself or { data, format: 'rgba' }.${sixteenBit(image)}`, 'image');
 };
 
 // An empty palette is what getPalette gives for an image with no visible pixels, and mapping such an image with it is
@@ -927,7 +938,7 @@ export const checkChoice = (palette, k) => {
     const count = palette.length / 3;
     k = checkK(k);
     if (k > count) {
-        throw fail('invalid-argument', `Invalid k: ${k} is more than the ${count} entries in the palette; use ${count} or fewer.`, 'k');
+        throw fail('invalid-argument', `Invalid k: ${k} is more than the ${counted(count, 'entry', 'entries')} in the palette; use ${count} or fewer.`, 'k');
     }
     return k;
 };

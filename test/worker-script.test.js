@@ -66,6 +66,7 @@ describe('createWorker({ script })', () => {
                 const error = await worker.buildPalette(image, 4).catch((caught) => caught);
                 expect(error.code).toBe('worker-failed');
                 expect(error.message).toContain('keep dist/ together');
+                expect(error.message).toContain('from different versions of agglomerative-clustering: serve all of dist/ from this version');
                 expect(error.message).toContain('createWorker({ script })');
             } finally {
                 await worker.terminate();

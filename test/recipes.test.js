@@ -831,7 +831,8 @@ describe('decoding image files (guides)', () => {
 // (bench/spikes/bare-grey/results-palette.txt: fast-png gives an 8-bit palette PNG as channels 1, depth 8, plus a palette).
 describe('fastPngToImage', () => {
     function fastPngToImage({ data, width, height, channels, depth, palette }) {
-        if (palette || depth !== 8) throw new Error('needs a decoder that expands palette, 16-bit and packed PNGs (pngjs)');
+        if (palette || depth < 8) throw new Error('needs a decoder that expands palette and packed PNGs (pngjs)');
+        if (depth === 16) data = Uint8Array.from(data, (v) => v >> 8); // 16-bit samples: keep each one's high byte
         if (channels === 4) return { data, format: 'rgba', width, height };
         if (channels === 3) return { data, format: 'rgb', width, height };
         const out = new Uint8Array(width * height * 4);
@@ -883,11 +884,20 @@ describe('fastPngToImage', () => {
         }
     });
 
-    it('refuses palette, 16-bit and packed PNGs', () => {
+    it('shifts 16-bit PNGs down to 8 bits', async () => {
+        const wide = Uint16Array.from(data, (v) => v * 257);
+        const decoded = roundTrip({ data: wide, channels: 4, depth: 16 });
+        expect(decoded.data).toBeInstanceOf(Uint16Array);
+        const image = fastPngToImage(decoded);
+        expect(image.format).toBe('rgba');
+        expect(Array.from(image.data)).toEqual(Array.from(data));
+        expect(await buildPalette(image, 6)).toEqual(await buildPalette({ data, format: 'rgba', width, height }, 6));
+    });
+
+    it('refuses palette and packed PNGs', () => {
         const indexed = decodePng(encodePng({ width, height, depth: 8, channels: 1, data: new Uint8Array(width * height), palette: [[0, 0, 0], [255, 255, 255]] }));
-        const deep = decodePng(encodePng({ width, height, depth: 16, channels: 1, data: new Uint16Array(width * height) }));
         const packed = decodePng(encodePng({ width, height, depth: 1, channels: 1, data: new Uint8Array(Math.ceil(width / 8) * height) }));
-        for (const png of [indexed, deep, packed]) {expect(() => fastPngToImage(png)).toThrow('needs a decoder that expands');}
+        for (const png of [indexed, packed]) {expect(() => fastPngToImage(png)).toThrow('needs a decoder that expands');}
     });
 });
 
