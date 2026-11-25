@@ -264,3 +264,40 @@ describe('a width option that is not a number', () => {
         expect(viaMethod).toMatchObject({ code: 'invalid-argument', argument: 'options.width' });
     });
 });
+
+// A `dither` the function doesn't take is an unknown option: the main entry says so without reading the object, so a getter
+// that throws or a revoked Proxy there gives the same error in the worker, not the caller's own error or a TypeError.
+describe('a dither option on a function that takes none', () => {
+    const revoked = (() => { const made = Proxy.revocable({}, {}); made.revoke(); return made.proxy; })();
+    const thrower = () => ({ get strength() { throw new Error('dither getter'); } });
+    const kinds = {
+        'a getter that throws': thrower,
+        'a revoked Proxy': () => revoked,
+        'a plain object': () => ({ strength: 0.5 }),
+        'true': () => true,
+    };
+    for (const [name, make] of Object.entries(kinds)) {
+        it(`gives the main entry's error for ${name}, whatever the function`, async () => {
+            const clustering = main;
+            const handle = await plain.cluster(pixels());
+            const loaded = await plain.load(new Uint8Array(stored));
+            const calls = [
+                [() => ac.buildClustering(pixels(), { dither: make() }), () => plain.buildClustering(pixels(), { dither: make() }), () => shared.buildClustering(pixels(), { dither: make() })],
+                [() => ac.buildPalette(pixels(), 2, { dither: make() }), () => plain.buildPalette(pixels(), 2, { dither: make() }), () => shared.buildPalette(pixels(), 2, { dither: make() })],
+                [() => ac.buildSwatches(pixels(), 2, { dither: make() }), () => plain.buildSwatches(pixels(), 2, { dither: make() }), () => shared.buildSwatches(pixels(), 2, { dither: make() })],
+                [() => clustering.chooseFrom(palette, 2, { dither: make() }), () => handle.chooseFrom(palette, 2, { dither: make() }), () => loaded.chooseFrom(palette, 2, { dither: make() })],
+            ];
+            try {
+                for (const [viaMain, viaWorker, viaOther] of calls) {
+                    const expected = await caught(viaMain);
+                    expect(expected, name).toMatchObject({ code: 'invalid-argument', argument: 'options.dither' });
+                    expect(await caught(viaWorker), name).toEqual(expected);
+                    expect(await caught(viaOther), name).toEqual(expected);
+                }
+            } finally {
+                await handle.release();
+                await loaded.release();
+            }
+        });
+    }
+});

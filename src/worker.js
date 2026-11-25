@@ -317,7 +317,8 @@ const takeControls = (options, allowed, image) => {
     options = snapshot(options);
     // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
     // at all, for a Proxy or a function): read it here the way the main entry does, once, and validate and send the copy.
-    if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
+    // A function that takes no dither is left to parseOptions, which names the unknown key before the object is read.
+    if (allowed.includes('dither') && options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
         options.dither = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
     }
     const parsed = parseOptions(options, allowed, image);
