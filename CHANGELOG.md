@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0
+## 4.0.0 (in beta: 4.0.0-beta.1)
 
 Premultiplied input, stricter image objects and result types that keep the input's. This is the first part of 4.0; the removals and new errors planned for it come in later betas. Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
 
