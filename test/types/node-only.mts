@@ -2,7 +2,7 @@
 // and the types must stay precise (not fall back to `any`).
 import { quantize, quantizeToIndices, init, getClusteringInfo, buildClustering } from 'agglomerative-clustering';
 import { createWorker, quantize as workerQuantize } from 'agglomerative-clustering/worker';
-import type { ImageLike, RawImage } from 'agglomerative-clustering';
+import type { ImageLike, PlatformImageData, RawImage } from 'agglomerative-clustering';
 
 declare const raw: RawImage;
 declare const bytes: Uint8Array;
@@ -37,5 +37,9 @@ export async function run() {
     const n: Uint8Array = await clustering.quantize(buffer, 4);
     // @ts-expect-error the result for a RawImage is not a string
     const notAString2: string = await clustering.quantize(raw, 4);
+    // Without the DOM lib there is no ImageData: the platform type is never, and a Buffer in gives a Uint8Array out.
+    const noPlatform: [PlatformImageData] extends [never] ? true : false = true;
+    const fromBuffer: Uint8Array = await quantize(buffer, 4);
+    void [noPlatform, fromBuffer];
     void [a, b, c, d, e, g, h, m, n, indexed, mse, notAString, notRaw, notAString2];
 }

@@ -2,6 +2,23 @@
 
 Upgrading from an earlier major version, and replacing names deprecated along the way. The full list of changes in every release is in the [CHANGELOG](../CHANGELOG.md).
 
+## From 3.x to 4.0
+
+4.0 is built in two parts, and the first beta has the first: premultiplied input, an image object that rejects keys it doesn't know, and result types that keep the input's. The removals listed under "Deprecated" below come in a later beta. Code that passes only `Uint8Array`s and `ImageData`s changes in nothing; each item below is a cost for code that passes `{ data, format }` objects.
+
+- **A variable reused across calls with different inputs stops compiling.** A result now has the input's exact type, so `let image = { data, format: 'rgba' as const }` can't be assigned an object with `format: 'bgra'`, or one with `width` after one without. Annotate it as `RawImage`:
+
+  ```ts
+  import type { RawImage } from 'agglomerative-clustering';
+  let image: RawImage = { data: a, format: 'rgba' };
+  image = { data: b, format: 'bgra', width, height };
+  ```
+
+- **`interface X extends RawImage` doesn't compile**, because `RawImage` is now a union split by `format` and an interface can't extend a union. Use a type: `type X = RawImage<'rgba'>` (or `RawImage<'rgba'> & { name: string }` to keep extra keys of your own). Note that a result type keeps only the image's own keys, so an extra key of yours isn't on the result.
+- **A result's `data` is typed `Uint8Array`**, where 3.x typed it `Uint8Array | Uint8ClampedArray`. It always was one at run time, so code that handled the clamped case can drop it, and the casts to `Uint8Array` the 3.x docs showed can go. To build an `ImageData` from a result, `new Uint8ClampedArray(result.data.buffer, result.data.byteOffset, result.data.length)` shares the bytes.
+- **Objects with other keys now throw.** An image object may have only `data`, `format`, `width`, `height` and `premultiplied`; another key is `invalid-argument` on `'image'`. The usual break is spreading a decoder's result, which carries `channels`, `size`, `depth` and more: build the object from what you need, `{ data, format: 'rgba', width: info.width, height: info.height }`.
+- **`premultiplied: true` used to be ignored.** In 3.x code that set it, hoping it worked, got darkened edges and no error. In 4.0 it does the conversion: palettes are of the real colours and mapped output is premultiplied again (a `nativeImage` round trip is in [Electron](environments.md#electron): `toBitmap()`, `premultiplied: true`, `createFromBitmap`), so output that went to an `ImageData` or an encoder now needs the guides' [straight-output recipe](guides.md#straight-pixels-from-a-premultiplied-source). It is for `'rgba'` and `'bgra'` only, and an error on the other formats; a value other than `true` or `false` is an error too (3.x ignored it). If you converted premultiplied pixels yourself (the loops the 3.x docs showed), delete them and set the flag instead, or keep them and leave the flag off.
+
 ## Deprecated in 3.8 (removed in 4.0)
 
 3.8 deprecates the five functions that take a stored clustering, in both entries. They keep working through 3.x, with no warning at run time, and 4.0 removes them. Use the method on the main thread, and a loaded handle off it: `worker.load(clustering)` keeps one copy of the clustering in the worker, so a slider or a batch no longer sends the bytes with every call.

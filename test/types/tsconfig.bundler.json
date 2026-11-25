@@ -17,6 +17,7 @@
     "worker.mts",
     "disposable.mts",
     "union.mts",
-    "shapes.mts"
+    "shapes.mts",
+    "premultiplied.mts"
   ]
 }

@@ -214,7 +214,7 @@ describe('BGRA validation', () => {
                 message: "Invalid image data: length must be a multiple of 4 for 'bgra'.", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.getPalette({ data: new Uint8Array(8), format: 'argb' }, 2)).rejects.toMatchObject({
-                message: "Invalid format: got 'argb'; it must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'. Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).", code: 'invalid-argument', argument: 'image',
+                message: "Invalid format: got 'argb'; it must be 'rgb', 'rgba', 'bgra', 'rgbx' or 'bgrx'. Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: pass it as 'bgra' with premultiplied: true (see Input in the API docs).", code: 'invalid-argument', argument: 'image',
             });
             await expect(api.quantize({ data: new Uint8Array(16), format: 'bgra' }, 2, { dither: true })).rejects.toMatchObject({
                 code: 'invalid-argument', argument: 'options.width',

@@ -30,14 +30,17 @@ Uint8Array                                   // raw RGBA bytes
 ImageData                                    // from a canvas: always RGBA, width included
 { data: Uint8Array | Uint8ClampedArray,      // explicit format, for other layouts or clamped arrays
   format: 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx',
-  width?: number, height?: number }          // optional: used for dithering, copied to results
+  width?: number, height?: number,           // optional: used for dithering, copied to results
+  premultiplied?: boolean }                  // 'rgba' and 'bgra' only: the colours are premultiplied by alpha
 ```
+
+An image object may have only these keys. Any other key is an `invalid-argument` error naming it, with a hint for near misses (`premultiply`, `widht`) and for the fields of a decoder's result (`channels`, `size`, `depth`): build `{ data, format, width, height }` from what you need instead of spreading a decoder's result, as `{ ...info, data, format }` would.
 
 | `format` | Bytes per pixel | Channel order | Fourth byte |
 |---|---|---|---|
 | `'rgb'` | 3 | red, green, blue | none |
-| `'rgba'` | 4 | red, green, blue | straight alpha |
-| `'bgra'` | 4 | blue, green, red | straight alpha |
+| `'rgba'` | 4 | red, green, blue | alpha, straight or (with `premultiplied: true`) premultiplied |
+| `'bgra'` | 4 | blue, green, red | alpha, straight or (with `premultiplied: true`) premultiplied |
 | `'rgbx'` | 4 | red, green, blue | padding: ignored, every pixel is opaque |
 | `'bgrx'` | 4 | blue, green, red | padding: ignored, every pixel is opaque |
 
@@ -50,43 +53,34 @@ Each format is read as it is and mapped images come back in it, with no swapping
 | `getImageData()` (browsers, node-canvas, skia-canvas, `@napi-rs/canvas`) | RGBA | straight | the `ImageData` |
 | sharp `.raw()` | RGB or RGBA | straight | `'rgb'` or `'rgba'` (its `info.channels`) |
 | skia-canvas `toBuffer('raw')`; with `{ colorType: 'bgra' }` | RGBA; BGRA | straight | `'rgba'`; `'bgra'` |
-| Electron `nativeImage.toBitmap()` (Windows, macOS, Linux) | BGRA | premultiplied | convert, then `'bgra'` |
-| node-canvas `canvas.toBuffer('raw')` (Cairo ARGB32, little-endian) | BGRA | premultiplied | convert, then `'bgra'` |
-| `@napi-rs/canvas` `canvas.data()` | RGBA | premultiplied | convert, then `'rgba'` |
-| WebGL `readPixels` (default `premultipliedAlpha: true`; rows bottom-up) | RGBA | premultiplied | convert, then `'rgba'` |
-| WebCodecs `frame.copyTo(buffer, { format: 'BGRA' })`; `'BGRX'` | BGRA; BGRX | straight for decoded video, premultiplied for frames made from a canvas | `'bgra'` (convert canvas frames); `'bgrx'` |
+| Electron `nativeImage.toBitmap()` (Windows, macOS, Linux) | BGRA | premultiplied | `'bgra'`, `premultiplied: true` |
+| node-canvas `canvas.toBuffer('raw')` (Cairo ARGB32, little-endian) | BGRA | premultiplied | `'bgra'`, `premultiplied: true` |
+| `@napi-rs/canvas` `canvas.data()` | RGBA | premultiplied | `'rgba'`, `premultiplied: true` |
+| WebGL `readPixels` (default `premultipliedAlpha: true`; rows bottom-up) | RGBA | premultiplied | `'rgba'`, `premultiplied: true` |
+| WebCodecs `frame.copyTo(buffer, { format: 'BGRA' })`; `'BGRX'` | BGRA; BGRX | straight for decoded video, premultiplied for frames made from a canvas | `'bgra'` (with `premultiplied: true` for canvas frames); `'bgrx'` |
 | ffmpeg `-f rawvideo -pix_fmt bgra`; `bgr0` | BGRA; BGRX | straight | `'bgra'`; `'bgrx'` |
 | Windows `GetDIBits`, 32-bit `BI_RGB` BMPs (rows usually bottom-up) | BGRX | none (usually 0) | `'bgrx'` |
-| Windows WIC `32bppBGRA`; `32bppPBGRA` | BGRA | straight; premultiplied | `'bgra'`; convert, then `'bgra'` |
+| Windows WIC `32bppBGRA`; `32bppPBGRA` | BGRA | straight; premultiplied | `'bgra'`; `'bgra'`, `premultiplied: true` |
 
-A wrong channel order can't be detected: red and blue come out swapped (orange as blue) in palettes that otherwise look plausible, so check one pixel of a known colour when trying a new source. Premultiplied pixels are read as straight, which darkens partly transparent ones (opaque and fully transparent pixels are the same either way), so convert them first, and convert mapped output back if it goes to an API that wants premultiplied pixels again. The conversion works in either channel order:
+For the sources marked premultiplied, mapped output comes back premultiplied: that suits Electron's `createFromBitmap` and Cairo, but for a straight destination (`ImageData`, PNG encoders) use the guides' [straight-output recipe](guides.md#straight-pixels-from-a-premultiplied-source).
 
-```js
-// Premultiplied to straight, in place (4 bytes a pixel, alpha last), before the call:
-const unpremultiply = (data) => {
-    for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        for (let c = i; c < i + 3; c++) {data[c] = a ? Math.min(255, Math.round(data[c] * 255 / a)) : 0;}
-    }
-};
-// Straight to premultiplied, in place, on a mapped result for an API that wants premultiplied pixels:
-const premultiply = (data) => {
-    for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        for (let c = i; c < i + 3; c++) {data[c] = Math.round(data[c] * a / 255);}
-    }
-};
-```
+A wrong channel order can't be detected: red and blue come out swapped (orange as blue) in palettes that otherwise look plausible, so check one pixel of a known colour when trying a new source.
 
-In Node, sharp does the first: `await sharp(data, { raw: { width, height, channels: 4, premultiplied: true } }).raw().toBuffer()` gives straight pixels in the same channel order. Reading premultiplied pixels directly is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
+**`premultiplied: true`** says the colours in `data` were multiplied by alpha, as the sources marked premultiplied above give them. It is for `'rgba'` and `'bgra'` only: with any other format it is an `invalid-argument` error, and `false` is the same as leaving it out. The library undoes the multiplication in its own copy of the pixels before it clusters, so palettes and clusterings are of the picture's real colours, and your array is never changed. Read without the flag, premultiplied pixels are taken as straight, which darkens the partly transparent ones (opaque and fully transparent pixels are the same either way).
+
+- **Premultiplied in means premultiplied out** for mapped images (`quantize*` returning an image): the result's colours are multiplied by the input's alpha again, so it can go back where the input came from, such as Electron's `nativeImage.createFromBitmap`, Cairo or WIC. It can't go to an `ImageData` (`putImageData`), which is straight. Palettes, clusterings, swatches and indexed output (`quantizeToIndices*`) are always straight.
+- **Setting it on opaque data does nothing**, and costs about 5 ms on 12 megapixels, so set it whenever the source may be premultiplied (a WebCodecs frame, which is premultiplied only when made from a canvas). <!-- bench/spikes/premultiplied/run.mjs → results.txt: 5.1 and 5.5 ms for the opaque case, the in-place pass over a 12 MP image -->
+- **`alpha: 'weight'` and `transparent`** read the pixels' straight alpha, which the flag never changes.
+- **For straight pixels out of a premultiplied source** (an `ImageData`, a PNG encoder), use the recipe in the guides, [Straight pixels from a premultiplied source](guides.md#straight-pixels-from-a-premultiplied-source): map to indices and write each pixel's palette colour with the input's alpha. Don't un-premultiply the mapped output: the rounding happens twice, and a 16-colour result came back with 1,171 colours, with errors up to 120 per channel below alpha 16. <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt -->
+- **In Node, sharp** can undo the multiplication itself: `await sharp(data, { raw: { width, height, channels: 4, premultiplied: true } }).raw().toBuffer()` gives straight pixels in the same channel order, which you pass without the flag.
 
 - **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`). When a bare array looks like RGB the library [warns](#warnings) once, and 4.0 will reject it.
-- **Pixels are 8-bit sRGB with straight alpha**, as `getImageData()` gives them. Convert anything else first: premultiplied pixels back to straight alpha (above), 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits, and grey or grey-and-alpha pixels to RGBA; a grey buffer passed as it is gets misread, and the library [warns](#warnings) when it sees one. Apply a photo's EXIF orientation and colour profile when decoding; the library doesn't read either. The recipes in [Decoding image files](guides.md#decoding-image-files) do all of this (sharp's `.rotate().ensureAlpha().raw()` in Node). An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
+- **Pixels are 8-bit sRGB**, straight alpha as `getImageData()` gives them, or premultiplied with `premultiplied: true` (above). Convert anything else first: 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits, and grey or grey-and-alpha pixels to RGBA; a grey buffer passed as it is gets misread, and the library [warns](#warnings) when it sees one. Apply a photo's EXIF orientation and colour profile when decoding; the library doesn't read either. The recipes in [Decoding image files](guides.md#decoding-image-files) do all of this (sharp's `.rotate().ensureAlpha().raw()` in Node). An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
 - **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: `createImageBitmap` in a browser, sharp in Node, jsquash on edge runtimes ([Decoding image files](guides.md#decoding-image-files) has each). Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`.
 
 ## Output
 
-The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format` (and `width` and `height`) whose `data` is a `Uint8Array`. In TypeScript the result type follows the kind of input (`ImageResult<I>`); for a `RawImage` it is `RawImage`, so see [TypeScript](#typescript) for passing it on. Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects. In formats with alpha each pixel keeps its own alpha (a fully transparent pixel still gets its nearest colour); the `x` formats get 255 in the fourth byte; `'rgb'` has none.
+The functions that return an image give back the type they were given: a `Uint8Array`, `ImageData`, or an object with the same `format`, `width`, `height` and `premultiplied` (each only if the input had it; `premultiplied` is copied as given) whose `data` is a `Uint8Array`. In TypeScript the result type follows the input (`ImageResult<I>`): a `RawImage<'bgra'>` gives its own keys back with `data: Uint8Array`, so no cast is needed (see [TypeScript](#typescript)). A result for `premultiplied: true` input is premultiplied (see [Input](#input)). Palettes come back as a `Palette`, clusterings as a `Clustering`, and the other results are `Swatches`, `IndexedImage` and `ClusteringInfo` objects. In formats with alpha each pixel keeps its own alpha (a fully transparent pixel still gets its nearest colour; premultiplied, it is black); the `x` formats get 255 in the fourth byte; `'rgb'` has none.
 
 ## Options
 
@@ -365,7 +359,7 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 
 | `code` | When |
 | --- | --- |
-| `invalid-argument` | A bad image, `k`, option or palette. |
+| `invalid-argument` | A bad image (including a key an image object doesn't have, or `premultiplied: true` on a format without alpha, or a `premultiplied` that isn't a boolean), `k`, option or palette. |
 | `invalid-clustering` | Bytes that aren't a clustering this version can read, or a stored clustering that came back damaged (its checksum or its records don't fit). |
 | `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `clustering.getSwatches(k)`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate: an image with very many colours, or pixel data over its 2 GB (the message gives the size). |
@@ -439,7 +433,7 @@ Both entries ship declarations, checked in CI under strict mode with `nodenext` 
 - **Image objects:** one assigned to a variable before it is passed widens `format: 'rgba'` to `string`, which no longer matches `RawImage`: write `format: 'rgba' as const`, or declare the variable as `RawImage`.
 - **Dither settings in a variable** widen the same way: `const dither = { method: 'ordered', steps: 32 }` has `method: string`. Write `as const`, or declare it as `DitherOptions`. A `steps` value from a slider is a `number`, and a method from a `<select>` a `string`: narrow them with the exported lists, `ditherSteps.find((s) => s === value)` and `ditherMethods.find((m) => m === value)` (see [Lists of names](#lists-of-names-colorspaces-imageformats-alphamodes-dithermethods-and-dithersteps)).
 - **Results narrow:** checking `result.indexBits === 8` makes `indices` a `Uint8Array`.
-- **Mapped `RawImage` results are typed as `RawImage`:** `format` is `ImageFormat` and `data` is `Uint8Array | Uint8ClampedArray`, although at run time `data` is always a `Uint8Array` and `format` is the input's. Where you need the narrower types (to write the bytes, or to pass the image to code that takes one format), cast: `const out = await quantize(image, 16) as RawImage & { data: Uint8Array; format: 'bgra' }`. Results that keep the input's types are [planned for 4.0](ROADMAP.md#40-breaking-changes-collected).
+- **Results keep the input's types:** a mapped `{ data, format: 'bgra' }` result has `format: 'bgra'` and `data: Uint8Array`, so you can write its bytes or pass it on without a cast. `RawImage` is a union split by `format`, and `premultiplied: true` on `'rgb'`, `'rgbx'` or `'bgrx'` is rejected at run time (`invalid-argument`; the types accept a boolean). A variable reused for inputs of different formats needs the annotation `RawImage`, and `interface X extends RawImage` becomes `type X = RawImage<'rgba'>` ([Migrating](migrating.md#from-3x-to-40)).
 - **`ImageFormat` grows** in minor releases (3.2 added `'bgra'`, `'rgbx'` and `'bgrx'`), so code that lists every format (an exhaustive `switch`, a `Record<ImageFormat, …>`, a union spelled out as `'rgb' | 'rgba'`) needs a new case when it does; take the names from `imageFormats`, or end a `switch` with a default branch.
 - **Clustering methods** exist only on values from the library or `new Clustering(bytes)`: a cast (`stored as Clustering`) or a `structuredClone` of a clustering is typed `Clustering` but is plain bytes, so calling a method on it compiles, then fails with `TypeError: … is not a function`. Wrap it: `new Clustering(structuredClone(clustering))`. Types can't tell whether the main entry is loaded either: in a worker-only app the methods compile, then reject with `wasm-load-failed`.
 - **Palettes:** palette parameters take a `PaletteLike` (a `Palette`, plain bytes or a `number[]`, not a `Clustering`). Stored bytes need `new Clustering(bytes)` to be accepted as a clustering.

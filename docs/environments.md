@@ -141,20 +141,18 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
 - **Keep the package external in a bundled main process** (electron-vite does by default; with webpack or esbuild mark it external). A bundle that inlines it finds the `.wasm` and worker script only when the app starts from the project directory, which a packaged app doesn't. If you must bundle it, pass `init({ wasm })` for the main entry and `createWorker({ script })` for the worker.
 - **`nodeIntegrationInWorker: true`** is supported: the worker script talks through `self` there.
 - **Errors lose their `code` and `argument` crossing Electron's IPC** (only the message survives), so send `{ message, code, argument }` yourself; `isCodedError` accepts that object on the other side.
-- **`nativeImage` gives premultiplied BGRA pixels** (Skia's native order in Electron on Windows, macOS and Linux, from `SkImageInfo::MakeN32Premul`). Pass them as `format: 'bgra'` after converting them to straight alpha ([Input](api.md#input) has the loop; opaque images, such as screenshots and captures, need no conversion), and a mapped image comes back in the same order for `nativeImage.createFromBitmap`. An image from an `@2x` file holds more pixels than `getSize()` says, which is in device-independent pixels, so take the size from the scale factor:
+- **`nativeImage` gives premultiplied BGRA pixels** (Skia's native order in Electron on Windows, macOS and Linux, from `SkImageInfo::MakeN32Premul`). Pass them as `format: 'bgra'` with `premultiplied: true` ([Input](api.md#input) says what the flag does; it is harmless on opaque images such as screenshots and captures), and a mapped image comes back premultiplied and in the same order, ready for `nativeImage.createFromBitmap`. An image from an `@2x` file holds more pixels than `getSize()` says, which is in device-independent pixels, so take the size from the scale factor:
 
   ```js
   // In the main process (or a preload script): nativeImage and Buffer aren't in a sandboxed renderer.
   const scaleFactor = Math.max(...img.getScaleFactors());
   const data = img.toBitmap({ scaleFactor });
   const width = Math.round(img.getSize().width * scaleFactor), height = data.length / 4 / width;
-  unpremultiply(data);                     // the first loop in Input; skip it for opaque images
-  const result = await quantize({ data, format: 'bgra', width, height }, 16);
-  premultiply(result.data);                // the second loop: createFromBitmap reads premultiplied pixels
+  const result = await quantize({ data, format: 'bgra', width, height, premultiplied: true }, 16);
   const reduced = nativeImage.createFromBitmap(Buffer.from(result.data.buffer, result.data.byteOffset, result.data.byteLength), { width, height, scaleFactor });
   ```
 
-  Reading premultiplied pixels directly is [planned for 4.0](ROADMAP.md#40-breaking-changes-collected). A translucent result has more distinct colours than `k` once it is premultiplied again (the rounding differs per alpha), so for an exact palette use `quantizeToIndices` and your own encoder.
+  A translucent result has more distinct colours than `k` once it is premultiplied (the rounding differs per alpha), so for an exact palette use `quantizeToIndices` and your own encoder (the guides' [straight-output recipe](guides.md#straight-pixels-from-a-premultiplied-source) is one).
 
 ## Browser extensions
 

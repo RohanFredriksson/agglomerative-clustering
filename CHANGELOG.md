@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0
+
+Premultiplied input, stricter image objects and result types that keep the input's. This is the first part of 4.0; the removals and new errors planned for it come in later betas. Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
+
+### Breaking
+- **Unknown keys on an image object throw.** `{ data, format }` may have only `data`, `format`, `width`, `height` and `premultiplied`; any other key is `invalid-argument` on `'image'`, with a hint for near misses (`premultiply`, `widht`) and for a decoder's result (`channels`, `size`, `depth`). Spreading a decoder's result into an image object no longer works: build `{ data, format, width, height }`. The worker entry checks before posting.
+- **Result types follow the input.** `RawImage` is a union split by `format`, and a mapped `{ data, format }` image comes back as the same type with `data: Uint8Array`, no cast needed. This also covers the `Clustering` methods and both kinds of handle. A variable reused across calls with different literal inputs needs a `RawImage` annotation, `interface X extends RawImage` becomes `type X = RawImage<'rgba'>`, and `premultiplied: true` on a format without alpha is rejected at run time (`invalid-argument`; the types accept a boolean).
+- **`premultiplied: true` is no longer ignored** (3.x ignored it silently), and a `premultiplied` that is neither `true` nor `false` throws `invalid-argument` (3.x ignored any value).
+
+### Added
+- **`premultiplied: true` on `'rgba'` and `'bgra'` images**, for Electron's `nativeImage`, node-canvas and `@napi-rs/canvas` raw buffers, WebGL, WebCodecs frames made from a canvas and WIC `32bppPBGRA`. The library un-premultiplies its own copy of the pixels in place in the WebAssembly heap before clustering or mapping (5 ms on an opaque 12 MP image), and premultiplies mapped output again, so it goes back where it came from. Palettes, clusterings and indexed output are straight. Mapped results carry the input's `premultiplied`. It works in the worker entry, with `signal` and `onProgress`.
+- **A recipe for straight output from a premultiplied source** (`ImageData`, PNG encoders): the guides' [Straight pixels from a premultiplied source](docs/guides.md#straight-pixels-from-a-premultiplied-source), exact and under 1% of the call. Don't un-premultiply the mapped output instead: 1,171 colours for `k = 16`.
+
+### Changed
+- The hint for a format named `'argb'` points at `'bgra'` with `premultiplied: true` instead of converting first.
+
 ## 3.8.0
 
 Additive: output and every existing call are unchanged. The fixed-palette search is built in, workers get a handle for a stored clustering, and the `…FromClustering` functions are deprecated ahead of their removal in 4.0.

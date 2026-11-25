@@ -53,6 +53,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     while (width > 1 && pixels % size_t(width) != 0) {width--;}
     const int map_width = dither > 0 ? width : 0;
 
+    // `premultiplied: true` (formats with alpha only, as the JavaScript requires): the input is converted in place before everything else,
+    // as the JavaScript does on the heap copy, and mapped output is premultiplied below. Which pixels, and from where, comes from the data.
+    const bool premultiplied = stride == 4 && format != 3 && format != 4 && (in.next() & 1);
+    if (premultiplied) {
+        const uint32_t half = uint32_t(pixels / 2);
+        unpremultiply(image.data(), 0, half);       // two slices, as the sliced path runs them
+        unpremultiply(image.data(), half, uint32_t(pixels));
+    }
+
     // Sliced clustering equals the one-shot clustering.
     uint8_t* whole = get_clustering(image.data(), length, format, color_space, precision, weight_alpha, transparent);
     ClusteringJob* job = clustering_job_start(image.data(), length, format, color_space, precision, weight_alpha, transparent);
@@ -83,7 +92,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         std::abort();
     }
 
-    std::free(quantize(image.data(), length, format, k, color_space, precision, weight_alpha, dither, method, steps, map_width, transparent));
+    if (uint8_t* mapped = quantize(image.data(), length, format, k, color_space, precision, weight_alpha, dither, method, steps, map_width, transparent)) {
+        if (premultiplied) {premultiply(mapped + 4, 0, uint32_t(pixels));}
+        std::free(mapped);
+    } else {
+        std::abort();
+    }
     std::free(quantize_with_palette(image.data(), length, format, palette.data(), int(palette.size()), color_space, dither, method, steps, map_width));
     std::free(quantize_indices_with_palette(image.data(), length, format, palette.data(), int(palette.size()), color_space, dither, method, steps, map_width, transparent));
     // And with the clustering just made, cut to k, as the …FromClustering functions do.

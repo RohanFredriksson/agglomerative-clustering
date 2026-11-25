@@ -15,6 +15,7 @@
   },
   "files": [
     "node-only.mts",
-    "shapes.mts"
+    "shapes.mts",
+    "premultiplied.mts"
   ]
 }

@@ -31,7 +31,7 @@
   - `Invalid image: unknown key '${key}'. An image object has data, format, width, height and premultiplied: build it from those rather than spreading a decoder's result.` followed by a hint where one applies:
     - for `premultiply`: ` Did you mean premultiplied: true?`
     - for a key within edit distance 1 of a known key, or equal to one ignoring case: ` Did you mean '${known}'?`
-    - for `channels`, `size`, `depth`: ` Spread only width and height from a decoder's result.`
+    - for `channels`, `size`, `depth`: ` Take only width and height from a decoder's result.`
 - Order of checks: the existing shape checks (`data`, `format`, length, `width`/`height`) first, then unknown keys, then `premultiplied`.
 - `premultiplied: false` on any format is accepted and does nothing.
 - No new error code. Validate and take bytes before the first `await`. No top-level await in `src/worker-thread.js`. No `await using` syntax in tests: check new test files with `node --check` under Node 20/22, which CI still runs until part 2.

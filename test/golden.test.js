@@ -129,6 +129,29 @@ describe.each([...Object.keys(synthetic), ...kodak.map((image) => image.name)])(
 
 });
 
+// Premultiplied copies (the colours multiplied by alpha, round(c * a / 255)) of the synthetic translucent image and of a Kodak photo
+// given an alpha gradient of x % 256 (every alpha value): read with `premultiplied: true`, mapped output premultiplied again.
+describe.each(['alpha', kodak[1].name])('%s premultiplied', (name) => {
+
+    it('clusterings, palettes and quantized images', async () => {
+        const { rgba, width, height } = images[name];
+        const data = new Uint8Array(rgba.length);
+        for (let i = 0; i < rgba.length; i += 4) {
+            const a = name === 'alpha' ? rgba[i + 3] : (i / 4 % width) % 256;
+            data[i + 3] = a;
+            for (let k = 0; k < 3; k++) {data[i + k] = Math.round(rgba[i + k] * a / 255);}
+        }
+        const image = { data, format: 'rgba', width, height, premultiplied: true };
+        const clustering = await buildClustering(image);
+        check(`${name}/premultiplied/clustering`, clustering);
+        check(`${name}/premultiplied/palette/16`, await getPaletteFromClustering(clustering, 16));
+        check(`${name}/premultiplied/quantize/16`, (await quantize(image, 16)).data);
+        check(`${name}/premultiplied/quantize/16/dither`, (await quantize(image, 16, { dither: true, width })).data);
+        check(`${name}/premultiplied/map/16`, (await quantizeWithPalette(image, await getPaletteFromClustering(clustering, 16))).data);
+    }, timeLimit(60_000));
+
+});
+
 it('golden.json has no stale entries', () => {
     if (!update) {expect(Object.keys(golden).sort()).toEqual(Object.keys(actual).sort());}
 });

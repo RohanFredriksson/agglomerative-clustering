@@ -250,5 +250,15 @@
   "kodim23/indices/rgb/16/dither/transparent": "b5218deab4129792",
   "kodim23/indices/rgb/16/dither-ordered/transparent": "c0806a61c108399f",
   "kodim23/indices/oklab/16/dither-atkinson": "3181806c127cace0",
-  "kodim23/indices/oklab/400": "c2efd3b4905c7fbe"
+  "kodim23/indices/oklab/400": "c2efd3b4905c7fbe",
+  "alpha/premultiplied/clustering": "30460cb1d7c68754",
+  "alpha/premultiplied/palette/16": "7f3b0714efcba9be",
+  "alpha/premultiplied/quantize/16": "6458afa845412b6d",
+  "alpha/premultiplied/quantize/16/dither": "5abc65a9c8a1e335",
+  "alpha/premultiplied/map/16": "6458afa845412b6d",
+  "kodim23/premultiplied/clustering": "087e8d2bf9cb575e",
+  "kodim23/premultiplied/palette/16": "592d0c3223d096b8",
+  "kodim23/premultiplied/quantize/16": "d7abc0494aa349bc",
+  "kodim23/premultiplied/quantize/16/dither": "4fae26338c8b9423",
+  "kodim23/premultiplied/map/16": "d7abc0494aa349bc"
 }

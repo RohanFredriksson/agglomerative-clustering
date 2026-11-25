@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
-import { Palette, buildSwatches, buildClustering, quantizeToIndices, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
+import { Palette, quantize, buildSwatches, buildClustering, quantizeToIndices, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 
@@ -968,4 +968,80 @@ describe('the worker script as a data: URL (the esbuild plugin)', () => {
             await rm(folder, { recursive: true, force: true });
         }
     }, timeLimit(60000));
+});
+
+// docs/guides.md, "Straight pixels from a premultiplied source": the guides' function, as written there.
+describe('straight output from a premultiplied source', () => {
+    async function toStraight(image, k, options) {
+      const { indices, palette } = await quantizeToIndices(image, k, options);   // indexed output is straight
+      const { data, format } = image;
+      const [red, blue] = format === 'bgra' ? [2, 0] : [0, 2];                  // the palette is RGB
+      const out = new Uint8ClampedArray(data.length);                           // same layout as the input
+      for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
+        const s = indices[i] * 3;
+        out[o + red] = palette[s]; out[o + 1] = palette[s + 1]; out[o + blue] = palette[s + 2];
+        out[o + 3] = data[o + 3];                                               // alpha comes from the input
+      }
+      return out;
+    }
+
+    // The library's own conversions, in JavaScript, to build the references.
+    const premultiplied = (data) => Uint8Array.from(data, (v, i) => (i & 3) === 3 ? v : Math.round(v * data[i | 3] / 255));
+    const straightened = (data) => Uint8Array.from(data, (v, i) => {
+        const a = data[i | 3];
+        return (i & 3) === 3 ? v : a ? Math.min(255, Math.round(v * 255 / a)) : 0;
+    });
+    const swapped = (data) => data.map((v, i) => (i & 3) === 0 ? data[i + 2] : (i & 3) === 2 ? data[i - 2] : v);
+
+    it('is the one in the guides, and passes no `transparent`', async () => {
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        const body = (text) => {
+            const lines = text.split('\n');
+            const first = lines.findIndex((line) => line.trim().startsWith('async function toStraight('));
+            expect(first).toBeGreaterThanOrEqual(0);
+            const indent = lines[first].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+            expect(end).toBeGreaterThan(first);
+            return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
+        };
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        expect(body(test)).toBe(body(guides));
+        expect(body(guides)).not.toContain('transparent');
+    });
+
+    for (const format of ['rgba', 'bgra']) {
+        it(`gives what quantize gives for the same picture as straight pixels (${format})`, async () => {
+            const pre = premultiplied(data);
+            const straight = straightened(pre);
+            const [premultipliedImage, straightImage] = [pre, straight].map((d) => ({
+                data: format === 'bgra' ? swapped(d) : d, format, width, height }));
+            const out = await toStraight({ ...premultipliedImage, premultiplied: true }, 16);
+            expect(out).toBeInstanceOf(Uint8ClampedArray);
+            expect(Array.from(out)).toEqual(Array.from((await quantize(straightImage, 16)).data));
+            // Dithering and other options pass through to the call.
+            const dithered = await toStraight({ ...premultipliedImage, premultiplied: true }, 16, { dither: true });
+            expect(Array.from(dithered)).toEqual(Array.from((await quantize(straightImage, 16, { dither: true })).data));
+            // Alpha is the input's, pixel for pixel; the palette has none, so taking it from there would make everything opaque.
+            for (let o = 3; o < out.length; o += 4) {expect(out[o]).toBe(premultipliedImage.data[o]);}
+            expect(new Set(Array.from(out.filter((_, i) => (i & 3) === 3))).size).toBeGreaterThan(2);
+            // A 16-colour result: at most 16 colours among the visible pixels (un-premultiplying the mapped output gave 1,171).
+            const colours = new Set();
+            for (let o = 0; o < out.length; o += 4) {if (out[o + 3]) {colours.add(`${out[o]},${out[o + 1]},${out[o + 2]}`);}}
+            expect(colours.size).toBeLessThanOrEqual(16);
+        });
+    }
+
+    it('swaps the channels of a BGRA input back correctly', async () => {
+        // One opaque orange pixel (255, 128, 0) in BGRA order is 0, 128, 255, 255.
+        const out = await toStraight({ data: new Uint8Array([0, 128, 255, 255]), format: 'bgra', width: 1, height: 1, premultiplied: true }, 2);
+        expect(Array.from(out)).toEqual([0, 128, 255, 255]);
+        const rgba = await toStraight({ data: new Uint8Array([255, 128, 0, 255]), format: 'rgba', width: 1, height: 1, premultiplied: true }, 2);
+        expect(Array.from(rgba)).toEqual([255, 128, 0, 255]);
+    });
+
+    it('builds an ImageData', async () => {
+        const out = await toStraight({ data: premultiplied(data), format: 'rgba', width, height, premultiplied: true }, 16);
+        expect(() => new ImageData(out, width, height)).not.toThrow();
+    });
 });

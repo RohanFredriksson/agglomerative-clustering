@@ -3,7 +3,7 @@ import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageObject, checkSize, formatHint,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -21,17 +21,6 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
 const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2, 'rgbx': 3, 'bgrx': 4};
-// A hint for a format name that isn't one: the right case, the name other libraries use for the same bytes, or the nearest
-// supported layout.
-const formatHint = (format) => {
-    if (typeof format !== 'string') {return '';}
-    const lower = format.toLowerCase();
-    if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
-    if (lower === 'xrgb' || lower === 'rgb24') {return " Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'.";}
-    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: convert it to straight alpha and pass 'bgra' (see Input in the API docs).";}
-    if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
-    return '';
-};
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
@@ -345,18 +334,6 @@ const bytes = (data) => isUint8Array(data) ? data : new Uint8Array(data.buffer, 
 // call returns; until then (the first call) a copy is kept for when it has loaded.
 const held = (data) => Module ? data : data.slice();
 
-// width and height are copied to results and used for dithering, so each must make sense on its own: a whole number of
-// pixels that divides the pixel count (and, when both are given, account for exactly the pixels in the data).
-const checkSize = (pixels, size, name, argument) => {
-    if (size === undefined) {return;}
-    if (!Number.isInteger(size) || size < 0) {
-        throw fail('invalid-argument', `Invalid ${name}: must be a whole number of pixels.`, argument);
-    }
-    if (pixels > 0 && (size === 0 || pixels % size !== 0)) {
-        throw fail('invalid-argument', `Invalid ${name}: ${size} does not divide the image's ${pixels} pixels into whole rows.`, argument);
-    }
-};
-
 // The bare-image warning (rgb-as-rgba, gray-as-rgba) for an image, decided before load() and given only once the call's own checks have passed,
 // just before it starts work, so the one warning isn't spent on a call that fails anyway (PRINCIPLES "Warnings").
 const noWarning = () => {};
@@ -384,7 +361,7 @@ const load = (image) => {
             throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode them to pixels first and pass those ("Decoding image files" in the guides has a recipe for Node, browsers and edge runtimes). If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
         }
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
-        return {data: held(image), format: 'rgba'};
+        return {data: held(image), format: 'rgba', premultiplied: false};
     }
 
     if (isImageData(image)) {
@@ -392,7 +369,7 @@ const load = (image) => {
             throw detachedError('imagedata');
         }
         checkImageDataPixels(image);
-        return {data: held(bytes(image.data)), format: 'rgba', width: image.width};
+        return {data: held(bytes(image.data)), format: 'rgba', width: image.width, premultiplied: false};
     }
 
     if (ArrayBuffer.isView(image)) {
@@ -410,23 +387,8 @@ const load = (image) => {
         throw detachedError('data');
     }
 
-    if (!imageFormats.includes(image.format)) {
-        throw fail('invalid-argument', `Invalid format: got ${describe(image.format)}; it must be ${formatNames}.${formatHint(image.format)}`, 'image');
-    }
-
-    const stride = channels(image.format);
-    if (image.data.length % stride !== 0) {
-        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${stride} for '${image.format}'.`, 'image');
-    }
-
-    const pixels = image.data.length / stride;
-    checkSize(pixels, image.width, 'image width', 'image');
-    checkSize(pixels, image.height, 'image height', 'image');
-    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
-        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${pixels} pixels.`, 'image');
-    }
-
-    return {data: held(bytes(image.data)), format: image.format, width: image.width};
+    const premultiplied = checkImageObject(image);
+    return {data: held(bytes(image.data)), format: image.format, width: image.width, premultiplied};
 
 };
 
@@ -436,11 +398,12 @@ const getWrapper = (image) => {
         return (output) => imageDataLike(image, new Uint8ClampedArray(output.buffer));
     }
     if (!isUint8Array(image) && typeof image === 'object' && image && image.data && image.format) {
-        const {format, width, height} = image;
+        const {format, width, height, premultiplied} = image;
         return (output) => {
             const result = {data: output, format};
             if (width !== undefined) {result.width = width;}
             if (height !== undefined) {result.height = height;}
+            if (premultiplied !== undefined) {result.premultiplied = premultiplied;}
             return result;
         };
     }
@@ -610,7 +573,9 @@ const allocate = (wasm, length) => {
 
 // Copies each buffer into the WASM heap, calls `fn` with their pointers, and returns the unpacked output,
 // freeing everything afterwards. `precision` is given for a clustering, for the out-of-memory advice.
-const call = (wasm, buffers, fn, precision) => {
+// `premultiplied` (the loaded image's flag) un-premultiplies the first buffer after it is copied in; `mapped` also premultiplies
+// the output payload (a mapped image, not indexed output) before it is unpacked.
+const call = (wasm, buffers, fn, precision, premultiplied, mapped) => {
     const pointers = [];
     let outputPointer = 0;
     let aborted = false;
@@ -620,10 +585,12 @@ const call = (wasm, buffers, fn, precision) => {
             pointers.push(pointer);
             wasm.HEAPU8.set(buffer, pointer);
         }
+        if (premultiplied) {wasm._unpremultiply(pointers[0], 0, buffers[0].length >> 2);}
         outputPointer = fn(...pointers);
         // Only the functions that read a clustering return nothing: when its records don't fit together (see
         // _get_palette_from_clustering), which a clustering whose checksum matches never does.
         if (!outputPointer) {throw fail('invalid-clustering', "Invalid clustering: its records don't fit together, so it is damaged or isn't a clustering. Cluster the image again.", 'clustering');}
+        if (premultiplied && mapped) {wasm._premultiply(outputPointer + 4, 0, buffers[0].length >> 2);}
         return unpack(wasm, outputPointer);
     } catch (error) {
         if (!isAbort(error)) {throw error;}
@@ -677,6 +644,18 @@ const reporter = (o) => {
     };
 };
 
+// The conversion passes in slices of this many pixels, so a long one gives the signal and the event loop a turn like the rest.
+const convertSlice = 65536;
+const convertInSlices = async (convert, pointer, pixels, o) => {
+    let last = performance.now();
+    for (let start = 0; start < pixels; start += convertSlice) {
+        checkAborted(o.signal);
+        convert(pointer, start, Math.min(pixels, start + convertSlice));
+        // Yield only once a slice's worth of time has gone, so a short pass doesn't pay a turn of the event loop per chunk.
+        if (start + convertSlice < pixels && performance.now() - last >= sliceMs) {await yieldNow(); last = performance.now();}
+    }
+};
+
 const isControlled = (o) => o.signal !== undefined || o.onProgress !== undefined;
 
 // The share of quantize's and quantizeToIndices' progress that clustering takes, the rest being mapping. It only shapes
@@ -701,6 +680,7 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
     let aborted = false;
     try {
         wasm.HEAPU8.set(image.data, imagePointer);
+        if (image.premultiplied) {await convertInSlices(wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
         job = wasm._clustering_job_start(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent);
         report(0);
         while (true) {
@@ -741,6 +721,7 @@ const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, 
         sourcePointer = allocate(wasm, bytes.length);
         wasm.HEAPU8.set(image.data, imagePointer);
         wasm.HEAPU8.set(bytes, sourcePointer);
+        if (image.premultiplied) {await convertInSlices(wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
         const palette = source.palette ? sourcePointer : 0, clustering = source.clustering ? sourcePointer : 0;
         job = wasm._mapping_job_start(imagePointer, image.data.length, codes[image.format], palette, source.palette ? bytes.length : 0, clustering, source.clustering ? bytes.length : 0, source.k || 0, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, indices ? 1 : 0, cutoff);
         if (!job) {throw fail('invalid-clustering', "Invalid clustering: its records don't fit together, so it is damaged or isn't a clustering. Cluster the image again.", 'clustering');}
@@ -756,7 +737,10 @@ const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, 
             checkAborted(o.signal);
         }
         const pointer = wasm._mapping_job_result(job);
-        try {return unpack(wasm, pointer);} finally {wasm._free(pointer);}
+        try {
+            if (image.premultiplied && !indices) {await convertInSlices(wasm._premultiply, pointer + 4, image.data.length >> 2, o);}
+            return unpack(wasm, pointer);
+        } finally {wasm._free(pointer);}
     } catch (error) {
         if (!isAbort(error)) {throw error;}
         aborted = true;
@@ -802,7 +786,7 @@ export const buildClustering = async (image, options) => {
         return markClustering(clustering);
     }
 
-    return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent), o.precision));
+    return markClustering(call(wasm, [image.data], (imagePointer) => wasm._get_clustering(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent), o.precision, image.premultiplied));
 
 };
 /** @deprecated The same function as buildClustering, its name before 3.4.0. Removed in 4.0. */
@@ -826,7 +810,7 @@ export const buildPalette = async (image, k, options) => {
         return markPalette(palette, colorSpaceName(o.colorSpace));
     }
 
-    return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent), o.precision), colorSpaceName(o.colorSpace));
+    return markPalette(call(wasm, [image.data], (imagePointer) => wasm._get_palette(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.transparent), o.precision, image.premultiplied), colorSpaceName(o.colorSpace));
 
 };
 /** @deprecated The same function as buildPalette, its name before 3.4.0. Removed in 4.0. */
@@ -956,7 +940,7 @@ export const quantize = async (image, k, options) => {
         return mapped;
     }
 
-    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent), o.precision));
+    return wrap(call(wasm, [image.data], (imagePointer) => wasm._quantize(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent), o.precision, image.premultiplied, true));
 
 };
 
@@ -981,7 +965,7 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
         return mapped;
     }
 
-    const result = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width)));
+    const result = wrap(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width), undefined, image.premultiplied, true));
     return result;
 
 };
@@ -1007,7 +991,7 @@ export const quantizeWithPalette = async (image, palette, options) => {
         return mapped;
     }
 
-    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width)));
+    const result = wrap(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width), undefined, image.premultiplied, true));
     return result;
 
 };
@@ -1031,7 +1015,7 @@ export const quantizeToIndices = async (image, k, options) => {
         return indexed;
     }
 
-    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent), o.precision), original, colorSpaceName(o.colorSpace));
+    return unpackIndices(call(wasm, [image.data], (imagePointer) => wasm._quantize_indices(imagePointer, image.data.length, codes[image.format], k, o.colorSpace, o.precision, o.alpha, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent), o.precision, image.premultiplied), original, colorSpaceName(o.colorSpace));
 
 };
 
@@ -1059,7 +1043,7 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
         return indexed;
     }
 
-    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, cutoff)), original, colorSpaceName(header.colorSpace));
+    const result = unpackIndices(call(wasm, [image.data, clustering], (imagePointer, clusteringPointer) => wasm._quantize_indices_with_clustering(imagePointer, image.data.length, codes[image.format], clusteringPointer, clustering.length, k, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, cutoff), undefined, image.premultiplied), original, colorSpaceName(header.colorSpace));
     return result;
 
 };
@@ -1086,7 +1070,7 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
         return indexed;
     }
 
-    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent)), original, paletteSpace);
+    const result = unpackIndices(call(wasm, [image.data, palette], (imagePointer, palettePointer) => wasm._quantize_indices_with_palette(imagePointer, image.data.length, codes[image.format], palettePointer, palette.length, space, o.dither, o.ditherMethod, o.ditherSteps, o.width, o.transparent), undefined, image.premultiplied), original, paletteSpace);
     return result;
 
 };

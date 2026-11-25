@@ -125,6 +125,92 @@ export const imageHint = (image) => {
     return '';
 };
 
+// An image object has only these keys; any other own enumerable key (a decoder's result spread in) is an error, with a hint where
+// the mistake is a common one. Inherited keys are not checked.
+const imageKeys = ['data', 'format', 'width', 'height', 'premultiplied'];
+const withinOne = (a, b) => {
+    if (a === b) {return true;}
+    if (Math.abs(a.length - b.length) > 1) {return false;}
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) {i++;}
+    if (a.length === b.length) {
+        // One substitution, or two neighbouring letters swapped (widht).
+        return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+    }
+    const [long, short] = a.length > b.length ? [a, b] : [b, a];
+    return long.slice(i + 1) === short.slice(i);
+};
+export const checkImageKeys = (image) => {
+    for (const key of Object.keys(image)) {
+        if (imageKeys.includes(key)) {continue;}
+        let hint = '';
+        if (key === 'premultiply') {hint = ' Did you mean premultiplied: true?';}
+        else if (key === 'channels' || key === 'size' || key === 'depth') {hint = " Take only width and height from a decoder's result.";}
+        else {
+            const near = imageKeys.find((known) => key.toLowerCase() === known || withinOne(key, known));
+            if (near) {hint = ` Did you mean '${near}'?`;}
+        }
+        throw fail('invalid-argument', `Invalid image: unknown key '${key}'. An image object has data, format, width, height and premultiplied: build it from those rather than spreading a decoder's result.${hint}`, 'image');
+    }
+};
+
+// A hint for a format name that isn't one: the right case, the name other libraries use for the same bytes, or the nearest
+// supported layout.
+export const formatHint = (format) => {
+    if (typeof format !== 'string') {return '';}
+    const lower = format.toLowerCase();
+    if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
+    if (lower === 'xrgb' || lower === 'rgb24') {return " Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'.";}
+    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: pass it as 'bgra' with premultiplied: true (see Input in the API docs).";}
+    if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
+    return '';
+};
+// width and height are copied to results and used for dithering, so each must make sense on its own: a whole number of
+// pixels that divides the pixel count (and, when both are given, account for exactly the pixels in the data).
+export const checkSize = (pixels, size, name, argument) => {
+    if (size === undefined) {return;}
+    if (!Number.isInteger(size) || size < 0) {
+        throw fail('invalid-argument', `Invalid ${name}: must be a whole number of pixels.`, argument);
+    }
+    if (pixels > 0 && (size === 0 || pixels % size !== 0)) {
+        throw fail('invalid-argument', `Invalid ${name}: ${size} does not divide the image's ${pixels} pixels into whole rows.`, argument);
+    }
+};
+
+// `premultiplied` on an image object: true only for 'rgba' and 'bgra' (the formats with alpha); false is accepted on any format.
+const checkPremultiplied = (image) => {
+    const value = image.premultiplied;
+    if (value === undefined || value === false) {return false;}
+    if (value !== true) {
+        throw fail('invalid-argument', `Invalid image: premultiplied must be true or false, got ${describe(value)}.`, 'image');
+    }
+    if (image.format !== 'rgba' && image.format !== 'bgra') {
+        throw fail('invalid-argument', `Invalid image: premultiplied is for 'rgba' and 'bgra'; '${image.format}' has no alpha, so remove it.`, 'image');
+    }
+    return true;
+};
+
+// Everything checked about an image object whose data is a Uint8Array or Uint8ClampedArray, in this order: format, data length,
+// width and height, unknown keys, premultiplied. The main entry and the worker entry (before it posts) both run it, so their errors
+// are identical. Returns the premultiplied flag.
+export const checkImageObject = (image) => {
+    if (!imageFormats.includes(image.format)) {
+        throw fail('invalid-argument', `Invalid format: got ${describe(image.format)}; it must be ${formatNames}.${formatHint(image.format)}`, 'image');
+    }
+    const stride = channels(image.format);
+    if (image.data.length % stride !== 0) {
+        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${stride} for '${image.format}'.`, 'image');
+    }
+    const pixels = image.data.length / stride;
+    checkSize(pixels, image.width, 'image width', 'image');
+    checkSize(pixels, image.height, 'image height', 'image');
+    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
+        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${pixels} pixels.`, 'image');
+    }
+    checkImageKeys(image);
+    return checkPremultiplied(image);
+};
+
 // An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
 // `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
 // (an iframe, a test sandbox) are fine.
