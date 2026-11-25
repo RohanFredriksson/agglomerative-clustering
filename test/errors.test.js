@@ -54,7 +54,7 @@ describe('a worker fails like the main entry', () => {
         expect(error.message).toBe(expected.message);
         expect(error.code).toBe(expected.code);
         expect(error.stack).toContain('errors.test');
-        expect(error.cause?.message).toBe(expected.message);
+        // checked on the caller's side, before anything is posted, so there is no remote stack to attach as a cause
     });
 
     // `worker.load` checks the bytes on the caller's side (there is no remote stack to attach as a cause).
@@ -152,4 +152,36 @@ describe('errorCodes and isCodedError', () => {
         }
     });
 
+});
+
+describe('message wording', () => {
+    const message = async (call) => (await caught(Promise.resolve().then(call))).message;
+
+    it('counts bytes and entries in the singular', async () => {
+        expect(await message(() => new ac.Clustering(new Uint8Array(1)))).toContain("(1 byte that doesn't start");
+        expect(await message(() => new ac.Clustering(new Uint8Array(2)))).toContain('(2 bytes that don\'t start');
+        expect(await message(() => made.chooseFrom(new Uint8Array(3), 2))).toBe('Invalid k: 2 is more than the 1 entry in the palette; use 1 or fewer.');
+    });
+
+    it('calls an empty clustering empty, not a 1.x clustering', async () => {
+        const text = await message(() => new ac.Clustering(new Uint8Array(0)));
+        expect(text).toContain('empty');
+        expect(text).not.toContain('1.x');
+        expect(await message(() => new ac.Clustering(new Uint8Array(12)))).toContain('1.x');
+    });
+
+    it('says what to do with 16-bit pixels', async () => {
+        for (const call of [() => ac.buildPalette({ data: new Uint16Array(16), format: 'rgba' }, 2), () => ac.buildPalette(new Uint16Array(16), 2)]) {
+            expect(await message(call)).toContain('Uint8Array.from(data, (v) => v >> 8)');
+        }
+        // other arrays don't get the advice
+        expect(await message(() => ac.buildPalette(new Float32Array(16), 2))).not.toContain('>> 8');
+    });
+
+    it('describes a function as a function, never printing its source', async () => {
+        const secret = () => 'the-source-text';
+        for (const call of [() => ac.buildPalette(image, 2, { colorSpace: secret }), () => worker.buildPalette(image, 2, { dither: secret }), () => worker.buildPalette(image, 2, { precision: secret })]) {
+            expect(await message(call)).not.toContain('the-source-text');
+        }
+    });
 });

@@ -112,7 +112,7 @@ const respond = async ({id, method, args, progress, check}, post) => {
         // Errors cross as plain data: the caller's side rebuilds them with the same name, message and code.
         post({id, error: error instanceof Error
             ? {name: error.name, message: error.message, code: error.code, argument: error.argument, stack: error.stack}
-            : {name: 'Error', message: String(error), code: 'worker-failed'}});
+            : {name: 'Error', message: typeof error === 'function' ? 'a function was thrown' : String(error), code: 'worker-failed'}});
     } finally {
         controllers.delete(id);
     }

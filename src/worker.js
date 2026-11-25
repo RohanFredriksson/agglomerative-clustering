@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {version, fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy} from './shared.js';
+import {version, fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy, checkK, checkPalette, checkNotEmpty, checkChoice, checkPixelArray, parseOptions, clusterOptions as clusterKeys, quantizeOptions as quantizeKeys, mapOptions as mapKeys, mapIndexOptions as mapIndexKeys} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -108,7 +108,7 @@ const start = async (receive, chosen) => {
         // A page with an opaque origin (a sandboxed iframe without allow-same-origin, as plugin hosts such as Figma use) can't
         // start a worker from any http(s) script, nor, in Chromium, from a blob: URL; a data: URL module can, and imports it.
         const opaque = !crossOrigin && isOpaqueOrigin() && webOrigins.includes(script.protocol);
-        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }).";
+        const scriptHint = "Check that worker-thread.mjs is served (open its URL), with index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it, which it imports, or say where your copy of dist/ is with createWorker({ script }) or, for the shared worker, init({ script }). The worker's files can also be from different versions of agglomerative-clustering: serve all of dist/ from this version.";
         let worker, source = null;
         try {
             if (opaque) {
@@ -146,13 +146,14 @@ const start = async (receive, chosen) => {
     const worker = new NodeWorker(await nodeWorkerScript(chosen), {execArgv: []});
     worker.on('message', receive);
     // A worker script that can't be found, or that can't find what it imports: a copy of dist/ split up or bundled away.
+    const versions = " The worker's files can also be from different versions of agglomerative-clustering: serve all of dist/ from this version.";
     const missing = (error) => error && (error.code === 'ERR_MODULE_NOT_FOUND' || /Cannot find module|import\.meta' outside a module|Qualified path resolution failed/.test(String(error.message)));
     // Yarn Plug'n'Play keeps packages in zip archives, which Node reads ES modules from only through Yarn's loader.
     const inZip = (error) => /\.zip[\\/]/.test(String(error && error.message));
     worker.on('error', (error) => receive({failure: missing(error)
         ? inZip(error)
-            ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).`
-            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.`
+            ? `${String(error.message).split('\n')[0]}. Under Yarn Plug'n'Play the package sits in a zip archive, which a worker thread can load its ES modules from only through Yarn's loader: run the app with yarn node (or node --require ./.pnp.cjs --loader ./.pnp.loader.mjs), or unplug the package (yarn unplug agglomerative-clustering). Otherwise keep dist/ together and say where it is with createWorker({ script }).${versions}`
+            : `${String(error.message).split('\n')[0]}. The worker script (worker-thread.mjs) needs index.mjs, shared.mjs, choose.mjs, clustering.js and clustering.wasm next to it: keep dist/ together, and say where it is with createWorker({ script }) or, for the shared worker, init({ script }) (a path, or a file: URL). In a serverless deployment (AWS Lambda, Vercel or Netlify functions), the file tracer may have left them out: include node_modules/agglomerative-clustering/dist in the function's files.${versions}`
         : error.message}));
     worker.on('exit', (code) => receive({failure: `The worker exited unexpectedly (code ${code}).`}));
     worker.unref();
@@ -193,6 +194,8 @@ const send = (image) => {
     // An image object goes through the main entry's own checks here (its fields read once, then shape, data, detached buffer, format,
     // sizes, unknown keys, premultiplied), so what can't be sent is reported as the main entry reports it, before anything is posted.
     // A function, a Symbol or a thenable gets the shape error rather than the structured clone's.
+    // A bare array has to be what the main entry accepts as one (the checks it makes before its options).
+    if (ArrayBuffer.isView(image)) {checkPixelArray(image);}
     if (!ArrayBuffer.isView(image) && !isImageData(image)) {
         const copy = imageCopy(image);
         if (copy === image) {
@@ -296,39 +299,33 @@ const initOptions = (options, allowScript) => {
     return checked;
 };
 
+// What the options of a call are checked against: the image's data length, format and width (a bare array is RGBA).
+const imageShape = (sent) => ArrayBuffer.isView(sent) ? {data: sent, format: 'rgba', width: undefined} : {data: sent.data, format: sent.format, width: sent.width};
+
+// Checks a call's options exactly as the main entry does (the same parseOptions, `allowed` being the keys the function takes,
+// `image` the shape of the image it maps, if any), so a wrong option is reported here, in the main entry's order and words,
+// before anything is posted or a buffer is transferred. What it returns is what is sent: the options as one plain copy, and
+// `parsed`, what parseOptions made of them.
 // A signal and a progress callback can't cross to the worker, so they stay on this side: the options are sent without
 // them, a cancel message is sent when the signal aborts, and the worker's progress messages call the callback.
-const takeControls = (options, ditherAllowed = true) => {
-    // Anything but an ordinary object goes on as it is, for the worker's own validation to reject. An ordinary one is copied
-    // once first: structured cloning drops inherited properties, and the copy is what gets validated and sent.
-    if (!isOptionsObject(options)) {return {options, signal: undefined, onProgress: undefined};}
+const takeControls = (options, allowed, image) => {
+    if (options === undefined) {return {options, signal: undefined, onProgress: undefined, parsed: parseOptions(options, allowed, image)};}
+    // Anything but an ordinary object is rejected by parseOptions, as in the main entry. An ordinary one is copied once first:
+    // structured cloning drops inherited properties, and the copy is what gets validated and sent.
+    if (!isOptionsObject(options)) {parseOptions(options, allowed, image);}
     options = snapshot(options);
     // The dither setting is an object of its own, which structured cloning would copy without its inherited keys (or not
-    // at all, for a Proxy or a function): read it here the way the main entry does, and send a plain copy.
-    // A function that takes no dither option rejects the key whatever its value, as the main entry does: send a value that
-    // can cross, for the worker's validation to name the option.
-    if (!ditherAllowed && 'dither' in options) {options.dither = null;}
+    // at all, for a Proxy or a function): read it here the way the main entry does, once, and validate and send the copy.
     if (options.dither !== null && (typeof options.dither === 'object' || typeof options.dither === 'function' || typeof options.dither === 'symbol')) {
-        // One read of each setting (a getter could answer differently twice): the copy is what is checked and sent.
-        const copy = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
-        // A wrong setting is the worker's to report, after the image and k, as the main entry orders its checks. Only a
-        // copy that can't be sent is reported here.
-        try {parseDither(copy);} catch (error) {if (!sendable(copy)) {throw error;}}
-        options.dither = copy;
+        options.dither = isOptionsObject(options.dither) ? Object.assign({}, snapshot(options.dither)) : options.dither;
     }
-    // The signal and the progress callback can't cross to the worker, so they are kept here and the worker gets its own.
-    // A wrong one crosses as `null` instead, which the worker's validation
-    // rejects with the main entry's error, after the image and k: the main entry checks the options last. (This relies on
-    // those messages not echoing the value: if they ever say what they got, send a stand-in that reads the same.)
+    const parsed = parseOptions(options, allowed, image);
+    // Every value left is a primitive, a copy of the dither object or the signal and callback taken out here, so what is
+    // posted can be cloned. (The `cannot be sent` error in `unsendable` stays as a safety net for anything that still isn't.)
     const {signal, onProgress} = options;
-    const badSignal = signal !== undefined && (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean' || typeof signal.addEventListener !== 'function');
-    const badProgress = onProgress !== undefined && typeof onProgress !== 'function';
     const {signal: _signal, onProgress: _onProgress, ...rest} = options;
-    if (badSignal || badProgress) {
-        return {options: {...rest, ...(badSignal ? {signal: null} : {}), ...(badProgress ? {onProgress: null} : {})}, signal: undefined, onProgress: undefined};
-    }
-    if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress};}
-    return {options: rest, signal, onProgress};
+    if (signal === undefined && onProgress === undefined) {return {options, signal, onProgress, parsed};}
+    return {options: rest, signal, onProgress, parsed};
 };
 
 // Whether a value survives being posted to the worker.
@@ -358,17 +355,17 @@ const unsendable = (method, args, error) => {
     const index = args.findIndex((value, at) => names[at] && !sendable(value));
     const cause = {cause: error};
     return index < 0
-        ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), cause)
-        : Object.assign(fail('invalid-argument', `Invalid ${names[index]}: it cannot be sent to the worker (${error.message})`, names[index]), cause);
+        ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker.`), cause)
+        : Object.assign(fail('invalid-argument', `Invalid ${names[index]}: it cannot be sent to the worker.`, names[index]), cause);
 };
 
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
+// The option keys each function takes (the main entry's lists).
+const keysOf = {buildClustering: clusterKeys, buildPalette: clusterKeys, buildSwatches: clusterKeys, quantize: quantizeKeys, quantizeToIndices: quantizeKeys, quantizeWithPalette: mapKeys, quantizeToIndicesWithPalette: mapIndexKeys};
 const imageFunctions = ['buildClustering', 'buildPalette', 'buildSwatches', 'quantize', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithPalette'];
 const mappedImageFunctions = ['quantize', 'quantizeWithPalette'];
-// The functions that only cluster, and so take no dither option.
-const clusteringOnlyFunctions = ['buildClustering', 'buildPalette', 'buildSwatches'];
 
 // Calls each worker's `abandon` once the worker made by createWorker() has been garbage-collected (see `abandoned`).
 const abandonment = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry((abandon) => abandon()) : null;
@@ -595,7 +592,12 @@ const makeWorker = (options, allowScript) => {
                 // then the rest of the image's checks (its fields are read once here), before the options, as in the main entry
                 const checked = send(image);
                 const position = optionsPosition[name];
-                const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
+                // then the argument before the options (k, or a palette), and the options, as the main entry orders them
+                const shape = imageShape(checked);
+                const byPalette = name.endsWith('WithPalette');
+                if (position === 1) {if (byPalette) {checkPalette(rest[0]);} else {checkK(rest[0]);}}
+                const {options, signal, onProgress, parsed} = takeControls(rest[position], keysOf[name], shape);
+                if (byPalette) {checkNotEmpty(rest[0], shape, name === 'quantizeToIndicesWithPalette' && parsed.transparent > 0 ? parsed.transparent : 1);}
                 let args = rest.slice();
                 if (position < args.length) {args[position] = options;}
                 if (signal && signal.aborted) {
@@ -639,7 +641,7 @@ const makeWorker = (options, allowScript) => {
     const looksLikeImage = (value) => value !== null && typeof value === 'object' && (isUint8Array(value) || isUint8ClampedArray(value) || isImageData(value) || 'data' in value);
     // Builds the handle object for what the worker keeps under `id`: `kind` is 'image' (from `cluster`: an image and its
     // clustering) or 'clustering' (from `load`: a clustering alone). `output` turns a mapped result back into the type of the image given.
-    const makeHandle = (id, kind, output) => {
+    const makeHandle = (id, kind, output, shape) => {
         let released = false;
         // Every method goes through `use`, which refers to `handle`, so a method kept after the handle itself is dropped
         // keeps it alive and it is not reclaimed while still in use.
@@ -648,16 +650,35 @@ const makeWorker = (options, allowScript) => {
             return invoke(method, [id, ...args], [], new Error(), controls);
         };
         // Calls with mapping options, whose signal and progress callback stay on this side (see takeControls).
-        const withControls = (method, leading, mapOptions) => {
+        // `lead` is what comes first: k or a palette, checked before the options, as in the main entry. `keys` are the options the
+        // method takes, and `shape` the image of this handle (see imageShape).
+        const withControls = (method, leading, mapOptions, keys, lead) => {
             let taken;
-            try {taken = takeControls(mapOptions);} catch (error) {return Promise.reject(error);}
+            try {
+                if (lead === 'palette') {checkPalette(leading[0]);} else {checkK(leading[0]);}
+                taken = takeControls(mapOptions, keys, shape);
+            } catch (error) {return Promise.reject(error);}
+            // A palette with no colours is wrong only if the image has pixels to map to it, which the thread knows (this side keeps
+            // the image's size only). So with a signal already aborted, the thread checks the call, as the functions do, and the abort
+            // is reported when that finds nothing wrong.
+            if (lead === 'palette' && leading[0].length === 0 && taken.signal && taken.signal.aborted) {
+                const aborted = taken.signal;
+                return use(method, [...leading, taken.options], {check: true}).then(() => {throw abortReason(aborted);}, (error) => {
+                    if (isCodedError(error) && error.argument !== undefined) {throw error;}
+                    throw abortReason(aborted);
+                });
+            }
             return use(method, [...leading, taken.options], {signal: taken.signal, onProgress: taken.onProgress});
         };
         // The cuts take no options (the handle's clustering already says how it was made): one passed anyway is an error,
         // as in the main entry, rather than silently ignored.
-        const plain = (method, name, args, extra) => extra.some((value) => value !== undefined)
-            ? Promise.reject(fail('invalid-argument', `Invalid arguments: handle.${name} takes no options. To map pixels with options, use handle.quantize.`, 'options'))
-            : use(method, args);
+        const plain = (method, name, args, extra) => {
+            // k first, then the options that aren't taken, as the main entry's cuts check them
+            try {if (args.length > 0) {checkK(args[0]);}} catch (error) {return Promise.reject(error);}
+            return extra.some((value) => value !== undefined)
+                ? Promise.reject(fail('invalid-argument', `Invalid arguments: handle.${name} takes no options. To map pixels with options, use handle.quantize.`, 'options'))
+                : use(method, args);
+        };
         // An image where k belongs is a mix-up between the two kinds of handle: say so, rather than "k must be an integer".
         const imageAsK = (name, k) => looksLikeImage(k)
             ? Promise.reject(fail('invalid-argument', `Invalid k: this handle holds an image (from worker.cluster) and maps it with ${name}(k); pass k, not an image. To map other images with a stored clustering, use worker.load(clustering).`, 'k'))
@@ -666,15 +687,15 @@ const makeWorker = (options, allowScript) => {
             getPalette: (k, ...extra) => plain('handleGetPalette', 'getPalette', [k], extra),
             getSwatches: (k, ...extra) => plain('handleGetSwatches', 'getSwatches', [k], extra),
             getClusteringInfo: (...extra) => plain('handleGetClusteringInfo', 'getClusteringInfo', [], extra),
-            // Takes the signal only: the main entry's chooseFrom takes no progress callback, so one given crosses as null for
-            // the thread to reject with the main entry's own error.
-            // That relies on the thread injecting a progress poster only for calls that have one (see `optionsIndex` in
-            // worker-thread.js): the null is then the only onProgress it sees, so its own option check rejects it.
+            // Takes the signal only: the main entry's chooseFrom takes no progress callback, so one given is rejected here, by
+            // the same check.
             chooseFrom: (palette, k, chooseOptions) => {
                 let taken;
-                try {taken = takeControls(chooseOptions, false);} catch (error) {return Promise.reject(error);}
-                const sent = taken.onProgress !== undefined ? {...taken.options, onProgress: null} : taken.options;
-                return use('handleChooseFrom', [palette, k, sent], {signal: taken.signal});
+                try {
+                    checkChoice(palette, k);
+                    taken = takeControls(chooseOptions, ['colorSpace', 'signal']);
+                } catch (error) {return Promise.reject(error);}
+                return use('handleChooseFrom', [palette, k, taken.options], {signal: taken.signal});
             },
             release: async () => {
                 if (released) {return;}
@@ -690,15 +711,15 @@ const makeWorker = (options, allowScript) => {
         if (kind === 'image') {
             Object.assign(handle, {
                 getClustering: (...extra) => plain('handleGetClustering', 'getClustering', [], extra),
-                quantize: (k, mapOptions) => imageAsK('quantize', k) || (async () => output(await withControls('handleQuantize', [k], mapOptions)))(),
-                quantizeToIndices: (k, mapOptions) => imageAsK('quantizeToIndices', k) || withControls('handleQuantizeToIndices', [k], mapOptions),
-                quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions)),
-                quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions),
+                quantize: (k, mapOptions) => imageAsK('quantize', k) || (async () => output(await withControls('handleQuantize', [k], mapOptions, mapKeys, 'k')))(),
+                quantizeToIndices: (k, mapOptions) => imageAsK('quantizeToIndices', k) || withControls('handleQuantizeToIndices', [k], mapOptions, mapIndexKeys, 'k'),
+                quantizeWithPalette: async (palette, mapOptions) => output(await withControls('handleQuantizeWithPalette', [palette], mapOptions, mapKeys, 'palette')),
+                quantizeToIndicesWithPalette: (palette, mapOptions) => withControls('handleQuantizeToIndicesWithPalette', [palette], mapOptions, mapIndexKeys, 'palette'),
             });
         }
         if (kind === 'clustering') {
             // The handle holds no image: each call maps the image it is given, and returns the type of that image.
-            const mapping = (name, method, mapped) => (image, k, mapOptions) => {
+            const mapping = (name, method, mapped, keys) => (image, k, mapOptions) => {
                 if (typeof image === 'number') {return Promise.reject(fail('invalid-argument', "Invalid image: this handle holds a clustering, not an image (from worker.load); pass the image, then k.", 'image'));}
                 const origin = new Error();
                 return (async () => {
@@ -706,7 +727,8 @@ const makeWorker = (options, allowScript) => {
                     const bare = bareImageError(image);
                     if (bare) {throw bare;}
                     const checked = send(image);
-                    const {options, signal, onProgress} = takeControls(mapOptions);
+                    checkK(k);
+                    const {options, signal, onProgress} = takeControls(mapOptions, keys, imageShape(checked));
                     if (signal && signal.aborted) {
                         // As the functions on the worker do: a wrong argument is reported before the abort.
                         try {
@@ -724,8 +746,8 @@ const makeWorker = (options, allowScript) => {
                 })();
             };
             Object.assign(handle, {
-                quantize: mapping('quantize', 'handleQuantizeImage', true),
-                quantizeToIndices: mapping('quantizeToIndices', 'handleQuantizeToIndicesImage', false),
+                quantize: mapping('quantize', 'handleQuantizeImage', true, mapKeys),
+                quantizeToIndices: mapping('quantizeToIndices', 'handleQuantizeToIndicesImage', false, mapIndexKeys),
             });
         }
         // `await using handle = await worker.cluster(image)` releases it at the end of the block.
@@ -735,14 +757,15 @@ const makeWorker = (options, allowScript) => {
     };
 
     // Clusters `image` and keeps it, with its clustering, in the worker.
-    instance.cluster = (image, clusterOptions) => {
+    instance.cluster = (image, givenOptions) => {
         const origin = new Error();
         return (async () => {
             // The image is checked before the options and the abort, as the main entry does.
             const bare = bareImageError(image);
             if (bare) {throw bare;}
             const checked = send(image);
-            const {options, signal, onProgress} = takeControls(clusterOptions, false);
+            const shape = imageShape(checked);
+            const {options, signal, onProgress} = takeControls(givenOptions, clusterKeys, shape);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
             const sent = ready() ? checked : take(checked);
@@ -759,7 +782,8 @@ const makeWorker = (options, allowScript) => {
                 if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
                 throw error;
             }
-            return makeHandle(id, 'image', rebuild(image));
+            // The handle keeps the image's size, not its bytes (a transferred buffer is empty by now).
+            return makeHandle(id, 'image', rebuild(image), {...shape, data: {length: shape.data.length}});
         })();
     };
 
