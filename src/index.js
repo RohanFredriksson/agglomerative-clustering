@@ -3,7 +3,7 @@ import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageObject, checkSize, formatHint,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageBody, imageCopy, checkSize, formatHint,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -380,14 +380,7 @@ const load = (image) => {
         throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');
     }
 
-    if (!isUint8Array(image.data) && !isUint8ClampedArray(image.data)) {
-        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
-    }
-    if (isDetached(image.data)) {
-        throw detachedError('data');
-    }
-
-    const premultiplied = checkImageObject(image);
+    const premultiplied = checkImageBody(image);
     return {data: held(bytes(image.data)), format: image.format, width: image.width, premultiplied};
 
 };
@@ -773,6 +766,7 @@ const noOptions = (name, extra) => {
 
 export const buildClustering = async (image, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
@@ -794,6 +788,7 @@ export const getClustering = buildClustering;
 
 export const buildPalette = async (image, k, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     image = load(image);
     k = check(k);
@@ -873,6 +868,7 @@ export const getSwatchesFromClustering = (clustering, k, ...extra) => cutSwatche
 // The same for an image: clusters it, then cuts, like getPalette.
 export const buildSwatches = async (image, k, options) => {
 
+    image = imageCopy(image);
     // Arguments are checked in the order they are given (image, then k, then options), as in every other function.
     load(image);
     k = check(k);
@@ -923,6 +919,7 @@ export const getClusteringInfo = (clustering, ...extra) => readInfo('getClusteri
 
 export const quantize = async (image, k, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
@@ -946,6 +943,7 @@ export const quantize = async (image, k, options) => {
 
 export const quantizeFromClustering = async (image, clustering, k, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
@@ -972,6 +970,7 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
 
 export const quantizeWithPalette = async (image, palette, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
@@ -998,6 +997,7 @@ export const quantizeWithPalette = async (image, palette, options) => {
 
 export const quantizeToIndices = async (image, k, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const original = image;
     image = load(image);
@@ -1021,6 +1021,7 @@ export const quantizeToIndices = async (image, k, options) => {
 
 export const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const original = image;
     image = load(image);
@@ -1050,6 +1051,7 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
 
 export const quantizeToIndicesWithPalette = async (image, palette, options) => {
 
+    image = imageCopy(image);
     const warn = warningFor(image);
     const original = image;
     image = load(image);

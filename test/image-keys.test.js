@@ -50,3 +50,16 @@ describe('unknown image keys', () => {
         expect(second.premultiplied).toBe(true);
     });
 });
+
+describe('image fields are read once', () => {
+    it('an unknown key is still found with the object read once, and a flipping data getter changes nothing', async () => {
+        let reads = 0;
+        const first = new Uint8Array(64).map((_, i) => (i * 37) % 256);
+        const image = { format: 'rgba', width: 4, height: 4 };
+        Object.defineProperty(image, 'data', { enumerable: true, get: () => (reads++ === 0 ? first : new Uint8Array(0)) });
+        const result = await quantize(image, 4);
+        expect(reads).toBe(1);
+        expect(result.data.length).toBe(64);
+        await expect(buildClustering({ data: first, format: 'rgba', width: 4, height: 4, foo: 1 })).rejects.toMatchObject(unknown('foo'));
+    });
+});

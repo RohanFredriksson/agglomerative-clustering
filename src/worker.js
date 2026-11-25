@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader, checkImageObject} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader, checkImageBody, imageCopy} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -190,8 +190,25 @@ const notPixels = (image) => image !== null && typeof image === 'object' && !Arr
 
 const send = (image) => {
     if (notPixels(image)) {throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');}
+    // An image object goes through the main entry's own checks here (its fields read once, then shape, data, detached buffer, format,
+    // sizes, unknown keys, premultiplied), so what can't be sent is reported as the main entry reports it, before anything is posted.
+    // A function, a Symbol or a thenable gets the shape error rather than the structured clone's.
+    if (!ArrayBuffer.isView(image) && !isImageData(image)) {
+        const copy = imageCopy(image);
+        if (copy === image) {
+            if (typeof image !== 'object' || image === null) {throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');}
+        } else {
+            const premultiplied = checkImageBody(copy);
+            if (copy.data.byteLength >= maxBytes) {throw tooLarge(copy.data.byteLength);}
+            const sent = {data: copy.data, format: copy.format};
+            if (copy.premultiplied !== undefined) {sent.premultiplied = premultiplied;}
+            if (copy.width !== undefined) {sent.width = copy.width;}
+            if (copy.height !== undefined) {sent.height = copy.height;}
+            return sent;
+        }
+    }
     // A detached buffer (transferred to a worker created with transfer: true, say) is reported as the main entry reports it.
-    const pixels = ArrayBuffer.isView(image) ? image : image && typeof image === 'object' && ArrayBuffer.isView(image.data) ? image.data : null;
+    const pixels = ArrayBuffer.isView(image) ? image : isImageData(image) && ArrayBuffer.isView(image.data) ? image.data : null;
     if (pixels && isDetached(pixels)) {
         throw detachedError(ArrayBuffer.isView(image) ? 'bare' : isImageData(image) ? 'imagedata' : 'data');
     }
@@ -201,18 +218,6 @@ const send = (image) => {
         checkImageDataPixels(image);
         const data = image.data;
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
-    }
-    if (image && typeof image === 'object' && !ArrayBuffer.isView(image) && ArrayBuffer.isView(image.data)) {
-        // The main entry's checks (shape, unknown keys, premultiplied) run here, in its order, before anything is posted. Data of another
-        // type, or no format, goes on as it is for the worker's own error.
-        const sent = {data: image.data, format: image.format};
-        if (image.format && (isUint8Array(image.data) || isUint8ClampedArray(image.data))) {
-            const premultiplied = checkImageObject(image);
-            if (image.premultiplied !== undefined) {sent.premultiplied = premultiplied;}
-        } else if (image.premultiplied !== undefined) {sent.premultiplied = image.premultiplied;}
-        if (image.width !== undefined) {sent.width = image.width;}
-        if (image.height !== undefined) {sent.height = image.height;}
-        return sent;
     }
     return image;
 };

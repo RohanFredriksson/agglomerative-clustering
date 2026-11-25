@@ -211,6 +211,42 @@ export const checkImageObject = (image) => {
     return checkPremultiplied(image);
 };
 
+// The image object's own fields, read once: `data`, `format`, `width`, `height` and `premultiplied` are taken from it here, and
+// everything after (validation and use) reads the copy, so a getter that answers differently on a later read changes nothing.
+// The copy also names the object's other own enumerable keys (with no value, never read), in order, for the unknown-key check.
+// Anything that isn't an object with `data` and `format` is returned as it is (a bare array, ImageData, a function...), or, for
+// an object without them, rejected here with the shape error the main entry gives.
+export const imageCopy = (image) => {
+    if (typeof image !== 'object' || image === null || ArrayBuffer.isView(image) || isImageData(image)) {return image;}
+    const data = image.data;
+    const format = image.format;
+    if (!data || !format) {
+        throw fail('invalid-argument', `Invalid image: expected object with \`data\` and \`format\`.${imageHint(image)}`, 'image');
+    }
+    const copy = Object.create(null);
+    copy.data = data;
+    copy.format = format;
+    copy.width = image.width;
+    copy.height = image.height;
+    copy.premultiplied = image.premultiplied;
+    for (const key of Object.keys(image)) {
+        if (!imageKeys.includes(key)) {copy[key] = undefined;}
+    }
+    return copy;
+};
+
+// What the main entry's `load` checks about an image object, from the copy imageCopy made, in its order: data's type, whether its
+// buffer is detached, then checkImageObject. The worker entry runs the same before it posts an image. Returns the premultiplied flag.
+export const checkImageBody = (image) => {
+    if (!isUint8Array(image.data) && !isUint8ClampedArray(image.data)) {
+        throw fail('invalid-argument', "Invalid image data: must be Uint8Array or Uint8ClampedArray.", 'image');
+    }
+    if (isDetached(image.data)) {
+        throw detachedError('data');
+    }
+    return checkImageObject(image);
+};
+
 // An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
 // `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
 // (an iframe, a test sandbox) are fine.

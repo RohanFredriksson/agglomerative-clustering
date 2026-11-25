@@ -5,6 +5,7 @@ import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
 import { Palette, quantize, buildSwatches, buildClustering, quantizeToIndices, quantizeToIndicesWithPalette, quantizeWithPalette, buildPalette } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
+import { createWorker } from '../dist/worker.mjs';
 
 
 // gifenc is CommonJS with an ES build: named exports in bundlers, only a default export in plain Node ESM.
@@ -1038,6 +1039,73 @@ describe('straight output from a premultiplied source', () => {
         expect(Array.from(out)).toEqual([0, 128, 255, 255]);
         const rgba = await toStraight({ data: new Uint8Array([255, 128, 0, 255]), format: 'rgba', width: 1, height: 1, premultiplied: true }, 2);
         expect(Array.from(rgba)).toEqual([255, 128, 0, 255]);
+    });
+
+    // "For an RGBA destination": the guides' variant, as written there.
+    async function toStraightRgba(image, k, options) {
+      const { indices, palette } = await quantizeToIndices(image, k, options);
+      const out = new Uint8ClampedArray(indices.length * 4);                    // always RGBA
+      for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
+        const s = indices[i] * 3;
+        out[o] = palette[s]; out[o + 1] = palette[s + 1]; out[o + 2] = palette[s + 2];   // the palette is RGB: no swap
+        out[o + 3] = image.data[o + 3];                                         // alpha is the fourth byte in both formats
+      }
+      return out;
+    }
+
+    it('the RGBA variant is the one in the guides', async () => {
+        const { readFile } = await import('fs/promises');
+        const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+        const body = (text) => {
+            const lines = text.split('\n');
+            const first = lines.findIndex((line) => line.trim().startsWith('async function toStraightRgba('));
+            expect(first).toBeGreaterThanOrEqual(0);
+            const indent = lines[first].match(/^ */)[0];
+            const end = lines.findIndex((line, i) => i > first && line === `${indent}}`);
+            expect(end).toBeGreaterThan(first);
+            return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
+        };
+        const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
+        expect(body(test)).toBe(body(guides));
+        expect(body(guides)).not.toContain('transparent');
+    });
+
+    for (const format of ['rgba', 'bgra']) {
+        it(`the RGBA variant gives the RGBA reference from a ${format} input`, async () => {
+            const pre = premultiplied(data);
+            const straight = straightened(pre);
+            const input = { data: format === 'bgra' ? swapped(pre) : pre, format, width, height, premultiplied: true };
+            const reference = await quantize({ data: straight, format: 'rgba', width, height }, 16);
+            const out = await toStraightRgba(input, 16);
+            expect(out).toBeInstanceOf(Uint8ClampedArray);
+            expect(Array.from(out)).toEqual(Array.from(reference.data));
+        });
+    }
+
+    // The trap and the fix in "Straight pixels from a premultiplied source": a worker made with transfer: true empties the array it is given.
+    it('with a transferring worker, the loop needs a copy of the pixels it sends', async () => {
+        const worker = createWorker({ transfer: true });
+        try {
+            const toStraightWorker = async (image, k, sendCopy) => {
+                const { indices, palette } = await worker.quantizeToIndices(sendCopy ? { ...image, data: image.data.slice() } : image, k);
+                const out = new Uint8ClampedArray(indices.length * 4);
+                for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
+                    const s = indices[i] * 3;
+                    out[o] = palette[s]; out[o + 1] = palette[s + 1]; out[o + 2] = palette[s + 2];
+                    out[o + 3] = image.data[o + 3];
+                }
+                return out;
+            };
+            const make = () => ({ data: premultiplied(data), format: 'rgba', width, height, premultiplied: true });
+            const expected = await toStraightRgba(make(), 16);
+            expect(Array.from(await toStraightWorker(make(), 16, true))).toEqual(Array.from(expected));
+            // Without the copy the input is empty by the time alpha is read.
+            const bare = make();
+            await worker.quantizeToIndices(bare, 16);
+            expect(bare.data.length).toBe(0);
+        } finally {
+            worker.terminate();
+        }
     });
 
     it('builds an ImageData', async () => {

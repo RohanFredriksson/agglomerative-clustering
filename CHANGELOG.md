@@ -16,6 +16,16 @@ Premultiplied input, stricter image objects and result types that keep the input
 ### Changed
 - The hint for a format named `'argb'` points at `'bgra'` with `premultiplied: true` instead of converting first.
 
+### Fixed
+- **The worker entry gave a different error for an image it couldn't send** (a function, a Symbol, a thenable, a `Proxy` as `data`, or an image with several faults where one value can't be cloned): `Invalid argument: it cannot be sent to the worker`, with no `argument`, where the main entry says what is wrong with the image, on `argument: 'image'`. The worker now runs the main entry's image checks before it posts, so the message, `code` and `argument` are the same. Also in 3.x.
+- **An image object's fields are read once.** A `data` getter that answered differently on a later read made `quantize` return empty output with no error. `data`, `format`, `width`, `height` and `premultiplied` are now read a single time, at the start, in both entries, and the copies are what is checked and used. Also in 3.x.
+
+### Docs
+- The straight-output recipe says what `createWorker({ transfer: true })` does to it (the input is empty by the time alpha is read; send a copy) and has an RGBA variant for BGRA input going to a PNG encoder or `ImageData`.
+- The guides say a palette PNG can't hold soft alpha (`transparent` is on or off per pixel) and point to the RGBA PNG route.
+- The migration notes say that TypeScript doesn't flag a spread decoder result (it fails at run time) and name `ImageResult<RawImage>` for a reused result variable.
+- The API docs say when WebGL `readPixels` bytes are premultiplied, and that a result read back from a canvas has more than `k` colours; the Electron section says to wrap a result's `Uint8Array` in a `Buffer` for `createFromBitmap`.
+
 ## 3.8.0
 
 Additive: output and every existing call are unchanged. The fixed-palette search is built in, workers get a handle for a stored clustering, and the `…FromClustering` functions are deprecated ahead of their removal in 4.0.
