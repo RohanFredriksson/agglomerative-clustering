@@ -29,6 +29,20 @@ const time = async (promise) => {
 // Measurements behind the timing checks, reported with a failure so it says why.
 const details = {};
 
+// Why a sliced clustering differed from the one-shot one (seen once on Safari, 2026-11-25): where the bytes part, and
+// whether a second one-shot and a second sliced call agree with the first ones, so a report says which side varied.
+const describeMismatch = async (image, whole, sliced) => {
+    if (whole.error) {return `the one-shot call failed: ${whole.error && whole.error.message}`;}
+    const a = whole.value, b = sliced;
+    let first = -1, count = 0;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {if (a[i] !== b[i]) {count++; if (first < 0) {first = i;}}}
+    const around = (bytes) => Array.from(bytes.subarray(Math.max(0, first - 4), first + 8)).join(',');
+    const [wholeAgain, slicedAgain] = [await ac.getClustering(image), await ac.getClustering(image, { onProgress: () => {} })];
+    return `lengths ${a.length} and ${b.length}, ${count} bytes differ, first at ${first} (record ${first < 22 ? 'header' : Math.floor((first - 25) / 21)}); `
+        + `one-shot [${around(a)}], sliced [${around(b)}]; second one-shot ${equal(wholeAgain, a) ? 'matches the first' : 'differs from the first'}, `
+        + `second sliced ${equal(slicedAgain, b) ? 'matches the first sliced' : equal(slicedAgain, a) ? 'matches the one-shot' : 'matches neither'}`;
+};
+
 async function run() {
     // A diagonal gradient through three colours, computed rather than drawn on a canvas: reading pixels back from a
     // canvas (getImageData) threw in CI's Safari under safaridriver, and the library only needs the ImageData.
@@ -139,7 +153,8 @@ async function run() {
     const progress = [];
     const whole = await time(ac.getClustering(big));
     const sliced = await ac.getClustering(big, { onProgress: (fraction) => progress.push(fraction) });
-    checks.slicedMatchesWhole = equal(sliced, whole.value);
+    checks.slicedMatchesWhole = !whole.error && equal(sliced, whole.value);
+    if (!checks.slicedMatchesWhole) {details.slicedMatchesWhole = await describeMismatch(big, whole, sliced);}
     checks.progressRisesToOne = progress.length > 3 && progress[progress.length - 1] === 1 && progress.every((value, i) => i === 0 || value > progress[i - 1]);
     const controller = new AbortController();
     const aborted = await ac.getClustering(big, { signal: controller.signal, onProgress: (fraction) => {if (fraction > 0.3) {controller.abort();}} }).catch((error) => error);
