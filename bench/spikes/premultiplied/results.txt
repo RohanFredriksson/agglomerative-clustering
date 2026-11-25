@@ -1,0 +1,6 @@
+One in-place pass over a 4240x2832 (12 MP) RGBA image in the WebAssembly heap, ms, median of 7; kodim23 tiled.
+em++ -O3 -msimd128, Node v24.18.0
+
+opaque    un-premultiply, division 8.5 | un-premultiply, table 5.1 | premultiply, division 5.7 | premultiply, table 5.5
+gradient  un-premultiply, division 52.0 | un-premultiply, table 17.7 | premultiply, division 26.5 | premultiply, table 16.9
+mostly 0  un-premultiply, division 11.5 | un-premultiply, table 14.6 | premultiply, division 30.2 | premultiply, table 14.2
