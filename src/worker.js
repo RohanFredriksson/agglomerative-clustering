@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader, checkImageKeys} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -203,7 +203,10 @@ const send = (image) => {
         return {data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), format: 'rgba', width: image.width, height: image.height};
     }
     if (image && typeof image === 'object' && !ArrayBuffer.isView(image) && ArrayBuffer.isView(image.data)) {
+        // An unknown key is reported here, as the main entry reports it, before anything is posted.
+        checkImageKeys(image);
         const sent = {data: image.data, format: image.format};
+        if ('premultiplied' in image) {sent.premultiplied = image.premultiplied;}
         if (image.width !== undefined) {sent.width = image.width;}
         if (image.height !== undefined) {sent.height = image.height;}
         return sent;
