@@ -125,6 +125,35 @@ export const imageHint = (image) => {
     return '';
 };
 
+// An image object has only these keys; any other own enumerable key (a decoder's result spread in) is an error, with a hint where
+// the mistake is a common one. Inherited keys are not checked.
+const imageKeys = ['data', 'format', 'width', 'height', 'premultiplied'];
+const withinOne = (a, b) => {
+    if (a === b) {return true;}
+    if (Math.abs(a.length - b.length) > 1) {return false;}
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) {i++;}
+    if (a.length === b.length) {
+        // One substitution, or two neighbouring letters swapped (widht).
+        return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+    }
+    const [long, short] = a.length > b.length ? [a, b] : [b, a];
+    return long.slice(i + 1) === short.slice(i);
+};
+export const checkImageKeys = (image) => {
+    for (const key of Object.keys(image)) {
+        if (imageKeys.includes(key)) {continue;}
+        let hint = '';
+        if (key === 'premultiply') {hint = ' Did you mean premultiplied: true?';}
+        else if (key === 'channels' || key === 'size' || key === 'depth') {hint = " Spread only width and height from a decoder's result.";}
+        else {
+            const near = imageKeys.find((known) => key.toLowerCase() === known || withinOne(key, known));
+            if (near) {hint = ` Did you mean '${near}'?`;}
+        }
+        throw fail('invalid-argument', `Invalid image: unknown key '${key}'. An image object has data, format, width, height and premultiplied: build it from those rather than spreading a decoder's result.${hint}`, 'image');
+    }
+};
+
 // An options object is an ordinary object. A Map, Date, ArrayBuffer or typed array has no own keys and would pass as
 // `{}`, silently ignoring what the caller meant. Checked by tag rather than prototype so objects from another realm
 // (an iframe, a test sandbox) are fine.

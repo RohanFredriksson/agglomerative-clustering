@@ -3,7 +3,7 @@ import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageKeys,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -439,6 +439,7 @@ const load = (image) => {
         throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${pixels} pixels.`, 'image');
     }
 
+    checkImageKeys(image);
     const premultiplied = checkPremultiplied(image);
     return {data: held(bytes(image.data)), format: image.format, width: image.width, premultiplied};
 
@@ -450,11 +451,12 @@ const getWrapper = (image) => {
         return (output) => imageDataLike(image, new Uint8ClampedArray(output.buffer));
     }
     if (!isUint8Array(image) && typeof image === 'object' && image && image.data && image.format) {
-        const {format, width, height} = image;
+        const {format, width, height, premultiplied} = image;
         return (output) => {
             const result = {data: output, format};
             if (width !== undefined) {result.width = width;}
             if (height !== undefined) {result.height = height;}
+            if (premultiplied !== undefined) {result.premultiplied = premultiplied;}
             return result;
         };
     }
@@ -698,10 +700,12 @@ const reporter = (o) => {
 // The conversion passes in slices of this many pixels, so a long one gives the signal and the event loop a turn like the rest.
 const convertSlice = 65536;
 const convertInSlices = async (wasm, convert, pointer, pixels, o) => {
+    let last = performance.now();
     for (let start = 0; start < pixels; start += convertSlice) {
-        if (start > 0) {await yieldNow();}
         checkAborted(o.signal);
         convert(pointer, start, Math.min(pixels, start + convertSlice));
+        // Yield only once a slice's worth of time has gone, so a short pass doesn't pay a turn of the event loop per chunk.
+        if (start + convertSlice < pixels && performance.now() - last >= sliceMs) {await yieldNow(); last = performance.now();}
     }
 };
 

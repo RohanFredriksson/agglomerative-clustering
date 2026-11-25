@@ -150,6 +150,19 @@ describe('premultiplied: true', () => {
         expect((await buildPalette(preImg, 4)).length).toBe(12);
     }, timeLimit(60_000));
 
+    it('an abort that lands inside the conversion pass rejects with the reason, and a following call works', async () => {
+        const w = 4240, h = 2832;
+        const big = new Uint8Array(w * h * 4).fill(200);
+        const reason = new Error('stop');
+        const controller = new AbortController();
+        const palette = await buildPalette(preImg, 4);
+        const promise = quantizeToIndicesWithPalette({ data: big, format: 'rgba', premultiplied: true }, palette, { signal: controller.signal });
+        // Queued after the call has started: it lands at the first yield, which the conversion pass makes if it runs past one slice, else the mapping's.
+        setImmediate(() => controller.abort(reason));
+        await expect(promise).rejects.toBe(reason);
+        expect((await buildPalette(preImg, 4)).length).toBe(12);
+    }, timeLimit(60_000));
+
     it('errors', async () => {
         for (const format of ['rgb', 'rgbx', 'bgrx']) {
             const data = new Uint8Array(format === 'rgb' ? 12 : 16);
