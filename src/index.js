@@ -3,7 +3,7 @@ import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageBody, imageCopy, checkSize, formatHint,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageError, checkImageBody, imageCopy, checkSize, formatHint,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -334,15 +334,6 @@ const bytes = (data) => isUint8Array(data) ? data : new Uint8Array(data.buffer, 
 // call returns; until then (the first call) a copy is kept for when it has loaded.
 const held = (data) => Module ? data : data.slice();
 
-// The bare-image warning (rgb-as-rgba, gray-as-rgba) for an image, decided before load() and given only once the call's own checks have passed,
-// just before it starts work, so the one warning isn't spent on a call that fails anyway (PRINCIPLES "Warnings").
-const noWarning = () => {};
-// A call whose signal is already aborted fails before any work, so it doesn't use the warning up either.
-const warningFor = (image) => {
-    const warning = bareImageWarning(image);
-    return warning ? (signal) => {if (!(signal && signal.aborted)) {warnOnce(warning, image.byteLength);}} : noWarning;
-};
-
 const load = (image) => {
 
     if (isClustering(image) || isPalette(image)) {
@@ -361,6 +352,8 @@ const load = (image) => {
             throw fail('invalid-argument', `Invalid image: these bytes are an encoded ${encoded} file, not pixels. Decode them to pixels first and pass those ("Decoding image files" in the guides has a recipe for Node, browsers and edge runtimes). If they really are raw RGBA pixels, pass { data, format: 'rgba' } to say so.`, 'image');
         }
         if (image.length % 4 !== 0) {throw fail('invalid-argument', "Invalid image data: length must be a multiple of 4 for 'rgba'.", 'image');}
+        const bare = bareImageError(image);
+        if (bare) {throw bare;}
         return {data: held(image), format: 'rgba', premultiplied: false};
     }
 
@@ -767,10 +760,8 @@ const noOptions = (name, extra) => {
 export const buildClustering = async (image, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     image = load(image);
     const o = parseOptions(options, clusterOptions, image);
-    warn(o.signal);
     const wasm = Module || await acquire();
 
     if (isControlled(o)) {
@@ -789,11 +780,9 @@ export const getClustering = buildClustering;
 export const buildPalette = async (image, k, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     image = load(image);
     k = check(k);
     const o = parseOptions(options, clusterOptions, image);
-    warn(o.signal);
     const wasm = Module || await acquire();
 
     if (isControlled(o)) {
@@ -921,12 +910,10 @@ export const getClusteringInfo = (clustering, ...extra) => readInfo('getClusteri
 export const quantize = async (image, k, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
     k = check(k);
     const o = parseOptions(options, quantizeOptions, image);
-    warn(o.signal);
     const wasm = Module || await acquire();
 
     if (isControlled(o)) {
@@ -945,14 +932,12 @@ export const quantize = async (image, k, options) => {
 export const quantizeFromClustering = async (image, clustering, k, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
     readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapOptions, image);
     clustering = held(clustering);
-    warn(o.signal);
     const wasm = Module || await acquire();
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
@@ -972,7 +957,6 @@ export const quantizeFromClustering = async (image, clustering, k, options) => {
 export const quantizeWithPalette = async (image, palette, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const wrap = getWrapper(image);
     image = load(image);
     checkPalette(palette);
@@ -980,7 +964,6 @@ export const quantizeWithPalette = async (image, palette, options) => {
     checkNotEmpty(palette, image, 1);
     const space = matchingSpace(o, palette);
     palette = held(palette);
-    warn(o.signal);
     const wasm = Module || await acquire();
     checkAborted(o.signal);
 
@@ -999,12 +982,10 @@ export const quantizeWithPalette = async (image, palette, options) => {
 export const quantizeToIndices = async (image, k, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const original = image;
     image = load(image);
     k = check(k);
     const o = parseOptions(options, quantizeIndexOptions, image);
-    warn(o.signal);
     const wasm = Module || await acquire();
 
     if (isControlled(o)) {
@@ -1023,14 +1004,12 @@ export const quantizeToIndices = async (image, k, options) => {
 export const quantizeToIndicesFromClustering = async (image, clustering, k, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const original = image;
     image = load(image);
     const header = readHeader(clustering);
     k = check(k);
     const o = parseOptions(options, mapIndexOptions, image);
     clustering = held(clustering);
-    warn(o.signal);
     const wasm = Module || await acquire();
     checkAborted(o.signal);
     const colorSpace = o.colorSpaceGiven ? o.colorSpace : -1;
@@ -1053,7 +1032,6 @@ export const quantizeToIndicesFromClustering = async (image, clustering, k, opti
 export const quantizeToIndicesWithPalette = async (image, palette, options) => {
 
     image = imageCopy(image);
-    const warn = warningFor(image);
     const original = image;
     image = load(image);
     checkPalette(palette);
@@ -1062,7 +1040,6 @@ export const quantizeToIndicesWithPalette = async (image, palette, options) => {
     const space = matchingSpace(o, palette);
     const paletteSpace = isPalette(palette) ? palette.colorSpace : colorSpaceName(space);
     palette = held(palette);
-    warn(o.signal);
     const wasm = Module || await acquire();
     checkAborted(o.signal);
 

@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader, checkImageBody, imageCopy} from './shared.js';
+import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -552,15 +552,12 @@ const makeWorker = (options, allowScript) => {
                     }
                     throw abortReason(signal);
                 }
-                // The bare-image warning is decided here, on the caller's side and before a transfer can empty the
-                // array, and given once the call succeeds: the thread checks the other arguments, and its own copy is
-                // silenced (PRINCIPLES "Warnings").
-                const warning = bareImageWarning(image);
-                const byteLength = warning ? image.byteLength : 0;
+                // A bare RGB or grey array is refused here, before anything is posted or a transfer can empty it.
+                const bare = bareImageError(image);
+                if (bare) {throw bare;}
                 let sent = send(image);
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
-                if (warning) {warnOnce(warning, byteLength);}
                 return mapped ? rebuild(image)(result) : result;
             })();
         };
@@ -671,13 +668,12 @@ const makeWorker = (options, allowScript) => {
                         }
                         throw abortReason(signal);
                     }
-                    const warning = bareImageWarning(image);
-                    const byteLength = warning ? image.byteLength : 0;
+                    const bare = bareImageError(image);
+                    if (bare) {throw bare;}
                     let sent = send(image);
                     const ahead = !ready();
                     if (ahead) {sent = take(sent);}
                     const result = await invoke(method, [id, sent, ahead ? own(k) : k, options], pixelBuffers(sent), origin, {signal, onProgress});
-                    if (warning) {warnOnce(warning, byteLength);}
                     return mapped ? rebuild(image)(result) : result;
                 })();
             };
@@ -699,8 +695,8 @@ const makeWorker = (options, allowScript) => {
             const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
-            const warning = bareImageWarning(image);
-            const byteLength = warning ? image.byteLength : 0;
+            const bare = bareImageError(image);
+            if (bare) {throw bare;}
             const sent = ready() ? send(image) : take(send(image));
             // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
             // existing (see `abandoned`).
@@ -715,7 +711,6 @@ const makeWorker = (options, allowScript) => {
                 if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
                 throw error;
             }
-            if (warning) {warnOnce(warning, byteLength);}
             return makeHandle(id, 'image', rebuild(image));
         })();
     };

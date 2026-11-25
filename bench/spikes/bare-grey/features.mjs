@@ -4,12 +4,10 @@
 //   node bench/spikes/bare-grey/features.mjs
 import { writeFile } from 'node:fs/promises';
 import { buildPalette } from '../../../dist/index.mjs';
-import { silenceWarnings } from '../../../dist/shared.mjs';
 import { looksLikeRgb } from '../../../dist/shared.mjs';
 import { corpus } from './corpus.mjs';
 import { looksLikeGrey } from './check.mjs';
 
-silenceWarnings();
 
 // Whole-array features: E[k] = mean |d[i] - d[i-k]| for k = 1..4, also per phase (i mod 4); exact-equality shares
 // over pixels (RGBA reading) that differ from the pixel before.
@@ -58,7 +56,7 @@ function mapMse(truth, truthFormat, palette) {
     return w ? sum / w / 3 : 0;
 }
 async function harm(row) {
-    const wrong = await buildPalette(new Uint8Array(row.bytes), 16);
+    const wrong = await buildPalette({ data: new Uint8Array(row.bytes), format: 'rgba' }, 16);
     const right = await buildPalette({ data: row.truth, format: row.truthFormat }, 16);
     return { right: mapMse(row.truth, row.truthFormat, right), wrong: mapMse(row.truth, row.truthFormat, wrong) };
 }

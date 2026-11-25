@@ -3,13 +3,12 @@
 // (dithered, pixel art and synthetic RGB) plus the grey arrays, and compares.
 //   node bench/spikes/bare-grey/rgb-changes.mjs > bench/spikes/bare-grey/results-rgb-changes.txt
 import { quantize } from '../../../dist/index.mjs';
-import { looksLikeRgb as shipped, silenceWarnings } from '../../../dist/shared.mjs';
+import { looksLikeRgb as shipped } from '../../../dist/shared.mjs';
 import { looksLikeRgb as old } from '../bare-rgb/check.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../../../fixtures/kodak.js';
 import { syntheticImages } from '../../lib/images.js';
 import { corpus } from './corpus.mjs';
 
-silenceWarnings();
 const changes = [];
 let n = 0;
 const compare = (kind, group, name, bytes) => {

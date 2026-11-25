@@ -4,7 +4,7 @@
 // to it fails here. The RGB rule decides first (bare-rgb-check.test.js).
 import { describe, it, expect, beforeAll } from 'vitest';
 import { encode, decode } from 'fast-png';
-import { bareLayout, bareImageWarning, resetWarnings } from '../dist/shared.mjs';
+import { bareLayout, bareImageError } from '../dist/shared.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
 import { timeLimit } from './timeout.js';
 
@@ -95,10 +95,13 @@ describe('bareLayout: never grey', () => {
     });
 });
 
-describe('bareImageWarning: grey', () => {
-    it('names gray-as-rgba with the layout it saw', () => {
-        resetWarnings();
-        expect(bareImageWarning(kodak.grey)).toEqual({ code: 'gray-as-rgba', layout: 'grey' });
-        expect(bareImageWarning(pixels(kodak.grey.length, (p) => kodak.grey[p], () => 255))).toEqual({ code: 'gray-as-rgba', layout: 'grey-alpha' });
+describe('bareImageError: grey', () => {
+    it('gives the grey and grey-and-alpha texts', () => {
+        const grey = bareImageError(kodak.grey);
+        expect(grey.message).toMatch(/^Invalid image: these [\d,]+ bytes look like grey \(1 per pixel\), not RGBA/);
+        expect(grey.code).toBe('invalid-argument');
+        expect(grey.argument).toBe('image');
+        const both = bareImageError(pixels(kodak.grey.length, (p) => kodak.grey[p], () => 255));
+        expect(both.message).toMatch(/^Invalid image: these [\d,]+ bytes look like grey and alpha \(2 per pixel\), not RGBA/);
     });
 });

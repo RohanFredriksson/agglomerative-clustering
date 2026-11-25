@@ -378,7 +378,7 @@ export const sniffImageFormat = (bytes) => {
 // The other common way to get a bare array wrong is bytes of another layout: RGB (sharp's plain .raw()), or grey and grey
 // with alpha (fast-png's decode() of a grey PNG). Read as RGBA, every pixel takes bytes from its neighbours and one of them
 // as its alpha, and nothing fails while the length divides by 4. They are never reinterpreted (a bare array is RGBA,
-// PRINCIPLES), only reported: a warning in 3.x, an error from 4.0.
+// PRINCIPLES), only reported, as an error (a warning in 3.x).
 //
 // The rules use E(k), the mean change between a byte and the one k before it (bench/spikes/bare-rgb/ and
 // bench/spikes/bare-grey/: no false positives on 2,984 real RGBA images).
@@ -446,48 +446,20 @@ export const bareLayout = (d) => {
 };
 export const looksLikeRgb = (d) => bareLayout(d) === 'rgb';
 
-// Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).
-const warned = new Set();
-const bareCodes = {rgb: 'rgb-as-rgba', grey: 'gray-as-rgba', 'grey-alpha': 'gray-as-rgba'};
-
-// The warning a bare image calls for, as {code, layout}, or null. It skips everything the main entry rejects (palettes
-// and clusterings passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns
-// about its image and rejects it, and both entries share this one order. An array of one layout never takes another's
-// code because its own was already used: it is classified first, and only then is its code checked.
-export const bareImageWarning = (image) => {
-    if ((warned.has('rgb-as-rgba') && warned.has('gray-as-rgba')) || !isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
+// The error a bare image calls for, or null. It skips everything the main entry rejects for another reason (palettes and
+// clusterings passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never gives two
+// errors for its image and both entries share this one order.
+const bareText = {
+    rgb: (n) => `Invalid image: these ${n} bytes look like RGB (3 per pixel) or grey, not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA: format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+    grey: (n) => `Invalid image: these ${n} bytes look like grey (1 per pixel), not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices. Expand 8-bit grey to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()); there is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+    'grey-alpha': (n) => `Invalid image: these ${n} bytes look like grey and alpha (2 per pixel), not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). fast-png's decode() gives this for a grey PNG with alpha. Expand it to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()); there is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+};
+export const bareImageError = (image) => {
+    if (!isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
     if (sniffImageFormat(image) !== null || image.length % 4 !== 0) {return null;}
     const layout = bareLayout(image);
-    return layout === null || warned.has(bareCodes[layout]) ? null : {code: bareCodes[layout], layout};
+    return layout === null ? null : fail('invalid-argument', bareText[layout](image.byteLength.toLocaleString('en-US')), 'image');
 };
-
-// The text of each warning. Delivered through process.emitWarning in Node, Bun and Deno (--no-warnings,
-// process.on('warning') and --trace-warnings then work), else console.warn. Runtimes that imitate Node have an
-// emitWarning that may print nothing (Cloudflare Workers with nodejs_compat), so they are told apart by
-// navigator.userAgent, as worker.js does; a bundler's `process` polyfill has no emitWarning, and `globalThis.process`
-// keeps Parcel from adding one.
-const nodeLike = () => typeof navigator === 'undefined' || /^(Node\.js|Bun|Deno)\//.test(String(navigator.userAgent));
-const warningText = {
-    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel), or grey, passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA; format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
-    'gray-as-rgba': (byteLength, layout) => (layout === 'grey-alpha'
-        ? `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey and alpha bytes (2 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG with alpha.`
-        : `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey bytes (1 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices.`)
-        + ` Expand ${layout === 'grey-alpha' ? 'it' : '8-bit grey'} to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()). There is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
-};
-// `warning` is what bareImageWarning returned: {code, layout}.
-export const warnOnce = ({code, layout}, byteLength) => {
-    if (warned.has(code)) {return;}
-    warned.add(code);
-    const message = warningText[code](byteLength, layout);
-    const runtime = globalThis.process;
-    if (runtime && typeof runtime.emitWarning === 'function' && nodeLike()) {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
-    else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}
-};
-// The worker thread's copy: its caller's side checks and warns (PRINCIPLES), so here every code counts as warned, which
-// also skips the sampling.
-export const silenceWarnings = () => {for (const code of Object.keys(warningText)) {warned.add(code);}};
-// For tests.
-export const resetWarnings = () => {warned.clear();};
 // Node's console.log and util.inspect call this (other environments ignore it), so the tag shows when debugging:
 // `Palette(oklab) [ 12, 34, ... ]` rather than a plain `Uint8Array(…)`.
 const inspect = Symbol.for('nodejs.util.inspect.custom');
