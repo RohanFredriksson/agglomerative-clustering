@@ -204,7 +204,7 @@ describe('the image is checked before the options, in both entries', () => {
 describe('the rest of the image is checked before the options too', () => {
     it('reports an unknown image key before an invalid option, from both entries', async () => {
         const image = { data: new Uint8Array(16), format: 'rgba', bogus: 1 };
-        const bad = { dither: { method: () => {} } };
+        const bad = { get colorSpace() { throw new Error('getter'); } };
         const fromMain = await buildPalette(image, 4, bad).catch((error) => error);
         expect(fromMain).toMatchObject({ code: 'invalid-argument', argument: 'image' });
         const worker = createWorker();
