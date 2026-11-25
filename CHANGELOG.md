@@ -19,6 +19,7 @@ Premultiplied input, stricter image objects and result types that keep the input
 - **A recipe for straight output from a premultiplied source** (`ImageData`, PNG encoders): the guides' [Straight pixels from a premultiplied source](docs/guides.md#straight-pixels-from-a-premultiplied-source), exact and under 1% of the call. Don't un-premultiply the mapped output instead: 1,171 colours for `k = 16`.
 
 ### Changed
+- The guides' palette PNG recipe is now a function, `forPng`, that returns the `data` and `palette` fast-png takes, with the transparent entry first and alpha set on every entry (also for an opaque image), instead of a swap written out in the encoder call that was easy to half-apply. The README no longer says GIF and palette PNG output are built in: the library returns indexed output, and the guides show the writers.
 - Messages count properly ("1 byte", "the 1 entry in the palette"), `new Clustering(new Uint8Array(0))` says it is empty instead of mentioning 1.x clusterings, and the errors for a `Uint16Array` where pixels belong say to shift 16-bit data down to 8 bits (`Uint8Array.from(data, (v) => v >> 8)`).
 - `new Clustering(palette)` says "this is a palette, not a clustering" (the hint the functions already gave) instead of a generic invalid-clustering message.
 - The hint for a format named `'argb'` points at `'bgra'` with `premultiplied: true` instead of converting first.

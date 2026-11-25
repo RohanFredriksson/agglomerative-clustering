@@ -13,7 +13,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 - **Every palette size from one pass.** Clustering a photo takes about 70 ms. After that, a palette of any size takes about 0.4 ms.
 - **Palettes nest, in a stable order.** The 16-colour palette is the 32-colour one with pairs merged, so swatches don't jump around as the count changes.
 - **It knows each colour's share of the image,** so you can show swatches with percentages, or pick the smallest palette that meets an error target.
-- **Transparency-aware.** A logo's transparent background never ends up in its palette. GIF and palette PNG output are built in.
+- **Transparency-aware.** A logo's transparent background never ends up in its palette. Indexed output (`quantizeToIndices`) gives a GIF or palette PNG writer a palette, one index per pixel and the transparent entry's position; the [guides](docs/guides.md#gifs-and-palette-pngs) show it with gifenc and fast-png.
 - **Off the main thread.** `agglomerative-clustering/worker` runs the same API in a Web Worker or Node worker thread.
 - **Accurate and fast.** The lowest average error of the six JavaScript quantizers we benchmarked, at about the speed of libimagequant ([benchmarks](#benchmarks)).
 - **Small and portable.** About 86 KB of WebAssembly (41 KB gzipped)<!-- bench/spikes/slicing-mapping/results-size.txt -->, Node and browsers, TypeScript types, no runtime dependencies, deterministic output.

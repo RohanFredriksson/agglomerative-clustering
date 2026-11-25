@@ -217,22 +217,26 @@ gif.finish();
 const bytes = gif.bytes();
 ```
 
-**A palette PNG** with [fast-png](https://github.com/image-js/fast-png): the same call, then move the transparent entry to the front and give it alpha 0. A PNG lists alpha for the first palette entries, in order, and fast-png writes only the alphas below 255, so the transparent entry has to come first or the alpha lands on the wrong colour:
+**A palette PNG** with [fast-png](https://github.com/image-js/fast-png): the same call, then `forPng`, which puts the transparent entry first and gives it alpha 0. A PNG lists alpha for the first palette entries only, in order, and fast-png writes just the alphas below 255, so with the transparent entry anywhere else the alpha lands on the wrong colour. `forPng` swaps entry 0 and the transparent entry in the palette and in the indices together (the two have to change together), adds alpha to every entry, and does nothing to the transparency when there is none, so it serves an opaque image too:
 
 ```js
 import { encode } from 'fast-png';
 
-// Swap the transparent entry with entry 0 (when there is one), in the palette and in the indices.
-const t = transparentIndex ?? 0;
-const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
-const png = encode({
-  width: image.width, height: image.height, depth: 8, channels: 1,
-  data: indices.map(swap),
-  palette: entries.map((_, i) => [...entries[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
-});
+// `toEntries` is from the GIF recipe above. The result is the `data` and `palette` that fast-png takes.
+function forPng({ palette, indices, transparentIndex }) {
+  const t = transparentIndex ?? 0;
+  const swap = (i) => (i === t ? 0 : i === 0 ? t : i);
+  const entries = toEntries(palette);
+  return {
+    data: indices.map(swap),
+    palette: entries.map((_, i) => [...entries[swap(i)], i === 0 && transparentIndex !== null ? 0 : 255]),
+  };
+}
+
+const png = encode({ width: image.width, height: image.height, depth: 8, channels: 1, ...forPng({ palette, indices, transparentIndex }) });
 ```
 
-For an opaque image, leave out `transparent` and the swap: `encode({ width, height, depth: 8, channels: 1, data: indices, palette: entries })`.
+Leave out `transparent` from the `quantizeToIndices` call for an opaque image, and `forPng` returns the indices and palette unchanged (with alpha 255). Don't pass `indices` and `palette` to the encoder yourself for an image with a transparent entry, and don't swap only one of them.
 
 `transparent` is on or off for each pixel, so a palette PNG can't hold soft edges or shadows: pixels with alpha below the cutoff become the transparent entry and the rest are drawn opaque. For those, write an RGBA PNG with the palette's colours and each pixel's own alpha, which is the [straight-output recipe](#straight-pixels-from-a-premultiplied-source) (it works for a straight source too, with `premultiplied` left off).
 
