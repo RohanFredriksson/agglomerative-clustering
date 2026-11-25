@@ -49,6 +49,8 @@ What it costs:
 
 ## Recommendation
 
+**Decided 2026-11-25 by the maintainer: recipe** (option A), with the built-in under ROADMAP "Later, if asked for".
+
 **Reviewed (2026-11-25):** `scope-steward` recipe (test 1 fails against an exact ten-line R3, test 6 has no clean shape yet; 4.0 already turned down a second way to say premultiplied, `'bgra-premultiplied'`); `user-advocate` recipe, with the R2 warning in the option's own docs entry and doc comment as well as the guide, and two reopening triggers. If it is ever built, `user-advocate` prefers the object form on the image key (`premultiplied: { output: false }`, input and output in one place), after a cold read.
 
 **Recipe now, built-in later if asked for:** document R3 next to the premultiplied option in 4.0 ("for a straight destination, map to indices and write the palette colours"), with a warning against R2 and the measured reason, test it in `test/recipes.test.js`, and record the built-in under ROADMAP "Later, if asked for", reopened by any report or exploratory-round run that writes R2 (the 4.0 beta round can include the task "write a 16-colour PNG from node-canvas raw data"), or a worker-entry user who reports the calling-thread loop as a problem. The warning goes in the `premultiplied` entry in `docs/api.md` and its doc comment too, where these users already are. R3 is exact, ten lines and under 1% of the call; the built-in's real gain is removing the R2 trap, which the docs can also do, and its shape needs a naming decision the evidence doesn't yet justify. The maintainer decides.
