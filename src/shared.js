@@ -387,8 +387,8 @@ export const sniffImageFormat = (bytes) => {
 //   but where it changes its bytes come in equal triples at a step of 3 and not of 4.
 // - Grey and alpha (2 bytes a pixel): smooth at a step of 2 and rough at a step of 1, since grey and alpha bytes alternate.
 // - Grey (1 byte a pixel): smoothest at a step of 1, unless most changing pixels have four equal bytes, which is real
-//   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; it then keeps the
-//   rgb-as-rgba code, whose text covers grey too.
+//   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; its error text
+//   covers grey too.
 // Units equal to the one before are skipped by the equal-byte counts, since flat areas read the same either way. It
 // samples 512 windows of 96 bytes (each on a multiple of 12, a pixel under every reading, one in each 512th of the
 // array), so it costs about 0.35 ms at any size. Returns 'rgb', 'grey', 'grey-alpha' or null.

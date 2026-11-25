@@ -2,6 +2,8 @@
 // warnings in 3.x): on every call, on every function that takes an image, in both entries, with the same message.
 import { describe, it, expect, vi } from 'vitest';
 import { buildPalette, buildClustering, buildSwatches, quantize, quantizeWithPalette, quantizeToIndices, quantizeToIndicesWithPalette, Palette } from '../dist/index.mjs';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { createWorker } from '../dist/worker.mjs';
 
 const hsv = (h, s, v) => {
@@ -69,6 +71,9 @@ describe('main entry', () => {
             () => clustering.quantizeToIndices(bareRgb, 4),
         ];
         for (const run of runs) {await expect(run()).rejects.toMatchObject(expected(texts('12,288').rgb));}
+        for (const [, image, message] of cases) {
+            await expect(quantizeToIndices(image, 4)).rejects.toMatchObject(expected(message));
+        }
     });
 
     it('reports the image before k and the options', async () => {
@@ -96,6 +101,26 @@ describe('main entry', () => {
     });
 });
 
+describe('CommonJS build and first call', () => {
+    it('rejects bare RGB with the same error as the ES build', async () => {
+        const cjs = createRequire(import.meta.url)('../dist/index.cjs');
+        await expect(cjs.buildPalette(bareRgb, 8)).rejects.toMatchObject(expected(texts('12,288').rgb));
+    });
+
+    it('rejects as the very first call of a freshly loaded module', () => {
+        const url = new URL('../dist/index.mjs', import.meta.url).href;
+        const source = `
+import { buildPalette } from ${JSON.stringify(url)};
+const rgb = new Uint8Array(64 * 64 * 3);
+for (let p = 0; p < 64 * 64; p++) {const h = (p % 64) / 64; rgb.set([Math.round(255 * h), Math.round(255 * (1 - h)), Math.round(255 * Math.floor(p / 64) / 64)], p * 3);}
+try {await buildPalette(rgb, 8); console.log(JSON.stringify(null));} catch (e) {console.log(JSON.stringify({code: e.code, argument: e.argument, message: e.message}));}
+`;
+        const out = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', source], { encoding: 'utf8' }).trim().split('\n').pop());
+        expect(out).toMatchObject({ code: 'invalid-argument', argument: 'image' });
+        expect(out.message).toBe(texts('12,288').rgb);
+    });
+});
+
 describe('worker entry', () => {
     it('rejects the same three layouts with the same message, code and argument, and posts nothing', async () => {
         const worker = createWorker();
@@ -113,6 +138,7 @@ describe('worker entry', () => {
                         () => worker.quantize(image, 4),
                         () => worker.quantizeWithPalette(image, palette),
                         () => worker.cluster(image),
+                        () => worker.cluster(image, { signal: AbortSignal.abort() }),
                         () => loaded.quantize(image, 4),
                     ];
                     for (const run of runs) {

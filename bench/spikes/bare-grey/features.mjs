@@ -8,7 +8,6 @@ import { looksLikeRgb } from '../../../dist/shared.mjs';
 import { corpus } from './corpus.mjs';
 import { looksLikeGrey } from './check.mjs';
 
-
 // Whole-array features: E[k] = mean |d[i] - d[i-k]| for k = 1..4, also per phase (i mod 4); exact-equality shares
 // over pixels (RGBA reading) that differ from the pixel before.
 export function features(d) {

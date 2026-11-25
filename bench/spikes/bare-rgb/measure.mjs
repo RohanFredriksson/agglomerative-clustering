@@ -20,8 +20,6 @@ import { syntheticImages } from '../../lib/images.js';
 import { MIN_BYTES, looksLikeRgb } from './check.mjs';
 import { looksLikeRgb as shippedLooksLikeRgb } from '../../../dist/shared.mjs';
 
-// The harm measurement passes bare RGB on purpose, as { data, format: 'rgba' } (a bare array is an error from 4.0).
-
 const here = dirname(fileURLToPath(import.meta.url));
 const emojiRoot = join(here, '../../../fixtures/images/bare-rgb');
 
@@ -180,6 +178,7 @@ function mapMse(truthRgb, palette) {
 }
 async function harm(bytes, truth) {
     if (bytes.length % 4) {return null;} // the library already rejects it
+    // Bare RGB on purpose, as { data, format: 'rgba' } (a bare array is an error from 4.0).
     const wrong = await buildPalette({ data: new Uint8Array(bytes), format: 'rgba' }, 16);
     const right = await buildPalette({ data: truth, format: 'rgb' }, 16);
     const a = mapMse(truth, right), b = mapMse(truth, wrong);

@@ -693,10 +693,11 @@ const makeWorker = (options, allowScript) => {
         const origin = new Error();
         return (async () => {
             const {options, signal, onProgress} = takeControls(clusterOptions, false);
-            if (signal && signal.aborted) {throw abortReason(signal);}
-            const id = nextHandle++;
+            // The image is checked before the abort, as the main entry does.
             const bare = bareImageError(image);
             if (bare) {throw bare;}
+            if (signal && signal.aborted) {throw abortReason(signal);}
+            const id = nextHandle++;
             const sent = ready() ? send(image) : take(send(image));
             // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
             // existing (see `abandoned`).
