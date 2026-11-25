@@ -95,10 +95,10 @@ describe('workers that are dropped', () => {
 
     it.skipIf(typeof Symbol.asyncDispose !== 'symbol')('can be terminated with await using (Symbol.asyncDispose)', async () => {
         const worker = createWorker();
-        await worker.getPalette(new Uint8Array(16), 2);
+        await worker.buildPalette(new Uint8Array(16), 2);
         expect(worker[Symbol.asyncDispose]).toBe(worker.terminate);
         await worker[Symbol.asyncDispose]();
-        await expect(worker.getPalette(new Uint8Array(16), 2)).rejects.toHaveProperty('code', 'worker-terminated');
+        await expect(worker.buildPalette(new Uint8Array(16), 2)).rejects.toHaveProperty('code', 'worker-terminated');
     });
 
 });

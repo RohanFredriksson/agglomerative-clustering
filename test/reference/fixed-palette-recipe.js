@@ -1,14 +1,14 @@
-// The fixed-palette recipe of 3.7.2 (docs/guides.md, "Choosing colours from a fixed palette"), copied verbatim, as the
-// reference that clustering.chooseFrom is tested against. `entry` is the library module (its three functions the recipe
-// calls); returns the recipe's chooseThreads and improveThreads.
+// The fixed-palette recipe of 3.7.2 (docs/guides.md, "Choosing colours from a fixed palette"), adapted to the 4.0 methods (clustering.getPalette, getSwatches), as the
+// reference that clustering.chooseFrom is tested against. `entry` is the library module (the function the recipe calls);
+// returns the recipe's chooseThreads and improveThreads.
 export function recipe(entry) {
-  const { getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesWithPalette } = entry;
+  const { quantizeToIndicesWithPalette } = entry;
 
   // The indices of n threads that represent the clustered image well.
   async function chooseThreads(clustering, threads, n) {
     let chosen = [];
     for (let k = n; k <= 4 * n && chosen.length < n; k++) {
-      const cut = await getPaletteFromClustering(clustering, k);
+      const cut = await clustering.getPalette(k);
       // The cut palette as an image of one pixel per colour, mapped to the threads.
       const { indices } = await quantizeToIndicesWithPalette({ data: cut, format: 'rgb' }, threads);
       // Split order puts the coarsest colours first, so when a cut gives more than n threads, the first n are kept.
@@ -21,7 +21,7 @@ export function recipe(entry) {
   // (sRGB values, which PSNR measures) or 'oklab' (a lower mean ΔE2000, but it can grey out small vivid areas).
   async function improveThreads(clustering, threads, chosen, space = 'rgb') {
     if (space !== 'oklab' && space !== 'rgb') {throw new TypeError(`Invalid space: expected 'oklab' or 'rgb', got ${space}`);}
-    const { palette: colors, weights } = await getSwatchesFromClustering(clustering, 1024);
+    const { palette: colors, weights } = await clustering.getSwatches(1024);
     const a = coordinates(threads, space), b = coordinates(colors, space);
     const m = weights.length, t = threads.length / 3, n = chosen.length;
     const distance = new Float64Array(t * m);   // distance[j * m + i]: squared, from thread j to swatch i

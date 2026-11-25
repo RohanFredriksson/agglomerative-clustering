@@ -17,7 +17,8 @@ export type ImageFormat = 'rgb' | 'rgba' | 'bgra' | 'rgbx' | 'bgrx';
  * newer format version or one using a colour space it doesn't know, or an older one that lacks what was asked for),
  * `out-of-memory`, `wasm-load-failed` (the WebAssembly module could not be loaded or compiled: a missing or blocked file, a
  * browser without SIMD, or a `.wasm` from another version of the library), and in the worker entry
- * `worker-terminated`, `worker-failed` and `invalid-handle`.
+ * `worker-terminated`, `worker-failed` (the worker could not start, crashed, or runs a script from another version of the
+ * package) and `invalid-handle`.
  */
 export type ErrorCode = 'invalid-argument' | 'invalid-clustering' | 'unsupported-version' | 'out-of-memory' | 'wasm-load-failed'
     | 'worker-terminated' | 'worker-failed' | 'invalid-handle';
@@ -165,7 +166,7 @@ export class Palette extends Uint8Array {
  * `Uint8Array`, which functions still accept at run time; `new Clustering(bytes)` gives them the type back (TypeScript
  * wants it) and checks they are a clustering.
  *
- * It has methods for the cluster-once workflow: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and
+ * It has methods for the cluster-once workflow: `clustering.getPalette(k)` cuts a palette from it, and
  * so on. They run on the calling thread with the main entry, so in a worker-only app they compile but reject with
  * `wasm-load-failed`. They exist only on values from this library or `new Clustering(bytes)`: slices and clones are plain
  * bytes, and a cast (`bytes as Clustering`) or a `structuredClone` keeps the type without them: wrap those with
@@ -274,7 +275,7 @@ export interface ClusteringOptions extends ProgressOptions {
      * PNG), and it gives the same palette everywhere: `buildPalette(image, k, { transparent })` is the palette
      * `quantizeToIndices(image, k, { transparent })` uses, apart from that function's extra transparent entry.
      * Cluster with it to get the palette you will map with (see `IndexOptions.transparent`). The cutoff is recorded in the
-     * clustering (see `ClusteringInfo.transparent`), and `quantizeToIndicesFromClustering` uses it unless you name one.
+     * clustering (see `ClusteringInfo.transparent`), and `clustering.quantizeToIndices(image, k)` uses it unless you name one.
      * It replaces `alpha` (with a cutoff, pixels count whole or not at all), so giving both is an `invalid-argument` error.
      */
     transparent?: boolean | number | undefined;
@@ -305,11 +306,11 @@ export type DitherOptions =
     | { method?: 'floyd-steinberg' | 'atkinson' | undefined; strength?: number | undefined; steps?: undefined }
     | { method: 'ordered'; strength?: number | undefined; steps?: DitherSteps | undefined };
 
-/** Options for mapping pixels to a palette: `quantizeFromClustering`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. With `signal` or `onProgress`, mapping runs in slices, as clustering does. */
+/** Options for mapping pixels to a palette: `clustering.quantize`, `quantizeWithPalette`, and the mapping half of `quantize` and `quantizeToIndices`. With `signal` or `onProgress`, mapping runs in slices, as clustering does. */
 export interface MappingOptions extends ProgressOptions {
     /**
      * The space pixels are matched to their nearest palette colour in. The default is the space the colours were made in:
-     * the clustering's in `quantizeFromClustering`, a `Palette`'s own in `quantizeWithPalette` and
+     * the clustering's in `clustering.quantize`, a `Palette`'s own in `quantizeWithPalette` and
      * `quantizeToIndicesWithPalette`; `'rgb'` for plain bytes, and in `quantize` and `quantizeToIndices`, which match in the
      * space they cluster in.
      */
@@ -343,14 +344,14 @@ export interface IndexOptions {
      * this function builds the palette itself it also leaves the pixels below the cutoff out of clustering (see
      * `ClusteringOptions.transparent`), so its palette is `buildPalette(image, k - 1, { transparent })`'s. With a palette
      * you supply (`quantizeToIndicesWithPalette`) there is no `k`: the entry is added to your palette as it is. In
-     * `quantizeToIndicesFromClustering` the default is the cutoff the clustering was made with.
+     * `clustering.quantizeToIndices` the default is the cutoff the clustering was made with.
      */
     transparent?: boolean | number | undefined;
 }
 
 /** The options of `quantizeToIndices`: clustering, mapping and indexed-output options. */
 export type QuantizeIndexOptions = QuantizeOptions & IndexOptions;
-/** The options of `quantizeToIndicesFromClustering` and `quantizeToIndicesWithPalette`: mapping and indexed-output options. */
+/** The options of `clustering.quantizeToIndices` and `quantizeToIndicesWithPalette`: mapping and indexed-output options. */
 export type MappingIndexOptions = MappingOptions & IndexOptions;
 
 interface IndexedImageFields {
@@ -401,10 +402,10 @@ export interface InitOptions {
 export const version: string;
 
 /**
- * The version of the data this library stores: the format of the clusterings `buildClustering` writes (`getClusteringInfo`
+ * The version of the data this library stores: the format of the clusterings `buildClustering` writes (`clustering.getClusteringInfo()`
  * reports a clustering's own as its `formatVersion`). One integer for the library's stored data, unrelated to `version`: it
  * changes only when the stored format does, so a new release that keeps the format keeps this number, and a minor release
- * may raise it. Every earlier format from 2 on stays readable (see `getClusteringInfo` for what 2.x clusterings lack).
+ * may raise it. Every earlier format from 2 on stays readable (see `clustering.getClusteringInfo()` for what 2.x clusterings lack).
  */
 export const formatVersion: number;
 
@@ -417,12 +418,10 @@ export function init(options?: InitOptions): Promise<void>;
 
 /**
  * Builds the colour hierarchy for an image: the expensive step, done once. The result is a `Clustering` (opaque bytes) you can
- * cache or store next to the image. Cut it to a palette of any size with `getPaletteFromClustering`, or map pixels
- * with `quantizeFromClustering`. An image with no visible pixels gives a clustering that cuts to an empty palette.
+ * cache or store next to the image. Cut it to a palette of any size with `clustering.getPalette(k)`, or map pixels
+ * with `clustering.quantize(image, k)`. An image with no visible pixels gives a clustering that cuts to an empty palette.
  */
 export function buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
-/** @deprecated Renamed {@link buildClustering} in 3.4.0 (the same function). Removed in 4.0. */
-export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 
 /**
  * A palette of at most `k` colours for `image` (fewer if it has fewer distinct colours), as flat RGB bytes in split
@@ -433,20 +432,6 @@ export function getClustering(image: ImageLike, options?: ClusteringOptions): Pr
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
-/** @deprecated Renamed {@link buildPalette} in 3.4.0 (the same function). Removed in 4.0. */
-export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
-
-/**
- * Cuts a clustering to at most `k` colours, in split order: index 0 is the dominant colour at two colours and keeps its
- * place as the palette grows (it is not always the heaviest entry of a larger one), and the palette for
- * `k + 1` is the palette for `k` with one entry refined and one colour appended.
- *
- * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
- *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
- *
- * @deprecated Use `clustering.getPalette(k)`; off the main thread, `(await worker.load(clustering)).getPalette(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
- */
-export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 
 /**
  * A palette with how much of the image each of its colours covers, for swatches with percentages. The three arrays come
@@ -473,21 +458,8 @@ export interface Swatches {
  *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
  */
 export function buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
-/** @deprecated Renamed {@link buildSwatches} in 3.4.0 (the same function). Removed in 4.0. */
-export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
 
-/**
- * The same as `buildSwatches` from a clustering you already have, so trying another `k` costs well under a millisecond.
- * Needs a clustering from 3.x; a 2.x clustering has no weights and is rejected.
- *
- * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
- *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
- *
- * @deprecated Use `clustering.getSwatches(k)`; off the main thread, `(await worker.load(clustering)).getSwatches(k)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
- */
-export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
-
-/** What a clustering holds (`getClusteringInfo`). */
+/** What a clustering holds (`clustering.getClusteringInfo()`). */
 export interface ClusteringInfo {
     /**
      * The format of the clustering's bytes: the data version (compare it with the exported `formatVersion`, the one this
@@ -499,7 +471,7 @@ export interface ClusteringInfo {
     precision: number;
     /**
      * The alpha cutoff (1-255) the clustering was made with (`transparent` in `ClusteringOptions`), or `false` for none. It is
-     * the default `transparent` of `quantizeToIndicesFromClustering`, so clustering and mapping agree unless you name another.
+     * the default `transparent` of `clustering.quantizeToIndices`, so clustering and mapping agree unless you name another.
      */
     transparent: false | number;
     /** The largest palette it can be cut to: its number of distinct clustered colours (fewer than the image's own when `precision` is below 8). */
@@ -524,15 +496,6 @@ export interface ClusteringInfo {
 }
 
 /**
- * Reads what a clustering holds, including its error curve for choosing a palette size. Needs a clustering from 3.x: a 2.x
- * clustering recorded no weights, so it is rejected with `unsupported-version` (as `clustering.getSwatches(k)` rejects it);
- * the palette and mapping functions still read it.
- *
- * @deprecated Use `clustering.getClusteringInfo()`; off the main thread, `(await worker.load(clustering)).getClusteringInfo()` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
- */
-export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
-
-/**
  * Reduces `image` to at most `k` colours and returns the mapped image as the same kind of thing you gave: a `Uint8Array`
  * for a `Uint8Array`, `ImageData` for `ImageData`, an object with the same `format` for a `RawImage` (`ImageResult`; a
  * value typed as the union `ImageLike` gives the union). Each pixel keeps its own alpha.
@@ -543,21 +506,9 @@ export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInf
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
 
 /**
- * Maps `image` to the `k`-colour cut of a clustering you already have, so trying another `k` or another image mapping
- * costs milliseconds. Matches in the clustering's colour space unless `colorSpace` is given. Returns the same kind of
- * thing as `quantize`.
- *
- * @param k The most palette entries in the result (`k` means this in every function). A flat palette has no transparent
- *     entry, so its entries are all colours. Fewer come back when the image has fewer distinct colours.
- *
- * @deprecated Use `clustering.quantize(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantize(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
- */
-export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
-
-/**
  * Maps each pixel of `image` to its nearest colour in a palette you supply (an edited swatch, a brand palette, one cut
  * from a clustering). Pixels are matched in the palette's own colour space if it is a `Palette` (one this library made),
- * so an OKLab palette maps the way `quantizeFromClustering` does; plain bytes carry no space and are matched in RGB. Name a
+ * so an OKLab palette maps the way `clustering.quantize` does; plain bytes carry no space and are matched in RGB. Name a
  * `colorSpace` to override either. Returns the same kind of thing as `quantize`.
  */
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
@@ -573,18 +524,6 @@ export function quantizeWithPalette<I extends ImageLike>(image: I, palette: Pale
  *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
  */
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
-
-/**
- * Like `quantizeFromClustering`, but returns palette indices. The palette is `clustering.getPalette(k)`'s.
- *
- * @param k The most palette entries in the result (`k` means this in every function), counting the transparent entry
- *     if there is one, so `256` is the most a GIF or palette PNG holds. Fewer come back when the image has fewer distinct colours.
- *     A colour is kept besides the transparent entry whenever the image has visible pixels, so with `transparent`,
- *     `k = 1` can give 2 entries; an image with no visible pixels gives just the transparent entry.
- *
- * @deprecated Use `clustering.quantizeToIndices(image, k, options)`; off the main thread, `(await worker.load(clustering)).quantizeToIndices(image, k, options)` (`worker.load` is in the worker entry). Deprecated in 3.8, removed in 4.0; no warning at run time.
- */
-export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 
 /** Like `quantizeWithPalette`, but returns indices into `palette`, which is returned too. */
 export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;

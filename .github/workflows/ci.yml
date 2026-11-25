@@ -15,8 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The oldest Node versions in `engines` (require(esm), which the CommonJS build needs) and the current LTS.
-        node: [20, 22, 24]
+        # The oldest Node version in `engines` (22.12, for require(esm), which the CommonJS build needs) and the newest.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
 
@@ -110,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 24]
+        node: [22, 24]
     steps:
       # Keep LF line endings, as on every other platform (the README and fixture checks read files as text).
       - run: git config --global core.autocrlf false

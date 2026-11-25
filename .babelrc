@@ -1,5 +1,5 @@
 {
-  "targets": "chrome >= 91, edge >= 91, firefox >= 89, safari >= 16.4, node >= 20.19",
+  "targets": "chrome >= 91, edge >= 91, firefox >= 89, safari >= 16.4, node >= 22.12",
   "presets": [
     "@babel/preset-env"
   ],

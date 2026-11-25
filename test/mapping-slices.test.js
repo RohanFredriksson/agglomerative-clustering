@@ -2,10 +2,7 @@
 // the result must be exactly one call's, for every dither method, format, output type and palette size. The images
 // are big enough that each case takes several slices, which the progress values below show.
 import { describe, it, expect } from 'vitest';
-import {
-    buildClustering, quantize, quantizeToIndices, quantizeWithPalette, quantizeFromClustering,
-    quantizeToIndicesFromClustering, quantizeToIndicesWithPalette,
-} from '../dist/index.mjs';
+import { buildClustering, quantize, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette } from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
 import { timeLimit } from './timeout.js';
 
@@ -70,8 +67,8 @@ describe('mapping in slices gives one call\'s result', () => {
                 [(o) => quantizeWithPalette(image, palette, { ...options, ...o })],
                 [(o) => quantizeWithPalette(image, palette, { ...options, colorSpace: 'oklab', ...o })],
                 [(o) => quantizeToIndicesWithPalette(image, palette, { ...options, transparent: true, ...o })],
-                [(o) => quantizeFromClustering(image, clustering, 40, { ...options, ...o })],
-                [(o) => quantizeToIndicesFromClustering(image, clustering, 40, { ...options, transparent: 200, ...o })],
+                [(o) => clustering.quantize(image, 40, { ...options, ...o })],
+                [(o) => clustering.quantizeToIndices(image, 40, { ...options, transparent: 200, ...o })],
                 [(o) => clustering.quantize(image, 24, { ...options, ...o })],
             ];
             for (const [run] of cases) {
@@ -170,8 +167,8 @@ describe('aborting while mapping', () => {
         const calls = [
             (o) => quantizeWithPalette(big, palette, { ...slow, ...o }),
             (o) => quantizeToIndicesWithPalette(big, palette, { ...slow, ...o }),
-            (o) => quantizeFromClustering(big, clustering, 64, { ...slow, ...o }),
-            (o) => quantizeToIndicesFromClustering(big, clustering, 64, { ...slow, ...o }),
+            (o) => clustering.quantize(big, 64, { ...slow, ...o }),
+            (o) => clustering.quantizeToIndices(big, 64, { ...slow, ...o }),
             (o) => clustering.quantizeToIndices(big, 64, { ...slow, ...o }),
         ];
         for (const call of calls) {

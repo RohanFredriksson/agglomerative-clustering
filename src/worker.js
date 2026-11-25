@@ -4,7 +4,7 @@
 // handle, so re-cutting and re-mapping it copies nothing across. The functions exported directly use one shared
 // worker, started on first use.
 
-import {fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageWarning, warnOnce, readHeader, checkImageBody, imageCopy} from './shared.js';
+import {version, fail, isCodedError, detachedError, isOptionsObject, isUint8Array, isUint8ClampedArray, snapshot, parseDither, mark, revive, latestVersion, imageHint, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, tooLarge, bareImageError, readHeader, checkImageBody, imageCopy} from './shared.js';
 
 // The same version, types and data-format version as the main entry (one implementation, in shared.js).
 export {version, Palette, Clustering, errorCodes, isCodedError, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes} from './shared.js';
@@ -338,16 +338,37 @@ const sendable = (value) => {
 };
 
 // Where the options sit among a function's arguments after the image (see takeControls).
-const optionsPosition = {getClustering: 0, getPalette: 1, getSwatches: 1, quantize: 1, quantizeFromClustering: 2, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesFromClustering: 2, quantizeToIndicesWithPalette: 1};
+const optionsPosition = {buildClustering: 0, buildPalette: 1, buildSwatches: 1, quantize: 1, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithPalette: 1};
+
+// The names of the arguments each call posts, for saying which one can't be sent.
+const argumentNames = {
+    buildClustering: ['image', 'options'], buildPalette: ['image', 'k', 'options'], buildSwatches: ['image', 'k', 'options'],
+    quantize: ['image', 'k', 'options'], quantizeToIndices: ['image', 'k', 'options'],
+    quantizeWithPalette: ['image', 'palette', 'options'], quantizeToIndicesWithPalette: ['image', 'palette', 'options'],
+    init: ['options'], cluster: [null, 'image', 'options'], load: [null, 'clustering'],
+    handleGetPalette: [null, 'k'], handleGetSwatches: [null, 'k'], handleChooseFrom: [null, 'palette', 'k', 'options'],
+    handleQuantize: [null, 'k', 'options'], handleQuantizeToIndices: [null, 'k', 'options'],
+    handleQuantizeWithPalette: [null, 'palette', 'options'], handleQuantizeToIndicesWithPalette: [null, 'palette', 'options'],
+    handleQuantizeImage: [null, 'image', 'k', 'options'], handleQuantizeToIndicesImage: [null, 'image', 'k', 'options'],
+};
+
+// The error for a call whose message can't be cloned: the first argument that fails alone names itself.
+const unsendable = (method, args, error) => {
+    const names = argumentNames[method] || [];
+    const index = args.findIndex((value, at) => names[at] && !sendable(value));
+    const cause = {cause: error};
+    return index < 0
+        ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), cause)
+        : Object.assign(fail('invalid-argument', `Invalid ${names[index]}: it cannot be sent to the worker (${error.message})`, names[index]), cause);
+};
 
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
-const imageFunctions = ['getClustering', 'getPalette', 'getSwatches', 'quantize', 'quantizeFromClustering', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesFromClustering', 'quantizeToIndicesWithPalette'];
-const mappedImageFunctions = ['quantize', 'quantizeFromClustering', 'quantizeWithPalette'];
+const imageFunctions = ['buildClustering', 'buildPalette', 'buildSwatches', 'quantize', 'quantizeWithPalette', 'quantizeToIndices', 'quantizeToIndicesWithPalette'];
+const mappedImageFunctions = ['quantize', 'quantizeWithPalette'];
 // The functions that only cluster, and so take no dither option.
-const clusteringOnlyFunctions = ['getClustering', 'getPalette', 'getSwatches'];
-const otherFunctions = ['getPaletteFromClustering', 'getSwatchesFromClustering', 'getClusteringInfo'];
+const clusteringOnlyFunctions = ['buildClustering', 'buildPalette', 'buildSwatches'];
 
 // Calls each worker's `abandon` once the worker made by createWorker() has been garbage-collected (see `abandoned`).
 const abandonment = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry((abandon) => abandon()) : null;
@@ -369,6 +390,9 @@ const makeWorker = (options, allowScript) => {
     const initialWasm = options.wasm === undefined ? undefined : wasmOption(options.wasm);
     let initial = initialWasm === undefined ? null : {wasm: initialWasm};
     let initialising = null;
+    // Whether the worker script has said it is this version (the first message to every worker), and that exchange.
+    let shaken = false;
+    let shaking = null;
 
     let connection = null;
     let starting = null;
@@ -387,7 +411,7 @@ const makeWorker = (options, allowScript) => {
     let nextHandle = 1;
     const pending = new Map();
     // Whether a call made now is posted before it returns (see `own`).
-    const ready = () => connection !== null && !initial;
+    const ready = () => connection !== null && shaken && !initial;
     // The image of a call made before the worker is ready: with `transfer: true` its buffer is moved out of the caller's
     // hands at once (a structured clone that transfers it, so the caller's array empties now, as it would on posting),
     // otherwise copied.
@@ -419,6 +443,8 @@ const makeWorker = (options, allowScript) => {
         connection = null;
         starting = null;
         initialising = null;
+        shaken = false;
+        shaking = null;
         if (initialWasm !== undefined) {initial = {wasm: initialWasm};}
         const calls = [...pending.values()];
         pending.clear();
@@ -475,6 +501,30 @@ const makeWorker = (options, allowScript) => {
             if (waitingFor !== generation) {throw fail('worker-failed', 'Worker failed while starting.');}
             connection = connection || started;
         }
+        if (!shaken) {
+            // The first message to a worker: its script must be this version's (an older thread answers `handshake` as an
+            // unknown method; a 3.4-3.8 one would otherwise run calls but never see their signals or progress callbacks).
+            // Nothing else is posted before it answers, so a mismatch is reported to every call waiting on the worker.
+            if (!shaking) {
+                const mine = generation;
+                shaking = post('handshake', [], [], origin).then((theirs) => {
+                    if (theirs === version) {shaken = true; return;}
+                    throw theirs;
+                }, (error) => {
+                    // A coded error from the call itself (terminated, failed) is passed on; only a reply that is an error
+                    // from the thread (an unknown method) means an older script.
+                    if (error && error.code !== undefined && error.code !== 'invalid-argument') {throw error;}
+                    throw undefined;
+                }).catch((theirs) => {
+                    if (theirs instanceof Error) {throw theirs;}
+                    if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
+                    const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Use the worker-thread.mjs from this version.`;
+                    if (mine === generation) {lose(reason);}
+                    throw fail('worker-failed', reason);
+                });
+            }
+            await shaking;
+        }
         if (initial && !(method === 'init' && args.length > 0 && args[0].wasm !== undefined)) {
             initialising = initialising || post('init', [initial], [], origin).then(() => {initial = null;}, (error) => {initialising = null; throw error;});
             await initialising;
@@ -525,8 +575,8 @@ const makeWorker = (options, allowScript) => {
                 call.cleanup();
                 if (pending.size === 0) {connection.unref();}
                 // A value that can't be structured-cloned (a function, symbol or promise) is an invalid argument, as it
-                // would be if the main entry were called with it.
-                reject(error && error.name === 'DataCloneError' ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), {cause: error}) : error);
+                // would be if the main entry were called with it; the first argument that fails alone is named.
+                reject(error && error.name === 'DataCloneError' ? unsendable(method, args.map(mark), error) : error);
             }
         });
     };
@@ -538,6 +588,12 @@ const makeWorker = (options, allowScript) => {
         instance[name] = (image, ...rest) => {
             const origin = new Error();
             return (async () => {
+                // A bare RGB or grey array is refused first, as in the main entry (before the options are read, an abort is
+                // honoured, or anything is posted or a transfer can empty the array).
+                const bare = bareImageError(image);
+                if (bare) {throw bare;}
+                // then the rest of the image's checks (its fields are read once here), before the options, as in the main entry
+                const checked = send(image);
                 const position = optionsPosition[name];
                 const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
                 let args = rest.slice();
@@ -546,33 +602,19 @@ const makeWorker = (options, allowScript) => {
                     // The main entry reports a wrong argument before an abort, so the worker checks the arguments (a
                     // copy, never transferred: an aborted call leaves the image with the caller) without doing the work.
                     try {
-                        await invoke(name, [own(send(image)), ...args.map(own)], [], origin, {check: true});
+                        await invoke(name, [own(checked), ...args.map(own)], [], origin, {check: true});
                     } catch (error) {
                         if (isCodedError(error) && error.argument !== undefined) {throw error;}
                     }
                     throw abortReason(signal);
                 }
-                // The bare-image warning is decided here, on the caller's side and before a transfer can empty the
-                // array, and given once the call succeeds: the thread checks the other arguments, and its own copy is
-                // silenced (PRINCIPLES "Warnings").
-                const warning = bareImageWarning(image);
-                const byteLength = warning ? image.byteLength : 0;
-                let sent = send(image);
+                let sent = checked;
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
-                if (warning) {warnOnce(warning, byteLength);}
                 return mapped ? rebuild(image)(result) : result;
             })();
         };
     }
-    for (const name of otherFunctions) {
-        instance[name] = (...args) => invoke(name, ready() ? args : args.map(own), [], new Error());
-    }
-    // 3.4.0's names for the functions that cluster an image. The old names are the same functions, and they still name the
-    // call on the wire, so a worker script copied from an older version still understands it.
-    instance.buildClustering = instance.getClustering;
-    instance.buildPalette = instance.getPalette;
-    instance.buildSwatches = instance.getSwatches;
 
     instance.init = (initArgs) => {
         const origin = new Error();
@@ -661,23 +703,23 @@ const makeWorker = (options, allowScript) => {
                 const origin = new Error();
                 return (async () => {
                     if (released || !handle) {throw fail('invalid-handle', "Invalid handle: it was released.");}
+                    const bare = bareImageError(image);
+                    if (bare) {throw bare;}
+                    const checked = send(image);
                     const {options, signal, onProgress} = takeControls(mapOptions);
                     if (signal && signal.aborted) {
                         // As the functions on the worker do: a wrong argument is reported before the abort.
                         try {
-                            await invoke(method, [id, own(send(image)), k, options], [], origin, {check: true});
+                            await invoke(method, [id, own(checked), k, options], [], origin, {check: true});
                         } catch (error) {
                             if (isCodedError(error) && error.argument !== undefined) {throw error;}
                         }
                         throw abortReason(signal);
                     }
-                    const warning = bareImageWarning(image);
-                    const byteLength = warning ? image.byteLength : 0;
-                    let sent = send(image);
+                    let sent = checked;
                     const ahead = !ready();
                     if (ahead) {sent = take(sent);}
                     const result = await invoke(method, [id, sent, ahead ? own(k) : k, options], pixelBuffers(sent), origin, {signal, onProgress});
-                    if (warning) {warnOnce(warning, byteLength);}
                     return mapped ? rebuild(image)(result) : result;
                 })();
             };
@@ -696,12 +738,14 @@ const makeWorker = (options, allowScript) => {
     instance.cluster = (image, clusterOptions) => {
         const origin = new Error();
         return (async () => {
+            // The image is checked before the options and the abort, as the main entry does.
+            const bare = bareImageError(image);
+            if (bare) {throw bare;}
+            const checked = send(image);
             const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
-            const warning = bareImageWarning(image);
-            const byteLength = warning ? image.byteLength : 0;
-            const sent = ready() ? send(image) : take(send(image));
+            const sent = ready() ? checked : take(checked);
             // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
             // existing (see `abandoned`).
             liveHandles++;
@@ -715,7 +759,6 @@ const makeWorker = (options, allowScript) => {
                 if (!terminated) {invoke('release', [id], [], new Error()).catch(() => {});}
                 throw error;
             }
-            if (warning) {warnOnce(warning, byteLength);}
             return makeHandle(id, 'image', rebuild(image));
         })();
     };
@@ -780,17 +823,9 @@ export const terminate = async () => {
 
 export const init = (...args) => sharedWorker().init(...args);
 export const buildClustering = (...args) => sharedWorker().buildClustering(...args);
-export const getClustering = buildClustering;
 export const buildPalette = (...args) => sharedWorker().buildPalette(...args);
-export const getPalette = buildPalette;
-export const getPaletteFromClustering = (...args) => sharedWorker().getPaletteFromClustering(...args);
 export const buildSwatches = (...args) => sharedWorker().buildSwatches(...args);
-export const getSwatches = buildSwatches;
-export const getSwatchesFromClustering = (...args) => sharedWorker().getSwatchesFromClustering(...args);
-export const getClusteringInfo = (...args) => sharedWorker().getClusteringInfo(...args);
 export const quantize = (...args) => sharedWorker().quantize(...args);
-export const quantizeFromClustering = (...args) => sharedWorker().quantizeFromClustering(...args);
 export const quantizeWithPalette = (...args) => sharedWorker().quantizeWithPalette(...args);
 export const quantizeToIndices = (...args) => sharedWorker().quantizeToIndices(...args);
-export const quantizeToIndicesFromClustering = (...args) => sharedWorker().quantizeToIndicesFromClustering(...args);
 export const quantizeToIndicesWithPalette = (...args) => sharedWorker().quantizeToIndicesWithPalette(...args);

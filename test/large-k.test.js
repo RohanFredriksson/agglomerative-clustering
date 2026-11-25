@@ -3,7 +3,7 @@
 // k = 54469 (and the one-shot functions returned an empty palette), and 2.x's palettes there came out one colour short;
 // the palette must be exactly the distinct colours of the k clusters.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildClustering, getClusteringInfo, buildPalette, getPaletteFromClustering, getSwatchesFromClustering, quantizeToIndicesFromClustering } from '../dist/index.mjs';
+import { buildClustering, buildPalette } from '../dist/index.mjs';
 import { KODAK_IMAGES, ensureImage, getImageRgba } from '../fixtures/kodak.js';
 import { timeLimit } from './timeout.js';
 
@@ -11,7 +11,7 @@ let image, clustering, maxColors;
 beforeAll(async () => {
     image = (await getImageRgba(await ensureImage(KODAK_IMAGES[13]))).rgba;
     clustering = await buildClustering(image);
-    maxColors = (await getClusteringInfo(clustering)).maxColors;
+    maxColors = (await clustering.getClusteringInfo()).maxColors;
 }, timeLimit(120000));
 
 // The colours of the k clusters, followed by index through the records' parent fields, independently of the library's cut.
@@ -41,7 +41,7 @@ describe('palettes at very large k (kodim14)', () => {
         for (let k = 50000; k <= maxColors; k += 499) {sizes.push(k);}
         sizes.push(50270, 50271, 53363, 54468, 54469, maxColors - 1, maxColors, maxColors + 5000);
         for (const k of sizes) {
-            const palette = await getPaletteFromClustering(clustering, k);
+            const palette = await clustering.getPalette(k);
             const keys = paletteKeys(palette);
             const expected = new Set(clusterColours(k));
             expect(keys.length, `k = ${k}`).toBe(expected.size);
@@ -52,12 +52,12 @@ describe('palettes at very large k (kodim14)', () => {
 
     it('gives the same palette from the image as from the clustering, and swatches and indices that agree', async () => {
         for (const k of [54469, maxColors]) {
-            const palette = await getPaletteFromClustering(clustering, k);
+            const palette = await clustering.getPalette(k);
             expect(await buildPalette(image, k)).toEqual(palette);
-            const { palette: swatchPalette, shares } = await getSwatchesFromClustering(clustering, k);
+            const { palette: swatchPalette, shares } = await clustering.getSwatches(k);
             expect(swatchPalette).toEqual(palette);
             expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
-            const indexed = await quantizeToIndicesFromClustering(image, clustering, k);
+            const indexed = await clustering.quantizeToIndices(image, k);
             expect(indexed.palette).toEqual(palette);
         }
     }, timeLimit(120000));

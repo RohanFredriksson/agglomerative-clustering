@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildClustering, getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+import { Clustering, buildClustering } from '../dist/index.mjs';
 
 // The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
-const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
+const weightsOf = async (clustering, k) => (await new Clustering(clustering).getSwatches(k)).weights;
 
 
 // Pixels of the given colours, each repeated `count` times, with alpha `alpha`.
@@ -22,7 +22,7 @@ for (let p = 0; p < width * height; p++) {
 
 const byColour = (palette, weights) => Object.fromEntries(Array.from(weights, (w, i) => [Array.from(palette.subarray(i * 3, i * 3 + 3)).join(','), w]));
 
-describe('the weights of getSwatchesFromClustering', () => {
+describe('the weights of Clustering.getSwatches', () => {
 
     const five = [
         { rgb: [250, 10, 10], count: 50 },
@@ -36,13 +36,13 @@ describe('the weights of getSwatchesFromClustering', () => {
         const clustering = await buildClustering(pixels(five));
         const weights = await weightsOf(clustering, 5);
         expect(weights).toBeInstanceOf(Float64Array);
-        expect(byColour(await getPaletteFromClustering(clustering, 5), weights)).toEqual(Object.fromEntries(five.map(({ rgb, count }) => [rgb.join(','), count])));
+        expect(byColour(await clustering.getPalette(5), weights)).toEqual(Object.fromEntries(five.map(({ rgb, count }) => [rgb.join(','), count])));
     });
 
     it('lines up with the palette and sums to the pixel count at every size', async () => {
         const clustering = await buildClustering(gradient);
         for (const k of [1, 2, 3, 10, 100, 5000]) {
-            const palette = await getPaletteFromClustering(clustering, k);
+            const palette = await clustering.getPalette(k);
             const weights = await weightsOf(clustering, k);
             expect(weights.length).toBe(palette.length / 3);
             expect(weights.reduce((a, b) => a + b, 0)).toBe(width * height);
@@ -60,7 +60,7 @@ describe('the weights of getSwatchesFromClustering', () => {
             { rgb: [10, 10, 250], count: 10, alpha: 0 },
         ]);
         const clustering = await buildClustering(image);
-        const weights = byColour(await getPaletteFromClustering(clustering, 3), await weightsOf(clustering, 3));
+        const weights = byColour(await clustering.getPalette(3), await weightsOf(clustering, 3));
         expect(weights).toEqual({ '250,10,10': 10, '10,250,10': 2 });
         const ignored = await buildClustering(image, { alpha: 'ignore' });
         expect(Array.from(await weightsOf(ignored, 3))).toEqual([10, 10, 10]);
@@ -115,23 +115,23 @@ describe('the weights of getSwatchesFromClustering', () => {
 describe('getClusteringInfo', () => {
 
     it('describes the clustering', async () => {
-        const info = await getClusteringInfo(await buildClustering(gradient, { colorSpace: 'oklab', precision: 6 }));
+        const info = await (await buildClustering(gradient, { colorSpace: 'oklab', precision: 6 })).getClusteringInfo();
         expect(info.formatVersion).toBe(3);
         expect(info.colorSpace).toBe('oklab');
         expect(info.precision).toBe(6);
         expect(info.totalWeight).toBe(width * height);
         expect(info.maxColors).toBe(info.mse.length);
-        expect(info.maxColors).toBe((await getPaletteFromClustering(await buildClustering(gradient, { colorSpace: 'oklab', precision: 6 }), 1e6)).length / 3);
+        expect(info.maxColors).toBe((await (await buildClustering(gradient, { colorSpace: 'oklab', precision: 6 })).getPalette(1e6)).length / 3);
     });
 
     it('gives an error curve that falls to 0 with every colour separate', async () => {
-        const { mse, maxColors: colors } = await getClusteringInfo(await buildClustering(gradient));
+        const { mse, maxColors: colors } = await (await buildClustering(gradient)).getClusteringInfo();
         expect(mse[colors - 1]).toBe(0);
         for (let k = 1; k < colors; k++) {expect(mse[k]).toBeLessThanOrEqual(mse[k - 1]);}
     });
 
     it('starts at the variance of the image, per channel', async () => {
-        const { mse } = await getClusteringInfo(await buildClustering(gradient));
+        const { mse } = await (await buildClustering(gradient)).getClusteringInfo();
         let variance = 0;
         for (let c = 0; c < 3; c++) {
             let sum = 0, squares = 0;
@@ -142,8 +142,8 @@ describe('getClusteringInfo', () => {
     });
 
     it('keeps the variance of the image at any precision, and no longer falls to 0', async () => {
-        const exact = await getClusteringInfo(await buildClustering(gradient));
-        const grouped = await getClusteringInfo(await buildClustering(gradient, { precision: 4 }));
+        const exact = await (await buildClustering(gradient)).getClusteringInfo();
+        const grouped = await (await buildClustering(gradient, { precision: 4 })).getClusteringInfo();
         // Grouping discards error before clustering; it is added back, so the starting point is the same variance.
         expect(grouped.mse[0]).toBeCloseTo(exact.mse[0], 0);
         expect(grouped.mse[grouped.maxColors - 1]).toBeGreaterThan(0);
@@ -152,7 +152,7 @@ describe('getClusteringInfo', () => {
     });
 
     it('gives the share of variance each palette size keeps', async () => {
-        const { mse, explained, maxColors: colors } = await getClusteringInfo(await buildClustering(gradient));
+        const { mse, explained, maxColors: colors } = await (await buildClustering(gradient)).getClusteringInfo();
         expect(explained.length).toBe(colors);
         expect(explained[0]).toBe(0);
         expect(explained[colors - 1]).toBe(1);
@@ -160,18 +160,18 @@ describe('getClusteringInfo', () => {
             expect(explained[k]).toBeCloseTo(1 - mse[k] / mse[0], 9);
             if (k > 0) {expect(explained[k]).toBeGreaterThanOrEqual(explained[k - 1]);}
         }
-        const flat = await getClusteringInfo(await buildClustering(pixels([{ rgb: [9, 9, 9], count: 5 }])));
+        const flat = await (await buildClustering(pixels([{ rgb: [9, 9, 9], count: 5 }]))).getClusteringInfo();
         expect(Array.from(flat.explained)).toEqual([1]);
-        expect((await getClusteringInfo(await buildClustering(new Uint8Array(0)))).explained.length).toBe(0);
+        expect((await (await buildClustering(new Uint8Array(0))).getClusteringInfo()).explained.length).toBe(0);
     });
 
     it('describes an empty clustering', async () => {
-        const info = await getClusteringInfo(await buildClustering(new Uint8Array(0)));
+        const info = await (await buildClustering(new Uint8Array(0))).getClusteringInfo();
         expect([info.maxColors, info.totalWeight, info.mse.length]).toEqual([0, 0, 0]);
     });
 
     it('rejects things that are not clusterings', async () => {
-        await expect(getClusteringInfo(new Uint8Array(5))).rejects.toThrow('Invalid clustering');
+        expect(() => new Clustering(new Uint8Array(5))).toThrow('Invalid clustering');
     });
 
 });

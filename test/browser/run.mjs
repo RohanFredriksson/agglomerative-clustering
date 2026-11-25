@@ -48,9 +48,9 @@ try {
     const ac = await import(cdn + '/index.mjs');
     const w = await import(cdn + '/worker.mjs');
     const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);
-    const expected = Array.from(await ac.getPalette(image, 4)).join();
+    const expected = Array.from(await ac.buildPalette(image, 4)).join();
     await check('cdnMainEntry', async () => expected.split(',').length === 12);
-    await check('cdnWorkerAcrossOrigins', async () => Array.from(await w.getPalette(image, 4)).join() === expected);
+    await check('cdnWorkerAcrossOrigins', async () => Array.from(await w.buildPalette(image, 4)).join() === expected);
     await check('cdnWorkerHandle', async () => {
         const worker = w.createWorker();
         const handle = await worker.cluster(image);
@@ -62,7 +62,7 @@ try {
     // esbuild): here on another origin, so it starts through a blob: URL as the package's own script does.
     await check('workerScriptOption', async () => {
         const worker = w.createWorker({ script: cdn + '/worker-thread.mjs' });
-        const same = Array.from(await worker.getPalette(image, 4)).join() === expected;
+        const same = Array.from(await worker.buildPalette(image, 4)).join() === expected;
         await worker.terminate();
         return same;
     });
@@ -75,7 +75,7 @@ try {
         const script = blob('import ' + JSON.stringify(globals) + '; import ' + JSON.stringify(cdn + '/worker-thread.mjs') + ';');
         const worker = w.createWorker({ script });
         const timeout = new Promise((done) => setTimeout(() => done('HUNG'), 15000));
-        const palette = await Promise.race([worker.getPalette(image, 4), timeout]);
+        const palette = await Promise.race([worker.buildPalette(image, 4), timeout]);
         await worker.terminate();
         if (palette === 'HUNG') {throw new Error('the call never settled');}
         return Array.from(palette).join() === expected;
@@ -87,7 +87,7 @@ try {
         frame.sandbox = 'allow-scripts';
         frame.srcdoc = '<script type="module">const w = await import(' + JSON.stringify(cdn + '/worker.mjs') + ');'
             + 'const image = new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255);'
-            + 'w.getPalette(image, 4).then((p) => parent.postMessage({ palette: Array.from(p).join() }, "*"), (e) => parent.postMessage({ error: e.message }, "*"));'
+            + 'w.buildPalette(image, 4).then((p) => parent.postMessage({ palette: Array.from(p).join() }, "*"), (e) => parent.postMessage({ error: e.message }, "*"));'
             + '<\\/script>';
         const answer = new Promise((done) => addEventListener('message', (event) => {if (event.source === frame.contentWindow) {done(event.data);}}));
         document.body.append(frame);
@@ -105,7 +105,7 @@ try {
             frame.srcdoc = '<script type="module">const w = await import(' + JSON.stringify(cdn + '/worker.mjs') + ');'
                 + 'const script = URL.createObjectURL(new Blob(["import " + JSON.stringify(' + JSON.stringify(cdn + '/worker-thread.mjs') + ') + ";"], { type: "text/javascript" }));'
                 + 'const worker = w.createWorker({ script });'
-                + 'worker.getPalette(new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255), 4).then(() => parent.postMessage({ ok: "started" }, "*"), (e) => parent.postMessage({ message: e.message }, "*")).finally(() => worker.terminate());'
+                + 'worker.buildPalette(new Uint8Array(4 * 64).map((_, i) => (i * 37 + 11) & 255), 4).then(() => parent.postMessage({ ok: "started" }, "*"), (e) => parent.postMessage({ message: e.message }, "*")).finally(() => worker.terminate());'
                 + '<\\/script>';
             const answer = new Promise((done) => addEventListener('message', (event) => {if (event.source === frame.contentWindow) {done(event.data);}}));
             document.body.append(frame);
@@ -121,7 +121,7 @@ try {
             const text = await (await fetch('./worker-bundle.mjs')).text();
             const script = 'data:text/javascript;base64,' + btoa(unescape(encodeURIComponent(text)));
             const worker = w.createWorker({ script });
-            const error = await worker.getPalette(image, 4).then(() => null, (e) => e);
+            const error = await worker.buildPalette(image, 4).then(() => null, (e) => e);
             await worker.terminate();
             if (!error) {throw new Error('it loaded the module without being given it');}
             if (error.code !== 'wasm-load-failed' || !error.message.includes('createWorker({ script, wasm')) {throw new Error(error.message);}

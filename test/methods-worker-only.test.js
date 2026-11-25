@@ -12,11 +12,11 @@ const image = new Uint8Array(4 * 64);
 for (let p = 0; p < 64; p++) {image.set([p * 4, 255 - p * 4, (p * 37) & 255, 255], p * 4);}
 
 const forms = {
-    getPalette: [(c) => c.getPalette(4), 'getPaletteFromClustering(clustering, k)'],
-    getSwatches: [(c) => c.getSwatches(4), 'getSwatchesFromClustering(clustering, k)'],
-    getClusteringInfo: [(c) => c.getClusteringInfo(), 'getClusteringInfo(clustering)'],
-    quantize: [(c) => c.quantize(image, 4), 'quantizeFromClustering(image, clustering, k)'],
-    quantizeToIndices: [(c) => c.quantizeToIndices(image, 4), 'quantizeToIndicesFromClustering(image, clustering, k)'],
+    getPalette: [(c) => c.getPalette(4), "(await worker.load(clustering)).getPalette(k)"],
+    getSwatches: [(c) => c.getSwatches(4), "(await worker.load(clustering)).getSwatches(k)"],
+    getClusteringInfo: [(c) => c.getClusteringInfo(), "(await worker.load(clustering)).getClusteringInfo()"],
+    quantize: [(c) => c.quantize(image, 4), "(await worker.load(clustering)).quantize(image, k)"],
+    quantizeToIndices: [(c) => c.quantizeToIndices(image, 4), "(await worker.load(clustering)).quantizeToIndices(image, k)"],
 };
 
 describe('methods on Clustering without the main entry', () => {
@@ -29,7 +29,7 @@ describe('methods on Clustering without the main entry', () => {
             expect(error.code).toBe('wasm-load-failed');
             expect(error.argument).toBeUndefined();
             expect(error.message).toMatch(new RegExp(`^clustering\\.${name} can't run here: a clustering's methods run on the calling thread with the main entry, 'agglomerative-clustering'`));
-            expect(error.message).toContain(`call ${form} from 'agglomerative-clustering/worker'`);
+            expect(error.message).toContain(`use a loaded handle's ${name}: ${form}`);
         }
     });
 
@@ -53,8 +53,9 @@ describe('methods on Clustering without the main entry', () => {
     it('work once the main entry is imported, on clusterings made before', async () => {
         const clustering = await buildClustering(image);
         const main = await import('../dist/index.mjs');
-        expect(await clustering.getPalette(4)).toEqual(await main.getPaletteFromClustering(clustering, 4));
-        expect(await clustering.quantize(image, 4)).toEqual(await main.quantizeFromClustering(image, clustering, 4));
+        const palette = await clustering.getPalette(4);
+        expect(palette).toEqual(await main.buildPalette(image, 4));
+        expect(await clustering.quantize(image, 4)).toEqual(await main.quantizeWithPalette(image, palette));
     });
 
 });

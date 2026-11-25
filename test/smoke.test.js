@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildClustering, buildPalette, getPaletteFromClustering, quantize } from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize } from '../dist/index.mjs';
 
 // 2x2 solid red RGBA — 1 unique color, each appearing 4 times.
 const solidRed2x2 = new Uint8Array([
@@ -46,7 +46,7 @@ describe('k larger than the colour count', () => {
             expect(await buildPalette(twoColor2x2, k)).toEqual(all);
         }
         const clustering = await buildClustering(twoColor2x2);
-        expect((await getPaletteFromClustering(clustering, 2 ** 40)).length).toBe(all.length);
+        expect((await clustering.getPalette(2 ** 40)).length).toBe(all.length);
         expect(await quantize(twoColor2x2, 2 ** 40)).toEqual(await quantize(twoColor2x2, 2));
     });
 
@@ -75,18 +75,18 @@ describe('getPalette', () => {
 
 });
 
-describe('getPaletteFromClustering', () => {
+describe('Clustering.getPalette', () => {
 
     it('returns 3 bytes for k = 1', async () => {
         const clustering = await buildClustering(solidRed2x2);
-        const result = await getPaletteFromClustering(clustering, 1);
+        const result = await clustering.getPalette(1);
         expect(result).toBeInstanceOf(Uint8Array);
         expect(result.length).toBe(3);
     });
 
     it('returns k * 3 bytes for a 2-color clustering', async () => {
         const clustering = await buildClustering(twoColor2x2);
-        const result = await getPaletteFromClustering(clustering, 2);
+        const result = await clustering.getPalette(2);
         expect(result.length).toBe(6);
     });
 

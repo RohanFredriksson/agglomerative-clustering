@@ -6,10 +6,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getPaletteFromClustering, getSwatchesFromClustering, getClusteringInfo, quantizeFromClustering } from '../dist/index.mjs';
+import { Clustering } from '../dist/index.mjs';
 
 // The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
-const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
+const weightsOf = async (clustering, k) => (await clustering.getSwatches(k)).weights;
 
 import { fixtureImage, sizes } from '../fixtures/clusterings/image.js';
 
@@ -25,49 +25,42 @@ describe('format version 1 (1.x), which is no longer read', () => {
 
     const legacy = new Uint8Array(readFileSync(resolve(folder, 'v1.bin')));
 
-    it('is rejected by every function that takes a clustering, with a message that says what to do', async () => {
-        for (const call of [
-            () => getPaletteFromClustering(legacy, 8),
-            () => weightsOf(legacy, 8),
-            () => getClusteringInfo(legacy),
-            () => quantizeFromClustering(fixtureImage(), legacy, 8),
-        ]) {
-            const error = await call().catch((e) => e);
-            expect(error.code).toBe('invalid-clustering');
-            expect(error.message).toContain('1.x');
-            expect(error.message).toContain('cluster the image again');
-        }
+    it('is rejected when read as a clustering, with a message that says what to do', async () => {
+        const error = await (async () => new Clustering(legacy))().catch((e) => e);
+        expect(error.code).toBe('invalid-clustering');
+        expect(error.message).toContain('1.x');
+        expect(error.message).toContain('cluster the image again');
     });
 
 });
 
 describe.each(versions.filter((version) => version >= 2))('format version %i', (version) => {
 
-    const clustering = new Uint8Array(readFileSync(resolve(folder, `v${version}.bin`)));
+    const clustering = new Clustering(new Uint8Array(readFileSync(resolve(folder, `v${version}.bin`))));
     const { palettes, weights, mse } = JSON.parse(readFileSync(resolve(folder, `v${version}.json`), 'utf8'));
 
     it('gives the palettes of the release that wrote it', async () => {
         for (const k of sizes) {
-            const palette = await getPaletteFromClustering(clustering, k);
+            const palette = await clustering.getPalette(k);
             expect(Array.from(palette)).toEqual(palettes[k]);
         }
     });
 
     it('quantizes with it', async () => {
-        const result = await quantizeFromClustering(fixtureImage(), clustering, 8);
+        const result = await clustering.quantize(fixtureImage(), 8);
         expect(result.length).toBe(fixtureImage().length);
     });
 
     if (version >= 3) {
         it('gives the weights and error curve of the release that wrote it', async () => {
             for (const k of sizes) {expect(Array.from(await weightsOf(clustering, k))).toEqual(weights[k]);}
-            expect(Array.from((await getClusteringInfo(clustering)).mse)).toEqual(mse);
+            expect(Array.from((await clustering.getClusteringInfo()).mse)).toEqual(mse);
         });
     } else {
         it('has no weights or error curve, so the functions that report them reject it', async () => {
             await expect(weightsOf(clustering, 4)).rejects.toThrow('has no weights');
-            await expect(getClusteringInfo(clustering)).rejects.toMatchObject({ code: 'unsupported-version', argument: 'clustering' });
-            await expect(getClusteringInfo(clustering)).rejects.toThrow('has no weights');
+            await expect(clustering.getClusteringInfo()).rejects.toMatchObject({ code: 'unsupported-version', argument: 'clustering' });
+            await expect(clustering.getClusteringInfo()).rejects.toThrow('has no weights');
         });
     }
 

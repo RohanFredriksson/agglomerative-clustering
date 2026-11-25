@@ -378,7 +378,7 @@ export const sniffImageFormat = (bytes) => {
 // The other common way to get a bare array wrong is bytes of another layout: RGB (sharp's plain .raw()), or grey and grey
 // with alpha (fast-png's decode() of a grey PNG). Read as RGBA, every pixel takes bytes from its neighbours and one of them
 // as its alpha, and nothing fails while the length divides by 4. They are never reinterpreted (a bare array is RGBA,
-// PRINCIPLES), only reported: a warning in 3.x, an error from 4.0.
+// PRINCIPLES), only reported, as an error (a warning in 3.x).
 //
 // The rules use E(k), the mean change between a byte and the one k before it (bench/spikes/bare-rgb/ and
 // bench/spikes/bare-grey/: no false positives on 2,984 real RGBA images).
@@ -387,8 +387,8 @@ export const sniffImageFormat = (bytes) => {
 //   but where it changes its bytes come in equal triples at a step of 3 and not of 4.
 // - Grey and alpha (2 bytes a pixel): smooth at a step of 2 and rough at a step of 1, since grey and alpha bytes alternate.
 // - Grey (1 byte a pixel): smoothest at a step of 1, unless most changing pixels have four equal bytes, which is real
-//   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; it then keeps the
-//   rgb-as-rgba code, whose text covers grey too.
+//   RGBA (grey with alpha = grey). The RGB rule goes first because near-grey RGB can look the same; its error text
+//   covers grey too.
 // Units equal to the one before are skipped by the equal-byte counts, since flat areas read the same either way. It
 // samples 512 windows of 96 bytes (each on a multiple of 12, a pixel under every reading, one in each 512th of the
 // array), so it costs about 0.35 ms at any size. Returns 'rgb', 'grey', 'grey-alpha' or null.
@@ -446,48 +446,20 @@ export const bareLayout = (d) => {
 };
 export const looksLikeRgb = (d) => bareLayout(d) === 'rgb';
 
-// Codes already warned in this copy of the library (PRINCIPLES: once per code, per copy).
-const warned = new Set();
-const bareCodes = {rgb: 'rgb-as-rgba', grey: 'gray-as-rgba', 'grey-alpha': 'gray-as-rgba'};
-
-// The warning a bare image calls for, as {code, layout}, or null. It skips everything the main entry rejects (palettes
-// and clusterings passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never both warns
-// about its image and rejects it, and both entries share this one order. An array of one layout never takes another's
-// code because its own was already used: it is classified first, and only then is its code checked.
-export const bareImageWarning = (image) => {
-    if ((warned.has('rgb-as-rgba') && warned.has('gray-as-rgba')) || !isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
+// The error a bare image calls for, or null. It skips everything the main entry rejects for another reason (palettes and
+// clusterings passed as the image, encoded files, lengths that aren't a multiple of 4), so a call never gives two
+// errors for its image and both entries share this one order.
+const bareText = {
+    rgb: (n) => `Invalid image: these ${n} bytes look like RGB (3 per pixel) or grey, not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA: format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+    grey: (n) => `Invalid image: these ${n} bytes look like grey (1 per pixel), not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices. Expand 8-bit grey to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()); there is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+    'grey-alpha': (n) => `Invalid image: these ${n} bytes look like grey and alpha (2 per pixel), not RGBA, and a bare Uint8Array is read as RGBA (4 per pixel). fast-png's decode() gives this for a grey PNG with alpha. Expand it to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()); there is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so.`,
+};
+export const bareImageError = (image) => {
+    if (!isUint8Array(image) || isPalette(image) || isClustering(image)) {return null;}
     if (sniffImageFormat(image) !== null || image.length % 4 !== 0) {return null;}
     const layout = bareLayout(image);
-    return layout === null || warned.has(bareCodes[layout]) ? null : {code: bareCodes[layout], layout};
+    return layout === null ? null : fail('invalid-argument', bareText[layout](image.byteLength.toLocaleString('en-US')), 'image');
 };
-
-// The text of each warning. Delivered through process.emitWarning in Node, Bun and Deno (--no-warnings,
-// process.on('warning') and --trace-warnings then work), else console.warn. Runtimes that imitate Node have an
-// emitWarning that may print nothing (Cloudflare Workers with nodejs_compat), so they are told apart by
-// navigator.userAgent, as worker.js does; a bundler's `process` polyfill has no emitWarning, and `globalThis.process`
-// keeps Parcel from adding one.
-const nodeLike = () => typeof navigator === 'undefined' || /^(Node\.js|Bun|Deno)\//.test(String(navigator.userAgent));
-const warningText = {
-    'rgb-as-rgba': (byteLength) => `This image (${byteLength.toLocaleString('en-US')} bytes) looks like RGB bytes (3 per pixel), or grey, passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. If it is RGB, pass { data, format: 'rgb' } (sharp's .raw() gives RGB for an image without alpha unless you add .ensureAlpha()). If it is grey (fast-png's decode() of a grey PNG), expand it to RGBA; format: 'rgb' would misread it too. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
-    'gray-as-rgba': (byteLength, layout) => (layout === 'grey-alpha'
-        ? `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey and alpha bytes (2 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG with alpha.`
-        : `This image (${byteLength.toLocaleString('en-US')} bytes) looks like grey bytes (1 per pixel) passed as a bare Uint8Array, which is read as RGBA (4 per pixel) and would give wrong colours. fast-png's decode() gives this for a grey PNG (rows below 8 bits stay packed) and for a palette PNG's indices.`)
-        + ` Expand ${layout === 'grey-alpha' ? 'it' : '8-bit grey'} to RGBA, or decode with something that gives RGBA (pngjs, or sharp with .ensureAlpha()). There is no grey format to pass. If it really is RGBA, pass { data, format: 'rgba' } to say so. From 4.0 this is an error. Shown once.`,
-};
-// `warning` is what bareImageWarning returned: {code, layout}.
-export const warnOnce = ({code, layout}, byteLength) => {
-    if (warned.has(code)) {return;}
-    warned.add(code);
-    const message = warningText[code](byteLength, layout);
-    const runtime = globalThis.process;
-    if (runtime && typeof runtime.emitWarning === 'function' && nodeLike()) {runtime.emitWarning(message, {type: 'AgglomerativeClusteringWarning', code});}
-    else if (typeof console !== 'undefined') {console.warn(`agglomerative-clustering [${code}]: ${message}`);}
-};
-// The worker thread's copy: its caller's side checks and warns (PRINCIPLES), so here every code counts as warned, which
-// also skips the sampling.
-export const silenceWarnings = () => {for (const code of Object.keys(warningText)) {warned.add(code);}};
-// For tests.
-export const resetWarnings = () => {warned.clear();};
 // Node's console.log and util.inspect call this (other environments ignore it), so the tag shows when debugging:
 // `Palette(oklab) [ 12, 34, ... ]` rather than a plain `Uint8Array(…)`.
 const inspect = Symbol.for('nodejs.util.inspect.custom');
@@ -503,7 +475,7 @@ export const markPalette = (bytes, colorSpace) => {
     Object.defineProperty(bytes, inspect, {value: paletteView});
     return bytes;
 };
-// Methods on a clustering: `clustering.getPalette(k)` is `getPaletteFromClustering(clustering, k)`, and so on. They are
+// Methods on a clustering: `clustering.getPalette(k)` cuts a palette from it, and so on. They are
 // non-enumerable own properties, added with the tags, so a clustering stays a plain Uint8Array (`toEqual` and
 // `deepStrictEqual` against plain bytes still pass), and slices and clones drop them as they drop the tags. They run on the
 // calling thread with the main entry's functions, which the main entry puts in `engine` when it is evaluated; the worker
@@ -513,13 +485,13 @@ let engine = null;
 // The first main entry evaluated keeps the slot: it is the one an app loads and gives `init({ wasm })`, so a later copy
 // (a duplicated chunk, a query-string import) doesn't re-point every clustering at a module of its own that isn't set up.
 export const setEngine = (value) => {if (engine === null) {engine = value;}};
-// Each method's call shape and its function form, for messages.
+// Each method's call shape and the loaded-handle form that serves it off the thread, for messages.
 const methodNames = {
-    getPalette: ['getPalette(k)', 'getPaletteFromClustering(clustering, k)'],
-    getSwatches: ['getSwatches(k)', 'getSwatchesFromClustering(clustering, k)'],
-    getClusteringInfo: ['getClusteringInfo()', 'getClusteringInfo(clustering)'],
-    quantize: ['quantize(image, k)', 'quantizeFromClustering(image, clustering, k)'],
-    quantizeToIndices: ['quantizeToIndices(image, k)', 'quantizeToIndicesFromClustering(image, clustering, k)'],
+    getPalette: ['getPalette(k)', "a loaded handle's getPalette: (await worker.load(clustering)).getPalette(k)"],
+    getSwatches: ['getSwatches(k)', "a loaded handle's getSwatches: (await worker.load(clustering)).getSwatches(k)"],
+    getClusteringInfo: ['getClusteringInfo()', "a loaded handle's getClusteringInfo: (await worker.load(clustering)).getClusteringInfo()"],
+    quantize: ['quantize(image, k)', "a loaded handle's quantize: (await worker.load(clustering)).quantize(image, k)"],
+    quantizeToIndices: ['quantizeToIndices(image, k)', "a loaded handle's quantizeToIndices: (await worker.load(clustering)).quantizeToIndices(image, k)"],
     chooseFrom: ['chooseFrom(palette, k, options?)', "a loaded handle's chooseFrom: (await worker.load(clustering)).chooseFrom(palette, k)"],
 };
 // Checks the receiver before anything else, since it is written first, then (for the mapping methods) that the image isn't
@@ -600,6 +572,8 @@ Object.defineProperty(Palette, Symbol.hasInstance, {value: isPalette});
 // those of a Uint8Array (bytes to copy, or a buffer with an offset and length to view).
 export function Clustering(...args) {
     const [source] = args;
+    // A palette gets the same hint as from every other function, before its bytes are copied.
+    if (isPalette(source)) {readHeader(source);}
     // Bytes, or a buffer to view: never a number (a length would allocate and make an empty clustering) or anything a Uint8Array
     // would coerce. A plain array must hold byte values, as for a palette.
     const isBuffer = isArrayBufferLike(source);
@@ -685,7 +659,7 @@ const notAClustering = (clustering) => {
 
 export const readHeader = (clustering) => {
     if (isPalette(clustering)) {
-        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from buildPalette and getPaletteFromClustering; a clustering comes from buildClustering.", 'clustering');
+        throw fail('invalid-clustering', "Invalid clustering: this is a palette, not a clustering. Palettes come from buildPalette or clustering.getPalette(k); a clustering comes from buildClustering.", 'clustering');
     }
     if (!isUint8Array(clustering)) {
         throw fail('invalid-clustering', "Invalid clustering: must be a Uint8Array from buildClustering.", 'clustering');
@@ -728,11 +702,11 @@ export const readHeader = (clustering) => {
     throw notAClustering(clustering);
 };
 
-// Palettes are flat RGB bytes. An empty palette is allowed: it is what getPalette gives for a fully transparent
+// Palettes are flat RGB bytes. An empty palette is allowed: it is what buildPalette gives for a fully transparent
 // image, and quantize maps such an image the same way.
 export const checkPalette = (palette) => {
     if (isClustering(palette)) {
-        throw fail('invalid-argument', "Invalid palette: this is a clustering (from buildClustering), not a palette. Cut a palette from it with getPaletteFromClustering, or map with quantizeFromClustering.", 'palette');
+        throw fail('invalid-argument', "Invalid palette: this is a clustering (from buildClustering), not a palette. Cut a palette from it with clustering.getPalette(k), or map with clustering.quantize(image, k).", 'palette');
     }
     if (!isUint8Array(palette) && !isUint8ClampedArray(palette) && !Array.isArray(palette)) {
         throw fail('invalid-argument', "Invalid palette: must be a Uint8Array of RGB bytes.", 'palette');

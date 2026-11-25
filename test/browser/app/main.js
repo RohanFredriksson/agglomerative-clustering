@@ -37,7 +37,7 @@ const describeMismatch = async (image, whole, sliced) => {
     let first = -1, count = 0;
     for (let i = 0; i < Math.max(a.length, b.length); i++) {if (a[i] !== b[i]) {count++; if (first < 0) {first = i;}}}
     const around = (bytes) => Array.from(bytes.subarray(Math.max(0, first - 4), first + 8)).join(',');
-    const [wholeAgain, slicedAgain] = [await ac.getClustering(image), await ac.getClustering(image, { onProgress: () => {} })];
+    const [wholeAgain, slicedAgain] = [await ac.buildClustering(image), await ac.buildClustering(image, { onProgress: () => {} })];
     return `lengths ${a.length} and ${b.length}, ${count} bytes differ, first at ${first} (record ${first < 22 ? 'header' : Math.floor((first - 25) / 21)}); `
         + `one-shot [${around(a)}], sliced [${around(b)}]; second one-shot ${equal(wholeAgain, a) ? 'matches the first' : 'differs from the first'}, `
         + `second sliced ${equal(slicedAgain, b) ? 'matches the first sliced' : equal(slicedAgain, a) ? 'matches the one-shot' : 'matches neither'}`;
@@ -90,24 +90,19 @@ async function run() {
 
     const worker = createWorker();
     const handle = await worker.cluster(image, { colorSpace: 'oklab' });
-    const clustering = await ac.getClustering(image, { colorSpace: 'oklab' });
+    const clustering = await ac.buildClustering(image, { colorSpace: 'oklab' });
     checks.handleClusteringMatchesMain = equal(await handle.getClustering(), clustering);
-    // This app also runs against published versions, so it calls the names every 3.x has. Where the version has 3.4.0's
-    // names, they must be the same functions, after bundling too.
-    checks.buildNamesAreTheSameFunctions = typeof ac.buildPalette !== 'function'
-        || (ac.buildClustering === ac.getClustering && ac.buildPalette === ac.getPalette && ac.buildSwatches === ac.getSwatches
-            && worker.buildPalette === worker.getPalette && equal(await ac.buildPalette(image, 5), await ac.getPalette(image, 5)));
     let cuts = true;
     for (const k of [2, 4, 16, 64]) {
-        cuts = cuts && equal(await handle.getPalette(k), await ac.getPaletteFromClustering(clustering, k));
-        cuts = cuts && equal((await handle.quantize(k)).data, (await ac.quantizeFromClustering(image, clustering, k)).data);
+        cuts = cuts && equal(await handle.getPalette(k), await clustering.getPalette(k));
+        cuts = cuts && equal((await handle.quantize(k)).data, (await clustering.quantize(image, k)).data);
     }
     checks.handleCutsMatchMain = cuts;
     // A clustering from the worker entry has the methods, run on this thread with the main entry (imported above).
     try {
-        const fromWorker = await worker.getClustering(image, { colorSpace: 'oklab' });
-        checks.methodsOnWorkerClustering = equal(await fromWorker.getPalette(8), await ac.getPaletteFromClustering(clustering, 8))
-            && equal((await fromWorker.quantize(image, 8)).data, (await ac.quantizeFromClustering(image, clustering, 8)).data)
+        const fromWorker = await worker.buildClustering(image, { colorSpace: 'oklab' });
+        checks.methodsOnWorkerClustering = equal(await fromWorker.getPalette(8), await clustering.getPalette(8))
+            && equal((await fromWorker.quantize(image, 8)).data, (await clustering.quantize(image, 8)).data)
             && (await fromWorker.quantize(image, 8)) instanceof ImageData;
     } catch (error) {
         checks.methodsOnWorkerClustering = false;
@@ -118,7 +113,7 @@ async function run() {
         checks.loadAndChooseFrom = typeof worker.load !== 'function' || await (async () => {
             const loaded = await worker.load(clustering);
             try {
-                const chart = await ac.getPalette(image, 12);
+                const chart = await ac.buildPalette(image, 12);
                 const viaHandle = await loaded.chooseFrom(chart, 6);
                 const viaMethod = await clustering.chooseFrom(chart, 6);
                 return equal(await loaded.getPalette(8), await clustering.getPalette(8))
@@ -132,7 +127,7 @@ async function run() {
         details.loadAndChooseFrom = `${error.code}: ${error.message}`;
     }
     // A palette made in RGB (it knows that), and the same bytes without the tag.
-    const custom = await ac.getPalette(image, 5);
+    const custom = await ac.buildPalette(image, 5);
     const plain = new Uint8Array(custom);
     // The handle was clustered in OKLab: plain bytes map in the space it was clustered in, a Palette in its own, and a
     // palette from the handle keeps the OKLab it was made in, across the worker boundary.
@@ -151,24 +146,24 @@ async function run() {
     // Slices on the main thread: the same result, progress that ends at 1, and an abort that lands between slices.
     const big = noise(500, 400, 7);
     const progress = [];
-    const whole = await time(ac.getClustering(big));
-    const sliced = await ac.getClustering(big, { onProgress: (fraction) => progress.push(fraction) });
+    const whole = await time(ac.buildClustering(big));
+    const sliced = await ac.buildClustering(big, { onProgress: (fraction) => progress.push(fraction) });
     checks.slicedMatchesWhole = !whole.error && equal(sliced, whole.value);
     if (!checks.slicedMatchesWhole) {details.slicedMatchesWhole = await describeMismatch(big, whole, sliced);}
     checks.progressRisesToOne = progress.length > 3 && progress[progress.length - 1] === 1 && progress.every((value, i) => i === 0 || value > progress[i - 1]);
     const controller = new AbortController();
-    const aborted = await ac.getClustering(big, { signal: controller.signal, onProgress: (fraction) => {if (fraction > 0.3) {controller.abort();}} }).catch((error) => error);
+    const aborted = await ac.buildClustering(big, { signal: controller.signal, onProgress: (fraction) => {if (fraction > 0.3) {controller.abort();}} }).catch((error) => error);
     checks.mainAbortRejects = aborted instanceof DOMException && aborted.name === 'AbortError';
 
     // Aborting a call in a Web Worker stops the worker, so a small call after it is not kept waiting.
     const cancelWorker = createWorker();
-    await cancelWorker.getPalette(image, 2);
-    const fullTime = await time(cancelWorker.getClustering(big));
+    await cancelWorker.buildPalette(image, 2);
+    const fullTime = await time(cancelWorker.buildClustering(big));
     const workerController = new AbortController();
-    const workerAbort = await time(cancelWorker.getClustering(big, { signal: workerController.signal, onProgress: (fraction) => {if (fraction > 0.3) {workerController.abort();}} }));
-    const next = await time(cancelWorker.getPalette(image, 4));
+    const workerAbort = await time(cancelWorker.buildClustering(big, { signal: workerController.signal, onProgress: (fraction) => {if (fraction > 0.3) {workerController.abort();}} }));
+    const next = await time(cancelWorker.buildPalette(image, 4));
     checks.workerAbortRejects = workerAbort.error instanceof DOMException && workerAbort.error.name === 'AbortError';
-    checks.workerAbortFreesWorker = equal(next.value, await ac.getPaletteFromClustering(await ac.getClustering(image), 4)) && next.ms < fullTime.ms * 0.5;
+    checks.workerAbortFreesWorker = equal(next.value, await (await ac.buildClustering(image)).getPalette(4)) && next.ms < fullTime.ms * 0.5;
     await cancelWorker.terminate();
 
     // Cancelled calls queued behind a mapping call never run: ten slow mappings sent at once, the first nine cancelled at
@@ -208,8 +203,8 @@ async function run() {
         clearInterval(timer);
         return { worst, ticks };
     };
-    const blocking = await gaps(() => ac.getClustering(big));
-    const sliced2 = await gaps(() => ac.getClustering(big, { onProgress: () => {} }));
+    const blocking = await gaps(() => ac.buildClustering(big));
+    const sliced2 = await gaps(() => ac.buildClustering(big, { onProgress: () => {} }));
     // The page gets turns while it slices (a few at least: a fast machine finishes in a few dozen milliseconds), and its
     // longest wait is a small part of the blocking run's.
     checks.slicingKeepsThePageResponsive = sliced2.ticks >= 3 && sliced2.worst < Math.max(150, blocking.worst * 0.5);
@@ -247,7 +242,7 @@ async function run() {
     await disposer.terminate();
 
     // Telling a worker where its WebAssembly is: a URL, the bytes, a compiled module.
-    const expected = await ac.getPalette(image, 6);
+    const expected = await ac.buildPalette(image, 6);
     const sources = {
         url: wasmUrl,
         bytes: await (await fetch(wasmUrl)).arrayBuffer(),
@@ -255,7 +250,7 @@ async function run() {
     };
     for (const [name, wasm] of Object.entries(sources)) {
         const located = createWorker({ wasm });
-        checks[`workerWasm_${name}`] = equal(await located.getPalette(image, 6), expected);
+        checks[`workerWasm_${name}`] = equal(await located.buildPalette(image, 6), expected);
         await located.terminate();
     }
     return checks;

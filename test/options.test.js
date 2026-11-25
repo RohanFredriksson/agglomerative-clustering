@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildClustering, buildPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeWithPalette } from '../dist/index.mjs';
 
 // A smooth 64x64 RGBA gradient: many distinct colours, so palettes, binning and dithering all have work to do.
 const width = 64, height = 64;
@@ -99,8 +99,8 @@ describe('colorSpace: oklab', () => {
 
     it('quantizes to colours from its own palette', async () => {
         const clustering = await buildClustering(gradient, { colorSpace: 'oklab' });
-        const palette = paletteSet(await getPaletteFromClustering(clustering, 12));
-        const result = await quantizeFromClustering(gradient, clustering, 12, { colorSpace: 'oklab' });
+        const palette = paletteSet(await clustering.getPalette(12));
+        const result = await clustering.quantize(gradient, 12, { colorSpace: 'oklab' });
         for (const colour of colours(result)) {expect(palette.has(colour)).toBe(true);}
     });
 
@@ -199,7 +199,7 @@ describe('empty images', () => {
     it('give an empty clustering (just the header) and palette', async () => {
         const clustering = await buildClustering(empty);
         expect(clustering.length).toBe(22);
-        expect((await getPaletteFromClustering(clustering, 4)).length).toBe(0);
+        expect((await clustering.getPalette(4)).length).toBe(0);
         expect((await buildPalette(empty, 4)).length).toBe(0);
     });
 

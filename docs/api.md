@@ -10,7 +10,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - [Errors](#errors)
 - [Worker entry](#worker-entry)
 - [TypeScript](#typescript)
-- [Functions](#functions), [deprecated names](#deprecated-names) and [deprecated function forms](#deprecated-function-forms)
+- [Functions](#functions)
 
 ## Terms
 
@@ -19,7 +19,7 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - **k**: the most palette entries in what you get back, in every function. A flat palette has no transparent entry, so its entries are all colours; in indexed output with `transparent`, the transparent entry is one of the `k`, so `256` is the most a GIF holds. Fewer come back when the image has fewer distinct colours. The one exception: indexed output always keeps a colour for the visible pixels, so `k = 1` with a transparent entry gives 2.
 - **split order**: palettes come out so that the palette for `k + 1` is the one for `k` with one colour split in two. Entries keep their place as `k` grows, but the palette is not sorted by share.
 - **build… and get…**: a name says how much work a call does. `build…` clusters an image; `get…` reads or cuts what a clustering or a worker handle already holds, so `buildPalette(image, k)` takes tens of milliseconds for a photo and `clustering.getPalette(k)` well under one. `quantize…` maps pixels, and may cluster first.
-- **clustering and mapping**: "clustering" functions build a clustering (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `quantizeFromClustering`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
+- **clustering and mapping**: "clustering" functions build a clustering (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `clustering.quantize`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
 ## Input
 
@@ -76,8 +76,8 @@ A wrong channel order can't be detected: red and blue come out swapped (orange a
 - **For straight pixels out of a premultiplied source** (an `ImageData`, a PNG encoder), use the recipe in the guides, [Straight pixels from a premultiplied source](guides.md#straight-pixels-from-a-premultiplied-source): map to indices and write each pixel's palette colour with the input's alpha. Don't un-premultiply the mapped output: the rounding happens twice, and a 16-colour result came back with 1,171 colours, with errors up to 120 per channel below alpha 16. <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt -->
 - **In Node, sharp** can undo the multiplication itself: `await sharp(data, { raw: { width, height, channels: 4, premultiplied: true } }).raw().toBuffer()` gives straight pixels in the same channel order, which you pass without the flag.
 
-- **A bare `Uint8Array` is read as RGBA**, like `ImageData`. RGB bytes passed bare are misread, with no error when their length happens to be a multiple of 4. Pass them as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`). When a bare array looks like RGB the library [warns](#warnings) once, and 4.0 will reject it.
-- **Pixels are 8-bit sRGB**, straight alpha as `getImageData()` gives them, or premultiplied with `premultiplied: true` (above). Convert anything else first: 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits, and grey or grey-and-alpha pixels to RGBA; a grey buffer passed as it is gets misread, and the library [warns](#warnings) when it sees one. Apply a photo's EXIF orientation and colour profile when decoding; the library doesn't read either. The recipes in [Decoding image files](guides.md#decoding-image-files) do all of this (sharp's `.rotate().ensureAlpha().raw()` in Node). An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
+- **A bare `Uint8Array` is read as RGBA**, like `ImageData`, and one whose bytes look like RGB (3 per pixel), grey (1) or grey and alpha (2) is an `invalid-argument` error on `'image'` (3.x warned, once). RGB bytes passed bare would be misread, with no other error when their length happens to be a multiple of 4. Pass RGB as `{ data, format: 'rgb', width }`, or add an alpha channel (sharp's `.ensureAlpha()`); expand grey to RGBA (there is no grey format); and if the bytes really are RGBA, pass `{ data, format: 'rgba' }` to say so. <!-- bench/spikes/bare-rgb/measure.mjs → results.txt; bench/spikes/bare-grey/shipped.mjs → results-shipped.txt, results-cost.txt --> The check samples the bytes, so it costs well under a millisecond at any size. It was tested on 2,984 real RGBA images (photos, emoji, cutouts, grey images with alpha, dithered images, pixel art, premultiplied pixels) and flagged none. It misses some grey input: photos dithered to a few grey levels, and grey whose changing pixels mostly come in runs of four equal bytes, which look exactly like RGBA. `ImageData` and `{ data, format }` are never inspected.
+- **Pixels are 8-bit sRGB**, straight alpha as `getImageData()` gives them, or premultiplied with `premultiplied: true` (above). Convert anything else first: 16-bit or floating-point pixels (16-bit PNGs, HDR) to 8 bits, and grey or grey-and-alpha pixels to RGBA; a grey buffer passed as it is gets misread, and the library rejects it when it sees one. Apply a photo's EXIF orientation and colour profile when decoding; the library doesn't read either. The recipes in [Decoding image files](guides.md#decoding-image-files) do all of this (sharp's `.rotate().ensureAlpha().raw()` in Node). An `ImageData` in another pixel format (Chromium's `pixelFormat: 'rgba-float16'`, skia-canvas's `colorType: 'bgra'` or `'gray8'`, or one whose `data` doesn't hold `width × height` RGBA pixels) is rejected with `invalid-argument`: ask for `getImageData(x, y, w, h, { pixelFormat: 'rgba-unorm8' })` (or skia-canvas's default `colorType`), or pass its data as `{ data, format }` in the format it holds.
 - **Image files are not pixels.** A bare `Uint8Array` that starts like a PNG, JPEG, GIF, WebP, BMP, TIFF, AVIF or HEIC file (from `fs.readFile` or `fetch`) is rejected with `invalid-argument` naming the format. Decode it first: `createImageBitmap` in a browser, sharp in Node, jsquash on edge runtimes ([Decoding image files](guides.md#decoding-image-files) has each). Only bare arrays are checked, so if raw pixels really do begin like a file header, pass `{ data, format: 'rgba' }`.
 
 ## Output
@@ -93,7 +93,7 @@ Every function that takes an image also takes an optional last argument of optio
 | `precision` | clustering | `1`–`8`, default `8` | Groups colours that share their top `precision` bits per channel before clustering, at their mean colour. **`6` is about 3× faster on photos at practically the same quality** (−0.02 dB), and caps the work on images with huge numbers of colours. `5` is about 8× faster for a small loss. |
 | `colorSpace` | clustering and mapping | `'rgb'` (default), `'oklab'` | `'rgb'` minimises squared error in sRGB (the best PSNR); `'oklab'` clusters and matches in [OKLab](https://bottosson.github.io/posts/oklab/). Neither wins everywhere: see [Choosing a colour space](#choosing-a-colour-space). |
 | `alpha` | clustering | `'weight'` (default), `'ignore'` | `'weight'` counts each RGBA or BGRA pixel in proportion to its opacity, so transparent pixels don't count (exact pixel counting for opaque images). `'ignore'` counts every pixel fully, as 1.x did. Clustering only: mapping and dithering still treat alpha-0 pixels as transparent, so for a buffer whose fourth byte isn't alpha use `'rgbx'` or `'bgrx'`. |
-| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see [Transparency](#transparency). |
+| `transparent` | clustering; indexed output | `false` (default), `true`, or an alpha cutoff `1`–`255` | Pixels with alpha below the cutoff (128 for `true`) are left out of clustering and the rest count whole; indexed output gives them a transparent entry, counted in `k`. For GIFs and palette PNGs; see [Transparency](#transparency). With `'rgb'`, `'rgbx'` or `'bgrx'` input, `true` or a cutoff is an `invalid-argument` error (those formats have no alpha); `false` is accepted. |
 | `dither` | mapping | `false` (default), `true`, `0`–`1`, `'floyd-steinberg'`, `'atkinson'`, `'ordered'`, or `{ method, strength, steps }` | Dithering, which hides banding at low colour counts at a cost in per-pixel metrics such as PSNR. `true` or a strength from 0 to 1 is Floyd–Steinberg error diffusion; a method name picks another; the object form sets `strength` (0 to 1, default 1) and, for `'ordered'`, `steps` (2, 4, 8, 16, 32 or 64; default 64 for two colours, else 16). See [Choosing a dither method](#choosing-a-dither-method). Fully transparent pixels are left undithered, and with a strength of 0 no width is needed. |
 | `width` | mapping | integer | The image width, for dithering a `Uint8Array` or a `RawImage` without one. If the image has a width of its own, this must equal it. |
 | `signal` | any call with an image | an `AbortSignal` | Cancels the call; see [Cancelling and progress](#cancelling-and-progress). |
@@ -227,7 +227,7 @@ Keep to these:
 
 ### Transparency
 
-Alpha matters only for RGBA and BGRA input (bare `Uint8Array`s and `ImageData` are RGBA). `'rgb'`, `'rgbx'` and `'bgrx'` have none: `alpha` and `transparent` are accepted for them and do nothing, so one set of options can serve images of every format. Two options handle it, at different stages, and naming both is an error:
+Alpha matters only for RGBA and BGRA input (bare `Uint8Array`s and `ImageData` are RGBA). `'rgb'`, `'rgbx'` and `'bgrx'` have none: `alpha` is accepted for them and does nothing, and `transparent: false` too, but `transparent: true` or a cutoff throws `invalid-argument` on `'options.transparent'` (no pixel of such an image can be transparent, and for `'rgbx'` and `'bgrx'` it usually means the fourth byte is alpha after all: use `'rgba'` or `'bgra'`). A clustering's stored cutoff is not an option, so mapping an `'rgb'` image with a clustering made with `transparent` still works. Two options handle it, at different stages, and naming both is an error:
 
 - **`alpha`** (the default, `'weight'`) weighs each pixel by its opacity when clustering, and each pixel keeps its own alpha in the output. Use it for swatches and for images that keep their alpha.
 - **`transparent`** is for destinations with one transparent colour, as GIF and palette PNG have. Pass it in the clustering step too, so the palette you cut is the one you map with. Translucent palette colours are not supported.
@@ -271,7 +271,7 @@ const restored = new Palette(bytes, colorSpace);   // maps exactly as the palett
 
 ## Clustering methods
 
-A `Clustering` has methods for the cluster-once workflow. Each is the function of the same name without `FromClustering`, with the clustering as the receiver, and gives exactly what that function gives: the same results, defaults and errors, with the same `code` and `argument`. Three messages name the method instead, because the mistake is in how it was called: a method called without its clustering, `clustering.quantize(16)` (the image goes first), and options passed to a cut. The receiver is checked first, as it is written first.
+A `Clustering` has methods for the cluster-once workflow: cut it to a palette, read what it holds, map an image with it. They run on the calling thread with the main entry; off it, a loaded handle (`worker.load(clustering)`) has the same methods. The receiver is checked first, as it is written first. Three messages name the method, because the mistake is in how it was called: a method called without its clustering, `clustering.quantize(16)` (the image goes first), and options passed to a cut.
 
 ```js
 import { buildClustering, Clustering } from 'agglomerative-clustering';
@@ -284,47 +284,34 @@ const reduced = await clustering.quantize(image, 16, { dither: 'atkinson' });
 const restored = new Clustering(await db.get('clustering'));               // stored bytes get the methods back
 ```
 
-- **Where they are:** on every clustering the library returns (from either entry, and from a worker's `handle.getClustering()`), and on `new Clustering(bytes)`. `slice`, `subarray`, clones and storage give plain bytes without them, as they drop the tags: wrap stored bytes with `new Clustering(bytes)`, or pass them to the function form, which takes plain bytes.
+- **Where they are:** on every clustering the library returns (from either entry, and from a worker's `handle.getClustering()`), and on `new Clustering(bytes)`. `slice`, `subarray`, clones and storage give plain bytes without them, as they drop the tags: wrap stored bytes with `new Clustering(bytes)`, or load them in a worker with `worker.load(bytes)`.
 - **Where they run:** on the calling thread, with the main entry. With only the worker entry imported, they reject with `wasm-load-failed` (see [Worker entry](#worker-entry)).
 - **They are async,** like the functions. Once the module is loaded, a cut settles at once, so a slider can call `clustering.getPalette(k)` on every input event.
-- **Only clusterings made by 3.3 or later have them.** A clustering from an older copy of the package (say a dependency that still pins 3.2) is tagged but has no methods, so `clustering.getPalette` is `undefined` there; wrap it with this copy's `new Clustering(bytes)`, or use the function form.
-- **In tests,** a mock of the module's `getPaletteFromClustering` doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on `clustering.getPalette` itself, on a real clustering, with `vi.spyOn` (or `jest.spyOn`).
-
-| Method | Function form (deprecated) | Arguments of the function form |
-|---|---|---|
-| `clustering.getPalette(k)` | `getPaletteFromClustering` | `(clustering, k)` |
-| `clustering.getSwatches(k)` | `getSwatchesFromClustering` | `(clustering, k)` |
-| `clustering.getClusteringInfo()` | `getClusteringInfo` | `(clustering)` |
-| `clustering.quantize(image, k, options?)` | `quantizeFromClustering` | `(image, clustering, k, options?)`: the image comes first |
-| `clustering.quantizeToIndices(image, k, options?)` | `quantizeToIndicesFromClustering` | `(image, clustering, k, options?)`: the image comes first |
-| `clustering.chooseFrom(palette, k, options?)` | none | |
-
-The `…FromClustering` functions are deprecated from 3.8 and 4.0 removes them (see [Deprecated function forms](#deprecated-function-forms)): use the method on the main thread, and a loaded handle off it. Nothing changes at run time, and there is no warning. The methods give the same results, and `worker.load(clustering)` keeps one copy of the clustering in the worker, where `worker.getPaletteFromClustering(clustering, k)` sends it every time.
-
-| Deprecated function (both entries) | Main thread | Off the thread |
-|---|---|---|
-| `getPaletteFromClustering(c, k)` | `c.getPalette(k)` | `(await worker.load(c)).getPalette(k)` |
-| `getSwatchesFromClustering(c, k)` | `c.getSwatches(k)` | `….getSwatches(k)` |
-| `getClusteringInfo(c)` (the function) | `c.getClusteringInfo()` | `….getClusteringInfo()` |
-| `quantizeFromClustering(image, c, k)` | `c.quantize(image, k)` | `….quantize(image, k)` |
-| `quantizeToIndicesFromClustering(image, c, k)` | `c.quantizeToIndices(image, k)` | `….quantizeToIndices(image, k)` |
+- **Only clusterings made by 3.3 or later have them.** A clustering from an older copy of the package (say a dependency that still pins 3.2) is tagged but has no methods, so `clustering.getPalette` is `undefined` there; wrap it with this copy's `new Clustering(bytes)`.
+- **In tests,** a mock of the module doesn't see `clustering.getPalette(k)`: the method doesn't call through the module's exports. Spy on `clustering.getPalette` itself, on a real clustering, with `vi.spyOn` (or `jest.spyOn`).
 
 ### `clustering.getPalette(k): Promise<Palette>`
-`getPaletteFromClustering(clustering, k)` as a method. Takes no options.
+Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too. `k` is a maximum: an image with fewer distinct colours gives fewer entries. Takes no options. Off the thread: `(await worker.load(clustering)).getPalette(k)`.
 
 ### `clustering.getSwatches(k): Promise<Swatches>`
-`getSwatchesFromClustering(clustering, k)` as a method. Needs a clustering from 3.x.
+The same as `buildSwatches` from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected. Takes no options.
 
 ### `clustering.getClusteringInfo(): Promise<ClusteringInfo>`
-`getClusteringInfo(clustering)` as a method. Needs a clustering from 3.x.
+What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, maxColors, totalWeight, mse, explained }`. Needs a clustering from 3.x: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` (the palette and mapping methods still read it). Takes no options.
+
+- `formatVersion`: the format of its bytes (compare it with the exported `formatVersion`).
+- `transparent`: the alpha cutoff it was made with, or `false`. `clustering.quantizeToIndices` uses it by default.
+- `maxColors`: the largest palette it can be cut to.
+- `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
+- `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces. Being relative to the image's own variance, it is a poor guide to how many colours an image needs: to choose a palette size by error, see [the guides](guides.md#choosing-a-palette-size).
 
 ### `clustering.quantize(image, k, options?): Promise<the type of image>`
-`quantizeFromClustering(image, clustering, k, options)` as a method: maps the image to the `k`-colour palette, matched in the clustering's colour space unless you name one. It takes the image first, unlike a worker handle's `quantize(k)`, which maps the image it holds.
+Maps the image to the `k`-colour palette of the clustering you already have, matched in the clustering's colour space unless you name one. Returns the same kind of thing as `quantize`. It takes the image first, unlike a worker handle's `quantize(k)`, which maps the image it holds.
 
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
 
 ### `clustering.quantizeToIndices(image, k, options?): Promise<IndexedImage>`
-`quantizeToIndicesFromClustering(image, clustering, k, options)` as a method, with the cutoff the clustering was made with as the default `transparent`.
+The same as `quantizeToIndices`, from a clustering you already have. The default `transparent` is the cutoff the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
 
 Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.
 
@@ -366,7 +353,7 @@ When an error is about one argument, `error.argument` names it: `'image'`, `'k'`
 | `unsupported-version` | A clustering from a newer format, or using a colour space it doesn't know (upgrade the package), or an older one without what you asked for (cluster again, e.g. for `clustering.getSwatches(k)`). |
 | `out-of-memory` | The WebAssembly module couldn't allocate: an image with very many colours, or pixel data over its 2 GB (the message gives the size). |
 | `wasm-load-failed` | The WebAssembly module couldn't be loaded or compiled: a missing or blocked `.wasm` file, a server bundle that moved it, a browser without SIMD, or a `.wasm` from a different version of the library than the script (a stale cache or CDN copy; the message names both versions). The message leads with the engine's reason and says what to check, and `cause` is the engine's own error. Also a [`Clustering` method](#clustering-methods) called where the main entry isn't loaded, with no `cause`: import the main entry on that thread. |
-| `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped, failed, or a handle was released. `worker-terminated` is for calls running or waiting when `terminate()` was called, and every later call on that `createWorker()` worker, so retrying on it can't help (the shared worker starts again on the next call). After `worker-failed` (it couldn't start, crashed or exited), the next call starts a new worker. |
+| `worker-terminated`, `worker-failed`, `invalid-handle` | Worker entry only: the worker was stopped, failed, or a handle was released. `worker-terminated` is for calls running or waiting when `terminate()` was called, and every later call on that `createWorker()` worker, so retrying on it can't help (the shared worker starts again on the next call). `worker-failed` is also for a worker script from another version of the package (the first message to every worker asks its version): every call on it rejects until you use this version's `worker-thread.mjs`. After `worker-failed` (it couldn't start, crashed, exited or was the wrong version), the next call starts a new worker. |
 
 ```js
 import { Clustering, isCodedError } from 'agglomerative-clustering';
@@ -386,27 +373,14 @@ Messages are for people and may change. The worker entry fails the same way as t
 
 ### Warnings
 
-A warning is for a call the next major version will reject. It never changes a result, and it is shown once per code. In Node, Bun and Deno it goes through `process.emitWarning`, as a warning named `AgglomerativeClusteringWarning` with a `code`; elsewhere (browsers, Cloudflare Workers and other runtimes that only imitate Node) through `console.warn`, prefixed `agglomerative-clustering [code]:`. Their text may change; match on `code`. They are:
-
-| `code` | When | What to do |
-| --- | --- | --- |
-| `rgb-as-rgba` | A bare `Uint8Array` whose bytes look like RGB (3 per pixel), or grey (1 per pixel), which is read as RGBA (4 per pixel) and gives wrong colours. sharp's plain `.raw()` gives RGB. | If it is RGB, pass `{ data, format: 'rgb' }` (or add `.ensureAlpha()`). If it is grey, convert it to RGBA as for `gray-as-rgba`; `format: 'rgb'` would misread it too. If it really is RGBA, pass `{ data, format: 'rgba' }`. From 4.0 this is an `invalid-argument` error. |
-| `gray-as-rgba` | A bare `Uint8Array` whose bytes look like grey: 1 byte per pixel, or 2 with alpha. fast-png's `decode()` gives these for grey PNGs (and 1 byte of palette index per pixel for palette PNGs), keeping rows below 8 bits packed. Read as RGBA, 1-byte grey packs four pixels into one, with every fourth byte as alpha; grey and alpha bytes become tinted pixels with the wrong alpha. | With fast-png, use [`fastPngToImage`](guides.md#keeping-fast-png), which expands 8-bit grey and refuses what it can't expand; or decode with something that gives RGBA (pngjs, or sharp with `.ensureAlpha()`), which also covers palette, packed and 16-bit files. There is no grey format. If it really is RGBA, pass `{ data, format: 'rgba' }`. From 4.0 this is an `invalid-argument` error. |
-
-<!-- bench/spikes/bare-rgb/measure.mjs → results.txt; bench/spikes/bare-grey/shipped.mjs → results-shipped.txt, results-cost.txt -->
-The check samples the bytes, so it costs well under a millisecond at any size. It was tested on 2,984 real RGBA images (photos, emoji, cutouts, grey images with alpha, dithered images, pixel art, premultiplied pixels) and warned on none. It misses some grey input: photos dithered to a few grey levels, and grey whose changing pixels mostly come in runs of four equal bytes, which look exactly like RGBA. `ImageData` and `{ data, format }` are never inspected, so saying what the bytes are silences it (for grey, which has no format, converting it does).
-
-- **When:** only for a call that passes its own checks, so a call that fails for another reason (a bad `k`, an unknown option, a signal already aborted) doesn't use the warning up. In the worker entry it comes after the call succeeds, on your side, never from the worker.
-- **Once per copy of the library:** an app that loads both the ES-module and CommonJS builds can see it twice.
-- **Silencing it in Node:** `node --no-warnings` or `NODE_NO_WARNINGS=1` silence every warning; `process.on('warning', (w) => …)` sees it, with `w.code` set (`'rgb-as-rgba'`, `'gray-as-rgba'`), if you'd rather handle it.
-- **Finding the call:** `node --trace-warnings` prints the stack, which shows the call site when a dependency makes the call.
+There are none. A 3.x release may warn about a call the next major version will reject, and 4.0 turned the two warnings it had (`rgb-as-rgba` and `gray-as-rgba`, for a bare `Uint8Array` that looks like RGB or grey) into the `invalid-argument` error on `'image'` described under "Input". If a warning is added in a later 4.x release, it will go through `process.emitWarning` in Node, Bun and Deno (a warning named `AgglomerativeClusteringWarning` with a `code`) and `console.warn` elsewhere, and become an error in 5.0.
 
 ## Worker entry
 
 `agglomerative-clustering/worker` exports every function of the main entry, run in one shared worker started on first use, plus `terminate()`, which stops it (the next call starts a new one), and `createWorker(options?)`, which starts a worker of your own. A worker has every function as a method, plus:
 
 - **`cluster(image, options?)`** keeps the image and its clustering in the worker, behind a handle with `handle.getClustering()`, `handle.getPalette(k)`, `handle.getSwatches(k)`, `handle.getClusteringInfo()`, `handle.chooseFrom(palette, k, options?)` (the clustering method of the same name, run in the worker: `colorSpace` and `signal` only), `handle.quantize(k, options?)`, `handle.quantizeToIndices(k, options?)`, `handle.quantizeWithPalette(palette, options?)` and `handle.quantizeToIndicesWithPalette(palette, options?)`. A palette of plain bytes is matched in the handle's colour space, and `quantizeToIndices` uses the cutoff it was clustered with. Free it with `release()`, or declare it with `await using handle = await worker.cluster(image)`; a dropped handle is freed only when the garbage collector gets to it.
-- **`load(clustering)`** keeps a stored clustering in the worker, behind a `LoadedClusteringHandle` with `loaded.getPalette(k)`, `loaded.getSwatches(k)`, `loaded.getClusteringInfo()`, `loaded.chooseFrom(palette, k, options?)`, `loaded.quantize(image, k, options?)` and `loaded.quantizeToIndices(image, k, options?)`. It holds no image, so the mapping methods take the one to map (and return its type), and it has no `loaded.getClustering()` (you passed the clustering in) and no `…WithPalette` methods (use `worker.quantizeWithPalette`). The clustering is checked and its bytes taken at the call, as for any argument. `signal` and `onProgress` work on the mapping methods. Free it with `release()`, or `await using loaded = await worker.load(clustering)`, which replaces one-off `worker.getPaletteFromClustering(clustering, k)` calls that send the clustering every time.
+- **`load(clustering)`** keeps a stored clustering in the worker, behind a `LoadedClusteringHandle` with `loaded.getPalette(k)`, `loaded.getSwatches(k)`, `loaded.getClusteringInfo()`, `loaded.chooseFrom(palette, k, options?)`, `loaded.quantize(image, k, options?)` and `loaded.quantizeToIndices(image, k, options?)`. It holds no image, so the mapping methods take the one to map (and return its type), and it has no `loaded.getClustering()` (you passed the clustering in) and no `…WithPalette` methods (use `worker.quantizeWithPalette`). The clustering is checked and its bytes taken at the call, as for any argument. `signal` and `onProgress` work on the mapping methods. Free it with `release()`, or `await using loaded = await worker.load(clustering)`, which sends the clustering once instead of with every call.
 
   The two kinds of handle differ in what they keep, and so in how they map:
 
@@ -507,37 +481,3 @@ Frozen arrays of every value of the options that take one of a fixed set of name
 
 ### `version: string` and `formatVersion: number`
 `version` is the library's version (such as `'3.0.0'`), for bug reports and runtime checks. `formatVersion` is the version of the data it stores (the clustering format), which changes only when that format does: a minor release may raise it, and every earlier format from 2 on stays readable. To keep stored clusterings current, cluster the image again when `(await new Clustering(stored).getClusteringInfo()).formatVersion` is below it, or when `new Clustering(stored)` throws or `getClusteringInfo()` rejects with `unsupported-version` (a 2.x clustering, which has no weights, or one from a newer version than this one). Both entries export both, and a `.wasm` from another version fails to load with `wasm-load-failed`.
-
-### Deprecated names
-`getClustering(image, options?)`, `getPalette(image, k, options?)` and `getSwatches(image, k, options?)` are the same functions as `buildClustering`, `buildPalette` and `buildSwatches` (their names before 3.4.0), in both entries and on workers, and 4.0 removes them. See [Migrating](migrating.md#deprecated-in-34-removed-in-40).
-
-## Deprecated function forms
-
-The five functions that take a stored clustering are deprecated from 3.8 and removed in 4.0, in both entries and on workers. They work as before; TypeScript marks them deprecated. Replace each with the method on the main thread or a loaded handle off it (the table under [Clustering methods](#clustering-methods)); [Migrating](migrating.md#deprecated-in-38-removed-in-40) has the steps.
-
-### `getPaletteFromClustering(clustering, k): Promise<Palette>`
-The function form of `clustering.getPalette(k)`. Cuts a clustering to at most `k` colours, returned as flat RGB bytes. This takes well under a millisecond. Colours come in split order: index 0 is the dominant colour at two colours and keeps its place as the palette grows (it is not always the heaviest entry of a larger palette), and the palette for `k + 1` is the palette for `k` with one entry refined (the larger half of a split keeps its parent's place) and the smaller half appended. Accepts clusterings from 2.x too. `k` is a maximum: an image with fewer distinct colours gives fewer entries.
-
-### `getSwatchesFromClustering(clustering, k): Promise<Swatches>`
-The function form of `clustering.getSwatches(k)`. The same from a clustering you already have, well under a millisecond. Needs a clustering from 3.x: 2.x clusterings don't record weights, so they are rejected.
-
-### `getClusteringInfo(clustering): Promise<ClusteringInfo>`
-The function form of `clustering.getClusteringInfo()`. What a clustering holds: `{ formatVersion, colorSpace, precision, transparent, maxColors, totalWeight, mse, explained }`.
-
-- `formatVersion`: the format of its bytes (compare it with the exported `formatVersion`).
-- `transparent`: the alpha cutoff it was made with, or `false`. `quantizeToIndicesFromClustering` uses it by default.
-- `maxColors`: the largest palette it can be cut to.
-- `mse[k - 1]`: the mean squared error per channel of the `k`-colour clustering, in 8-bit RGB values (OKLab units for an OKLab clustering). `mse[0]` is the image's variance, and `mse[maxColors - 1]` is 0 at the default `precision: 8` (below 8, it is the error that grouping colours discarded). It is an estimate from merge costs; mapping pixels to the palette usually lowers it by another 10–15%.
-- `explained[k - 1]`: `1 - mse[k - 1] / mse[0]`, the share of the image's variance the `k`-colour palette keeps, from 0 to 1. It has no units, so a target such as `0.99` means the same in both colour spaces. Being relative to the image's own variance, it is a poor guide to how many colours an image needs: to choose a palette size by error, see [the guides](guides.md#choosing-a-palette-size).
-
-It needs a clustering from 3.x, like `getSwatchesFromClustering`: a 2.x clustering recorded no weights, so it is rejected with `unsupported-version` (the palette and mapping functions still read it).
-
-### `quantizeFromClustering(image, clustering, k, options?): Promise<the type of image>`
-The function form of `clustering.quantize(image, k, options)`. Quantizes using a clustering you already have.
-
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`.
-
-### `quantizeToIndicesFromClustering(image, clustering, k, options?): Promise<IndexedImage>`
-The function form of `clustering.quantizeToIndices(image, k, options)`. The same as `quantizeToIndices`, from a clustering you already have. The default cutoff is the one the clustering was made with (`(await clustering.getClusteringInfo()).transparent`), so clustering and mapping agree unless you name another.
-
-Options: `colorSpace` (defaults to the clustering's), `dither`, `width`, `signal`, `onProgress`, `transparent`.

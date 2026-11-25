@@ -17,7 +17,7 @@ describe('CommonJS entry', () => {
 
     it('gives the same results as the ES module', async () => {
         const cjs = require('../dist/index.cjs');
-        expect(await cjs.getClustering(gradient)).toEqual(await esm.getClustering(gradient));
+        expect(await cjs.buildClustering(gradient)).toEqual(await esm.buildClustering(gradient));
         expect(await cjs.quantize(gradient, 8)).toEqual(await esm.quantize(gradient, 8));
     });
 
@@ -25,7 +25,7 @@ describe('CommonJS entry', () => {
         const worker = require('agglomerative-clustering/worker');
         expect(typeof worker.createWorker).toBe('function');
         try {
-            expect(await worker.getPalette(gradient, 4)).toEqual(await esm.getPalette(gradient, 4));
+            expect(await worker.buildPalette(gradient, 4)).toEqual(await esm.buildPalette(gradient, 4));
         } finally {
             await worker.terminate();
         }

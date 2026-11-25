@@ -1,5 +1,5 @@
 // Post-processes the CommonJS build (dist/index.cjs) after Babel. Its require of the Emscripten glue, an ES module, works
-// in Node (20.19 and later, which can require() ES modules) and in bundlers, but Jest's module system can't load it
+// in Node (22.12 and later, which can require() ES modules) and in bundlers, but Jest's module system can't load it
 // ("Must use import to load ES Module"). Then the CommonJS copy of the glue (dist/clustering.cjs, see patch-glue.mjs) is
 // used instead.
 import { readFileSync, writeFileSync } from 'fs';

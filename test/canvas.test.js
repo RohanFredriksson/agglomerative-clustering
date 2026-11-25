@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildClustering, buildPalette, quantize, quantizeFromClustering, quantizeWithPalette } from '../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeWithPalette } from '../dist/index.mjs';
 
 // These tests cover the ImageData input path, which is polyfilled in test/setup.js
 // via the `canvas` package so it works in Node.js.
@@ -123,24 +123,24 @@ describe('quantize with ImageData', () => {
 
 });
 
-describe('quantizeFromClustering with ImageData', () => {
+describe('Clustering.quantize with ImageData', () => {
 
     it('ImageData in → ImageData out', async () => {
         const clustering = await buildClustering(solidRedImageData);
-        const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
+        const result = await clustering.quantize(solidRedImageData, 1);
         expect(result).toBeInstanceOf(ImageData);
     });
 
     it('output preserves dimensions', async () => {
         const clustering = await buildClustering(solidRedImageData);
-        const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
+        const result = await clustering.quantize(solidRedImageData, 1);
         expect(result.width).toBe(solidRedImageData.width);
         expect(result.height).toBe(solidRedImageData.height);
     });
 
     it('output data is Uint8ClampedArray', async () => {
         const clustering = await buildClustering(solidRedImageData);
-        const result = await quantizeFromClustering(solidRedImageData, clustering, 1);
+        const result = await clustering.quantize(solidRedImageData, 1);
         expect(result.data).toBeInstanceOf(Uint8ClampedArray);
     });
 

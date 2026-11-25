@@ -2,6 +2,10 @@ import { describe, it, expect, afterAll } from 'vitest';
 import * as ac from '../dist/index.mjs';
 import { createWorker } from '../dist/worker.mjs';
 
+// The methods on Clustering read their receiver, so they run on any bytes through `call`.
+const made = await ac.buildClustering(new Uint8Array(4 * 16).fill(200));
+const cut = (bytes, k) => made.getPalette.call(bytes, k);
+
 const image = new Uint8Array(4 * 16).fill(200);
 const worker = createWorker();
 afterAll(() => worker.terminate());
@@ -18,8 +22,8 @@ describe('errors carry a code', () => {
         ['an invalid k', () => ac.buildPalette(image, 0), 'invalid-argument'],
         ['an unknown option', () => ac.buildPalette(image, 4, { dither: true }), 'invalid-argument'],
         ['an invalid palette', () => ac.quantizeWithPalette(image, new Uint8Array(4)), 'invalid-argument'],
-        ['bytes that are not a clustering', () => ac.getPaletteFromClustering(new Uint8Array([1, 2, 3, 4, 5]), 2), 'invalid-clustering'],
-        ['a clustering from a newer format', () => ac.getPaletteFromClustering(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]), 2), 'unsupported-version'],
+        ['bytes that are not a clustering', () => cut(new Uint8Array([1, 2, 3, 4, 5]), 2), 'invalid-clustering'],
+        ['a clustering from a newer format', () => cut(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]), 2), 'unsupported-version'],
     ])('%s', async (_, call, code) => {
         const error = await caught(call());
         expect(error).toBeInstanceOf(Error);
@@ -28,18 +32,19 @@ describe('errors carry a code', () => {
 
     it('needs a 3.x clustering for weights', async () => {
         const v2 = new Uint8Array([0xAC, 2, 0, 8, 1, 2, 3]);
-        expect((await caught(ac.getSwatchesFromClustering(v2, 1))).code).toBe('unsupported-version');
+        expect((await caught(made.getSwatches.call(v2, 1))).code).toBe('unsupported-version');
     });
 
 });
 
 describe('a worker fails like the main entry', () => {
 
+    // A stored clustering enters through `new Clustering` on the main entry and `worker.load` on a worker.
+    const loaded = async (api, bytes) => api === ac ? new ac.Clustering(bytes) : api.load(bytes);
+
     const cases = [
         ['an invalid k', (api) => api.buildPalette(image, 0)],
         ['an unknown option', (api) => api.buildPalette(image, 4, { dither: true })],
-        ['an invalid clustering', (api) => api.getPaletteFromClustering(new Uint8Array([1, 2, 3, 4, 5]), 2)],
-        ['a newer clustering', (api) => api.getClusteringInfo(new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0]))],
     ];
 
     it.each(cases)('with %s', async (_, call) => {
@@ -50,6 +55,18 @@ describe('a worker fails like the main entry', () => {
         expect(error.code).toBe(expected.code);
         expect(error.stack).toContain('errors.test');
         expect(error.cause?.message).toBe(expected.message);
+    });
+
+    // `worker.load` checks the bytes on the caller's side (there is no remote stack to attach as a cause).
+    it.each([
+        ['an invalid clustering', new Uint8Array([1, 2, 3, 4, 5])],
+        ['a newer clustering', new Uint8Array([0xAC, 99, 0, 0, 0, 0, 0])],
+    ])('with %s given to load', async (_, bytes) => {
+        const expected = await caught(loaded(ac, bytes));
+        const error = await caught(loaded(worker, bytes));
+        expect(error.message).toBe(expected.message);
+        expect(error.code).toBe(expected.code);
+        expect(error.argument).toBe(expected.argument);
     });
 
     it('codes handle and termination errors', async () => {
@@ -81,10 +98,10 @@ describe('which argument an error is about', () => {
                 expect(await argumentOf(entry.buildPalette(image, 4, { colourSpace: 'oklab' }))).toBe('options.colourSpace');
                 expect(await argumentOf(entry.buildPalette(image, 4, { precision: 9 }))).toBe('options.precision');
                 expect(await argumentOf(entry.quantize(image, 4, { dither: true }))).toBe('options.width');
-                expect(await argumentOf(entry.getPaletteFromClustering(new Uint8Array(5), 2))).toBe('clustering');
+                expect(await argumentOf((entry === ac ? cut(new Uint8Array(5), 2) : entry.load(new Uint8Array(5))))).toBe('clustering');
                 expect(await argumentOf(entry.quantizeWithPalette(image, [300, 0, 0]))).toBe('palette');
                 expect(await argumentOf(entry.quantizeWithPalette(image, clustering))).toBe('palette');
-                expect(await argumentOf(entry.quantizeFromClustering(image, clustering, 4, { onProgress: 5 }))).toBe('options.onProgress');
+                expect(await argumentOf((entry === ac ? clustering.quantize(image, 4, { onProgress: 5 }) : entry.load(clustering).then((handle) => handle.quantize(image, 4, { onProgress: 5 }))))).toBe('options.onProgress');
             }
         } finally {
             await worker.terminate();

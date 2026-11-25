@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildClustering, buildPalette, getPaletteFromClustering, quantize, quantizeFromClustering, quantizeWithPalette, getSwatchesFromClustering, getClusteringInfo } from '../dist/index.mjs';
+import { Clustering, buildClustering, buildPalette, quantize, quantizeWithPalette } from '../dist/index.mjs';
+
+// Bytes that are not a clustering are refused when they are wrapped, so these tests go through the constructor.
+const method = async (name, bytes, ...args) => new Clustering(bytes)[name](...args);
+
 
 // The weight of each colour in a cut, from the swatches (the weights alone used to be a function of their own).
-const weightsOf = async (clustering, k) => (await getSwatchesFromClustering(clustering, k)).weights;
+const weightsOf = async (clustering, k) => (await new Clustering(clustering).getSwatches(k)).weights;
 
 // A 48x48 RGBA gradient with many distinct colours.
 const width = 48, height = 48;
@@ -45,8 +49,8 @@ describe('clustering header', () => {
     it('reports clusterings from a newer format version as such', async () => {
         const newer = new Uint8Array(await buildClustering(gradient));
         newer[1] = 4;
-        await expect(getPaletteFromClustering(newer, 4)).rejects.toThrow('format version 4 is newer');
-        await expect(quantizeFromClustering(gradient, newer, 4)).rejects.toThrow('format version 4 is newer');
+        await expect(method('getPalette', newer, 4)).rejects.toThrow('format version 4 is newer');
+        await expect(method('quantize', newer, gradient, 4)).rejects.toThrow('format version 4 is newer');
         expect(newer.length % 9).toBe(7);
     });
 
@@ -55,19 +59,19 @@ describe('clustering header', () => {
         for (const index of [4, 6]) {
             const future = new Uint8Array(await buildClustering(gradient));
             future[index] = 2;
-            await expect(getPaletteFromClustering(future, 4), `byte ${index}`).rejects.toMatchObject({ code: 'unsupported-version' });
-            await expect(getClusteringInfo(future)).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(method('getPalette', future, 4), `byte ${index}`).rejects.toMatchObject({ code: 'unsupported-version' });
+            await expect(method('getClusteringInfo', future)).rejects.toMatchObject({ code: 'unsupported-version' });
             await expect(weightsOf(future, 4)).rejects.toMatchObject({ code: 'unsupported-version' });
         }
         // A damaged length is still just an invalid clustering.
         const damaged = new Uint8Array(await buildClustering(gradient));
         damaged[3] = 5;
-        await expect(getPaletteFromClustering(damaged, 4)).rejects.toMatchObject({ code: 'invalid-clustering' });
+        await expect(method('getPalette', damaged, 4)).rejects.toMatchObject({ code: 'invalid-clustering' });
     });
 
     it('reads records longer than it knows, ignoring the extra fields', async () => {
         const clustering = await buildClustering(gradient);
-        const merges = (await getClusteringInfo(clustering)).maxColors - 1;
+        const merges = (await clustering.getClusteringInfo()).maxColors - 1;
         // The same clustering with 9 unknown bytes after each record (keeping the length 7 more than a multiple of 9).
         const header = clustering[2];
         const extended = new Uint8Array(header + 3 + 30 * merges + (7 - (header + 3 + 30 * merges) % 9 + 9) % 9);
@@ -76,19 +80,18 @@ describe('clustering header', () => {
         extended.fill(0, 17, 21);   // no checksum: these bytes aren't the ones it was computed over (read unchecked, like 3.0.0-beta.1's)
         for (let i = 0; i < merges; i++) {extended.set(clustering.subarray(header + 3 + 21 * i, header + 24 + 21 * i), header + 3 + 30 * i);}
         for (const k of [1, 5, 40]) {
-            expect(await getPaletteFromClustering(extended, k)).toEqual(await getPaletteFromClustering(clustering, k));
+            expect(await new Clustering(extended).getPalette(k)).toEqual(await clustering.getPalette(k));
             expect(await weightsOf(extended, k)).toEqual(await weightsOf(clustering, k));
         }
-        expect((await getClusteringInfo(extended)).mse).toEqual((await getClusteringInfo(clustering)).mse);
+        expect((await new Clustering(extended).getClusteringInfo()).mse).toEqual((await clustering.getClusteringInfo()).mse);
     });
 
     it('rejects things that are not clusterings', async () => {
-        await expect(getPaletteFromClustering(new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
+        await expect(method('getPalette', new Uint8Array(5), 4)).rejects.toThrow('Invalid clustering');
         const wrongMagic = (await buildClustering(gradient)).slice();
         wrongMagic[0] = 0;
-        await expect(getPaletteFromClustering(wrongMagic, 4)).rejects.toThrow('Invalid clustering');
-        await expect(getPaletteFromClustering([0xAC, 2, 0, 8], 4)).rejects.toThrow('Invalid clustering');
-        await expect(quantizeFromClustering(gradient, new Uint8Array(8), 4)).rejects.toThrow('Invalid clustering');
+        await expect(method('getPalette', wrongMagic, 4)).rejects.toThrow('Invalid clustering');
+        await expect(method('quantize', new Uint8Array(8), gradient, 4)).rejects.toThrow('Invalid clustering');
     });
 
 });
@@ -97,10 +100,10 @@ describe('split-order palettes', () => {
 
     it('start with the root colour and grow by refining one entry and appending one', async () => {
         const clustering = await buildClustering(gradient);
-        let previous = colours(await getPaletteFromClustering(clustering, 1));
+        let previous = colours(await clustering.getPalette(1));
         expect(previous).toHaveLength(1);
         for (let k = 2; k <= 64; k++) {
-            const palette = colours(await getPaletteFromClustering(clustering, k));
+            const palette = colours(await clustering.getPalette(k));
             expect(palette).toHaveLength(k);
             const changed = previous.filter((c, i) => palette[i] !== c).length;
             expect(changed).toBeLessThanOrEqual(1);
@@ -127,18 +130,18 @@ describe('split-order palettes', () => {
 
 });
 
-describe('quantizeFromClustering colour space', () => {
+describe('Clustering.quantize colour space', () => {
 
     it('defaults to the space the clustering was made in', async () => {
         const clustering = await buildClustering(gradient, { colorSpace: 'oklab' });
-        const inherited = await quantizeFromClustering(gradient, clustering, 16);
-        expect(inherited).toEqual(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'oklab' }));
+        const inherited = await clustering.quantize(gradient, 16);
+        expect(inherited).toEqual(await clustering.quantize(gradient, 16, { colorSpace: 'oklab' }));
     });
 
     it('can be overridden', async () => {
         const clustering = await buildClustering(gradient, { colorSpace: 'oklab' });
-        const palette = await getPaletteFromClustering(clustering, 16);
-        expect(await quantizeFromClustering(gradient, clustering, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
+        const palette = await clustering.getPalette(16);
+        expect(await clustering.quantize(gradient, 16, { colorSpace: 'rgb' })).toEqual(await quantizeWithPalette(gradient, palette, { colorSpace: 'rgb' }));
     });
 
 });

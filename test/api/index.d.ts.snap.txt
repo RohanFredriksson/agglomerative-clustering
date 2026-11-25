@@ -131,18 +131,13 @@ export const version: string;
 export const formatVersion: number;
 export function init(options?: InitOptions): Promise<void>;
 export function buildClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
-export function getClustering(image: ImageLike, options?: ClusteringOptions): Promise<Clustering>;
 export function buildPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
-export function getPalette(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Palette>;
-export function getPaletteFromClustering(clustering: Clustering, k: number): Promise<Palette>;
 export interface Swatches {
     palette: Palette;
     weights: Float64Array;
     shares: Float64Array;
 }
 export function buildSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
-export function getSwatches(image: ImageLike, k: number, options?: ClusteringOptions): Promise<Swatches>;
-export function getSwatchesFromClustering(clustering: Clustering, k: number): Promise<Swatches>;
 export interface ClusteringInfo {
     formatVersion: number;
     colorSpace: ColorSpace;
@@ -153,11 +148,8 @@ export interface ClusteringInfo {
     mse: Float64Array;
     explained: Float64Array;
 }
-export function getClusteringInfo(clustering: Clustering): Promise<ClusteringInfo>;
 export function quantize<I extends ImageLike>(image: I, k: number, options?: QuantizeOptions): Promise<ImageResult<I>>;
-export function quantizeFromClustering<I extends ImageLike>(image: I, clustering: Clustering, k: number, options?: MappingOptions): Promise<ImageResult<I>>;
 export function quantizeWithPalette<I extends ImageLike>(image: I, palette: PaletteLike, options?: MappingOptions): Promise<ImageResult<I>>;
 export function quantizeToIndices(image: ImageLike, k: number, options?: QuantizeIndexOptions): Promise<IndexedImage>;
-export function quantizeToIndicesFromClustering(image: ImageLike, clustering: Clustering, k: number, options?: MappingIndexOptions): Promise<IndexedImage>;
 export function quantizeToIndicesWithPalette(image: ImageLike, palette: PaletteLike, options?: MappingIndexOptions): Promise<IndexedImage>;
 export {};

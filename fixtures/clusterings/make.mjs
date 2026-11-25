@@ -15,11 +15,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const clustering = await (library.buildClustering ?? library.getClustering)(fixtureImage());   // 3.4.0 renamed it
 const fixture = { made_with: release ?? (await import(resolve(dirname(build), '../package.json'), { with: { type: 'json' } })).default.version, palettes: {} };
-for (const k of sizes) {fixture.palettes[k] = Array.from(await library.getPaletteFromClustering(clustering, k));}
-if (library.getSwatchesFromClustering) {
+// 4.0 forms (methods on the clustering) when the build has them; builds before 3.3 only have the function forms.
+const palette = (k) => clustering.getPalette ? clustering.getPalette(k) : library.getPaletteFromClustering(clustering, k);
+const swatches = (k) => clustering.getSwatches ? clustering.getSwatches(k) : library.getSwatchesFromClustering(clustering, k);
+const info = () => clustering.getClusteringInfo ? clustering.getClusteringInfo() : library.getClusteringInfo(clustering);
+for (const k of sizes) {fixture.palettes[k] = Array.from(await palette(k));}
+if (clustering.getSwatches || library.getSwatchesFromClustering) {
     fixture.weights = {};
-    for (const k of sizes) {fixture.weights[k] = Array.from((await library.getSwatchesFromClustering(clustering, k)).weights);}
-    fixture.mse = Array.from((await library.getClusteringInfo(clustering)).mse);
+    for (const k of sizes) {fixture.weights[k] = Array.from((await swatches(k)).weights);}
+    fixture.mse = Array.from((await info()).mse);
 }
 
 writeFileSync(resolve(here, `v${version}.bin`), clustering);

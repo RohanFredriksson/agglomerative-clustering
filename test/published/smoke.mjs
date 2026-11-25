@@ -34,18 +34,14 @@ try {
     const pixels = 'const px = new Uint8Array(64 * 4); for (let i = 0; i < 64; i++) px.set([(i * 37) & 255, (i * 91) & 255, (i * 13) & 255, 255], i * 4);';
 
     writeFileSync(join(project, 'esm.mjs'), `${pixels}
-import { version, getPalette, getSwatches, quantizeToIndices, Palette, Clustering, getClustering, init } from 'agglomerative-clustering';
-import * as all from 'agglomerative-clustering';
+import { version, buildPalette, buildSwatches, quantizeToIndices, Palette, Clustering, buildClustering, init } from 'agglomerative-clustering';
 await init();
 if (version !== ${JSON.stringify(installed)}) throw new Error('version is ' + version);
-const palette = await getPalette(px, 4, { colorSpace: 'oklab' });
+const palette = await buildPalette(px, 4, { colorSpace: 'oklab' });
 if (!(palette instanceof Palette) || palette.colorSpace !== 'oklab' || palette.length !== 12) throw new Error('palette');
-const { shares } = await getSwatches(px, 4);
+const { shares } = await buildSwatches(px, 4);
 if (Math.abs(shares.reduce((a, b) => a + b) - 1) > 1e-9) throw new Error('shares');
-if (!((await getClustering(px)) instanceof Clustering)) throw new Error('clustering');
-// The names before 3.4.0 work in every 3.x; where this version has the 3.4.0 names, they are the same functions.
-if (typeof all.buildPalette === 'function' && (all.buildPalette !== getPalette || all.buildClustering !== getClustering || all.buildSwatches !== getSwatches
-    || String(await all.buildPalette(px, 4)) !== String(await getPalette(px, 4)))) throw new Error('build names');
+if (!((await buildClustering(px)) instanceof Clustering)) throw new Error('clustering');
 const indexed = await quantizeToIndices(px, 4);
 console.log('version ' + version + ', ' + palette.length / 3 + ' colours, ' + indexed.indices.length + ' indices');
 `);
@@ -53,7 +49,7 @@ console.log('version ' + version + ', ' + palette.length / 3 + ' colours, ' + in
 
     writeFileSync(join(project, 'cjs.cjs'), `${pixels}
 const ac = require('agglomerative-clustering');
-ac.getPalette(px, 3).then((palette) => console.log(palette.length / 3 + ' colours from require()'));
+ac.buildPalette(px, 3).then((palette) => console.log(palette.length / 3 + ' colours from require()'));
 `);
     check('CommonJS require', () => run(process.execPath, ['cjs.cjs'], project).trim());
 
@@ -63,7 +59,6 @@ const worker = createWorker();
 const handle = await worker.cluster(px, { colorSpace: 'oklab' });
 const palette = await handle.getPalette(4);
 await handle.release();
-if (typeof worker.buildPalette === 'function' && worker.buildPalette !== worker.getPalette) throw new Error('worker build names');
 await worker.terminate();
 if (palette.colorSpace !== 'oklab') throw new Error('palette lost its colour space in the worker');
 console.log(palette.length / 3 + ' colours from a worker thread');
@@ -74,7 +69,7 @@ console.log(palette.length / 3 + ' colours from a worker thread');
 import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 const path = createRequire(import.meta.url).resolve('agglomerative-clustering/clustering.wasm');
-const { init, getPalette } = await import('agglomerative-clustering');
+const { init } = await import('agglomerative-clustering');
 await init({ wasm: readFileSync(path) });
 console.log('loaded from the exported .wasm (' + readFileSync(path).length + ' bytes)');
 `);
@@ -82,11 +77,11 @@ console.log('loaded from the exported .wasm (' + readFileSync(path).length + ' b
 
     writeFileSync(join(project, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, module: 'nodenext', moduleResolution: 'nodenext', target: 'es2022', noEmit: true, skipLibCheck: false, lib: ['es2022', 'dom'] }, files: ['types.mts'] }));
     writeFileSync(join(project, 'types.mts'), `
-import { getPalette, getClustering, Clustering, Palette, type ErrorArgument } from 'agglomerative-clustering';
+import { buildPalette, buildClustering, Clustering, Palette, type ErrorArgument } from 'agglomerative-clustering';
 import { createWorker, type ClusteringHandle } from 'agglomerative-clustering/worker';
 declare const bytes: Uint8Array;
-const palette: Palette = await getPalette(bytes, 8);
-const clustering: Clustering = await getClustering(bytes);
+const palette: Palette = await buildPalette(bytes, 8);
+const clustering: Clustering = await buildClustering(bytes);
 const handle: ClusteringHandle = await createWorker().cluster(bytes);
 const which: ErrorArgument = 'options.colorSpace';
 void [palette, clustering, handle, which];

@@ -66,9 +66,3 @@ loadedHandle.getClustering();
 // @ts-expect-error getInfo was renamed
 declare const h: ClusteringHandle; h.getInfo();
 void main;
-
-// The names before 3.4.0 still compile (deprecated, the same functions).
-import { getPalette as paletteBefore340 } from 'agglomerative-clustering/worker';
-const sameAsBefore340: typeof buildPalette = paletteBefore340;
-void sameAsBefore340;
-void createWorker().getPalette(new Uint8Array(4), 2);

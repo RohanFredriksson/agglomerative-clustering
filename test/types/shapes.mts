@@ -1,6 +1,6 @@
 // The shapes of results and inputs: what narrows, and which palette inputs the types accept. Uses only types that exist
 // without the DOM lib, so it is compiled in every configuration.
-import { buildClustering, getClusteringInfo, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes } from 'agglomerative-clustering';
+import { buildClustering, quantizeToIndices, quantizeWithPalette, quantizeToIndicesWithPalette, ditherMethods, ditherSteps, colorSpaces, imageFormats, alphaModes } from 'agglomerative-clustering';
 import { createWorker } from 'agglomerative-clustering/worker';
 import type { AlphaMode, ClusteringInfo, ColorSpace, DitherMethod, DitherSteps, ImageFormat, IndexedImage, PaletteLike, RawImage } from 'agglomerative-clustering';
 
@@ -18,7 +18,7 @@ export async function shapes() {
 
     // One shape: the error curve and weights are always there (a 2.x clustering is rejected), and the format is a number,
     // so a later format needs no new type.
-    const info: ClusteringInfo = await getClusteringInfo(await buildClustering(raw));
+    const info: ClusteringInfo = await (await buildClustering(raw)).getClusteringInfo();
     const precision: number = info.precision;
     const mse: Float64Array = info.mse;
     const explained: Float64Array = info.explained;
