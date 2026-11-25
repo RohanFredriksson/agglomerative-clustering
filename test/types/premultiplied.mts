@@ -15,6 +15,11 @@ export async function premultiplied() {
     const fromConfig: RawImage = { data: u8, ...forwarded };
     void [noAlpha, noAlphaFlag, fromConfig];
 
+    // docs/migrating.md: a result variable reused across formats is annotated ImageResult<RawImage>.
+    let resultVariable: ImageResult<RawImage> = await quantize({ data: u8, format: 'rgb' as const }, 16);
+    resultVariable = await quantize({ data: u8, format: 'rgba' as const, width: 4, height: 4 }, 16);
+    void resultVariable;
+
     // The result has the input's own keys, with data a Uint8Array and the literal format kept.
     const r = await quantize({ data: u8, format: 'bgra' as const, width: 4 }, 4);
     const rd: Uint8Array = r.data;
