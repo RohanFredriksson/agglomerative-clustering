@@ -12,18 +12,29 @@ export const alphaModes: readonly AlphaMode[];
 export const ditherMethods: readonly DitherMethod[];
 export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
-export interface RawImage {
+interface RawImageWithAlpha<F extends 'rgba' | 'bgra' = 'rgba' | 'bgra'> {
     data: Uint8Array | Uint8ClampedArray;
-    format: ImageFormat;
+    format: F;
     width?: number | undefined;
     height?: number | undefined;
+    premultiplied?: boolean | undefined;
 }
+interface RawImageWithoutAlpha<F extends 'rgb' | 'rgbx' | 'bgrx' = 'rgb' | 'rgbx' | 'bgrx'> {
+    data: Uint8Array | Uint8ClampedArray;
+    format: F;
+    width?: number | undefined;
+    height?: number | undefined;
+    premultiplied?: boolean | undefined;
+}
+export type RawImage<F extends ImageFormat = ImageFormat> = F extends 'rgba' | 'bgra' ? RawImageWithAlpha<F> : F extends 'rgb' | 'rgbx' | 'bgrx' ? RawImageWithoutAlpha<F> : never;
 export type PlatformImageData = typeof globalThis extends {
     ImageData: {
         prototype: infer T;
     };
 } ? T : never;
-export type ImageResult<I extends ImageLike> = I extends Uint8Array ? Uint8Array : I extends RawImage ? RawImage : I extends PlatformImageData ? PlatformImageData : never;
+export type ImageResult<I extends ImageLike> = I extends Uint8Array ? Uint8Array : I extends RawImage ? Omit<I, 'data'> & {
+    data: Uint8Array;
+} : I extends PlatformImageData ? PlatformImageData : never;
 export type ImageLike = Uint8Array | PlatformImageData | RawImage;
 export type WasmModule = typeof globalThis extends {
     WebAssembly: {

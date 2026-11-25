@@ -1,8 +1,8 @@
 /**
  * How pixel bytes are laid out:
  * - `'rgb'`: 3 bytes per pixel, red, green, blue.
- * - `'rgba'`, `'bgra'`: 4 bytes, with straight (not premultiplied) alpha last. BGRA is the order of Windows bitmaps and
- *   Electron's `nativeImage`, whose `toBitmap()` is premultiplied: convert it first (see Input in docs/api.md).
+ * - `'rgba'`, `'bgra'`: 4 bytes, with alpha last, straight unless the image object says `premultiplied: true` (canvas
+ *   surfaces, Electron's `toBitmap()`). BGRA is the order of Windows bitmaps and Electron's `nativeImage`.
  * - `'rgbx'`, `'bgrx'`: 4 bytes whose last is padding, not alpha (Windows `BI_RGB` bitmaps, WebCodecs `'BGRX'`, ffmpeg
  *   `bgr0`): every pixel is opaque, and mapped output writes 255 there.
  *
@@ -70,17 +70,47 @@ export const ditherSteps: readonly DitherSteps[];
 export function isCodedError(value: unknown): value is CodedError;
 
 /**
- * An image as raw bytes with an explicit layout: for RGB or BGRA data, a `Uint8ClampedArray`, or Node, where there is no
- * `ImageData`. Functions that return an image give back an object of this shape with the same `format`.
+ * RGBA or BGRA bytes. `premultiplied: true` says the colours are multiplied by alpha (canvas, Electron, WebGL).
+ * Internal: name it through `RawImage<'rgba'>` or `RawImage<'bgra'>`.
  */
-export interface RawImage {
+interface RawImageWithAlpha<F extends 'rgba' | 'bgra' = 'rgba' | 'bgra'> {
     data: Uint8Array | Uint8ClampedArray;
-    format: ImageFormat;
+    format: F;
     /** Width in pixels. Optional; used for dithering, and copied to `quantize*` results. */
     width?: number | undefined;
     /** Height in pixels. Optional; copied to `quantize*` results. */
     height?: number | undefined;
+    /**
+     * The colours are multiplied by alpha (what a canvas surface, Electron's `toBitmap()`, WebGL and Cairo hold). They are
+     * read as straight colours (divided by alpha), and `quantize*` gives the mapped colours back multiplied, copied as
+     * given: the result has the same `premultiplied` as the input. For a straight destination (`ImageData`, PNG encoders),
+     * use `quantizeToIndices` and write palette colours with the input's alpha; un-premultiplying the output loses colour.
+     */
+    premultiplied?: boolean | undefined;
 }
+
+/**
+ * Formats without alpha. `premultiplied: false` says nothing; `true` is rejected at run time (there is no alpha).
+ * Internal: name it through `RawImage<'rgb'>`, `RawImage<'rgbx'>` or `RawImage<'bgrx'>`.
+ */
+interface RawImageWithoutAlpha<F extends 'rgb' | 'rgbx' | 'bgrx' = 'rgb' | 'rgbx' | 'bgrx'> {
+    data: Uint8Array | Uint8ClampedArray;
+    format: F;
+    /** Width in pixels. Optional; used for dithering, and copied to `quantize*` results. */
+    width?: number | undefined;
+    /** Height in pixels. Optional; copied to `quantize*` results. */
+    height?: number | undefined;
+    /** Accepted as `false` on any format and does nothing here; `true` is an `invalid-argument` error, since there is no alpha. */
+    premultiplied?: boolean | undefined;
+}
+
+/**
+ * An image as raw bytes with an explicit layout: for RGB or BGRA data, a `Uint8ClampedArray`, or Node, where there is no
+ * `ImageData`. `RawImage<'bgra'>` is one format. Functions that return an image give back an object with the input's own
+ * keys (`format`, and `width`, `height` and `premultiplied` when given) and a new `data`.
+ */
+export type RawImage<F extends ImageFormat = ImageFormat> =
+    F extends 'rgba' | 'bgra' ? RawImageWithAlpha<F> : F extends 'rgb' | 'rgbx' | 'bgrx' ? RawImageWithoutAlpha<F> : never;
 
 /**
  * The platform's `ImageData` class where the global exists (the DOM lib, or typings for a canvas polyfill), and `never`
@@ -88,10 +118,13 @@ export interface RawImage {
  */
 export type PlatformImageData = typeof globalThis extends { ImageData: { prototype: infer T } } ? T : never;
 
-/** What a function that returns an image gives back for the input it was given: the same kind of thing. */
+/**
+ * What a function that returns an image gives back for the input it was given: the same kind of thing. For an image
+ * object, one with the input's own keys and a new `data: Uint8Array`.
+ */
 export type ImageResult<I extends ImageLike> =
     I extends Uint8Array ? Uint8Array
-    : I extends RawImage ? RawImage
+    : I extends RawImage ? Omit<I, 'data'> & { data: Uint8Array }
     : I extends PlatformImageData ? PlatformImageData
     : never;
 
@@ -344,7 +377,8 @@ interface IndexedImageFields {
 
 /**
  * One palette index per pixel in `indices`: a `Uint8Array` up to 256 palette entries, a `Uint16Array` up to 65536, else a
- * `Uint32Array`. `indexBits` says which (8, 16 or 32), and checking it narrows `indices` to that array type.
+ * `Uint32Array`. `indexBits` says which (8, 16 or 32), and checking it narrows `indices` to that array type. The palette
+ * is straight even for a premultiplied input: indexed output has no partial alpha, so there is nothing to premultiply.
  */
 export type IndexedImage =
     | (IndexedImageFields & { indexBits: 8; indices: Uint8Array })
