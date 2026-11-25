@@ -217,9 +217,9 @@ const png = encode({
 });
 ```
 
-`transparent` is on or off for each pixel, so a palette PNG can't hold soft edges or shadows: semi-transparent pixels are either kept opaque or dropped. For those, write an RGBA PNG with the palette's colours and each pixel's own alpha, which is the [straight-output recipe](#straight-pixels-from-a-premultiplied-source) (it works for a straight source too, with `premultiplied` left off).
-
 For an opaque image, leave out `transparent` and the swap: `encode({ width, height, depth: 8, channels: 1, data: indices, palette: entries })`.
+
+`transparent` is on or off for each pixel, so a palette PNG can't hold soft edges or shadows: pixels with alpha below the cutoff become the transparent entry and the rest are drawn opaque. For those, write an RGBA PNG with the palette's colours and each pixel's own alpha, which is the [straight-output recipe](#straight-pixels-from-a-premultiplied-source) (it works for a straight source too, with `premultiplied` left off).
 
 ## Animated GIFs and sets of images
 
@@ -662,7 +662,7 @@ Five things to keep:
 - **Take alpha from the input, not the palette.** Palette entries are RGB, so alpha from there makes every pixel opaque.
 - **Don't pass `transparent`.** It adds an entry after the palette, which the loop would read as `undefined` and write as 0. A pixel's alpha is already kept pixel for pixel.
 - **The output is in the input's channel order.** BGRA in gives BGRA out (the loop swaps the palette's RGB to match, as `quantize` does), so it is not ready for `new ImageData` or a PNG encoder, which want RGBA. For those, use the RGBA variant above.
-- **With `createWorker({ transfer: true })`, copy the pixels you send.** The loop reads alpha from `image.data` after the call, and a transferring worker has emptied that array by then (the loop would write `undefined`, and an encoder then fails on the size). In a version of the function that calls the worker's `quantizeToIndices`, send `{ ...image, data: image.data.slice() }`, so the original stays whole (or leave `transfer` off).
+- **With `createWorker({ transfer: true })`, copy the pixels you send.** The loop reads alpha from `image.data` after the call, and a transferring worker has emptied that array by then (the loop then writes alpha 0 for every pixel: a fully transparent image, with no error). In a version of the function that calls the worker's `quantizeToIndices`, send a copy of the image object, `{ ...image, data: image.data.slice() }`, so the original stays whole (or leave `transfer` off).
 - **Don't un-premultiply the mapped output instead.** It reads as "undo what the library did", but the colours were rounded once to premultiply and a second time to undo it: below alpha 16 every pixel is off, by up to 120 per channel, and a 16-colour result has 1,171 colours. <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt --> The loop above has none of that.
 
 ## Moving from color-thief, node-vibrant, image-q or get-image-colors

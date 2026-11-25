@@ -870,6 +870,7 @@ export const buildSwatches = async (image, k, options) => {
 
     image = imageCopy(image);
     // Arguments are checked in the order they are given (image, then k, then options), as in every other function.
+    // `load` only validates here (buildClustering loads again); both see the copy, so the caller's fields are read once.
     load(image);
     k = check(k);
     return getSwatchesFromClustering(await buildClustering(image, options), k);
