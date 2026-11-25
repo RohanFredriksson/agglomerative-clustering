@@ -352,7 +352,7 @@ video.requestVideoFrameCallback(onFrame);
     }
   }
   ```
-- **WebCodecs frames** copy straight into a format the library reads, cheaper than drawing to a canvas: `frame.copyTo(buffer, { format: 'BGRA' })` gives BGRA whatever the frame holds (decoders give I420), sized by `frame.allocationSize({ format: 'BGRA' })`. Pass `{ data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }`, which is what `copyTo` copies (`displayWidth` differs for video with non-square pixels), and call `frame.close()` once copied. Ask for `'BGRA'`, not `'BGRX'`: in a `'BGRX'` copy the fourth byte isn't reliably 255 (frames made from a canvas carry their alpha into it), and if you do get `'BGRX'` frames pass them as `'bgrx'`. Frames made from a canvas copy out premultiplied; decoded video is opaque, so it is the same either way.
+- **WebCodecs frames** copy straight into a format the library reads, cheaper than drawing to a canvas: `frame.copyTo(buffer, { format: 'BGRA' })` gives BGRA whatever the frame holds (decoders give I420), sized by `frame.allocationSize({ format: 'BGRA' })`. Pass `{ data: buffer, format: 'bgra', width: frame.visibleRect.width, height: frame.visibleRect.height }`, which is what `copyTo` copies (`displayWidth` differs for video with non-square pixels), and call `frame.close()` once copied. Ask for `'BGRA'`, not `'BGRX'`: in a `'BGRX'` copy the fourth byte isn't reliably 255 (frames made from a canvas carry their alpha into it), and if you do get `'BGRX'` frames pass them as `'bgrx'`. Frames made from a canvas copy out premultiplied, so pass `premultiplied: true`; decoded video is opaque, so it is the same either way.
 
 ## Workers
 
@@ -617,17 +617,17 @@ The colours come back as sRGB bytes whatever `colorSpace` they were clustered in
 
 ### Straight pixels from a premultiplied source
 
-A premultiplied image (`premultiplied: true`) comes back premultiplied, which is right for where it came from (Electron's `createFromBitmap`, Cairo, WIC) and wrong for a destination that wants straight pixels: `new ImageData` and `putImageData`, the JavaScript PNG encoders, sharp's default raw input. For those, map to indices and write each pixel's palette colour with the input's alpha. The result is exactly what `quantize` gives for the same picture as straight pixels (0 pixels differ), and the loop adds under 1% to the call (55 ms on 12 megapixels, against 7.5 s for the mapping). <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt -->
+A premultiplied image (`premultiplied: true`) comes back premultiplied, which is right for where it came from (Electron's `createFromBitmap`, Cairo, WIC) and wrong for a destination that wants straight pixels: `new ImageData` and `putImageData`, the JavaScript PNG encoders, sharp's default raw input. For those, map to indices and write each pixel's palette colour with the input's alpha. The result is exactly what `quantize` gives for the same picture as straight pixels (0 pixels differ), and the loop adds under 1% to the call (55 ms on 12 megapixels, against 7.5 s for the mapping). <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt --> It runs on the calling thread, even with the worker entry: for a page, run it in a worker of your own or in chunks of rows between awaits.
 
 ```js
 import { quantizeToIndices } from 'agglomerative-clustering';
 
-// Straight RGBA bytes from a premultiplied 'rgba' or 'bgra' image, mapped to k colours.
+// Straight bytes from a premultiplied 'rgba' or 'bgra' image, mapped to k colours, in the input's channel order.
 async function toStraight(image, k, options) {
   const { indices, palette } = await quantizeToIndices(image, k, options);   // indexed output is straight
   const { data, format } = image;
   const [red, blue] = format === 'bgra' ? [2, 0] : [0, 2];                  // the palette is RGB
-  const out = new Uint8ClampedArray(data.length);                           // what ImageData wants
+  const out = new Uint8ClampedArray(data.length);                           // same layout as the input
   for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
     const s = indices[i] * 3;
     out[o + red] = palette[s]; out[o + 1] = palette[s + 1]; out[o + blue] = palette[s + 2];
@@ -644,7 +644,7 @@ Four things to keep:
 
 - **Take alpha from the input, not the palette.** Palette entries are RGB, so alpha from there makes every pixel opaque.
 - **Don't pass `transparent`.** It adds an entry after the palette, which the loop would read as `undefined` and write as 0. A pixel's alpha is already kept pixel for pixel.
-- **Swap for `'bgra'`**, as the loop does; without it red and blue are exchanged.
+- **The output is in the input's channel order.** BGRA in gives BGRA out (the loop swaps the palette's RGB to match, as `quantize` does), so it is not ready for `new ImageData`. To fill an `ImageData` from BGRA, write `out[o] = palette[s]; out[o + 1] = palette[s + 1]; out[o + 2] = palette[s + 2]` with no swap, which is the `rgba` case.
 - **Don't un-premultiply the mapped output instead.** It reads as "undo what the library did", but the colours were rounded once to premultiply and a second time to undo it: below alpha 16 every pixel is off, by up to 120 per channel, and a 16-colour result has 1,171 colours. <!-- bench/spikes/premultiplied-straight/recipes.mjs → results.txt --> The loop above has none of that.
 
 ## Moving from color-thief, node-vibrant, image-q or get-image-colors

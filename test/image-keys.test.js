@@ -20,7 +20,7 @@ describe('unknown image keys', () => {
     });
     it('decoder keys', async () => {
         for (const key of ['channels', 'size', 'depth']) {
-            await expect(buildClustering({ data, format: 'rgba', [key]: 4 })).rejects.toMatchObject(unknown(key, " Spread only width and height from a decoder's result."));
+            await expect(buildClustering({ data, format: 'rgba', [key]: 4 })).rejects.toMatchObject(unknown(key, " Take only width and height from a decoder's result."));
         }
     });
     it('an undefined-valued key is rejected', async () => {

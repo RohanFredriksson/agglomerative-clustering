@@ -152,7 +152,7 @@ Everything works in dev and in an app packaged with `asar` (no `asarUnpack`), in
   const reduced = nativeImage.createFromBitmap(Buffer.from(result.data.buffer, result.data.byteOffset, result.data.byteLength), { width, height, scaleFactor });
   ```
 
-  A translucent result has more distinct colours than `k` once it is premultiplied (the rounding differs per alpha), so for an exact palette use `quantizeToIndices` and your own encoder.
+  A translucent result has more distinct colours than `k` once it is premultiplied (the rounding differs per alpha), so for an exact palette use `quantizeToIndices` and your own encoder (the guides' [straight-output recipe](guides.md#straight-pixels-from-a-premultiplied-source) is one).
 
 ## Browser extensions
 

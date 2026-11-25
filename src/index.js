@@ -3,7 +3,7 @@ import {choose} from './choose.js';
 import {
     parseDither,
     version, fail, colorSpaceCodes, colorSpaces, colorSpaceName, isUint8Array, isUint8ClampedArray, isArrayBufferLike, isOptionsObject, snapshot, isPalette, isClustering, markPalette, markClustering, setEngine, imageHint,
-    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageKeys,
+    latestVersion, imageFormats, channels, hasAlpha, formatNames, detachedError, describe, readHeader, checkPalette, isDetached, imageDataLike, isImageData, checkImageDataPixels, maxBytes, sizeText, tooLarge, sniffImageFormat, bareImageWarning, warnOnce, checkImageObject, checkSize, formatHint,
 } from './shared.js';
 
 // The library's version, the stored-data format version, and the Palette and Clustering types (see shared.js).
@@ -21,17 +21,6 @@ const isWasmModule = (value) => typeof value === 'object' && value !== null
 const isURL = (value) => typeof value === 'object' && value !== null && ((typeof URL !== 'undefined' && value instanceof URL) || tagOf(value) === '[object URL]');
 
 const codes = {'rgba': 0, 'rgb': 1, 'bgra': 2, 'rgbx': 3, 'bgrx': 4};
-// A hint for a format name that isn't one: the right case, the name other libraries use for the same bytes, or the nearest
-// supported layout.
-const formatHint = (format) => {
-    if (typeof format !== 'string') {return '';}
-    const lower = format.toLowerCase();
-    if (lower !== format && imageFormats.includes(lower)) {return ` Format names are lower case: '${lower}'.`;}
-    if (lower === 'xrgb' || lower === 'rgb24') {return " Cairo RGB24 (xRGB) is BGRX in memory on little-endian machines: pass 'bgrx'.";}
-    if (lower === 'argb' || lower === 'argb32') {return " Cairo and node-canvas ARGB32 is BGRA in memory on little-endian machines, and premultiplied: pass it as 'bgra' with premultiplied: true (see Input in the API docs).";}
-    if (lower === 'bgr' || lower === 'bgr24') {return " 24-bit BGR isn't supported: widen each pixel to 4 bytes and pass 'bgrx'.";}
-    return '';
-};
 const alphaModeCodes = {'ignore': 0, 'weight': 1};
 let Module = null;
 
@@ -345,18 +334,6 @@ const bytes = (data) => isUint8Array(data) ? data : new Uint8Array(data.buffer, 
 // call returns; until then (the first call) a copy is kept for when it has loaded.
 const held = (data) => Module ? data : data.slice();
 
-// width and height are copied to results and used for dithering, so each must make sense on its own: a whole number of
-// pixels that divides the pixel count (and, when both are given, account for exactly the pixels in the data).
-const checkSize = (pixels, size, name, argument) => {
-    if (size === undefined) {return;}
-    if (!Number.isInteger(size) || size < 0) {
-        throw fail('invalid-argument', `Invalid ${name}: must be a whole number of pixels.`, argument);
-    }
-    if (pixels > 0 && (size === 0 || pixels % size !== 0)) {
-        throw fail('invalid-argument', `Invalid ${name}: ${size} does not divide the image's ${pixels} pixels into whole rows.`, argument);
-    }
-};
-
 // The bare-image warning (rgb-as-rgba, gray-as-rgba) for an image, decided before load() and given only once the call's own checks have passed,
 // just before it starts work, so the one warning isn't spent on a call that fails anyway (PRINCIPLES "Warnings").
 const noWarning = () => {};
@@ -364,19 +341,6 @@ const noWarning = () => {};
 const warningFor = (image) => {
     const warning = bareImageWarning(image);
     return warning ? (signal) => {if (!(signal && signal.aborted)) {warnOnce(warning, image.byteLength);}} : noWarning;
-};
-
-// `premultiplied` on an image object: true only for 'rgba' and 'bgra' (the formats with alpha); false is accepted on any format.
-const checkPremultiplied = (image) => {
-    const value = image.premultiplied;
-    if (value === undefined || value === false) {return false;}
-    if (value !== true) {
-        throw fail('invalid-argument', `Invalid image: premultiplied must be true or false, got ${describe(value)}.`, 'image');
-    }
-    if (image.format !== 'rgba' && image.format !== 'bgra') {
-        throw fail('invalid-argument', `Invalid image: premultiplied is for 'rgba' and 'bgra'; '${image.format}' has no alpha, so remove it.`, 'image');
-    }
-    return true;
 };
 
 const load = (image) => {
@@ -423,24 +387,7 @@ const load = (image) => {
         throw detachedError('data');
     }
 
-    if (!imageFormats.includes(image.format)) {
-        throw fail('invalid-argument', `Invalid format: got ${describe(image.format)}; it must be ${formatNames}.${formatHint(image.format)}`, 'image');
-    }
-
-    const stride = channels(image.format);
-    if (image.data.length % stride !== 0) {
-        throw fail('invalid-argument', `Invalid image data: length must be a multiple of ${stride} for '${image.format}'.`, 'image');
-    }
-
-    const pixels = image.data.length / stride;
-    checkSize(pixels, image.width, 'image width', 'image');
-    checkSize(pixels, image.height, 'image height', 'image');
-    if (image.width !== undefined && image.height !== undefined && image.width * image.height !== pixels) {
-        throw fail('invalid-argument', `Invalid image: width x height (${image.width} x ${image.height}) does not match its ${pixels} pixels.`, 'image');
-    }
-
-    checkImageKeys(image);
-    const premultiplied = checkPremultiplied(image);
+    const premultiplied = checkImageObject(image);
     return {data: held(bytes(image.data)), format: image.format, width: image.width, premultiplied};
 
 };
@@ -699,7 +646,7 @@ const reporter = (o) => {
 
 // The conversion passes in slices of this many pixels, so a long one gives the signal and the event loop a turn like the rest.
 const convertSlice = 65536;
-const convertInSlices = async (wasm, convert, pointer, pixels, o) => {
+const convertInSlices = async (convert, pointer, pixels, o) => {
     let last = performance.now();
     for (let start = 0; start < pixels; start += convertSlice) {
         checkAborted(o.signal);
@@ -733,7 +680,7 @@ const clusterInSlices = async (wasm, image, o, report, share) => {
     let aborted = false;
     try {
         wasm.HEAPU8.set(image.data, imagePointer);
-        if (image.premultiplied) {await convertInSlices(wasm, wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
+        if (image.premultiplied) {await convertInSlices(wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
         job = wasm._clustering_job_start(imagePointer, image.data.length, codes[image.format], o.colorSpace, o.precision, o.alpha, o.transparent);
         report(0);
         while (true) {
@@ -774,7 +721,7 @@ const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, 
         sourcePointer = allocate(wasm, bytes.length);
         wasm.HEAPU8.set(image.data, imagePointer);
         wasm.HEAPU8.set(bytes, sourcePointer);
-        if (image.premultiplied) {await convertInSlices(wasm, wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
+        if (image.premultiplied) {await convertInSlices(wasm._unpremultiply, imagePointer, image.data.length >> 2, o);}
         const palette = source.palette ? sourcePointer : 0, clustering = source.clustering ? sourcePointer : 0;
         job = wasm._mapping_job_start(imagePointer, image.data.length, codes[image.format], palette, source.palette ? bytes.length : 0, clustering, source.clustering ? bytes.length : 0, source.k || 0, colorSpace, o.dither, o.ditherMethod, o.ditherSteps, o.width, indices ? 1 : 0, cutoff);
         if (!job) {throw fail('invalid-clustering', "Invalid clustering: its records don't fit together, so it is damaged or isn't a clustering. Cluster the image again.", 'clustering');}
@@ -791,7 +738,7 @@ const mapInSlices = async (wasm, image, source, colorSpace, indices, cutoff, o, 
         }
         const pointer = wasm._mapping_job_result(job);
         try {
-            if (image.premultiplied && !indices) {await convertInSlices(wasm, wasm._premultiply, pointer + 4, image.data.length >> 2, o);}
+            if (image.premultiplied && !indices) {await convertInSlices(wasm._premultiply, pointer + 4, image.data.length >> 2, o);}
             return unpack(wasm, pointer);
         } finally {wasm._free(pointer);}
     } catch (error) {

@@ -970,13 +970,13 @@ describe('the worker script as a data: URL (the esbuild plugin)', () => {
     }, timeLimit(60000));
 });
 
-// "Converting the output" > "Straight pixels from a premultiplied source": the guides' function, as written there.
+// docs/guides.md, "Straight pixels from a premultiplied source": the guides' function, as written there.
 describe('straight output from a premultiplied source', () => {
     async function toStraight(image, k, options) {
       const { indices, palette } = await quantizeToIndices(image, k, options);   // indexed output is straight
       const { data, format } = image;
       const [red, blue] = format === 'bgra' ? [2, 0] : [0, 2];                  // the palette is RGB
-      const out = new Uint8ClampedArray(data.length);                           // what ImageData wants
+      const out = new Uint8ClampedArray(data.length);                           // same layout as the input
       for (let i = 0, o = 0; i < indices.length; i++, o += 4) {
         const s = indices[i] * 3;
         out[o + red] = palette[s]; out[o + 1] = palette[s + 1]; out[o + blue] = palette[s + 2];

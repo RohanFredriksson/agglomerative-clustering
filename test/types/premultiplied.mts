@@ -41,11 +41,21 @@ export async function premultiplied() {
     const hd: Uint8Array = hr.data;
     const direct: ImageResult<typeof img> = hr;
     void [hf, hp, hd, direct];
+    // @ts-expect-error the handle's image is bgra, not rgba
+    const hWrong: 'rgba' = hr.format;
+    // @ts-expect-error no height was given
+    hr.height;
+    void hWrong;
     // A loaded handle takes the image, then k.
     const loaded = await worker.load(await buildClustering(img));
     const lr: ImageResult<typeof img> = await loaded.quantize(img, 4);
     const lf: 'bgra' = lr.format;
     void lf;
+    // @ts-expect-error the loaded handle's result is bgra, not rgba
+    const lWrong: 'rgba' = lr.format;
+    // @ts-expect-error no height was given
+    lr.height;
+    void lWrong;
 
     // Generic callers.
     const generic = <I extends ImageLike>(image: I) => quantize(image, 4);

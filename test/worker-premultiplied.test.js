@@ -69,6 +69,37 @@ describe('worker entry, premultiplied images', () => {
         expect(post).not.toHaveBeenCalled();
     });
 
+    it('image-object errors match the main entry, in its order, without posting', async () => {
+        const post = vi.spyOn(Worker.prototype, 'postMessage');
+        const small = () => new Uint8Array(16 * 4);
+        const cases = {
+            'bad format and unknown key': { data: small(), format: 'nope', foo: 1 },
+            'size mismatch and unknown key': { data: small(), format: 'rgba', width: 3, height: 4, foo: 1 },
+            'premultiplied on rgb': { data: new Uint8Array(48), format: 'rgb', premultiplied: true },
+            'premultiplied 1': { data: small(), format: 'rgba', premultiplied: 1 },
+            'premultiplied function': { data: small(), format: 'rgba', premultiplied: () => {} },
+            'premultiplied symbol': { data: small(), format: 'rgba', premultiplied: Symbol('x') },
+        };
+        for (const [name, bad] of Object.entries(cases)) {
+            const expected = await ac.buildPalette(bad, 4).catch((e) => e);
+            expect(expected, name).toBeInstanceOf(Error);
+            const error = await worker.buildPalette(bad, 4).then(() => null, (e) => e);
+            expect(error, name).toBeInstanceOf(Error);
+            expect(error.message, name).toBe(expected.message);
+            expect(error.code, name).toBe(expected.code);
+            expect(error.argument, name).toBe(expected.argument);
+            expect(error.code, name).toBe('invalid-argument');
+        }
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('premultiplied: false is carried and appears on the result', async () => {
+        const input = { ...image(), premultiplied: false };
+        const got = await worker.quantize(input, 16);
+        expect(got.premultiplied).toBe(false);
+        expect(got).toEqual(await ac.quantize(input, 16));
+    });
+
     it('transfer: true moves a premultiplied image and gives the right result', async () => {
         const moving = createWorker({ transfer: true });
         try {

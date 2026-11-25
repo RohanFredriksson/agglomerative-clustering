@@ -84,7 +84,7 @@ interface RawImageWithAlpha<F extends 'rgba' | 'bgra' = 'rgba' | 'bgra'> {
      * The colours are multiplied by alpha (what a canvas surface, Electron's `toBitmap()`, WebGL and Cairo hold). They are
      * read as straight colours (divided by alpha), and `quantize*` gives the mapped colours back multiplied, copied as
      * given: the result has the same `premultiplied` as the input. For a straight destination (`ImageData`, PNG encoders),
-     * use `quantizeToIndices` and write palette colours with the input's alpha; un-premultiplying the output loses colour.
+     * use `quantizeToIndices` and write palette colours with the input's alpha; un-premultiplying the output loses colour. The guides' "Straight pixels from a premultiplied source" has the loop.
      */
     premultiplied?: boolean | undefined;
 }
