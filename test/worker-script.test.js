@@ -9,7 +9,7 @@ import { join, resolve, dirname, relative } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { build } from 'esbuild';
 import { createWorker } from '../dist/worker.mjs';
-import { buildPalette } from '../dist/index.mjs';
+import { buildPalette, version } from '../dist/index.mjs';
 import { timeLimit } from './timeout.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,7 +66,7 @@ describe('createWorker({ script })', () => {
                 const error = await worker.buildPalette(image, 4).catch((caught) => caught);
                 expect(error.code).toBe('worker-failed');
                 expect(error.message).toContain('keep dist/ together');
-                expect(error.message).toContain('from different versions of agglomerative-clustering: serve all of dist/ from this version');
+                expect(error.message).toContain("Serve all of the package's dist/ files from this version.");
                 expect(error.message).toContain('createWorker({ script })');
             } finally {
                 await worker.terminate();
@@ -152,9 +152,67 @@ describe('a worker script that fails to link, in Node', () => {
             const error = await worker.buildPalette(image, 4).catch((caught) => caught);
             expect(error.code).toBe('worker-failed');
             expect(error.message).toContain('noSuchExport');
-            expect(error.message).toContain('from different versions of agglomerative-clustering: serve all of dist/ from this version');
+            expect(error.message).toContain("Serve all of the package's dist/ files from this version.");
+            expect(String(error.cause && error.cause.message)).toContain('noSuchExport');
         } finally {
             await worker.terminate();
+        }
+    });
+
+});
+
+describe('a worker script that throws, in Node', () => {
+
+    it('keeps its own message, with no versions hint, and the error as the cause', async () => {
+        for (const [source, text] of [["throw new Error('broken on purpose');", 'broken on purpose'], ['throw undefined;', 'not an Error'], ["throw 'a string';", 'not an Error']]) {
+            const script = join(folder, 'throws.mjs');
+            writeFileSync(script, `${source}\n`);
+            const worker = createWorker({ script });
+            try {
+                const error = await worker.buildPalette(image, 4).catch((caught) => caught);
+                expect(error.code).toBe('worker-failed');
+                expect(error.message).toContain(text);
+                expect(error.message).not.toContain('undefined');
+                expect(error.message).not.toContain('dist/');
+                if (text === 'broken on purpose') {expect(error.cause.message).toBe(text);}
+            } finally {
+                await worker.terminate();
+            }
+        }
+    });
+
+});
+
+describe('init({ wasm }) twice in a row', () => {
+
+    // A stub thread that logs the locations it is sent and answers an init slowly, so a newer one can be recorded while the
+    // older is on its way.
+    it('keeps the newer location when the older one finishes later', async () => {
+        const stubFolder = mkdtempSync(join(tmpdir(), 'init-race-'));
+        const script = join(stubFolder, 'worker-thread.mjs');
+        writeFileSync(script, `
+            import { parentPort } from 'node:worker_threads';
+            const seen = [];
+            parentPort.on('message', ({ id, method, args }) => {
+                if (method === 'handshake') {parentPort.postMessage({ id, result: ${JSON.stringify(version)} });}
+                else if (method === 'init') {
+                    if (args[0] && args[0].wasm) {seen.push(args[0].wasm);}
+                    setTimeout(() => parentPort.postMessage({ id, result: null }), 150);
+                } else {parentPort.postMessage({ id, result: seen });}
+            });
+        `);
+        const worker = createWorker({ script });
+        try {
+            await worker.init({ wasm: 'first.wasm' });
+            const first = worker.buildPalette(image, 2);     // sends the first location ...
+            await new Promise((done) => setTimeout(done, 50));
+            await worker.init({ wasm: 'second.wasm' });       // ... and a newer one is recorded while it is on its way
+            await first;
+            // The newer location is the last the thread has been sent, whatever the timing of the older one.
+            expect((await worker.buildPalette(image, 2)).at(-1)).toBe('second.wasm');
+        } finally {
+            await worker.terminate();
+            rmSync(stubFolder, { recursive: true, force: true });
         }
     });
 
