@@ -263,15 +263,17 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
     it('clusters, cuts, weighs and indexes x formats as rgb', async () => {
         for (const [name, order, fourth] of variants) {
             const rgb = rgbOf(name), x = xOf(name, order, fourth);
-            for (const o of cases[name]) {
+            for (const withTransparent of cases[name]) {
+                // these formats have no alpha, so `transparent` as an option throws (test/transparent-formats.test.js)
+                const { transparent: _unused, ...o } = withTransparent;
                 const label = `${name} ${order}x ${fourth} ${JSON.stringify(o)}`;
                 const fromRgb = await ac.buildClustering(rgb, o), fromX = await ac.buildClustering(x, o);
                 expect(compare(fromX, fromRgb), label).toBe(0);
                 expect(await ac.getClusteringInfo(fromX), label).toEqual(await ac.getClusteringInfo(fromRgb));
                 expect(await ac.getPaletteFromClustering(fromX, 16), label).toEqual(await ac.getPaletteFromClustering(fromRgb, 16));
                 expect(await ac.getSwatchesFromClustering(fromX, 16), label).toEqual(await ac.getSwatchesFromClustering(fromRgb, 16));
-                const indexed = await ac.quantizeToIndicesFromClustering(x, fromX, 16, { ...mapOnly(o), transparent: true });
-                const expected = await ac.quantizeToIndicesFromClustering(rgb, fromRgb, 16, { ...mapOnly(o), transparent: true });
+                const indexed = await ac.quantizeToIndicesFromClustering(x, fromX, 16, { ...mapOnly(o) });
+                const expected = await ac.quantizeToIndicesFromClustering(rgb, fromRgb, 16, { ...mapOnly(o) });
                 expect(indexed.transparentIndex, label).toBe(null);
                 expect(indexed.palette, label).toEqual(expected.palette);
                 expect(compare(indexed.indices, expected.indices), label).toBe(0);
@@ -297,7 +299,7 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
                     (image) => ac.quantizeFromClustering(image, clustering, 16, { dither }),
                     (image) => ac.quantizeWithPalette(image, palette, { dither }),
                 ];
-                if (small.includes(name)) {calls.push((image) => ac.quantize(image, 16, { dither, transparent: true }));}
+                if (small.includes(name)) {calls.push((image) => ac.quantize(image, 16, { dither }));}
                 for (const call of calls) {
                     const actual = await call(x), expected = await call(rgb);
                     expect(actual.format, label).toBe(order + 'x');

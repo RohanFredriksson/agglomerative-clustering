@@ -177,7 +177,7 @@ describe('transparent', () => {
         expect(result.transparentIndex).toBeNull();
         expect(result.palette).toEqual(await buildPalette(opaque, 8));
         const rgb = { data: new Uint8Array(12).fill(9), format: 'rgb' };
-        expect((await quantizeToIndices(rgb, 4, { transparent: true })).transparentIndex).toBeNull();
+        expect((await quantizeToIndices(rgb, 4)).transparentIndex).toBeNull();
         expect((await quantizeToIndices(image, 8, { transparent: 1 })).transparentIndex).toBe(7);
     });
 

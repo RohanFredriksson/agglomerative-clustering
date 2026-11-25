@@ -517,6 +517,8 @@ const parseOptions = (options, allowed, image) => {
         throw fail('invalid-argument', "Invalid transparent: must be a boolean or an integer alpha cutoff from 1 to 255.", 'options.transparent');
     }
 
+    checkTransparentFormat(image, options);
+
     // A cutoff replaces opacity weighting (pixels count whole or not at all), so naming both would leave one of them ignored.
     if (transparent > 0 && options.alpha !== undefined) {
         throw fail('invalid-argument', "Invalid options: `transparent` replaces `alpha` (with a cutoff, pixels count whole or not at all), so give one or the other.", 'options');
@@ -527,6 +529,14 @@ const parseOptions = (options, allowed, image) => {
 };
 
 const controlOptions = ['signal', 'onProgress'];
+// `transparent: true` or a cutoff on a format with no alpha channel can't mean anything (no pixel is transparent), so it is
+// an error rather than a silent no-op. Only the call's own options count: a clustering's stored cutoff never reaches here.
+const checkTransparentFormat = (image, options) => {
+    if (!image || hasAlpha(image.format) || options.transparent === undefined || options.transparent === false) {return;}
+    const hint = image.format === 'rgbx' || image.format === 'bgrx' ? " If the fourth byte really is alpha, use 'rgba' or 'bgra'." : '';
+    throw fail('invalid-argument', `Invalid transparent: '${image.format}' has no alpha, so no pixel can be transparent. Leave transparent out (false is accepted).${hint}`, 'options.transparent');
+};
+
 const clusterOptions = ['colorSpace', 'precision', 'alpha', 'transparent', ...controlOptions];
 const quantizeOptions = [...clusterOptions, 'dither', 'width'];
 const mapOptions = ['colorSpace', 'dither', 'width', ...controlOptions];
