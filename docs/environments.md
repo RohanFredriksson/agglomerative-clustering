@@ -121,7 +121,7 @@ const worker = createWorker({
 
 ## Serverless functions: AWS Lambda, Vercel, Netlify
 
-Both entries run in Node functions (checked in the AWS Lambda Node 22 image, with a read-only code directory, and with the file tracers Vercel and Netlify use). Unbundled, with `node_modules` in the package or a layer, nothing is needed. Bundled:
+Both entries run in Node functions (checked with 3.x in the AWS Lambda Node 20 image, with a read-only code directory; 4.0 needs a Node 22 or later runtime, and with the file tracers Vercel and Netlify use). Unbundled, with `node_modules` in the package or a layer, nothing is needed. Bundled:
 
 - **An ES module bundle** finds `clustering.wasm` next to itself: copy `node_modules/agglomerative-clustering/dist/clustering.wasm` beside the bundle. **A CommonJS bundle** has lost the package's own location: pass `init({ wasm: path })`, with a path to the copy you ship.
 - **The worker entry** needs `worker-thread.mjs` and the files it imports: leave the package external, or ship a copy of `dist/` and pass `createWorker({ script: path })`. Netlify's esbuild bundler moves them apart, so list the package in `external_node_modules`.

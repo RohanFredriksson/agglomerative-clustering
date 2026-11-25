@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The oldest Node versions in `engines` (require(esm), which the CommonJS build needs) and the current LTS.
+        # The oldest Node version in `engines` (22.12, for require(esm), which the CommonJS build needs) and the newest.
         node: [22, 24]
     steps:
       - uses: actions/checkout@v4

@@ -139,7 +139,7 @@ describe('dither option forms', () => {
 
 });
 
-// The supported engines (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 20.19; see .babelrc) don't all have every
+// The supported engines (Chrome and Edge 91, Firefox 89, Safari 16.4, Node 22.12; see .babelrc) don't all have every
 // newer built-in, and Babel doesn't polyfill built-ins. Object.hasOwn arrived in Chrome 93 and Firefox 92.
 describe('built-ins the supported engines lack', () => {
 
