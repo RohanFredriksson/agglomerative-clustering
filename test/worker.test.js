@@ -206,15 +206,19 @@ describe('createWorker', () => {
         await dropIn.terminate();
     });
 
-    it('reports arguments that cannot be sent to the worker as invalid, and keeps working', async () => {
-        for (const bad of [
-            () => worker.buildPalette(image, 4, { bogus: () => {} }),
-            () => worker.buildPalette(image, Symbol('k')),
-            () => worker.buildPalette(Promise.resolve(image), 4),
-            () => worker.quantizeWithPalette(image, class Palette {}),
-        ]) {
-            await expect(bad()).rejects.toMatchObject({ code: 'invalid-argument' });
+    it('reports arguments that cannot be sent to the worker as invalid, naming the argument, and keeps working', async () => {
+        const cases = [
+            [() => worker.buildPalette(image, 4, { bogus: () => {} }), 'options'],
+            [() => worker.buildPalette(image, Symbol('k')), 'k'],
+            [() => worker.quantizeWithPalette(image, class Palette {}), 'palette'],
+            // A clustering is checked by readHeader before it is posted and is always a Uint8Array, so none can fail to clone.
+        ];
+        for (const [bad, argument] of cases) {
+            const error = await bad().catch((caught) => caught);
+            expect(error).toMatchObject({ code: 'invalid-argument', argument });
+            expect(error.message.startsWith(`Invalid ${argument}: it cannot be sent to the worker (`)).toBe(true);
         }
+        await expect(worker.buildPalette(Promise.resolve(image), 4)).rejects.toMatchObject({ code: 'invalid-argument', argument: 'image' });
         expect(await worker.buildPalette(image, 4)).toEqual(await ac.buildPalette(image, 4));
     });
 

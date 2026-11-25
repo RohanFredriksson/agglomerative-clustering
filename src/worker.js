@@ -346,6 +346,28 @@ const sendable = (value) => {
 // Where the options sit among a function's arguments after the image (see takeControls).
 const optionsPosition = {buildClustering: 0, buildPalette: 1, buildSwatches: 1, quantize: 1, quantizeWithPalette: 1, quantizeToIndices: 1, quantizeToIndicesWithPalette: 1};
 
+// The names of the arguments each call posts, for saying which one can't be sent.
+const argumentNames = {
+    buildClustering: ['image', 'options'], buildPalette: ['image', 'k', 'options'], buildSwatches: ['image', 'k', 'options'],
+    quantize: ['image', 'k', 'options'], quantizeToIndices: ['image', 'k', 'options'],
+    quantizeWithPalette: ['image', 'palette', 'options'], quantizeToIndicesWithPalette: ['image', 'palette', 'options'],
+    init: ['options'], cluster: [null, 'image', 'options'], load: [null, 'clustering'],
+    handleGetPalette: [null, 'k'], handleGetSwatches: [null, 'k'], handleChooseFrom: [null, 'palette', 'k', 'options'],
+    handleQuantize: [null, 'k', 'options'], handleQuantizeToIndices: [null, 'k', 'options'],
+    handleQuantizeWithPalette: [null, 'palette', 'options'], handleQuantizeToIndicesWithPalette: [null, 'palette', 'options'],
+    handleQuantizeImage: [null, 'image', 'k', 'options'], handleQuantizeToIndicesImage: [null, 'image', 'k', 'options'],
+};
+
+// The error for a call whose message can't be cloned: the first argument that fails alone names itself.
+const unsendable = (method, args, error) => {
+    const names = argumentNames[method] || [];
+    const index = args.findIndex((value, at) => names[at] && !sendable(value));
+    const cause = {cause: error};
+    return index < 0
+        ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), cause)
+        : Object.assign(fail('invalid-argument', `Invalid ${names[index]}: it cannot be sent to the worker (${error.message})`, names[index]), cause);
+};
+
 // Like fetch: an aborted call rejects with the signal's reason, an AbortError unless the caller gave another.
 const abortReason = (signal) => signal.reason !== undefined ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
 
@@ -530,8 +552,8 @@ const makeWorker = (options, allowScript) => {
                 call.cleanup();
                 if (pending.size === 0) {connection.unref();}
                 // A value that can't be structured-cloned (a function, symbol or promise) is an invalid argument, as it
-                // would be if the main entry were called with it.
-                reject(error && error.name === 'DataCloneError' ? Object.assign(fail('invalid-argument', `Invalid argument: it cannot be sent to the worker (${error.message})`), {cause: error}) : error);
+                // would be if the main entry were called with it; the first argument that fails alone is named.
+                reject(error && error.name === 'DataCloneError' ? unsendable(method, args.map(mark), error) : error);
             }
         });
     };
