@@ -1,0 +1,27 @@
+Straight output from a premultiplied 4240x2832 (12 MP) RGBA image, kodim23 tiled, alpha gradient 0-255, k = 16.
+dist/ 3.8.0, Node v24.18.0; times are medians of 3 runs, ms.
+
+undithered:
+  quantize itself                           7599
+  R1 JS un-premultiply of the input         204  (exact: it is the reference)
+  R2 JS un-premultiply of 4.0's output      164
+  R3 quantizeToIndices                      7535  + expand in JS 55  (pixels differing from R1: 0)
+  R2 against the straight answer, by input alpha: pixels off / max channel error
+    alpha   1-15   100.0% of 722160 px, max 120
+    alpha  16-63    99.3% of 2310912 px, max 8
+    alpha  64-254   67.0% of 8881152 px, max 2
+    alpha 255-255    0.0% of 45312 px, max 0
+  R2 distinct colours among visible pixels: 1171 (the straight answer has at most 16)
+
+dithered:
+  quantize itself                           8137
+  R1 JS un-premultiply of the input         208  (exact: it is the reference)
+  R2 JS un-premultiply of 4.0's output      191
+  R3 quantizeToIndices                      8075  + expand in JS 52  (pixels differing from R1: 0)
+  R2 against the straight answer, by input alpha: pixels off / max channel error
+    alpha   1-15   100.0% of 722160 px, max 120
+    alpha  16-63    99.2% of 2310912 px, max 8
+    alpha  64-254   66.8% of 8881152 px, max 2
+    alpha 255-255    0.0% of 45312 px, max 0
+  R2 distinct colours among visible pixels: 1234 (the straight answer has at most 16)
+
