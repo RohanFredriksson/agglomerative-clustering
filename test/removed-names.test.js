@@ -173,6 +173,19 @@ describe('a worker script from another version', () => {
         }
     }, timeLimit(5000));
 
+    // terminate() while the first call waits for the worker to start and answer the handshake is a termination, not a mismatch.
+    it('terminated during the handshake rejects with worker-terminated', async () => {
+        for (const delay of [0, 20]) {
+            const worker = workerEntry.createWorker();
+            const pending = [worker.buildPalette(image, 4), worker.buildClustering(image)].map((call) => call.catch((caught) => caught));
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            await worker.terminate();
+            for (const error of await Promise.all(pending)) {
+                expect(error.code, `after ${delay} ms`).toBe('worker-terminated');
+            }
+        }
+    }, timeLimit(10000));
+
     it('is not a problem for the package\'s own thread: calls, progress and cancels work', async () => {
         const worker = workerEntry.createWorker();
         try {

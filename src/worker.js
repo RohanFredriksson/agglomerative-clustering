@@ -511,10 +511,13 @@ const makeWorker = (options, allowScript) => {
                     if (theirs === version) {shaken = true; return;}
                     throw theirs;
                 }, (error) => {
-                    if (error && error.code === 'worker-failed') {throw error;}
+                    // A coded error from the call itself (terminated, failed) is passed on; only a reply that is an error
+                    // from the thread (an unknown method) means an older script.
+                    if (error && error.code !== undefined && error.code !== 'invalid-argument') {throw error;}
                     throw undefined;
                 }).catch((theirs) => {
                     if (theirs instanceof Error) {throw theirs;}
+                    if (terminated) {throw fail('worker-terminated', "Worker terminated.");}
                     const reason = `The worker script is from another version of agglomerative-clustering (${typeof theirs === 'string' ? theirs : 'an older one'}; this is ${version}). Use the worker-thread.mjs from this version.`;
                     if (mine === generation) {lose(reason);}
                     throw fail('worker-failed', reason);
@@ -589,6 +592,8 @@ const makeWorker = (options, allowScript) => {
                 // honoured, or anything is posted or a transfer can empty the array).
                 const bare = bareImageError(image);
                 if (bare) {throw bare;}
+                // then the rest of the image's checks (its fields are read once here), before the options, as in the main entry
+                const checked = send(image);
                 const position = optionsPosition[name];
                 const {options, signal, onProgress} = takeControls(rest[position], !clusteringOnlyFunctions.includes(name));
                 let args = rest.slice();
@@ -597,13 +602,13 @@ const makeWorker = (options, allowScript) => {
                     // The main entry reports a wrong argument before an abort, so the worker checks the arguments (a
                     // copy, never transferred: an aborted call leaves the image with the caller) without doing the work.
                     try {
-                        await invoke(name, [own(send(image)), ...args.map(own)], [], origin, {check: true});
+                        await invoke(name, [own(checked), ...args.map(own)], [], origin, {check: true});
                     } catch (error) {
                         if (isCodedError(error) && error.argument !== undefined) {throw error;}
                     }
                     throw abortReason(signal);
                 }
-                let sent = send(image);
+                let sent = checked;
                 if (!ready()) {sent = take(sent); args = args.map(own);}
                 const result = await invoke(name, [sent, ...args], pixelBuffers(sent), origin, {signal, onProgress});
                 return mapped ? rebuild(image)(result) : result;
@@ -700,17 +705,18 @@ const makeWorker = (options, allowScript) => {
                     if (released || !handle) {throw fail('invalid-handle', "Invalid handle: it was released.");}
                     const bare = bareImageError(image);
                     if (bare) {throw bare;}
+                    const checked = send(image);
                     const {options, signal, onProgress} = takeControls(mapOptions);
                     if (signal && signal.aborted) {
                         // As the functions on the worker do: a wrong argument is reported before the abort.
                         try {
-                            await invoke(method, [id, own(send(image)), k, options], [], origin, {check: true});
+                            await invoke(method, [id, own(checked), k, options], [], origin, {check: true});
                         } catch (error) {
                             if (isCodedError(error) && error.argument !== undefined) {throw error;}
                         }
                         throw abortReason(signal);
                     }
-                    let sent = send(image);
+                    let sent = checked;
                     const ahead = !ready();
                     if (ahead) {sent = take(sent);}
                     const result = await invoke(method, [id, sent, ahead ? own(k) : k, options], pixelBuffers(sent), origin, {signal, onProgress});
@@ -735,10 +741,11 @@ const makeWorker = (options, allowScript) => {
             // The image is checked before the options and the abort, as the main entry does.
             const bare = bareImageError(image);
             if (bare) {throw bare;}
+            const checked = send(image);
             const {options, signal, onProgress} = takeControls(clusterOptions, false);
             if (signal && signal.aborted) {throw abortReason(signal);}
             const id = nextHandle++;
-            const sent = ready() ? send(image) : take(send(image));
+            const sent = ready() ? checked : take(checked);
             // Counted from before the call, so an abandoned worker isn't stopped between the call settling and the handle
             // existing (see `abandoned`).
             liveHandles++;

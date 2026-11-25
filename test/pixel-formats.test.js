@@ -260,13 +260,17 @@ describe('rgbx and bgrx behave as the same pixels in RGB', () => {
     const rgbOf = (name) => ({ data: toRgb(images[name].rgba.data), format: 'rgb', width: images[name].rgba.width, height: images[name].rgba.height });
     const xOf = (name, order, fourth) => ({ data: toX(images[name].rgba.data, order, fourth), format: order + 'x', width: images[name].rgba.width, height: images[name].rgba.height });
 
+    // these formats have no alpha, so `transparent` as an option throws (test/transparent-formats.test.js): the sets
+    // that only differ by it are the same case here
+    const withoutTransparent = {};
+    for (const name of Object.keys(cases)) {
+        withoutTransparent[name] = [...new Set(cases[name].map((set) => JSON.stringify(Object.fromEntries(Object.entries(set).filter(([key]) => key !== 'transparent')))))].map((text) => JSON.parse(text));
+    }
+
     it('clusters, cuts, weighs and indexes x formats as rgb', async () => {
         for (const [name, order, fourth] of variants) {
             const rgb = rgbOf(name), x = xOf(name, order, fourth);
-            // these formats have no alpha, so `transparent` as an option throws (test/transparent-formats.test.js): the sets
-            // that only differ by it are the same case here
-            const withoutTransparent = [...new Set(cases[name].map(({ transparent, ...rest }) => JSON.stringify(rest)))].map((text) => JSON.parse(text));
-            for (const o of withoutTransparent) {
+            for (const o of withoutTransparent[name]) {
                 const label = `${name} ${order}x ${fourth} ${JSON.stringify(o)}`;
                 const fromRgb = await ac.buildClustering(rgb, o), fromX = await ac.buildClustering(x, o);
                 expect(compare(fromX, fromRgb), label).toBe(0);
