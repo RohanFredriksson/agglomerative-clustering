@@ -1449,6 +1449,46 @@ const char* library_version() {
     return AGGLOMERATIVE_CLUSTERING_VERSION;
 }
 
+// Premultiplied pixels, converted in place on the heap copy of an image (the caller's array is never touched). Both work on 4-byte
+// pixels [start, end) with alpha in byte 3, so they serve RGBA and BGRA alike; alpha 255 is skipped and alpha is never changed.
+// A 256 x 256 table per direction (table[alpha][channel]), built on first use: 17-18 ms for 12 MP with every alpha present,
+// against 27-52 ms with integer division (bench/spikes/premultiplied/).
+// unpremultiply: min(255, round(c * 255 / a)), alpha 0 as black. premultiply: round(c * a / 255).
+static uint8_t* premultiply_table(bool undo) {
+    static uint8_t* tables[2] = {nullptr, nullptr};
+    uint8_t*& table = tables[undo ? 1 : 0];
+    if (!table) {
+        table = static_cast<uint8_t*>(std::malloc(256 * 256));
+        for (unsigned a = 0; a < 256; a++) {
+            for (unsigned c = 0; c < 256; c++) {
+                unsigned v = undo ? (a == 0 ? 0 : (c * 255u + a / 2) / a) : (c * a + 127) / 255;
+                table[a * 256 + c] = uint8_t(v > 255 ? 255 : v);
+            }
+        }
+    }
+    return table;
+}
+
+static void convert_pixels(uint8_t* pixels, uint32_t start, uint32_t end, bool undo) {
+    const uint8_t* table = premultiply_table(undo);
+    for (uint8_t* p = pixels + size_t(start) * 4, *stop = pixels + size_t(end) * 4; p < stop; p += 4) {
+        const unsigned a = p[3];
+        if (a == 255) {continue;}
+        const uint8_t* t = table + a * 256;
+        p[0] = t[p[0]]; p[1] = t[p[1]]; p[2] = t[p[2]];
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void unpremultiply(uint8_t* pixels, uint32_t start, uint32_t end) {
+    convert_pixels(pixels, start, end, true);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void premultiply(uint8_t* pixels, uint32_t start, uint32_t end) {
+    convert_pixels(pixels, start, end, false);
+}
+
 // A clustering run in slices (see ClusteringJob): start it, step it until it returns 1000, take the result, free it.
 // The image must stay allocated until the job has finished.
 EMSCRIPTEN_KEEPALIVE
