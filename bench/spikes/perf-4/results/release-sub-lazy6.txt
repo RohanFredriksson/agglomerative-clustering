@@ -1,0 +1,18 @@
+runs 5; load before 0.91/1.05/1.28
+image	mode	config	colours	4.2.0 ms	new ms	change	identical
+fern	cluster	rgb8	331638	1219	1164	-4.6%	yes
+fern	cluster	rgb6	331638	298	283	-5.1%	yes
+fern	cluster	oklab8	331638	2181	2066	-5.2%	yes
+sky	cluster	rgb8	332741	1217	1110	-8.8%	yes
+sky	cluster	rgb6	332741	285	261	-8.2%	yes
+sky	cluster	oklab8	332741	1348	1219	-9.6%	yes
+night	cluster	rgb8	351004	1365	1264	-7.4%	yes
+night	cluster	rgb6	351004	253	243	-3.9%	yes
+night	cluster	oklab8	351004	1777	1690	-4.9%	yes
+komar	cluster	rgb8	330629	1368	1234	-9.8%	yes
+komar	cluster	rgb6	330629	191	190	-0.5%	yes
+komar	cluster	oklab8	330629	1599	1421	-11.1%	yes
+k23	cluster	rgb8	72079	124	128	3.4%	yes
+k23	cluster	rgb6	72079	46	46	1.6%	yes
+k23	cluster	oklab8	72079	140	146	4.1%	yes
+load after 1.11/1.09/1.26; outputs that differ: 0

@@ -290,6 +290,36 @@ public:
         return id;
     }
 
+    typedef int32_t i32x4 __attribute__((vector_size(16)));
+
+    // The exact bounds of a bucket's live lanes (what link builds up one cluster at a time). Dead lanes sit at
+    // far_away in every coordinate, so they never lower a minimum; masking them out of the maxima and the counts.
+    static Bounds exact_bounds(const std::vector<Chunk>& chunks) {
+        const f32x4 big = {far_away, far_away, far_away, far_away};
+        const f32x4 zero = {0.0f, 0.0f, 0.0f, 0.0f};
+        f32x4 lx = big, ly = big, lz = big, hx = zero, hy = zero, hz = zero, lightest = big;
+        for (const Chunk& chunk : chunks) {
+            i32x4 ids;
+            std::memcpy(&ids, chunk.id, sizeof ids);
+            const i32x4 live = ids != none;
+            lx = lx < chunk.x ? lx : chunk.x;
+            ly = ly < chunk.y ? ly : chunk.y;
+            lz = lz < chunk.z ? lz : chunk.z;
+            const f32x4 x = (f32x4) ((i32x4) chunk.x & live), y = (f32x4) ((i32x4) chunk.y & live), z = (f32x4) ((i32x4) chunk.z & live);
+            hx = hx > x ? hx : x;
+            hy = hy > y ? hy : y;
+            hz = hz > z ? hz : z;
+            const f32x4 count = (f32x4) (((i32x4) __builtin_convertvector(chunk.count, f32x4) & live) | ((i32x4) big & ~live));
+            lightest = lightest < count ? lightest : count;
+        }
+        auto smallest = [](f32x4 v) {const f32x4 w = __builtin_shufflevector(v, v, 2, 3, 0, 1); const f32x4 m = v < w ? v : w; return m[0] < m[1] ? m[0] : m[1];};
+        auto largest = [](f32x4 v) {const f32x4 w = __builtin_shufflevector(v, v, 2, 3, 0, 1); const f32x4 m = v > w ? v : w; return m[0] > m[1] ? m[0] : m[1];};
+        Bounds bounds;
+        bounds.low = f32x4{smallest(lx), smallest(ly), smallest(lz), 0.0f};
+        bounds.high = f32x4{largest(hx), largest(hy), largest(hz), smallest(lightest)};
+        return bounds;
+    }
+
     void remove(int32_t id) {
         Cluster& cluster = this->clusters[id];
         Bucket& bucket = this->buckets[cluster.bucket];
@@ -308,6 +338,18 @@ public:
         std::memcpy(reinterpret_cast<char*>(&tail.z) + lane, &far_away, 4);
         bucket.size = last;
         if (last % 4 == 0) {bucket.chunks.pop_back();}
+        // The cell test in search needs only a valid lower bound on its members' cost, and bounds taken from the live
+        // lanes are one, no looser than the ones link built up, so this changes which cells and chunks are visited
+        // and never the answer. link only widens a cell's bounds, so after a removal alone they would describe
+        // clusters that are gone. They change only if the removed cluster was at an extreme or the lightest, so
+        // only then are they recomputed (one pass over the cell's lanes).
+        {
+            Bounds& bounds = this->bucket_bounds[cluster.bucket];
+            const float x = float(cluster.coords[0]), y = float(cluster.coords[1]), z = float(cluster.coords[2]);
+            if (x == bounds.low[0] || y == bounds.low[1] || z == bounds.low[2] || x == bounds.high[0] || y == bounds.high[1] || z == bounds.high[2] || float(cluster.count) == bounds.high[3]) {
+                bounds = exact_bounds(bucket.chunks);
+            }
+        }
         cluster.bucket = none;
         if (cluster.count < small) {this->small_counts[cluster.count]--;}
         if (this->cache_of[id] != none) {

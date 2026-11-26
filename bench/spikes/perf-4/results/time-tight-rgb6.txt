@@ -1,0 +1,8 @@
+mode cluster runs 7; load before 0.52/1.68/1.96
+image	config	base ms	tight ms	tight change	identical
+k23	rgb6	49	46	-6.1%	yes
+mos12	rgb6	260	245	-5.8%	yes
+fern	rgb6	336	305	-9.3%	yes
+night	rgb6	255	251	-1.6%	yes
+sky	rgb6	307	263	-14.4%	yes
+load after 0.62/1.64/1.94; outputs that differ: 0

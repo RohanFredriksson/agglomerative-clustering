@@ -1,0 +1,17 @@
+# Instruction counts (callgrind, native clang -O2) of the 4.2.0 source (base) and this branch (shipped), clustering with the driver, hash checked against results/ref-hashes.json (4.2.0's)
+base k23 rgb8 899390902 a85df0f5c7b15c9a yes
+base fern rgb8 8032647679 9e52fe27c7bf091a yes
+base sky rgb8 8118445605 bb1791809be6a65e yes
+base night rgb8 9195749644 e8661cd479c54141 yes
+base k23 rgb6 336029940 deebf8ccfc3bdce2 yes
+base fern rgb6 1833056200 3f00f43ea83ae0f0 yes
+base k23 oklab8 1058776474 c034faa898898f03 yes
+base fern oklab8 20242970193 ba880a74f3de4e0b yes
+shipped k23 rgb8 921207062 a85df0f5c7b15c9a yes
+shipped sky rgb8 7072171294 bb1791809be6a65e yes
+shipped fern rgb8 7194666424 9e52fe27c7bf091a yes
+shipped night rgb8 8084501048 e8661cd479c54141 yes
+shipped k23 rgb6 318383954 deebf8ccfc3bdce2 yes
+shipped fern rgb6 1705425876 3f00f43ea83ae0f0 yes
+shipped k23 oklab8 1072051277 c034faa898898f03 yes
+shipped fern oklab8 19325628121 ba880a74f3de4e0b yes

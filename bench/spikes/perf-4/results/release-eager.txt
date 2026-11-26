@@ -1,0 +1,36 @@
+runs 5; load before 1.11/1.06/1.35
+image	mode	config	colours	4.2.0 ms	new ms	change	identical
+birch	cluster	rgb8	149453	637	530	-16.8%	yes
+birch	cluster	rgb6	149453	146	141	-3.6%	yes
+birch	cluster	oklab8	149453	752	591	-21.4%	yes
+city	cluster	rgb8	326361	1165	968	-16.9%	yes
+city	cluster	rgb6	326361	283	260	-8.3%	yes
+city	cluster	oklab8	326361	1484	1293	-12.9%	yes
+fern	cluster	rgb8	331638	1210	1050	-13.3%	yes
+fern	cluster	rgb6	331638	293	272	-7.1%	yes
+fern	cluster	oklab8	331638	2185	1947	-10.9%	yes
+komar	cluster	rgb8	330629	1369	1121	-18.1%	yes
+komar	cluster	rgb6	330629	190	181	-4.7%	yes
+komar	cluster	oklab8	330629	1590	1304	-18.0%	yes
+night	cluster	rgb8	351004	1364	1169	-14.3%	yes
+night	cluster	rgb6	351004	245	235	-4.2%	yes
+night	cluster	oklab8	351004	1774	1592	-10.3%	yes
+old	cluster	rgb8	210599	832	716	-14.0%	yes
+old	cluster	rgb6	210599	181	171	-5.8%	yes
+old	cluster	oklab8	210599	1175	984	-16.3%	yes
+pip	cluster	rgb8	256	64	63	-0.7%	yes
+pip	cluster	rgb6	256	62	62	0.7%	yes
+pip	cluster	oklab8	256	63	63	-0.5%	yes
+sky	cluster	rgb8	332741	1214	999	-17.7%	yes
+sky	cluster	rgb6	332741	287	256	-10.6%	yes
+sky	cluster	oklab8	332741	1341	1124	-16.2%	yes
+sp	cluster	rgb8	224100	789	721	-8.7%	yes
+sp	cluster	rgb6	224100	177	169	-4.4%	yes
+sp	cluster	oklab8	224100	1015	915	-9.8%	yes
+wk	cluster	rgb8	164980	648	550	-15.2%	yes
+wk	cluster	rgb6	164980	151	147	-2.6%	yes
+wk	cluster	oklab8	164980	727	636	-12.5%	yes
+k23	cluster	rgb8	72079	128	123	-4.1%	yes
+k23	cluster	rgb6	72079	45	43	-5.1%	yes
+k23	cluster	oklab8	72079	142	142	0.4%	yes
+load after 1.15/1.11/1.31; outputs that differ: 0

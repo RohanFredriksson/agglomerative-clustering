@@ -1,0 +1,8 @@
+mode cluster runs 5; load before 1.71/1.92/2.10
+image	config	base ms	T1s ms	T1s change	identical
+k23	rgb8	126	125	-0.2%	yes
+mos12	rgb8	1018	884	-13.1%	yes
+fern	rgb8	1245	1087	-12.7%	yes
+night	rgb8	1390	1201	-13.6%	yes
+sky	rgb8	1241	1025	-17.4%	yes
+load after 1.33/1.79/2.04; outputs that differ: 0

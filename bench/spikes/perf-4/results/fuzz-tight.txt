@@ -1,0 +1,25 @@
+"\001\017" # Uses: 25
+"\024\000" # Uses: 31
+"\001\000\177\243$'\350\000" # Uses: 28
+"\022\000" # Uses: 22
+"\000\006" # Uses: 21
+"\007\000" # Uses: 16
+"\037\024\000\000\000\000\000\000" # Uses: 20
+"\004\201a\000PR\000\000" # Uses: 12
+"\020\302\017\000\240R\000\000" # Uses: 11
+"\003\000" # Uses: 14
+"\001\000\001\224" # Uses: 7
+"\301\272v-QV\000\000" # Uses: 7
+"\001\000P\340\000\000>\357" # Uses: 3
+"\005<" # Uses: 6
+"\021\000\000\000\000\000\000\000" # Uses: 3
+"EF\000\000\340P\000\000" # Uses: 4
+"\261\006\000\000" # Uses: 1
+"\370\001\000\000\000\000\000\000" # Uses: 1
+###### End of recommended dictionary. ######
+Done 25576 runs in 331 second(s)
+stat::number_of_executed_units: 25576
+stat::average_exec_per_sec:     77
+stat::new_units_added:          877
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              436
