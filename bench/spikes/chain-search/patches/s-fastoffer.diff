@@ -1,0 +1,24 @@
+--- a/src/clustering.hpp
++++ b/src/clustering.hpp
+@@ -375,12 +375,18 @@
+ 
+     // Inserts a candidate if it ranks among the best `limit`; returns the cost of any candidate pushed out, else infinity.
+     double offer(int32_t id, Candidates& list, int limit, int32_t candidate, double cost) const {
+-        if (list.size == limit && !this->is_before(id, cost, candidate, list.costs[limit - 1], list.ids[limit - 1])) {return cost;}
++        // The same order as is_before, with its first test (different costs) inline: is_before is called only for equal costs.
++        if (list.size == limit) {
++            const double worst = list.costs[limit - 1];
++            if (cost > worst || (cost == worst && !this->is_before(id, cost, candidate, worst, list.ids[limit - 1]))) {return cost;}
++        }
+         double evicted = list.size == limit ? list.costs[limit - 1] : std::numeric_limits<double>::infinity();
+         int i = list.size == limit ? limit - 1 : list.size++;
+-        while (i > 0 && this->is_before(id, cost, candidate, list.costs[i - 1], list.ids[i - 1])) {
++        while (i > 0) {
++            const double above = list.costs[i - 1];
++            if (!(cost < above || (cost == above && this->is_before(id, cost, candidate, above, list.ids[i - 1])))) {break;}
+             list.ids[i] = list.ids[i - 1];
+-            list.costs[i] = list.costs[i - 1];
++            list.costs[i] = above;
+             i--;
+         }
+         list.ids[i] = candidate;

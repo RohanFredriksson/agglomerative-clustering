@@ -1,0 +1,40 @@
+--------------------------------------------------------------------------------
+Profile data file 'build/prof-fern.out' (creator: callgrind-3.22.0)
+--------------------------------------------------------------------------------
+I1 cache: 
+D1 cache: 
+LL cache: 
+Timerange: Basic block 0 - 1405669150
+Trigger: Program termination
+Profiled target:  build/count/driver-native data/fern.rgba 0 8 1 (PID 1, part 1)
+Events recorded:  Ir
+Events shown:     Ir
+Event sort order: Ir
+Thresholds:       99
+Include dirs:     
+User annotated:   
+Auto-annotation:  on
+
+--------------------------------------------------------------------------------
+Ir                      
+--------------------------------------------------------------------------------
+11,919,113,327 (100.0%)  PROGRAM TOTALS
+
+--------------------------------------------------------------------------------
+Ir                      file:function
+--------------------------------------------------------------------------------
+8,557,077,673 (71.79%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/sp
+  749,502,340 ( 6.29%)  build/count/src/clustering.hpp:AgglomerativeClustering::AgglomerativeHistogram::add(unsigned int, unsigned long) [/spikes/chain-search/build/count
+  598,862,111 ( 5.02%)  build/count/src/clustering.cpp:ClusteringJob::scan(bool, double) [/spikes/chain-search/build/count/driver-native]
+  445,696,770 ( 3.74%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::search(int, AgglomerativeC
+  327,691,452 ( 2.75%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_iterator.h:AgglomerativeClustering::WardGrid::search(int, Agglomerativ
+  212,486,228 ( 1.78%)  build/count/src/clustering.cpp:ClusteringJob::write(bool, double) [/spikes/chain-search/build/count/driver-native]
+  123,466,115 ( 1.04%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::link(int) [/spikes/chain-search/build/count/driver-native]
+  111,813,216 ( 0.94%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::is_before(int, double, int, double, int) const [/spikes/chain-search/build/count
+  105,259,244 ( 0.88%)  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+   73,131,372 ( 0.61%)  build/count/src/clustering.cpp:clustering_crc_update(unsigned int, unsigned char const*, unsigned long, unsigned long) [/spikes/chain-search/build
+   71,464,385 ( 0.60%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::count_occupied(bool, double) [/spikes/chain-search/build/count/driver-native]
+   61,364,412 ( 0.51%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::remove(int) [/spikes/chain-search/build/count/driver-native]
+   52,399,410 ( 0.44%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::reindex(bool, double) [/spikes/chain-search/build/count/driver-native]
+   48,997,219 ( 0.41%)  build/count/src/clustering.hpp:AgglomerativeClustering::WardGrid::nearest(int, int) [/spikes/chain-search/build/count/driver-native]
+   45,887,056 ( 0.38%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:ClusteringJob::write(bool, double)

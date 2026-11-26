@@ -1,0 +1,12 @@
+load before: 1.18 1.57 1.94 3/1442 723642
+RUN 0 TOTAL 68.683
+HASH deebf8ccfc3bdce2
+RUN 1 TOTAL 52.595
+HASH deebf8ccfc3bdce2
+RUN 2 TOTAL 50.925
+HASH deebf8ccfc3bdce2
+RUN 3 TOTAL 51.803
+HASH deebf8ccfc3bdce2
+RUN 4 TOTAL 49.502
+HASH deebf8ccfc3bdce2
+load after: 1.18 1.57 1.94 1/1442 723650

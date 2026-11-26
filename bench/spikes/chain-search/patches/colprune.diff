@@ -1,0 +1,56 @@
+--- a/src/clustering.hpp
++++ b/src/clustering.hpp
+@@ -75,8 +75,14 @@
+     };
+ 
+     // Candidate caches for clusters whose searches are expensive (see nearest).
+-    static constexpr int cache_size = 16;
+-    static constexpr size_t cache_after = 1024;
++#ifndef CACHE_SIZE
++#define CACHE_SIZE 16
++#endif
++#ifndef CACHE_AFTER
++#define CACHE_AFTER 1024
++#endif
++    static constexpr int cache_size = CACHE_SIZE;
++    static constexpr size_t cache_after = CACHE_AFTER;
+ 
+     // The cheapest partners of one cluster in the total order of is_before, cheapest first.
+     struct Candidates {
+@@ -148,7 +154,10 @@
+     // occupied cells are rather than from the cluster count: the finest grid whose occupied cells hold at
+     // least `target_occupancy` clusters on average. Finer grids mean fewer distance evaluations per search but
+     // more empty cells to step over.
+-    static constexpr double target_occupancy = 24.0;
++#ifndef TARGET_OCC
++#define TARGET_OCC 24.0
++#endif
++    static constexpr double target_occupancy = TARGET_OCC;
+ 
+     // Clusters only merge, so the grid only needs to get coarser: sizes are tried from the current one down,
+     // counting each one's occupied cells in a bitmap. The live clusters are read from the buckets, which hold
+@@ -474,6 +483,12 @@
+             }
+         };
+ 
++        // Distance along one axis from the colour to a cell's interval: every cluster in the cell is at least this far.
++        auto axis_gap = [&](int axis, int32_t cell) __attribute__((always_inline)) -> uint64_t {
++            const uint64_t low = this->boundaries[cell], high = uint64_t(this->boundaries[cell + 1]) - 1u, v = p[axis];
++            return v < low ? low - v : (v > high ? v - high : 0u);
++        };
++
+         for (int32_t ring = 0; ; ring++) {
+ 
+             // Anything outside the cells already searched lies past one of the cube's faces.
+@@ -501,7 +516,11 @@
+ 
+             for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
+                 bool x_edge = x == c[0] - ring || x == c[0] + ring;
++                const uint64_t gx = axis_gap(0, x);
++                if (minimum_weight * double(gx * gx) > bound) {continue;}
+                 for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
++                    const uint64_t gy = axis_gap(1, y);
++                    if (minimum_weight * double(gx * gx + gy * gy) > bound) {continue;}
+                     bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
+                     const uint64_t* column = &this->columns[size_t(x * this->dimension + y) * this->words];
+                     if (xy_edge) {

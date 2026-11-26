@@ -1,0 +1,12 @@
+build/fast/driver-tune-cs16 fern ms 1670.400 hash 9e52fe27c7bf091a examined   446982641 cells   91886384 chunks  118327495 exact   3146963
+build/fast/driver-tune-cs32 fern ms 1701.866 hash 9e52fe27c7bf091a examined   440201474 cells   90955429 chunks  116551054 exact   3606932
+build/fast/driver-tune-cs64 fern ms 1842.385 hash 9e52fe27c7bf091a examined   447781455 cells   91632704 chunks  118632732 exact   4573076
+build/fast/driver-tune-cs128 fern ms 2232.993 hash 9e52fe27c7bf091a examined   465016662 cells   93301887 chunks  123322779 exact   6117006
+build/fast/driver-tune-cs16 up12 ms 7148.935 hash f0958588fb787674 examined  2134283824 cells  249480737 chunks  573289861 exact   8810618
+build/fast/driver-tune-cs32 up12 ms 5153.390 hash f0958588fb787674 examined  1361578515 cells  191267576 chunks  365821487 exact   8776031
+build/fast/driver-tune-cs64 up12 ms 4499.196 hash f0958588fb787674 examined  1079818836 cells  170662221 chunks  290218211 exact   9218879
+build/fast/driver-tune-cs128 up12 ms 4396.251 hash f0958588fb787674 examined   978016983 cells  164018040 chunks  263035827 exact  10157283
+build/fast/driver-tune-cs16 mos12 ms 1530.037 hash 1a83ebf8c5224ed8 examined   416471924 cells   86056635 chunks  111618949 exact   2757655
+build/fast/driver-tune-cs32 mos12 ms 1408.079 hash 1a83ebf8c5224ed8 examined   342672490 cells   76941811 chunks   91614188 exact   2913971
+build/fast/driver-tune-cs64 mos12 ms 1465.669 hash 1a83ebf8c5224ed8 examined   316628333 cells   73534284 chunks   84542517 exact   3290316
+build/fast/driver-tune-cs128 mos12 ms 1592.440 hash 1a83ebf8c5224ed8 examined   313333912 cells   72804208 chunks   83632542 exact   3913976

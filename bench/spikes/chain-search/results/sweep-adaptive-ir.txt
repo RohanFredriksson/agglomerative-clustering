@@ -1,0 +1,9 @@
+build/adapt/driver-mx128 fern 0 8 Ir 9062531835 hash 9e52fe27c7bf091a
+build/adapt/driver-mx128 k23 0 8 Ir 924736200 hash a85df0f5c7b15c9a
+build/adapt/driver-mx128 mos12 0 8 Ir 7194789327 hash 1a83ebf8c5224ed8
+build/adapt/driver-mx32 fern 0 8 Ir 9044708697 hash 9e52fe27c7bf091a
+build/adapt/driver-mx32 k23 0 8 Ir 913018750 hash a85df0f5c7b15c9a
+build/adapt/driver-mx32 mos12 0 8 Ir 7554137634 hash 1a83ebf8c5224ed8
+build/adapt/driver-mx64 fern 0 8 Ir 9004755853 hash 9e52fe27c7bf091a
+build/adapt/driver-mx64 k23 0 8 Ir 909242083 hash a85df0f5c7b15c9a
+build/adapt/driver-mx64 mos12 0 8 Ir 7195816575 hash 1a83ebf8c5224ed8

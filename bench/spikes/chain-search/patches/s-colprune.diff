@@ -1,0 +1,27 @@
+--- a/src/clustering.hpp
++++ b/src/clustering.hpp
+@@ -474,6 +474,12 @@
+             }
+         };
+ 
++        // Distance along one axis from the colour to a cell's interval: every cluster in the cell is at least this far.
++        auto axis_gap = [&](int axis, int32_t cell) __attribute__((always_inline)) -> uint64_t {
++            const uint64_t low = this->boundaries[cell], high = uint64_t(this->boundaries[cell + 1]) - 1u, v = p[axis];
++            return v < low ? low - v : (v > high ? v - high : 0u);
++        };
++
+         for (int32_t ring = 0; ; ring++) {
+ 
+             // Anything outside the cells already searched lies past one of the cube's faces.
+@@ -501,7 +507,11 @@
+ 
+             for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
+                 bool x_edge = x == c[0] - ring || x == c[0] + ring;
++                const uint64_t gx = axis_gap(0, x);
++                if (minimum_weight * double(gx * gx) > bound) {continue;}
+                 for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
++                    const uint64_t gy = axis_gap(1, y);
++                    if (minimum_weight * double(gx * gx + gy * gy) > bound) {continue;}
+                     bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
+                     const uint64_t* column = &this->columns[size_t(x * this->dimension + y) * this->words];
+                     if (xy_edge) {

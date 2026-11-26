@@ -1,0 +1,259 @@
+--- a/src/clustering.cpp
++++ b/src/clustering.cpp
+@@ -253,6 +253,9 @@
+     std::vector<Merge> merges;
+     std::vector<double> heights;
+     std::vector<int32_t> chain;
++#ifdef COUNTERS
++    int chain_cat = 2;
++#endif
+     int32_t next_start = 0;
+ 
+     // Writing
+@@ -436,19 +439,23 @@
+             if (this->chain.empty()) {
+                 while (!grid.is_alive(this->next_start)) {this->next_start++;}
+                 this->chain.push_back(this->next_start);
++                COUNT(this->chain_cat = 2); COUNT(AgglomerativeClustering::g_sc.chain_starts++);
+             }
+ 
+             int32_t a = this->chain.back();
++            COUNT(AgglomerativeClustering::g_sc.category = this->chain_cat);
+             // The cluster below `a` in the chain is a live partner, so its cost bounds the search.
+             int32_t b = grid.nearest(a, this->chain.size() >= 2 ? this->chain[this->chain.size() - 2] : AgglomerativeClustering::WardGrid::none);
+ 
+             if (this->chain.size() < 2 || this->chain[this->chain.size() - 2] != b) {
+                 this->chain.push_back(b);
++                COUNT(this->chain_cat = 0); COUNT(AgglomerativeClustering::g_sc.chain_pushes++); COUNT(AgglomerativeClustering::g_sc.chain_max = std::max<uint64_t>(AgglomerativeClustering::g_sc.chain_max, this->chain.size()));
+                 continue;
+             }
+ 
+             this->chain.pop_back();
+             this->chain.pop_back();
++            COUNT(AgglomerativeClustering::g_sc.merges++); COUNT(this->chain_cat = 1);
+ 
+             uint32_t a_count = grid.count(a);
+             uint32_t b_count = grid.count(b);
+--- a/src/clustering.hpp
++++ b/src/clustering.hpp
+@@ -18,6 +18,28 @@
+ 
+ namespace AgglomerativeClustering {
+ 
++#ifdef COUNTERS
++// Spike counters (never in a shipped build): what the chain's searches do. See bench/spikes/chain-search.
++struct SearchCounters {
++    // category of the current query: 0 a freshly pushed cluster, 1 a cluster exposed by a merge above it, 2 the first of a new chain
++    int category = 0;
++    uint64_t nearest_calls[3] = {}, cached_entry[3] = {}, cache_hit[3] = {}, cache_fallback[3] = {}, cache_built = 0, expensive_marked = 0;
++    uint64_t searches[3][3] = {};      // [category][limit==1 ? 0 : 1]
++    uint64_t examined[3][3] = {}, rings[3][3] = {}, cells_visited[3][3] = {}, cells_skipped[3][3] = {}, chunks_seen[3][3] = {}, chunks_exact[3][3] = {}, lanes_offered[3][3] = {};
++    uint64_t ring_stop_bound = 0, ring_stop_edge = 0, hint_used = 0, hint_equal_result = 0;
++    uint64_t reindex_checks = 0, rebuilds = 0, relinked = 0;
++    uint64_t cache_offers = 0;
++    uint64_t by_log2_searches[32] = {}, by_log2_examined[32] = {}, by_log2_exact[32] = {};
++    std::vector<uint32_t> per_id_nearest, per_id_search;
++    uint64_t chain_pushes = 0, chain_max = 0, merges = 0, chain_starts = 0;
++    uint64_t hint_cost_ratio_sum_cnt = 0;
++};
++inline SearchCounters g_sc;
++#define COUNT(...) __VA_ARGS__
++#else
++#define COUNT(...) ((void)0)
++#endif
++
+ // Spatial index over the live clusters, answering exact "cheapest partner by Ward cost" queries.
+ // Cells form a dense uniform grid that is rebuilt coarser as clusters merge, keeping a few clusters per cell.
+ class WardGrid {
+@@ -75,8 +97,14 @@
+     };
+ 
+     // Candidate caches for clusters whose searches are expensive (see nearest).
+-    static constexpr int cache_size = 16;
+-    static constexpr size_t cache_after = 1024;
++#ifndef CACHE_SIZE
++#define CACHE_SIZE 16
++#endif
++#ifndef CACHE_AFTER
++#define CACHE_AFTER 1024
++#endif
++    static constexpr int cache_size = CACHE_SIZE;
++    static constexpr size_t cache_after = CACHE_AFTER;
+ 
+     // The cheapest partners of one cluster in the total order of is_before, cheapest first.
+     struct Candidates {
+@@ -128,6 +156,10 @@
+     std::vector<Bounds> bucket_bounds;
+     std::vector<Cluster> clusters;
+     size_t alive = 0;
++    // Live clusters with each small count, and a lower bound of the smallest live count (counts only grow).
++    static constexpr uint32_t small = 4096;
++    std::vector<uint32_t> small_counts = std::vector<uint32_t>(small, 0u);
++    uint32_t min_count = 1;
+ 
+     static uint64_t get_distance(const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+         uint64_t dx = static_cast<uint64_t>(a[0] > b[0] ? a[0] - b[0] : b[0] - a[0]);
+@@ -148,7 +180,10 @@
+     // occupied cells are rather than from the cluster count: the finest grid whose occupied cells hold at
+     // least `target_occupancy` clusters on average. Finer grids mean fewer distance evaluations per search but
+     // more empty cells to step over.
+-    static constexpr double target_occupancy = 24.0;
++#ifndef TARGET_OCC
++#define TARGET_OCC 24.0
++#endif
++    static constexpr double target_occupancy = TARGET_OCC;
+ 
+     // Clusters only merge, so the grid only needs to get coarser: sizes are tried from the current one down,
+     // counting each one's occupied cells in a bitmap. The live clusters are read from the buckets, which hold
+@@ -238,6 +273,7 @@
+     // Rebuilding the grid at a new size: the arrays first, then (link_some) every live cluster linked in id order
+     // from `review_cursor` on, so it can be resumed; link_some returns whether every cluster is linked.
+     void start_rebuild(int32_t dimension) {
++        COUNT(g_sc.rebuilds++);
+         this->dimension = dimension;
+         this->boundaries.resize(size_t(dimension) + 1);
+         for (int32_t k = 0; k <= dimension; k++) {this->boundaries[k] = uint32_t((uint64_t(k) * 65536u + uint64_t(dimension) - 1u) / uint64_t(dimension));}
+@@ -253,7 +289,7 @@
+         while (this->review_cursor < this->clusters.size()) {
+             const size_t end = std::min(this->clusters.size(), this->review_cursor + block);
+             for (; this->review_cursor < end; this->review_cursor++) {
+-                if (this->clusters[this->review_cursor].bucket != none) {this->link(int32_t(this->review_cursor));}
++                if (this->clusters[this->review_cursor].bucket != none) {COUNT(g_sc.relinked++); this->link(int32_t(this->review_cursor));}
+             }
+             if (timed && this->review_cursor < this->clusters.size() && emscripten_get_now() >= deadline) {return false;}
+         }
+@@ -274,6 +310,8 @@
+         this->clusters.push_back({coords, count, none, none});
+         this->cache_of.push_back(none);
+         this->expensive.push_back(false);
++        COUNT(g_sc.per_id_nearest.push_back(0)); COUNT(g_sc.per_id_search.push_back(0));
++        if (count < small) {this->small_counts[count]++;}
+         this->link(id);
+         this->alive++;
+         return id;
+@@ -298,6 +336,7 @@
+         bucket.size = last;
+         if (last % 4 == 0) {bucket.chunks.pop_back();}
+         cluster.bucket = none;
++        if (cluster.count < small) {this->small_counts[cluster.count]--;}
+         if (this->cache_of[id] != none) {
+             this->free_caches.push_back(this->cache_of[id]);
+             this->cache_of[id] = none;
+@@ -397,9 +436,13 @@
+         const std::array<uint16_t, 3>& p = self.coords;
+         const int32_t c[3] = {this->cell_of(p[0]), this->cell_of(p[1]), this->cell_of(p[2])};
+         const int32_t last = this->dimension - 1;
+-        const double minimum_weight = get_weight(self.count, 1u) * (1.0 - 1e-12);
++        const double minimum_weight = get_weight(self.count, this->min_count) * (1.0 - 1e-12);
+         size_t examined = 0;
+         list.size = 0;
++        COUNT(const int cat = g_sc.category); COUNT(const int lim = limit == 1 ? 0 : 1);
++        COUNT(g_sc.searches[cat][lim]++); COUNT(g_sc.per_id_search[id]++);
++        COUNT(const int lg = 31 - __builtin_clz(self.count)); COUNT(g_sc.by_log2_searches[lg]++);
++        COUNT(if (hint != none && limit == 1) {g_sc.hint_used++;});
+ 
+         // The cost a candidate must beat to make the list: its worst entry once full.
+         double bound = std::numeric_limits<double>::infinity();
+@@ -440,6 +483,7 @@
+         auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
+             int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
+             if (bucket == none) {return;}
++            COUNT(g_sc.cells_visited[cat][lim]++);
+             // No member of this cell can cost less than its lightest possible member at the nearest point of the
+             // cell's colour box. Lane 3 of the gap is 0 (low and position are 0 there, high is a count).
+             const Bounds& bounds = this->bucket_bounds[bucket];
+@@ -449,13 +493,15 @@
+             gap = gap > 0.0f ? gap : 0.0f;
+             gap *= gap;
+             float lightest = bounds.high[3];
+-            if (own_count_f[0] * lightest * (gap[0] + gap[1] + gap[2]) > filter_bound[0] * (own_count_f[0] + lightest)) {return;}
++            if (own_count_f[0] * lightest * (gap[0] + gap[1] + gap[2]) > filter_bound[0] * (own_count_f[0] + lightest)) {COUNT(g_sc.cells_skipped[cat][lim]++); return;}
+             const Bucket& members = this->buckets[bucket];
+-            examined += members.size;
++            examined += members.size; COUNT(g_sc.by_log2_examined[lg] += members.size);
+             for (const Chunk& chunk : members.chunks) {
++                COUNT(g_sc.chunks_seen[cat][lim]++);
+                 f32x4 dx = chunk.x - px, dy = chunk.y - py, dz = chunk.z - pz;
+                 u32x4 maybe = (u32x4) (dx * dx + dy * dy + dz * dz <= filter_bound * chunk.inverse + filter_own);
+                 if (!any_lane(maybe)) {continue;}
++                COUNT(g_sc.chunks_exact[cat][lim]++); COUNT(g_sc.by_log2_exact[lg]++);
+                 // Exact Ward costs for all four lanes: integer differences and their squares are exact in double,
+                 // and the weight uses the same operations as get_weight, so these match the scalar costs bit for bit.
+                 f64x4 ex = __builtin_convertvector(dx, f64x4), ey = __builtin_convertvector(dy, f64x4), ez = __builtin_convertvector(dz, f64x4);
+@@ -468,6 +514,7 @@
+                 for (int lane = 0; lane < 4; lane++) {
+                     if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id) {continue;}
+                     if (cost[lane] > bound) {continue;}
++                    COUNT(g_sc.lanes_offered[cat][lim]++);
+                     this->offer(id, list, limit, chunk.id[lane], cost[lane]);
+                     if (list.size == limit) {tighten(list.costs[limit - 1]);}
+                 }
+@@ -475,6 +522,7 @@
+         };
+ 
+         for (int32_t ring = 0; ; ring++) {
++            COUNT(g_sc.rings[cat][lim]++);
+ 
+             // Anything outside the cells already searched lies past one of the cube's faces.
+             if (ring > 0) {
+@@ -483,8 +531,8 @@
+                     if (c[axis] - ring >= 0) {gap = std::min<uint64_t>(gap, uint64_t(p[axis]) - (this->boundaries[c[axis] - ring + 1] - 1u));}
+                     if (c[axis] + ring <= last) {gap = std::min<uint64_t>(gap, this->boundaries[c[axis] + ring] - uint64_t(p[axis]));}
+                 }
+-                if (gap == std::numeric_limits<uint64_t>::max()) {break;}
+-                if (minimum_weight * double(gap * gap) > bound) {break;}
++                if (gap == std::numeric_limits<uint64_t>::max()) {COUNT(g_sc.ring_stop_edge++); break;}
++                if (minimum_weight * double(gap * gap) > bound) {COUNT(g_sc.ring_stop_bound++); break;}
+             }
+ 
+             // Column bits for this ring: the z range of edge rows, and the two end cells of interior rows (a zero
+@@ -522,6 +570,7 @@
+ 
+         }
+ 
++        COUNT(g_sc.examined[cat][lim] += examined);
+         return examined;
+ 
+     }
+@@ -538,9 +587,12 @@
+     // remaining candidate isn't strictly below the threshold.
+     [[nodiscard]] int32_t nearest(int32_t id, int32_t hint = none) {
+ 
+-        int32_t slot = this->cache_of[id];
++        while (this->min_count < small && this->small_counts[this->min_count] == 0u) {this->min_count++;}
+ 
++        int32_t slot = this->cache_of[id];
++        COUNT(g_sc.nearest_calls[g_sc.category]++); COUNT(g_sc.per_id_nearest[id]++);
+         if (slot != none) {
++            COUNT(g_sc.cached_entry[g_sc.category]++);
+             Cache& cache = this->caches[slot];
+             Candidates& list = cache.candidates;
+             int kept = 0;
+@@ -559,7 +611,8 @@
+                 cache.threshold = std::min(cache.threshold, this->offer(id, list, cache_size, other, cost));
+             }
+             cache.seen = end;
+-            if (list.size > 0 && list.costs[0] < cache.threshold) {return list.ids[0];}
++            if (list.size > 0 && list.costs[0] < cache.threshold) {COUNT(g_sc.cache_hit[g_sc.category]++); return list.ids[0];}
++            COUNT(g_sc.cache_fallback[g_sc.category]++);
+             this->search(id, list, cache_size);
+             cache.threshold = list.size == cache_size ? list.costs[cache_size - 1] : std::numeric_limits<double>::infinity();
+             return list.size > 0 ? list.ids[0] : none;
+@@ -568,7 +621,7 @@
+         Candidates list;
+         size_t examined = this->search(id, list, 1, hint);
+         if (examined > cache_after && !this->expensive[id]) {
+-            this->expensive[id] = true;
++            this->expensive[id] = true; COUNT(g_sc.expensive_marked++);
+         } else if (examined > cache_after) {
+             if (this->free_caches.empty()) {
+                 slot = (int32_t) this->caches.size();
+@@ -577,7 +630,7 @@
+                 slot = this->free_caches.back();
+                 this->free_caches.pop_back();
+             }
+-            this->cache_of[id] = slot;
++            this->cache_of[id] = slot; COUNT(g_sc.cache_built++);
+             Cache& cache = this->caches[slot];
+             this->search(id, cache.candidates, cache_size);
+             cache.seen = this->capacity();

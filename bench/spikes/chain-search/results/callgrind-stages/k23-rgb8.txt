@@ -1,0 +1,11 @@
+start                 3522314 0.4%
+scan                 33531288 3.4%
+convert               3821243 0.4%
+grid_add             16073312 1.6%
+reindex              32057635 3.2%
+chain               835965019 83.7%
+w_colors              7209124 0.7%
+w_sort               45554663 4.6%
+w_records             5117690 0.5%
+w_checksum           15898776 1.6%
+total               998751064

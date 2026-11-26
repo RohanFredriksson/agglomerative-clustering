@@ -1,0 +1,67 @@
+load before: 0.92 0.61 0.87 2/1457 665726
+RUN 0
+STAGE scan 151.519
+STAGE convert 0.007
+STAGE grid_add 0.291
+STAGE reindex 0.250
+STAGE chain 1.070
+STAGE w_colors 0.006
+STAGE w_sort 0.074
+STAGE w_records 0.051
+STAGE w_checksum 0.018
+TOTAL 156.540
+SEARCHES 614
+HASH b499c6c4d9631c62
+RUN 1
+STAGE scan 118.533
+STAGE convert 0.009
+STAGE grid_add 0.019
+STAGE reindex 0.129
+STAGE chain 0.581
+STAGE w_colors 0.002
+STAGE w_sort 0.015
+STAGE w_records 0.002
+STAGE w_checksum 0.013
+TOTAL 119.349
+SEARCHES 614
+HASH b499c6c4d9631c62
+RUN 2
+STAGE scan 112.323
+STAGE convert 0.006
+STAGE grid_add 0.013
+STAGE reindex 0.103
+STAGE chain 0.492
+STAGE w_colors 0.002
+STAGE w_sort 0.013
+STAGE w_records 0.002
+STAGE w_checksum 0.012
+TOTAL 113.003
+SEARCHES 614
+HASH b499c6c4d9631c62
+RUN 3
+STAGE scan 118.237
+STAGE convert 0.008
+STAGE grid_add 0.015
+STAGE reindex 0.137
+STAGE chain 0.504
+STAGE w_colors 0.003
+STAGE w_sort 0.017
+STAGE w_records 0.002
+STAGE w_checksum 0.016
+TOTAL 118.975
+SEARCHES 614
+HASH b499c6c4d9631c62
+RUN 4
+STAGE scan 114.219
+STAGE convert 0.007
+STAGE grid_add 0.011
+STAGE reindex 0.103
+STAGE chain 0.506
+STAGE w_colors 0.003
+STAGE w_sort 0.017
+STAGE w_records 0.002
+STAGE w_checksum 0.015
+TOTAL 114.917
+SEARCHES 614
+HASH b499c6c4d9631c62
+load after: 0.92 0.61 0.87 1/1457 665734

@@ -1,0 +1,72 @@
+--- a/src/clustering.hpp
++++ b/src/clustering.hpp
+@@ -128,6 +128,10 @@
+     std::vector<Bounds> bucket_bounds;
+     std::vector<Cluster> clusters;
+     size_t alive = 0;
++    // Live clusters with each small count, and a lower bound of the smallest live count (counts only grow).
++    static constexpr uint32_t small = 4096;
++    std::vector<uint32_t> small_counts = std::vector<uint32_t>(small, 0u);
++    uint32_t min_count = 1;
+ 
+     static uint64_t get_distance(const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+         uint64_t dx = static_cast<uint64_t>(a[0] > b[0] ? a[0] - b[0] : b[0] - a[0]);
+@@ -274,6 +278,7 @@
+         this->clusters.push_back({coords, count, none, none});
+         this->cache_of.push_back(none);
+         this->expensive.push_back(false);
++        if (count < small) {this->small_counts[count]++;}
+         this->link(id);
+         this->alive++;
+         return id;
+@@ -298,6 +303,7 @@
+         bucket.size = last;
+         if (last % 4 == 0) {bucket.chunks.pop_back();}
+         cluster.bucket = none;
++        if (cluster.count < small) {this->small_counts[cluster.count]--;}
+         if (this->cache_of[id] != none) {
+             this->free_caches.push_back(this->cache_of[id]);
+             this->cache_of[id] = none;
+@@ -397,7 +403,7 @@
+         const std::array<uint16_t, 3>& p = self.coords;
+         const int32_t c[3] = {this->cell_of(p[0]), this->cell_of(p[1]), this->cell_of(p[2])};
+         const int32_t last = this->dimension - 1;
+-        const double minimum_weight = get_weight(self.count, 1u) * (1.0 - 1e-12);
++        const double minimum_weight = get_weight(self.count, this->min_count) * (1.0 - 1e-12);
+         size_t examined = 0;
+         list.size = 0;
+ 
+@@ -474,6 +480,12 @@
+             }
+         };
+ 
++        // Distance along one axis from the colour to a cell's interval: every cluster in the cell is at least this far.
++        auto axis_gap = [&](int axis, int32_t cell) __attribute__((always_inline)) -> uint64_t {
++            const uint64_t low = this->boundaries[cell], high = uint64_t(this->boundaries[cell + 1]) - 1u, v = p[axis];
++            return v < low ? low - v : (v > high ? v - high : 0u);
++        };
++
+         for (int32_t ring = 0; ; ring++) {
+ 
+             // Anything outside the cells already searched lies past one of the cube's faces.
+@@ -501,7 +513,11 @@
+ 
+             for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
+                 bool x_edge = x == c[0] - ring || x == c[0] + ring;
++                const uint64_t gx = axis_gap(0, x);
++                if (minimum_weight * double(gx * gx) > bound) {continue;}
+                 for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
++                    const uint64_t gy = axis_gap(1, y);
++                    if (minimum_weight * double(gx * gx + gy * gy) > bound) {continue;}
+                     bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
+                     const uint64_t* column = &this->columns[size_t(x * this->dimension + y) * this->words];
+                     if (xy_edge) {
+@@ -538,6 +554,8 @@
+     // remaining candidate isn't strictly below the threshold.
+     [[nodiscard]] int32_t nearest(int32_t id, int32_t hint = none) {
+ 
++        while (this->min_count < small && this->small_counts[this->min_count] == 0u) {this->min_count++;}
++
+         int32_t slot = this->cache_of[id];
+ 
+         if (slot != none) {
