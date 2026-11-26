@@ -20,7 +20,7 @@ Most colour quantizers answer one question: *give me k colours*. Ask for a diffe
 
    *Other quantizers start over for each k (here MMCQ, color-thief's median cut, in the order it returns); these palettes nest.*
 
-2. **The lowest error of the libraries benchmarked.** On the 24 Kodak photos at 64 colours, the next best (libimagequant, pngquant's engine) has 1.08× our mean squared error; see [Benchmarks](#benchmarks). <!-- TODO(task 3): numbers and wording from the 4.3 run -->
+2. **The lowest error of the libraries benchmarked.** On the 24 Kodak photos at 64 colours, the nearest, image-q Wu, has 1.05× our mean squared error; see [Benchmarks](#benchmarks). <!-- TODO(task 3): numbers and wording from the 4.3 run -->
 3. **It knows the image.** Each colour's share of the pixels (`buildSwatches`), the error at every palette size, so you can pick a size from an error target (`getClusteringInfo`), and the best fit of `k` entries from a fixed palette such as a thread chart (`chooseFrom`).
 4. **Real-world input.** Transparency (a logo's background never ends up in its palette), premultiplied canvas pixels, BGRA and other pixel layouts, and a worker entry that keeps the page responsive.
 5. **Runs everywhere.** Node and browsers, about 42 KB of WebAssembly gzipped<!-- gzip -9 of dist/clustering.wasm at 4.3.0: 42,862 bytes, bench/spikes/slicing-mapping/results-size.txt -->, no dependencies, deterministic output.
@@ -101,7 +101,7 @@ What people build with it. Each card has the code that makes it, and a guide.
 
 One photo at 4, 8, 16 and 32 colours, ordered dithering. The clustering is built once; each size is a cut and a map.
 
-<!-- snippet -->
+<!-- snippet pixelart -->
 ```js
 import { buildClustering } from 'agglomerative-clustering';
 
@@ -119,7 +119,7 @@ Guides: [GIFs and palette PNGs](https://github.com/RohanFredriksson/agglomerativ
 
 The photo beside its rendering in seven inks, Floyd–Steinberg. The picture uses the `ditherInLight` recipe, which mixes in light, as the panel does; the code below is the plain call, and `ditherInLight` is a drop-in replacement for it.
 
-<!-- snippet -->
+<!-- snippet eink -->
 ```js
 import { quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
@@ -136,7 +136,7 @@ Guides: [Fixed palettes](https://github.com/RohanFredriksson/agglomerative-clust
 
 `chooseFrom` picks the 12 entries of a fixed set (here 24 illustrative colours, not a real chart) that best fit the photo.
 
-<!-- snippet -->
+<!-- snippet threads -->
 ```js
 import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
@@ -154,7 +154,7 @@ Guide: [Fixed palettes](https://github.com/RohanFredriksson/agglomerative-cluste
 
 An app icon with a soft shadow, reduced to 24 colours. The shadow does not take palette entries, and each pixel keeps its own alpha, so the result sits on any background.<!-- docs/media/results.json: transparency --> The gallery's GIFs are the library's own `quantizeToIndices` output, written with gifenc: see the [GIF and palette PNG recipe](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#gifs-and-palette-pngs).
 
-<!-- snippet -->
+<!-- snippet transparency -->
 ```js
 import { quantize } from 'agglomerative-clustering';
 
@@ -170,7 +170,7 @@ Docs: [Transparency](https://github.com/RohanFredriksson/agglomerative-clusterin
 
 `buildSwatches` gives the palette and each colour's share of the image, ready for bars or a legend.
 
-<!-- snippet -->
+<!-- snippet swatches -->
 ```js
 import { buildSwatches } from 'agglomerative-clustering';
 
@@ -186,7 +186,7 @@ Guide: [Swatches and choosing a palette size](https://github.com/RohanFredriksso
 
 One palette for the clip, then ordered dithering: a pixel's colour depends only on its colour and position, so still areas stay still. With Floyd–Steinberg, 4.1% of the pixels away from the ball changed in each frame; with ordered, 0%.<!-- docs/media/results.json: animation.pixelsChangedAwayFromBallPercent -->
 
-<!-- snippet -->
+<!-- snippet animation -->
 ```js
 import { buildClustering, quantizeToIndicesWithPalette } from 'agglomerative-clustering';
 
@@ -195,7 +195,7 @@ const frame = await quantizeToIndicesWithPalette(image, palette, { dither: 'orde
 frame;
 ```
 
-Guides: [Animated GIFs and sets of images](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#animated-gifs-and-sets-of-images), [live video](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#live-video-and-camera-frames).
+Guides: [Animated GIFs and sets of images](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#animated-gifs-and-sets-of-images), [video frames](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#live-video-and-camera-frames).
 
 ## Benchmarks
 
@@ -214,7 +214,7 @@ The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared er
 
 All rows are from one run. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/bench/COMPARISON.md); reproduce them with `node bench/run.js`. These numbers are a snapshot, so expect them to move with the hardware and the versions.
 
-**Large photos.** Clustering a photo with 150,000 to 350,000 distinct colours takes 0.5 to 1.2 s at full precision and 0.14 to 0.29 s with `precision: 6`; 4.3 is 1.5% to 21% faster than 4.2 at full precision on these, with identical output<!-- bench/spikes/perf-4/results/results-release.txt -->.
+**Large photos.** Clustering a photo with 150,000 to 350,000 distinct colours takes 0.5 to 1.2 s at full precision and 0.14 to 0.29 s with `precision: 6`; 4.3 is 1.5% to 20.7% faster than 4.2 at full precision in RGB on these, with identical output<!-- bench/spikes/perf-4/results/results-release.txt -->.
 
 ## How it works
 
