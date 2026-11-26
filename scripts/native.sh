@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Native builds of the C++ (no Emscripten), for what WebAssembly can't give:
 #   scripts/native.sh fuzz [seconds]            build the libFuzzer targets in native/ with ASan and UBSan and run each
-#                                               for `seconds` (default 60); a crash or a broken invariant fails
+#                                               for `seconds` (default 60); a crash, a broken invariant or a clustering
+#                                               that differs from the 4.0.0 reference fails
 #   scripts/native.sh profile <image> [format] [precision] [color space]
 #                                               one clustering under callgrind, printing its instruction count (an
 #                                               image .png is converted to raw RGBA first; anything else is raw pixels)
@@ -9,7 +10,7 @@
 # Without them locally, run it in a container:
 #   podman run --rm -v "$PWD:/src:Z" -w /src ubuntu:24.04 bash -c 'apt-get update -qq && apt-get install -y -qq clang valgrind >/dev/null && scripts/native.sh fuzz 60'
 # Corpora are kept in build/native/corpus (gitignored), seeded from fixtures/clusterings and native/seeds
-# (Kodak crops in each format, written by native/make-seeds.mjs).
+# (Kodak crops in each format, and generated images for fuzz_identical, written by native/make-seeds.mjs).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,13 +22,18 @@ case "${1:-}" in
     fuzz)
         seconds="${2:-60}"
         flags=(-std=c++17 -O1 -g -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined)
-        for target in fuzz_clustering_bytes fuzz_images; do
-            "$cxx" "${flags[@]}" "$root/native/$target.cpp" -o "$out/$target"
+        targets=(fuzz_clustering_bytes fuzz_images fuzz_identical)
+        for target in "${targets[@]}"; do
+            # fuzz_identical also links the 4.0.0 code it compares against (native/reference/, in its own namespace).
+            extra=()
+            if [[ "$target" == fuzz_identical ]]; then extra=("$root/native/reference/reference.cpp"); fi
+            "$cxx" "${flags[@]}" "$root/native/$target.cpp" "${extra[@]}" -o "$out/$target"
         done
-        mkdir -p "$out/corpus/fuzz_clustering_bytes" "$out/corpus/fuzz_images"
+        mkdir -p "${targets[@]/#/$out/corpus/}"
         cp "$root"/fixtures/clusterings/*.bin "$out/corpus/fuzz_clustering_bytes/"
         cp "$root"/native/seeds/fuzz_images/* "$out/corpus/fuzz_images/"
-        for target in fuzz_clustering_bytes fuzz_images; do
+        cp "$root"/fixtures/clusterings/*.bin "$root"/native/seeds/fuzz_images/* "$root"/native/seeds/fuzz_identical/* "$out/corpus/fuzz_identical/"
+        for target in "${targets[@]}"; do
             echo "== $target, ${seconds} s"
             "$out/$target" "$out/corpus/$target" -max_total_time="$seconds" -max_len=20000 -rss_limit_mb=2048 -timeout=30 -print_final_stats=1
         done

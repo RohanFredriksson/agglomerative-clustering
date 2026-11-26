@@ -161,7 +161,8 @@ jobs:
 
   # Native fuzzing of the C++ with ASan and UBSan (scripts/native.sh): stored clusterings come back from users as
   # untrusted bytes, and the image functions must keep their invariants (sliced clustering equals one-shot, indices point
-  # into the palette) for every input the JavaScript lets through. Two minutes per target on each push.
+  # into the palette) for every input the JavaScript lets through, and a clustering must stay byte-identical to the 4.0.0 reference
+  # in native/reference/. Two minutes per target on each push.
   fuzz:
     runs-on: ubuntu-24.04
     steps:
