@@ -1,4 +1,5 @@
-// Writes the seed inputs for native/fuzz_images.cpp to native/seeds/fuzz_images (committed; rerun only to change them):
+// Writes the seed inputs for native/fuzz_images.cpp to native/seeds/fuzz_images, and for native/fuzz_identical.cpp to
+// native/seeds/fuzz_identical (committed; rerun only to change them):
 // a header in the harness's byte order, a palette, then pixels cropped from Kodak photos, so fuzzing starts from real
 // image sizes instead of growing inputs from a few bytes. Run from the repo root: node native/make-seeds.mjs
 import { writeFileSync, mkdirSync } from 'fs';
@@ -30,3 +31,19 @@ for (const [name, header] of Object.entries(seeds)) {
     writeFileSync(`${dir}/${name}`, Uint8Array.from([...header, ...palette, ...crop(300, 200, 48, 32, header[0])]));
 }
 console.log(`wrote ${Object.keys(seeds).length} seeds to ${dir}`);
+
+// fuzz_identical reads the same header, but for generated pixels: [format, colour space, precision, weight alpha, generated pixels
+// (2^(n-1)), scatter (2^n levels), mode, centres, transparent, palette colours (the centres), width seed], then pixels as they are.
+const identicalDir = 'native/seeds/fuzz_identical';
+mkdirSync(identicalDir, { recursive: true });
+const identical = {
+    'rgba-noise-8192': [0, 0, 8, 1, 14, 5, 0, 20, 0, 6, 47],
+    'rgb-gradient-oklab': [1, 1, 8, 0, 13, 4, 1, 8, 0, 3, 39],
+    'bgra-ramp-transparent': [2, 0, 8, 1, 12, 3, 2, 12, 128, 4, 31],
+    'rgbx-precision6-wide': [3, 0, 6, 0, 10, 8, 0, 40, 0, 2, 23],
+};
+for (const [name, header] of Object.entries(identical)) {
+    const palette = Array.from({ length: header[9] * 3 }, (_, i) => (i * 97 + 13) & 255);
+    writeFileSync(`${identicalDir}/${name}`, Uint8Array.from([...header, ...palette, ...crop(300, 200, 16, 16, header[0])]));
+}
+console.log(`wrote ${Object.keys(identical).length} seeds to ${identicalDir}`);

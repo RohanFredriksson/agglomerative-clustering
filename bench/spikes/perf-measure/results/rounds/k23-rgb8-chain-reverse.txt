@@ -1,0 +1,34 @@
+== k23 rgb8 chain, started from the newest cluster
+RUN 0
+STAGE scan 33.334
+STAGE convert 2.043
+STAGE grid_add 9.288
+STAGE reindex 16.812
+STAGE chain 517.698
+STAGE w_colors 1.636
+STAGE w_sort 24.825
+STAGE w_records 1.796
+STAGE w_checksum 5.913
+TOTAL 614.767
+SEARCHES 216229
+HASH 70b8100856c13a46
+lengths 1513663 1513663 identical bytes: false
+records 72078 differing at same position 35319 first 152
+records of b whose (colours, weight, cost) are not in a: 6219
+header bytes differing 17,18,19,20
+k=2: error 1.817310e+9 vs 1.817310e+9, ratio 1.000000
+k=4: error 1.002410e+9 vs 1.002410e+9, ratio 1.000000
+k=16: error 2.010541e+8 vs 2.010541e+8, ratio 1.000000
+k=64: error 5.848449e+7 vs 5.848449e+7, ratio 1.000000
+k=256: error 1.973572e+7 vs 1.973572e+7, ratio 1.000000
+k=1024: error 6.746830e+6 vs 6.746830e+6, ratio 1.000000
+k=4096: error 2.216660e+6 vs 2.216660e+6, ratio 1.000000
+k=2: 2 colours vs 2, shared 2
+k=16: 16 colours vs 16, shared 16
+k=64: 64 colours vs 64, shared 64
+k=256: 256 colours vs 256, shared 256
+k=1024: 1024 colours vs 1024, shared 1024
+k=4096: 4096 colours vs 4096, shared 4096
+k=16384: 16384 colours vs 16384, shared 16384
+k=32768: 32768 colours vs 32768, shared 32768
+k=65536: 65536 colours vs 65536, shared 65527

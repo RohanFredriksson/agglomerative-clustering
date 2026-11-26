@@ -1,0 +1,39 @@
+RUN 0 TOTAL 3275.034
+HASH 1a83ebf8c5224ed8
+C merges 288587 chain_starts 33497 chain_pushes 543677 chain_max 25
+C cat fresh nearest 543677 cached_entry 0 cache_hit 0 cache_fallback 0 searches1 543677 searches16 0
+C cat fresh limit 1 examined 113170571 rings 1784826 cells_visited 33472847 cells_skipped 29012342 chunks_seen 29969736 chunks_exact 1341426 lanes_offered 1049362
+C cat fresh limit 16 examined 0 rings 0 cells_visited 0 cells_skipped 0 chunks_seen 0 chunks_exact 0 lanes_offered 0
+C cat exposed nearest 255090 cached_entry 85360 cache_hit 79943 cache_fallback 5417 searches1 169730 searches16 11682
+C cat exposed limit 1 examined 65215762 rings 632145 cells_visited 19311711 cells_skipped 16568810 chunks_seen 17337694 chunks_exact 494525 lanes_offered 449973
+C cat exposed limit 16 examined 225774125 rings 110453 cells_visited 28762861 cells_skipped 16383348 chunks_seen 61061423 chunks_exact 796535 lanes_offered 1129746
+C cat start nearest 33497 cached_entry 0 cache_hit 0 cache_fallback 0 searches1 33497 searches16 0
+C cat start limit 1 examined 12311466 rings 129982 cells_visited 4509216 cells_skipped 4050387 chunks_seen 3250096 chunks_exact 125169 lanes_offered 156473
+C cat start limit 16 examined 0 rings 0 cells_visited 0 cells_skipped 0 chunks_seen 0 chunks_exact 0 lanes_offered 0
+C nearest_total 832264 searches_total 758586 cache_built 6265 expensive_marked 15254 ring_stop_bound 746144 ring_stop_edge 12442 hint_used 691542 rebuilds 13 relinked 577030
+C per_id_nearest_hist 0:1 1:467279 2:73040 3:21785 4:8072 5:3312 6:1528 7+:2158
+C per_id_nearest max 11049 clusters_over_100_calls 74 their_calls 70183
+C by_log2count 0 searches 71966 examined 5552927 chunks_exact 223681
+C by_log2count 1 searches 118215 examined 10620295 chunks_exact 314262
+C by_log2count 2 searches 119480 examined 13966411 chunks_exact 300371
+C by_log2count 3 searches 104134 examined 16167397 chunks_exact 262226
+C by_log2count 4 searches 87327 examined 17605283 chunks_exact 223284
+C by_log2count 5 searches 71765 examined 19544108 chunks_exact 194641
+C by_log2count 6 searches 57820 examined 20910572 chunks_exact 172412
+C by_log2count 7 searches 44842 examined 26313443 chunks_exact 157932
+C by_log2count 8 searches 32652 examined 36122857 chunks_exact 134670
+C by_log2count 9 searches 21474 examined 46042987 chunks_exact 135670
+C by_log2count 10 searches 12187 examined 39216255 chunks_exact 129107
+C by_log2count 11 searches 7519 examined 70725544 chunks_exact 194095
+C by_log2count 12 searches 4699 examined 54273721 chunks_exact 187533
+C by_log2count 13 searches 2191 examined 32817120 chunks_exact 80721
+C by_log2count 14 searches 931 examined 1291837 chunks_exact 10507
+C by_log2count 15 searches 397 examined 168691 chunks_exact 1389
+C by_log2count 16 searches 643 examined 5003509 chunks_exact 33326
+C by_log2count 17 searches 115 examined 36837 chunks_exact 532
+C by_log2count 18 searches 166 examined 88366 chunks_exact 1139
+C by_log2count 19 searches 42 examined 3509 chunks_exact 123
+C by_log2count 20 searches 10 examined 165 chunks_exact 19
+C by_log2count 21 searches 8 examined 82 chunks_exact 12
+C by_log2count 22 searches 2 examined 6 chunks_exact 2
+C by_log2count 23 searches 1 examined 2 chunks_exact 1

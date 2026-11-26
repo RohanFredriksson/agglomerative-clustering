@@ -1,0 +1,7 @@
+data/
+build/
+node_modules/
+.npm-cache/
+*.rgba
+*.jpg
+*.bin

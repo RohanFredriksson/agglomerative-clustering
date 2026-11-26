@@ -1,0 +1,11 @@
+# id <TAB> Wikimedia Commons file page (original file downloaded via Special:FilePath) <TAB> licence as shown by Commons <TAB> subject
+wk	https://commons.wikimedia.org/wiki/File:Going_am_Wilden_Kaiser_Panorama_2011-01-29.jpg	Public domain	landscape (mountain panorama)
+sky	https://commons.wikimedia.org/wiki/File:Crepuscular_rays_at_Sunset_near_Waterberg_Plateau.jpg	FAL	sky gradient (sunset)
+pip	https://commons.wikimedia.org/wiki/File:Bearded_man_smoking_pipe-3013924.jpg	CC0	portrait (greyscale JPEG: only 256 colours)
+night	https://commons.wikimedia.org/wiki/File:150502_Strelitzer_Stra%C3%9Fe_bei_Nacht.jpg	CC BY 3.0 de	night street
+fern	https://commons.wikimedia.org/wiki/File:Beech_and_ferns_in_Gullmarsskogen.jpg	CC0	foliage
+city	https://commons.wikimedia.org/wiki/File:Canberra_From_Black_Mountain_Tower.jpg	CC BY-SA 3.0	city view
+birch	https://commons.wikimedia.org/wiki/File:Birchwood_Slavnoe_2012_G1.jpg	Public domain	foliage (birch wood)
+sp	https://commons.wikimedia.org/wiki/File:Homeless_sleeping_on_Paulista_Avenue%2C_S%C3%A3o_Paulo_city%2C_Brazil.jpg	CC0	street, city
+komar	https://commons.wikimedia.org/wiki/File:Komargorod_pond_2013_G3.jpg	Public domain	landscape (pond)
+old	https://commons.wikimedia.org/wiki/File:Old_man_reading_newspaper_early_in_the_morning_at_Basantapur-IMG_6800.jpg	CC BY-SA 4.0	portrait (colour)

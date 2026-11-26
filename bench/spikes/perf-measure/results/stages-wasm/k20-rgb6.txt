@@ -1,0 +1,75 @@
+RUN 0
+STAGE scan 16.161
+STAGE convert 0.448
+STAGE group 1.675
+STAGE grouped_error 0.288
+STAGE grid_add 3.821
+STAGE reindex 2.472
+STAGE chain 37.930
+STAGE w_colors 0.127
+STAGE w_sort 2.174
+STAGE w_records 0.175
+STAGE w_checksum 0.596
+TOTAL 67.848
+SEARCHES 22365
+HASH ba4b7e6baa2e100d
+RUN 1
+STAGE scan 9.021
+STAGE convert 0.194
+STAGE group 1.102
+STAGE grouped_error 0.201
+STAGE grid_add 0.316
+STAGE reindex 1.579
+STAGE chain 16.799
+STAGE w_colors 0.081
+STAGE w_sort 1.157
+STAGE w_records 0.127
+STAGE w_checksum 0.494
+TOTAL 31.148
+SEARCHES 22365
+HASH ba4b7e6baa2e100d
+RUN 2
+STAGE scan 7.350
+STAGE convert 0.195
+STAGE group 0.963
+STAGE grouped_error 0.122
+STAGE grid_add 0.235
+STAGE reindex 1.640
+STAGE chain 25.828
+STAGE w_colors 0.143
+STAGE w_sort 1.294
+STAGE w_records 0.128
+STAGE w_checksum 0.510
+TOTAL 38.497
+SEARCHES 22365
+HASH ba4b7e6baa2e100d
+RUN 3
+STAGE scan 9.268
+STAGE convert 0.232
+STAGE group 1.098
+STAGE grouped_error 0.202
+STAGE grid_add 0.329
+STAGE reindex 3.931
+STAGE chain 21.676
+STAGE w_colors 0.070
+STAGE w_sort 0.970
+STAGE w_records 0.086
+STAGE w_checksum 0.511
+TOTAL 38.440
+SEARCHES 22365
+HASH ba4b7e6baa2e100d
+RUN 4
+STAGE scan 5.140
+STAGE convert 0.112
+STAGE group 0.713
+STAGE grouped_error 0.108
+STAGE grid_add 0.187
+STAGE reindex 1.201
+STAGE chain 15.557
+STAGE w_colors 0.146
+STAGE w_sort 1.315
+STAGE w_records 0.138
+STAGE w_checksum 0.508
+TOTAL 25.167
+SEARCHES 22365
+HASH ba4b7e6baa2e100d

@@ -1,0 +1,40 @@
+RUN 0 TOTAL 2273.600
+HASH d7177da841192b80
+C merges 210598 chain_starts 29784 chain_pushes 391412 chain_max 35
+C cat fresh nearest 391412 cached_entry 0 cache_hit 0 cache_fallback 0 searches1 391412 searches16 0
+C cat fresh limit 1 examined 98733170 rings 1341614 cells_visited 25808266 cells_skipped 20068551 chunks_seen 26609850 chunks_exact 967868 lanes_offered 754723
+C cat fresh limit 16 examined 0 rings 0 cells_visited 0 cells_skipped 0 chunks_seen 0 chunks_exact 0 lanes_offered 0
+C cat exposed nearest 180814 cached_entry 56461 cache_hit 53018 cache_fallback 3443 searches1 124353 searches16 8987
+C cat exposed limit 1 examined 53450162 rings 482871 cells_visited 13312933 cells_skipped 10201266 chunks_seen 14425075 chunks_exact 364385 lanes_offered 329786
+C cat exposed limit 16 examined 143093645 rings 122798 cells_visited 18537047 cells_skipped 8758246 chunks_seen 39143244 chunks_exact 547560 lanes_offered 808528
+C cat start nearest 29784 cached_entry 0 cache_hit 0 cache_fallback 0 searches1 29784 searches16 0
+C cat start limit 1 examined 13484698 rings 125074 cells_visited 3940659 cells_skipped 3128665 chunks_seen 3639389 chunks_exact 115996 lanes_offered 143582
+C cat start limit 16 examined 0 rings 0 cells_visited 0 cells_skipped 0 chunks_seen 0 chunks_exact 0 lanes_offered 0
+C nearest_total 602010 searches_total 554536 cache_built 5544 expensive_marked 14451 ring_stop_bound 546714 ring_stop_edge 7822 hint_used 500771 rebuilds 13 relinked 421089
+C per_id_nearest_hist 0:1 1:341662 2:52167 3:15756 4:5955 5:2542 6:1204 7+:1910
+C per_id_nearest max 18366 clusters_over_100_calls 47 their_calls 43257
+C by_log2count 0 searches 66913 examined 4568361 chunks_exact 202422
+C by_log2count 1 searches 81672 examined 7468831 chunks_exact 214509
+C by_log2count 2 searches 77786 examined 9686532 chunks_exact 198530
+C by_log2count 3 searches 71099 examined 11841348 chunks_exact 182789
+C by_log2count 4 searches 61104 examined 13173591 chunks_exact 160766
+C by_log2count 5 searches 49017 examined 14050535 chunks_exact 132531
+C by_log2count 6 searches 40289 examined 16190931 chunks_exact 119692
+C by_log2count 7 searches 32862 examined 20103363 chunks_exact 122755
+C by_log2count 8 searches 24924 examined 21369949 chunks_exact 110463
+C by_log2count 9 searches 17408 examined 23707227 chunks_exact 110877
+C by_log2count 10 searches 11407 examined 20192734 chunks_exact 72996
+C by_log2count 11 searches 7309 examined 16990102 chunks_exact 34057
+C by_log2count 12 searches 4754 examined 16818781 chunks_exact 41604
+C by_log2count 13 searches 2506 examined 10471997 chunks_exact 16114
+C by_log2count 14 searches 1842 examined 12656407 chunks_exact 36967
+C by_log2count 15 searches 2693 examined 87011286 chunks_exact 225292
+C by_log2count 16 searches 479 examined 2151315 chunks_exact 10388
+C by_log2count 17 searches 249 examined 218067 chunks_exact 1436
+C by_log2count 18 searches 126 examined 79625 chunks_exact 1408
+C by_log2count 19 searches 52 examined 8267 chunks_exact 115
+C by_log2count 20 searches 22 examined 2007 chunks_exact 51
+C by_log2count 21 searches 15 examined 383 chunks_exact 36
+C by_log2count 22 searches 6 examined 31 chunks_exact 9
+C by_log2count 23 searches 1 examined 3 chunks_exact 1
+C by_log2count 24 searches 1 examined 2 chunks_exact 1

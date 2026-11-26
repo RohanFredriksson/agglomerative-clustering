@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.1.0 (unreleased)
+
+### Changed
+- **Clustering is faster on images with many colours, and every clustering is byte-identical to 4.0's.** The search for each cluster's cheapest partner skips more work that cannot win (heavy clusters keep a longer list of candidates, and go straight to building it, the search stops at the smallest live count instead of one pixel, slabs and columns of cells too far for it are skipped, and the grid's size is reviewed more often), and none of it can drop a candidate that could be chosen, ties included. Measured in WebAssembly on ten real 16 to 24 MP photos (the greyscale one, with 256 colours, doesn't change) and a Kodak photo, median of 5: at full precision clustering takes 17.5% (a sky gradient) to 49% (a night street) less time on the nine photos with 150,000 to 350,000 colours, and 9% less on the Kodak photo; with `colorSpace: 'oklab'` 29% (a birch wood) to 58% (the night street) less, and 17% less on the Kodak photo; at `precision: 6` 7% (the birch wood) to 29% (a pond) less, and 9% less on the Kodak photo. <!-- bench/spikes/chain-search/release-check.mjs, results-release.txt: this branch's dist/ against 4.0.0's, same machine and run, load 0.4 to 1.6 --> The `.wasm` grows by about 0.9 KB, and a candidate list can use about 0.8 KB instead of 0.2 KB. Nothing in the API changes. A new fuzz target, `fuzz_identical`, checks that clusterings stay byte-identical to a copy of the 4.0.0 code (`native/reference/`) for generated images in every format, colour space, `precision` and `alpha` mode.
+
 ## 4.0.0
 
 Premultiplied input, stricter image objects and result types that keep the input's. This is 4.0 in two parts: premultiplied input and the image types, then the removals and new errors (Node 20, the bare-image warnings, `transparent` on formats without alpha, the `…FromClustering` and `get…` functions). Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).

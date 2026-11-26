@@ -1,0 +1,1 @@
+{"name":"perf-measure-runtimes","private":true,"version":"0.0.0","description":"edge runtime checks for the perf spike (workerd, deno, bun); delete node_modules and .npm-cache when done","dependencies":{"bun":"^1.4.5","deno":"^2.9.6","workerd":"^1.20261125.1"}}

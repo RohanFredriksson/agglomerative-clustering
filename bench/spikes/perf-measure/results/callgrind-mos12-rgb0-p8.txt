@@ -1,0 +1,17 @@
+start                49137388 0.1%
+scan                837374122 1.6%
+convert              13241709 0.0%
+grid_add             64316127 0.1%
+reindex             118845375 0.2%
+chain              9072882136 17.5%
+w_colors             28860487 0.1%
+w_sort              202240037 0.4%
+w_records            20489862 0.0%
+w_checksum           63639178 0.1%
+map k16 none       1153571703 2.2%
+map k16 fs         7015408123 13.6%
+map k16 ordered     7395996886 14.3%
+map k256 none      1426444761 2.8%
+map k256 fs        7659049789 14.8%
+map k256 ordered    16638879363 32.1%
+total             51760377046

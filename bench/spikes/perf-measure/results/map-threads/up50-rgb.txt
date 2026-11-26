@@ -1,0 +1,30 @@
+MAPT 16 none 0 512.987 91521a68993c4ffe identical 0
+MAPT 16 none 1 519.580 91521a68993c4ffe identical 0 spawn_ms 0.060
+MAPT 16 none 2 310.516 91521a68993c4ffe identical 0 spawn_ms 0.064
+MAPT 16 none 4 204.095 91521a68993c4ffe identical 0 spawn_ms 0.119
+MAPT 16 none 8 184.208 91521a68993c4ffe identical 0 spawn_ms 0.112
+MAPT 16 ordered 0 3028.908 4916ef5273daeddf identical 0
+MAPT 16 ordered 1 3059.657 4916ef5273daeddf identical 0 spawn_ms 0.051
+MAPT 16 ordered 2 1941.431 4916ef5273daeddf identical 0 spawn_ms 0.060
+MAPT 16 ordered 4 1457.170 4916ef5273daeddf identical 0 spawn_ms 0.060
+MAPT 16 ordered 8 1115.485 4916ef5273daeddf identical 0 spawn_ms 0.120
+MAPT 16 fs-stripes 0 3032.947 ac1a07ba8ccd8c3f identical 0
+MAPT 16 fs-stripes 1 3067.861 ac1a07ba8ccd8c3f identical 0 spawn_ms 0.039
+MAPT 16 fs-stripes 2 1799.534 4144c1c0b543fa08 DIFFERENT 9456053 spawn_ms 0.121
+MAPT 16 fs-stripes 4 1112.336 f52d7f116a34e3be DIFFERENT 14423037 spawn_ms 0.071
+MAPT 16 fs-stripes 8 910.617 27fe166d78157781 DIFFERENT 17328008 spawn_ms 0.130
+MAPT 256 none 0 628.996 f3149e15755b01d4 identical 0
+MAPT 256 none 1 636.693 f3149e15755b01d4 identical 0 spawn_ms 0.060
+MAPT 256 none 2 387.754 f3149e15755b01d4 identical 0 spawn_ms 0.058
+MAPT 256 none 4 248.527 f3149e15755b01d4 identical 0 spawn_ms 0.063
+MAPT 256 none 8 220.579 f3149e15755b01d4 identical 0 spawn_ms 0.244
+MAPT 256 ordered 0 5665.334 3bdf7fb22aead492 identical 0
+MAPT 256 ordered 1 5734.207 3bdf7fb22aead492 identical 0 spawn_ms 0.053
+MAPT 256 ordered 2 3559.101 3bdf7fb22aead492 identical 0 spawn_ms 0.095
+MAPT 256 ordered 4 2863.938 3bdf7fb22aead492 identical 0 spawn_ms 0.093
+MAPT 256 ordered 8 2054.866 3bdf7fb22aead492 identical 0 spawn_ms 0.129
+MAPT 256 fs-stripes 0 4085.021 ba0a86dbdc8c96db identical 0
+MAPT 256 fs-stripes 1 4075.908 ba0a86dbdc8c96db identical 0 spawn_ms 0.052
+MAPT 256 fs-stripes 2 2496.533 22545b69605bd6a7 DIFFERENT 12209733 spawn_ms 0.055
+MAPT 256 fs-stripes 4 1527.095 7a186d82301df971 DIFFERENT 18282997 spawn_ms 0.106
+MAPT 256 fs-stripes 8 1251.650 08f069bbbf461478 DIFFERENT 21459695 spawn_ms 0.135

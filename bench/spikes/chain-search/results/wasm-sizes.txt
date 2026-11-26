@@ -1,0 +1,6 @@
+s-fastoffer wasm bytes 87413
+s-minw wasm bytes 87742
+s-colprune wasm bytes 87493
+s-review wasm bytes 87323
+s-adaptive wasm bytes 87506
+s-skip1 wasm bytes 87955

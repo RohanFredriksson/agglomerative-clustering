@@ -1,0 +1,49 @@
+== up12 oklab8 chain
+RUN 0
+STAGE scan 615.777
+STAGE convert 126.871
+STAGE grid_add 81.130
+STAGE reindex 123.219
+STAGE chain 26460.946
+STAGE w_colors 219.824
+STAGE w_sort 226.985
+STAGE w_records 47.805
+STAGE w_checksum 59.748
+TOTAL 27976.165
+SEARCHES 2611427
+HASH 04cd6c5169346f18
+== up12 oklab8 rounds, 1 thread, partner cache
+RUN 0
+STAGE scan 378.837
+STAGE convert 92.523
+STAGE grid_add 62.988
+STAGE reindex 112.268
+STAGE w_colors 10167.261
+STAGE w_sort 372.574
+STAGE w_records 97.951
+STAGE w_checksum 73.247
+TOTAL 11391.588
+SEARCHES 0
+ROUNDS 65 merges_first 185266 merges_median 441 merges_last 1 searches 3649134 t_search 8288.078 t_merge 1304.805 t_other 269.715
+HASH a8f220bb68252743
+== compare
+lengths 19057489 19057489 identical bytes: false
+records 907498 differing at same position 385386 first 5842
+records of b whose (colours, weight, cost) are not in a: 88487
+header bytes differing 17,19,20
+k=2: error 1.963867e+5 vs 1.963867e+5, ratio 1.000000
+k=4: error 9.913248e+4 vs 9.913248e+4, ratio 1.000000
+k=16: error 2.073259e+4 vs 2.073259e+4, ratio 1.000000
+k=64: error 5.328455e+3 vs 5.328455e+3, ratio 1.000000
+k=256: error 1.734033e+3 vs 1.734033e+3, ratio 1.000000
+k=1024: error 6.326111e+2 vs 6.326111e+2, ratio 1.000000
+k=4096: error 2.320116e+2 vs 2.320116e+2, ratio 1.000000
+k=2: 2 colours vs 2, shared 2
+k=16: 16 colours vs 16, shared 16
+k=64: 64 colours vs 64, shared 64
+k=256: 256 colours vs 256, shared 256
+k=1024: 1024 colours vs 1024, shared 1024
+k=4096: 4096 colours vs 4096, shared 4096
+k=16384: 16384 colours vs 16384, shared 16384
+k=32768: 32768 colours vs 32768, shared 32768
+k=65536: 65535 colours vs 65535, shared 65535

@@ -1,0 +1,330 @@
+== chain
+RUN 0
+STAGE scan 14.568
+STAGE convert 0.523
+STAGE grid_add 5.736
+STAGE reindex 12.881
+STAGE chain 127.662
+STAGE w_colors 0.620
+STAGE w_sort 11.819
+STAGE w_records 1.167
+STAGE w_checksum 3.015
+TOTAL 179.709
+SEARCHES 205314
+HASH a85df0f5c7b15c9a
+RUN 1
+STAGE scan 5.558
+STAGE convert 0.337
+STAGE grid_add 1.607
+STAGE reindex 6.122
+STAGE chain 115.079
+STAGE w_colors 0.434
+STAGE w_sort 9.424
+STAGE w_records 0.856
+STAGE w_checksum 3.406
+TOTAL 142.870
+SEARCHES 205314
+HASH a85df0f5c7b15c9a
+RUN 2
+STAGE scan 4.893
+STAGE convert 0.308
+STAGE grid_add 1.609
+STAGE reindex 6.692
+STAGE chain 115.198
+STAGE w_colors 0.394
+STAGE w_sort 7.695
+STAGE w_records 1.209
+STAGE w_checksum 3.242
+TOTAL 141.291
+SEARCHES 205314
+HASH a85df0f5c7b15c9a
+RUN 3
+STAGE scan 4.941
+STAGE convert 0.232
+STAGE grid_add 1.320
+STAGE reindex 6.501
+STAGE chain 116.004
+STAGE w_colors 0.484
+STAGE w_sort 8.332
+STAGE w_records 0.975
+STAGE w_checksum 2.996
+TOTAL 141.823
+SEARCHES 205314
+HASH a85df0f5c7b15c9a
+RUN 4
+STAGE scan 5.389
+STAGE convert 0.233
+STAGE grid_add 1.306
+STAGE reindex 6.149
+STAGE chain 121.158
+STAGE w_colors 0.435
+STAGE w_sort 9.148
+STAGE w_records 0.964
+STAGE w_checksum 3.177
+TOTAL 147.997
+SEARCHES 205314
+HASH a85df0f5c7b15c9a
+== rounds threads=1
+RUN 0
+STAGE scan 10.342
+STAGE convert 0.482
+STAGE grid_add 5.995
+STAGE reindex 11.710
+STAGE w_colors 174.800
+STAGE w_sort 11.163
+STAGE w_records 0.938
+STAGE w_checksum 3.000
+TOTAL 220.086
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 141.099 t_merge 23.636 t_other 8.041
+HASH 48cee913642315fb
+RUN 1
+STAGE scan 6.406
+STAGE convert 0.250
+STAGE grid_add 1.497
+STAGE reindex 6.170
+STAGE w_colors 158.226
+STAGE w_sort 7.781
+STAGE w_records 1.093
+STAGE w_checksum 3.450
+TOTAL 184.909
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 134.046 t_merge 18.564 t_other 5.049
+HASH 48cee913642315fb
+RUN 2
+STAGE scan 5.391
+STAGE convert 0.242
+STAGE grid_add 1.367
+STAGE reindex 7.069
+STAGE w_colors 164.769
+STAGE w_sort 8.206
+STAGE w_records 1.001
+STAGE w_checksum 3.377
+TOTAL 191.453
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 138.708 t_merge 20.388 t_other 4.942
+HASH 48cee913642315fb
+RUN 3
+STAGE scan 5.365
+STAGE convert 0.259
+STAGE grid_add 1.315
+STAGE reindex 6.210
+STAGE w_colors 162.705
+STAGE w_sort 7.439
+STAGE w_records 0.769
+STAGE w_checksum 3.382
+TOTAL 187.477
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 138.104 t_merge 19.373 t_other 4.623
+HASH 48cee913642315fb
+RUN 4
+STAGE scan 5.393
+STAGE convert 0.231
+STAGE grid_add 1.286
+STAGE reindex 6.369
+STAGE w_colors 155.640
+STAGE w_sort 8.095
+STAGE w_records 0.956
+STAGE w_checksum 3.279
+TOTAL 181.281
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 131.621 t_merge 18.580 t_other 4.826
+HASH 48cee913642315fb
+== rounds threads=2
+RUN 0
+STAGE scan 9.931
+STAGE convert 0.565
+STAGE grid_add 6.122
+STAGE reindex 10.919
+STAGE w_colors 132.318
+STAGE w_sort 10.649
+STAGE w_records 0.986
+STAGE w_checksum 3.262
+TOTAL 176.568
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 93.930 t_merge 25.690 t_other 9.370
+HASH 48cee913642315fb
+RUN 1
+STAGE scan 6.070
+STAGE convert 0.286
+STAGE grid_add 1.573
+STAGE reindex 6.399
+STAGE w_colors 111.975
+STAGE w_sort 7.441
+STAGE w_records 0.840
+STAGE w_checksum 3.481
+TOTAL 138.104
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 84.524 t_merge 21.000 t_other 5.539
+HASH 48cee913642315fb
+RUN 2
+STAGE scan 5.798
+STAGE convert 0.625
+STAGE grid_add 2.486
+STAGE reindex 8.522
+STAGE w_colors 112.219
+STAGE w_sort 7.896
+STAGE w_records 0.926
+STAGE w_checksum 3.011
+TOTAL 141.513
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 85.121 t_merge 20.962 t_other 4.951
+HASH 48cee913642315fb
+RUN 3
+STAGE scan 5.835
+STAGE convert 0.286
+STAGE grid_add 1.714
+STAGE reindex 7.209
+STAGE w_colors 115.801
+STAGE w_sort 8.850
+STAGE w_records 1.173
+STAGE w_checksum 3.345
+TOTAL 144.242
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 87.332 t_merge 22.171 t_other 5.420
+HASH 48cee913642315fb
+RUN 4
+STAGE scan 4.958
+STAGE convert 0.231
+STAGE grid_add 1.804
+STAGE reindex 6.278
+STAGE w_colors 112.019
+STAGE w_sort 7.910
+STAGE w_records 0.936
+STAGE w_checksum 3.125
+TOTAL 137.292
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 85.155 t_merge 21.056 t_other 4.882
+HASH 48cee913642315fb
+== rounds threads=4
+RUN 0
+STAGE scan 9.925
+STAGE convert 0.561
+STAGE grid_add 6.074
+STAGE reindex 11.407
+STAGE w_colors 106.812
+STAGE w_sort 11.481
+STAGE w_records 0.904
+STAGE w_checksum 3.000
+TOTAL 151.622
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 68.802 t_merge 24.802 t_other 9.480
+HASH 48cee913642315fb
+RUN 1
+STAGE scan 6.617
+STAGE convert 0.436
+STAGE grid_add 1.548
+STAGE reindex 6.727
+STAGE w_colors 90.724
+STAGE w_sort 8.379
+STAGE w_records 0.782
+STAGE w_checksum 3.061
+TOTAL 118.311
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 62.671 t_merge 20.682 t_other 5.861
+HASH 48cee913642315fb
+RUN 2
+STAGE scan 5.668
+STAGE convert 0.300
+STAGE grid_add 1.462
+STAGE reindex 6.712
+STAGE w_colors 86.565
+STAGE w_sort 8.441
+STAGE w_records 0.937
+STAGE w_checksum 3.137
+TOTAL 113.259
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 57.074 t_merge 22.570 t_other 5.691
+HASH 48cee913642315fb
+RUN 3
+STAGE scan 5.318
+STAGE convert 0.299
+STAGE grid_add 1.448
+STAGE reindex 6.347
+STAGE w_colors 85.157
+STAGE w_sort 7.669
+STAGE w_records 0.945
+STAGE w_checksum 2.985
+TOTAL 110.199
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 58.327 t_merge 19.938 t_other 5.406
+HASH 48cee913642315fb
+RUN 4
+STAGE scan 4.995
+STAGE convert 0.234
+STAGE grid_add 1.289
+STAGE reindex 6.655
+STAGE w_colors 83.319
+STAGE w_sort 10.297
+STAGE w_records 0.908
+STAGE w_checksum 3.971
+TOTAL 111.706
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 55.403 t_merge 21.602 t_other 5.372
+HASH 48cee913642315fb
+== rounds threads=8
+RUN 0
+STAGE scan 9.760
+STAGE convert 0.455
+STAGE grid_add 5.609
+STAGE reindex 10.964
+STAGE w_colors 94.064
+STAGE w_sort 11.110
+STAGE w_records 1.420
+STAGE w_checksum 3.171
+TOTAL 138.262
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 53.439 t_merge 26.374 t_other 9.825
+HASH 48cee913642315fb
+RUN 1
+STAGE scan 7.226
+STAGE convert 0.299
+STAGE grid_add 1.808
+STAGE reindex 6.243
+STAGE w_colors 82.883
+STAGE w_sort 8.318
+STAGE w_records 0.843
+STAGE w_checksum 3.661
+TOTAL 111.351
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 47.859 t_merge 26.332 t_other 7.042
+HASH 48cee913642315fb
+RUN 2
+STAGE scan 4.857
+STAGE convert 0.234
+STAGE grid_add 1.446
+STAGE reindex 7.133
+STAGE w_colors 75.191
+STAGE w_sort 9.270
+STAGE w_records 0.819
+STAGE w_checksum 3.144
+TOTAL 102.130
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 45.400 t_merge 22.525 t_other 5.906
+HASH 48cee913642315fb
+RUN 3
+STAGE scan 4.965
+STAGE convert 0.229
+STAGE grid_add 1.381
+STAGE reindex 7.006
+STAGE w_colors 75.113
+STAGE w_sort 8.055
+STAGE w_records 0.948
+STAGE w_checksum 2.986
+TOTAL 100.714
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 45.760 t_merge 22.047 t_other 5.650
+HASH 48cee913642315fb
+RUN 4
+STAGE scan 4.725
+STAGE convert 0.252
+STAGE grid_add 1.768
+STAGE reindex 6.963
+STAGE w_colors 76.100
+STAGE w_sort 9.188
+STAGE w_records 0.756
+STAGE w_checksum 2.977
+TOTAL 102.769
+SEARCHES 0
+ROUNDS 48 merges_first 15620 merges_median 115 merges_last 1 searches 284849 t_search 46.616 t_merge 22.590 t_other 5.670
+HASH 48cee913642315fb

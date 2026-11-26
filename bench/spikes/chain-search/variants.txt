@@ -1,0 +1,20 @@
+# name: transforms applied in order to the shipped src/ (see make-variant.py); defaults of the macros are the final settings
+base:
+count: counters
+params: params
+final: params fastoffer minw colprune review adaptive skip1
+final-count: counters params fastoffer minw colprune review adaptive skip1
+s-fastoffer: fastoffer
+s-minw: minw
+s-colprune: colprune
+s-review: params review
+s-adaptive: params fastoffer adaptive
+s-skip1: params fastoffer adaptive skip1
+c1: minw
+c2: minw colprune
+c3: params minw colprune review
+c4: params fastoffer minw colprune review adaptive
+l-minw: params fastoffer colprune review adaptive skip1
+l-colprune: params fastoffer minw review adaptive skip1
+l-review: params fastoffer minw colprune adaptive skip1
+l-adaptive: params fastoffer minw colprune review
