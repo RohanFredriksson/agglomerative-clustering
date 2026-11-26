@@ -18,7 +18,7 @@ import gifenc from 'gifenc';
 const { GIFEncoder } = gifenc;
 import { encode } from 'fast-png';
 import quantizeMMCQ from 'quantize';
-import { buildClustering, buildPalette, quantizeToIndices, quantizeToIndicesWithPalette } from '../../dist/index.mjs';
+import { buildClustering, buildPalette, quantize, quantizeToIndicesWithPalette } from '../../dist/index.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const photos = path.join(here, '../../fixtures/images');
@@ -193,6 +193,8 @@ try {
 
 // ---------------------------------------------------------------- hero: 2 to 64 colours from one clustering
 
+const HERO_FRAMES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64];
+
 async function hero() {
     const width = 768;
     const image = await load('kodim23', width, 512);
@@ -234,8 +236,7 @@ async function hero() {
     let order = [0]; // display order of palette indices in the bar; a split inserts the new colour beside its parent
     let previous = await clustering.getPalette(1);
     for (let k = 2; k <= 64; k++) {
-        const { palette, indices } = await clustering.quantizeToIndices(image, k);
-        const { shares } = await clustering.getSwatches(k);
+        const { palette, shares } = await clustering.getSwatches(k);
         // The split: the heavier child takes the parent's index and the lighter child is appended, so the one index
         // that changed is the parent, and index k-1 is its new neighbour.
         let parent = order[order.length - 1];
@@ -247,7 +248,9 @@ async function hero() {
         }
         order.splice(order.indexOf(parent) + 1, 0, k - 1);
         previous = palette;
+        if (!HERO_FRAMES.includes(k)) continue;
 
+        const { indices } = await clustering.quantizeToIndices(image, k);
         const bg = k;
         const canvas = indexCanvas(width, height, bg);
         canvas.blit(0, 0, indices, image.width, image.height);
@@ -255,8 +258,8 @@ async function hero() {
         const flat = new Uint8Array(3 * (k + 1));
         flat.set(palette);
         flat.set(BG, 3 * k);
-        // A short hold on each doubling of k, a longer one on 64; about 8.4 s for the loop.
-        frames.push({ pixels: canvas.pixels, palette: flat, delay: [2, 4, 8, 16, 32].includes(k) ? 700 : k === 64 ? 1500 : 60 });
+        // One even pace, and a longer look at the last frame: 20 x 400 ms + 2000 ms = 10 s.
+        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 64 ? 2000 : 400 });
     }
     await writeGif(out('hero.gif'), width, height, frames, { delta: true });
 }
@@ -325,39 +328,50 @@ async function nesting() {
     await writeLabelled(out('nesting.png'), canvas, labels);
 }
 
-// ---------------------------------------------------------------- pixel art: few colours, hard pixels
+// ---------------------------------------------------------------- pixel art: flat blocks, no dither
 
 async function pixelArt() {
-    const small = await load('kodim03', 128, 85);
-    const scale = 4;
-    const clustering = await buildClustering(small);
-    const width = small.width * scale;
-    const barHeight = 20;
-    const height = small.height * scale + 8 + barHeight;
-    const frames = [];
-    for (const k of PIXEL_ART_COLOURS) {
-        const { palette, indices } = await clustering.quantizeToIndices(small, k, { dither: 'ordered' });
-        const n = palette.length / 3;
-        const canvas = indexCanvas(width, height, n);
-        for (let y = 0; y < small.height; y++) {
-            for (let x = 0; x < small.width; x++) {
-                const v = indices[y * small.width + x];
-                for (let j = 0; j < scale; j++) canvas.pixels.fill(v, (y * scale + j) * width + x * scale, (y * scale + j) * width + x * scale + scale);
-            }
+    // The row of hats, tightly cropped: clustered in OKLab at 16 colours, mapped with no dither, blocks scaled up.
+    const crop = { left: 0, top: 30, width: 768, height: 380 };
+    const smallWidth = 72;
+    const k = 16;
+    const scale = 6;
+    const smallHeight = Math.round((smallWidth * crop.height) / crop.width);
+    const source = sharp(path.join(photos, 'kodim03.png')).extract(crop);
+    const { data } = await source.clone().resize(smallWidth, smallHeight, { kernel: 'lanczos3' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const small = { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: smallWidth, height: smallHeight };
+    const clustering = await buildClustering(small, { colorSpace: 'oklab' });
+    const { palette, indices } = await clustering.quantizeToIndices(small, k);
+    const w = smallWidth * scale;
+    const h = smallHeight * scale;
+    const smooth = await source.clone().resize(w, h, { kernel: 'lanczos3' }).ensureAlpha().raw().toBuffer();
+
+    const margin = 16;
+    const gap = 16;
+    const top = 44;
+    const chips = 28;
+    const width = margin * 2 + w * 2 + gap;
+    const height = top + h + 14 + chips + margin;
+    const canvas = rgbaCanvas(width, height);
+    canvas.blit(margin, top, { width: w, height: h, data: smooth });
+    const x2 = margin + w + gap;
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const v = indices[Math.floor(y / scale) * smallWidth + Math.floor(x / scale)];
+            canvas.rect(x2 + x, top + y, 1, 1, palCol(palette, v));
         }
-        const cellW = width / n;
-        for (let i = 0; i < n; i++) {
-            const x0 = Math.round(i * cellW);
-            canvas.rect(x0, small.height * scale + 8, Math.round((i + 1) * cellW) - x0, barHeight, i);
-        }
-        const flat = new Uint8Array(3 * (n + 1));
-        flat.set(palette);
-        flat.set(BG, 3 * n);
-        frames.push({ pixels: canvas.pixels, palette: flat, delay: 1500 });
     }
-    await writeGif(out('pixel-art.gif'), width, height, frames);
+    const n = palette.length / 3;
+    const chipW = w / n;
+    for (let i = 0; i < n; i++) {
+        const x0 = Math.round(i * chipW);
+        canvas.rect(x2 + x0, top + h + 14, Math.round((i + 1) * chipW) - x0 - 3, chips, palCol(palette, i));
+    }
+    await writeLabelled(out('pixel-art.png'), canvas, [
+        { x: margin, y: 30, text: 'original', size: 20, weight: 'bold' },
+        { x: x2, y: 30, text: `${k} colours, ${smallWidth} px wide`, size: 20, weight: 'bold' },
+    ]);
 }
-const PIXEL_ART_COLOURS = [8, 16, 32];
 
 // ---------------------------------------------------------------- e-ink: the photo next to its seven-ink version
 
@@ -459,37 +473,40 @@ async function threadsCard() {
 
 // ---------------------------------------------------------------- transparency: a logo's palette has no background
 
-/** A simple logo on a transparent background (alpha 0), flat colours, antialiased edges: drawn from an SVG. */
-async function logo(size) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 200 200">
-<circle cx="100" cy="100" r="86" fill="#2f6fdb"/>
-<circle cx="100" cy="100" r="58" fill="#f8dfae"/>
-<path d="M100 44 L148 128 L52 128 Z" fill="#f2a516"/>
-<circle cx="100" cy="106" r="17" fill="#d8453f"/>
-<rect x="30" y="150" width="140" height="14" rx="7" fill="#1e2a5a"/>
+/** An app-icon-style illustration on a transparent background: gradient rounded square, a paint drop, a soft shadow. */
+async function icon(size) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256">
+<defs>
+<linearGradient id="body" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#7a5cff"/><stop offset="0.55" stop-color="#c14fe0"/><stop offset="1" stop-color="#ff6b8a"/></linearGradient>
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.38"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+<linearGradient id="drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3b8"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+<filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="11" flood-color="#2a1260" flood-opacity="0.55"/></filter>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#6a1a70" flood-opacity="0.35"/></filter>
+</defs>
+<rect x="36" y="28" width="184" height="184" rx="44" fill="url(#body)" filter="url(#shadow)"/>
+<rect x="36" y="28" width="184" height="184" rx="44" fill="url(#gloss)"/>
+<path d="M128 62 C128 62 88 108 88 138 C88 160 106 176 128 176 C150 176 168 160 168 138 C168 108 128 62 128 62 Z" fill="url(#drop)" filter="url(#soft)"/>
+<ellipse cx="111" cy="142" rx="7" ry="13" transform="rotate(18 111 142)" fill="#c14fe0" fill-opacity="0.45"/>
 </svg>`;
     const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     return { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: info.width, height: info.height };
 }
 
 async function transparency() {
-    const image = await logo(260);
-    const k = 5;
+    const image = await icon(256);
+    const k = 16;
     const palette = await buildPalette(image, k);
-    const indexed = await quantizeToIndices(image, k + 1, { transparent: true });
-    // The palette PNG with its transparent entry (written by hand: the transparent entry is last, so tRNS is one byte
-    // short of the palette), then read back by sharp as a viewer would show it.
-    const png = indexedPng(image.width, image.height, indexed.indices, indexed.palette, indexed.transparentIndex);
-    const shown = await sharp(png).ensureAlpha().raw().toBuffer();
-
+    // Mapped output keeps each pixel's own alpha. quantizeToIndices (palette indices) cannot: an indexed pixel is
+    // opaque unless it takes the one transparent entry, so a soft shadow would come out as a hard-edged opaque shape.
+    const mapped = await quantize(image, k);
     const board = (x, y) => (((x >> 4) + (y >> 4)) & 1 ? [204, 204, 208] : [244, 244, 246]);
-    const over = (canvas, left, top, rgba, w, h) => {
+    const dark = [52, 54, 66];
+    const over = (canvas, left, top, rgba, w, h, background) => {
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
                 const p = 4 * (y * w + x);
                 const a = rgba[p + 3] / 255;
-                const b = board(x, y);
-                // The source is not premultiplied; blend each channel over the checkerboard.
+                const b = background(x, y);
                 canvas.rect(left + x, top + y, 1, 1, [0, 1, 2].map((c) => Math.round(rgba[p + c] * a + b[c] * (1 - a))));
             }
         }
@@ -498,34 +515,44 @@ async function transparency() {
     const gap = 24;
     const top = 52;
     const panel = image.width;
+    const chipTop = top + panel + 84;
+    const chipH = 34;
     const width = margin * 2 + panel * 3 + gap * 2;
-    const height = top + panel + 52;
+    const height = chipTop + chipH + margin;
     const canvas = rgbaCanvas(width, height);
-    over(canvas, margin, top, image.data, panel, panel);
-    // The palette: its colours as swatches on the page's background (no checkerboard: there is no background colour in it).
-    const side = 3;
-    const cell = Math.floor((panel - 12 * (side - 1)) / side);
-    for (let i = 0; i < k; i++) canvas.rect(margin + panel + gap + (i % side) * (cell + 12), top + Math.floor(i / side) * (cell + 12), cell, cell, palCol(palette, i));
-    over(canvas, margin + (panel + gap) * 2, top, shown, panel, panel);
-    const y = top + panel + 30;
+    over(canvas, margin, top, image.data, panel, panel, board);
+    over(canvas, margin + panel + gap, top, mapped.data, panel, panel, board);
+    over(canvas, margin + (panel + gap) * 2, top, mapped.data, panel, panel, () => dark);
+    const chipsWidth = width - margin * 2;
+    for (let i = 0; i < k; i++) {
+        const x0 = Math.round((i * chipsWidth) / k);
+        canvas.rect(margin + x0, chipTop, Math.round(((i + 1) * chipsWidth) / k) - x0 - 4, chipH, palCol(palette, i));
+    }
     await writeLabelled(out('transparency.png'), canvas, [
-        { x: margin, y: 32, text: 'logo, transparent', size: 18, weight: 'bold' },
-        { x: margin + panel + gap, y: 32, text: 'buildPalette(logo, 5)', size: 18, weight: 'bold' },
-        { x: margin + (panel + gap) * 2, y: 32, text: 'quantizeToIndices', size: 18, weight: 'bold' },
-        { x: margin, y, text: 'on a checkerboard', size: 16 },
-        { x: margin + panel + gap, y, text: 'no background colour', size: 16 },
-        { x: margin + (panel + gap) * 2, y, text: 'palette PNG, index 5 clear', size: 16 },
+        { x: margin, y: 32, text: 'original, on a checkerboard', size: 17, weight: 'bold' },
+        { x: margin + panel + gap, y: 32, text: 'quantize(icon, 16)', size: 17, weight: 'bold' },
+        { x: margin + (panel + gap) * 2, y: 32, text: 'the same pixels on dark', size: 17, weight: 'bold' },
+        { x: margin, y: top + panel + 28, text: 'soft shadow, antialiased edges', size: 15 },
+        { x: margin + panel + gap, y: top + panel + 28, text: 'each pixel keeps its alpha', size: 15 },
+        { x: margin, y: chipTop - 10, text: '16 colours, no background colour', size: 18, weight: 'bold' },
     ]);
-    // The palette must hold the logo's colours only: count entries near the transparent pixels' stored colour (black)
-    // or either checkerboard colour.
-    const background = [[0, 0, 0], [204, 204, 208], [244, 244, 246]];
+    // The palette holds the icon's colours only: count entries near either checkerboard colour or the dark background.
+    // (A near-black entry is the shadow's faintest pixels, whose colour is dark by construction; it is counted apart.)
+    const background = [[204, 204, 208], [244, 244, 246], dark];
     const near = (c) => background.some((b) => Math.hypot(c[0] - b[0], c[1] - b[1], c[2] - b[2]) < 30);
+    const partial = (data) => { let n = 0; for (let i = 3; i < data.length; i += 4) if (data[i] > 0 && data[i] < 255) n++; return n; };
+    const distinct = new Set();
+    for (let i = 0; i < mapped.data.length; i += 4) if (mapped.data[i + 3] > 0) distinct.add(`${mapped.data[i]},${mapped.data[i + 1]},${mapped.data[i + 2]}`);
+    let sameAlpha = true;
+    for (let i = 3; i < image.data.length; i += 4) if (image.data[i] !== mapped.data[i]) sameAlpha = false;
     results.transparency = {
+        output: 'quantize (mapped): palette colours with each pixel\'s own alpha',
         paletteEntries: palette.length / 3,
         paletteEntriesNearBackgroundColours: rgbList(palette).filter(near).length,
-        indexedEntries: indexed.palette.length / 3,
-        transparentIndex: indexed.transparentIndex,
-        transparentPixels: indexed.indices.filter((v) => v === indexed.transparentIndex).length,
+        paletteEntriesNearBlack: rgbList(palette).filter((c) => Math.hypot(...c) < 30).length,
+        outputDistinctColours: distinct.size,
+        partiallyTransparentPixels: partial(image.data),
+        outputAlphaIdenticalToInput: sameAlpha,
     };
 }
 

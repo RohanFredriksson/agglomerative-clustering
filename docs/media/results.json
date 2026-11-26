@@ -2,15 +2,15 @@
   "hero": {
     "width": 768,
     "height": 512,
-    "clusterMs": 153.9,
-    "cutsMs": 5.8,
-    "totalMs": 160,
+    "clusterMs": 150.2,
+    "cutsMs": 5.7,
+    "totalMs": 155.7,
     "runsTotalMs": [
-      160,
-      155.4,
-      161.9,
-      161.1,
-      158.5
+      156.3,
+      155.7,
+      153.3,
+      152.2,
+      159.4
     ],
     "settings": {
       "photo": "kodim23",
@@ -25,18 +25,18 @@
   "machine": "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz x 8, linux 7.3.4-200.fc44.x86_64",
   "node": "v24.18.0",
   "load": {
-    "before": 1.65,
-    "after": 1.65
+    "before": 1.26,
+    "after": 1.26
   },
   "files": {
     "animation.gif": 134539,
     "eink.png": 288712,
-    "hero.gif": 489547,
+    "hero.gif": 436741,
     "nesting.png": 17147,
-    "pixel-art.gif": 68609,
+    "pixel-art.png": 214218,
     "swatches.png": 153789,
     "threads.png": 181483,
-    "transparency.png": 23860
+    "transparency.png": 68729
   },
   "animation": {
     "photo": "kodim08",
@@ -48,10 +48,12 @@
     }
   },
   "transparency": {
-    "paletteEntries": 5,
+    "output": "quantize (mapped): palette colours with each pixel's own alpha",
+    "paletteEntries": 16,
     "paletteEntriesNearBackgroundColours": 0,
-    "indexedEntries": 6,
-    "transparentIndex": 5,
-    "transparentPixels": 28090
+    "paletteEntriesNearBlack": 0,
+    "outputDistinctColours": 16,
+    "partiallyTransparentPixels": 20324,
+    "outputAlphaIdenticalToInput": true
   }
 }
