@@ -214,7 +214,7 @@ The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared er
 
 All rows are from one run. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/bench/COMPARISON.md); reproduce them with `node bench/run.js`. These numbers are a snapshot, so expect them to move with the hardware and the versions.
 
-**Large photos.** Clustering a photo with 150,000 to 350,000 distinct colours takes 0.5 to 1.2 s at full precision and 0.14 to 0.29 s with `precision: 6`; 4.3 is 1.5% to 20.7% faster than 4.2 at full precision in RGB on these, with identical output<!-- bench/spikes/perf-4/results/results-release.txt -->.
+**Large photos.** Clustering a photo with about 150,000 to 350,000 distinct colours takes 0.5 to 1.2 s at full precision and 0.14 to 0.29 s with `precision: 6`; 4.3 is 1.5% to 20.7% faster than 4.2 at full precision in RGB on these, with identical output<!-- bench/spikes/perf-4/results/results-release.txt -->.
 
 ## How it works
 
