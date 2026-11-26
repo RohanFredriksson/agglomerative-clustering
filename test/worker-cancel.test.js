@@ -141,7 +141,8 @@ describe('a worker call with a signal or onProgress', () => {
         // The clustering was cancelled, not run to the end: the next call is not kept waiting for it.
         const next = await timed(worker.buildPalette(small, 4));
         expect(next.value).toEqual(await ac.buildPalette(small, 4));
-        expect(performance.now() - start).toBeLessThan(whole.ms * 0.6);
+        // Cancelled at 20%, so well under the whole clustering's time; 0.85 leaves room for slow runners (the ASan job ran at 0.61).
+        expect(performance.now() - start).toBeLessThan(whole.ms * 0.85);
         // a clustering call's callback that throws fails the call, through a handle too
         await expect(worker.cluster(big, { onProgress: () => {throw new Error('boom again');} })).rejects.toThrow('boom again');
     }, timeLimit(60000));
