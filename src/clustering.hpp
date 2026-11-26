@@ -560,7 +560,7 @@ public:
     // Returns the live cluster that is cheapest to merge with `id`.
     //
     // A cluster at the base of the nearest-neighbour chain is queried again after every merge above it, and a
-    // large cluster's search reaches far (its bound assumes a one-pixel partner). So once a search has been
+    // large cluster's search reaches far (its bound can only assume a partner with the smallest live count). So once a search has been
     // expensive, the cluster keeps its `cache_size` cheapest candidates and a threshold below which no
     // unlisted cluster can cost. Live clusters never change, so the next query only has to drop dead
     // candidates and offer the clusters created since; it falls back to a full search when the cheapest

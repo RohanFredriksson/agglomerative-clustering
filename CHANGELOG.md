@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.1.0 (unreleased)
+
+### Changed
+- **Clustering is faster on images with many colours, and every clustering is byte-identical to 4.0's.** The search for each cluster's cheapest partner skips more work that cannot win (heavy clusters keep a larger list of candidates and go straight to building it, the search stops at the smallest live count instead of one pixel, whole slabs and columns of cells too far for it are skipped, and the grid's bounds are rebuilt more often), and none of it can drop a candidate that could be chosen, ties included. On large photos (16 to 24 MP, 150,000 to 350,000 colours) clustering takes 25% (foliage) to 50% (night street) less time in WebAssembly at full precision, 58% less on a 12 MP upscale with 0.9 million colours, and 57 to 58% less with `colorSpace: 'oklab'`; a 0.4 MP Kodak photo takes 12% less. `precision: 6` is 17 to 23% faster. <!-- bench/spikes/chain-search/README.md, "Changes tried": wall clock in WebAssembly (run-wasm-timing.sh, table-wasm.mjs; median of 5) and run-wasm-config.sh (OKLab and precision 6) --> The `.wasm` grows by about 0.9 KB, and a candidate list can use about 0.8 KB instead of 0.2 KB. Nothing in the API changes. A new fuzz target, `fuzz_identical`, checks that clusterings stay byte-identical to a copy of the 4.0.0 code (`native/reference/`) for generated images in every format, colour space, `precision` and `alpha` mode.
+
 ## 4.0.0
 
 Premultiplied input, stricter image objects and result types that keep the input's. This is 4.0 in two parts: premultiplied input and the image types, then the removals and new errors (Node 20, the bare-image warnings, `transparent` on formats without alpha, the `…FromClustering` and `get…` functions). Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
