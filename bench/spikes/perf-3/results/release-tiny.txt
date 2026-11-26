@@ -1,0 +1,4 @@
+1x1 old 0.0151 new 0.0155 ms per quantize
+8x8 old 0.0183 new 0.0186 ms per quantize
+64x64 old 0.0663 new 0.0516 ms per quantize
+768x512 old 6.2232 new 4.7245 ms per quantize

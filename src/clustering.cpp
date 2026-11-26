@@ -802,7 +802,9 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 
 // lround for a float in [0, 2^23): adding the largest float below one half and truncating gives the integer that rounding halves away
 // from zero gives, without lroundf's call. Exhaustively checked against lround over every non-negative float up to 65,535
-// (1,199,570,689 values) by native/round_check.cpp, which CI runs; the dither targets are clamped to [0, limit] first, and limit is at most 65,535.
+// (1,199,570,689 values) by native/round_check.cpp, which CI runs. The dither targets are clamped to [0, limit] first, and MappingJob
+// static_asserts that limit is at most 65,535. A NaN would pass the clamp and make the conversion undefined, but none arrives: a target is
+// an integer coordinate plus the carried error, which is finite and has its length capped at `most` (see `carry` in MappingJob::step).
 static inline int32_t round_nonnegative(float x) {return int32_t(x + 0x1.fffffep-2f);}
 
 // What a MappingJob does with each pixel's index: write its colour (_quantize) or the index itself (_quantize_indices). One
@@ -846,6 +848,9 @@ class MappingJob {
 
     typedef AgglomerativeClustering::KDTree::Point Point;
     static constexpr int memo_bits = 14;
+    // The dithering's coordinate ranges (8-bit RGB, 16-bit OKLab); round_nonnegative is only checked up to 65,535.
+    static constexpr float rgb_limit = 255.0f, oklab_limit = 65535.0f;
+    static_assert(rgb_limit <= 65535.0f && oklab_limit <= 65535.0f, "round_nonnegative is checked only up to 65,535 (native/round_check.cpp)");
     enum class Method {plain, floyd_steinberg, atkinson, ordered};
 
     const uint8_t* image_data;
@@ -875,9 +880,10 @@ class MappingJob {
     std::vector<uint32_t> memo_keys;
     std::vector<int32_t> memo_values;
     // The same for the four-byte fast path of undithered mapped output (see step): keyed by the pixel's raw first three bytes, holding the
-    // output pixel. Made on the first slice and kept, so a sliced run doesn't rebuild it per slice.
+    // output pixel. Made on the first slice and kept, so a sliced run doesn't rebuild it per slice. Which slot a colour takes never shows in the output.
     struct RawMemo {uint32_t raw; uint32_t out;};
     std::vector<RawMemo> raw_memo;
+    int raw_bits = memo_bits;   // its size: at most twice the pixel count, so a tiny image doesn't pay for 128 KB
 
     // Dithering (see step for what each is)
     float strength = 0.0f, limit = 0.0f, near = 0.0f, most = 0.0f;
@@ -927,7 +933,7 @@ public:
 
         this->height = this->pixels / this->width;
         this->strength = float(std::min(dither, 1.0));
-        this->limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
+        this->limit = color_space == ColorSpace::rgb ? rgb_limit : oklab_limit;
         // The colour a pixel should take (its own plus the error it was given) can lie outside the cube. Close to it (dark
         // areas next to the palette's darkest colour) it is clamped to the cube, as most dithering does, and matched
         // through the index. Further out, the palette can't reach the image's colours (saturated cyan with a 7-colour
@@ -1099,7 +1105,11 @@ public:
                 // Four-byte pixels (RGBA, BGRA, RGBX, BGRX) to mapped output: the memo is keyed by the pixel's first three bytes as they lie (no
                 // reordering) and holds the output pixel itself, so a hit is one compare, a load and a store with the alpha byte put back.
                 // Each pixel gets the colour of the same nearest entry and the same alpha byte (or 255) that the sink writes, so the bytes match.
-                if (this->raw_memo.empty()) {this->raw_memo.assign(size_t(1) << memo_bits, RawMemo{0xFFFFFFFFu, 0u});}
+                if (this->raw_memo.empty()) {
+                    while (this->raw_bits > 4 && (size_t(1) << (this->raw_bits - 1)) >= 2 * pixels) {this->raw_bits--;}
+                    this->raw_memo.assign(size_t(1) << this->raw_bits, RawMemo{0xFFFFFFFFu, 0u});
+                }
+                const int raw_shift = 32 - this->raw_bits;
                 RawMemo* const memo = this->raw_memo.data();
                 uint8_t* const output = emit.output;
                 const int ro = L.r, bo = L.b;
@@ -1109,7 +1119,7 @@ public:
                     uint32_t v;
                     std::memcpy(&v, image + p * 4, 4);
                     const uint32_t raw = v & 0x00FFFFFFu;
-                    RawMemo& entry = memo[(raw * 0x9E3779B1u) >> (32 - memo_bits)];
+                    RawMemo& entry = memo[(raw * 0x9E3779B1u) >> raw_shift];
                     if (entry.raw != raw) {
                         const int32_t u = lookup(space.match(uint8_t(raw >> (8 * ro)), uint8_t(raw >> 8), uint8_t(raw >> (8 * bo))));
                         const uint32_t key = keys[size_t(u)];

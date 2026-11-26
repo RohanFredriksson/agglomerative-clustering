@@ -1,0 +1,9 @@
+kodim23, format/precision/space 0 8 0
+==22== Collected : 894974388
+kodim23, format/precision/space 0 6 0
+==44== Collected : 335898875
+kodim23, format/precision/space 0 8 1
+==66== Collected : 1054357060
+exclusive, full precision:
+894,974,388 (100.0%)  PROGRAM TOTALS
+528,912,980 (59.10%)  native/../src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, Agglomerativ

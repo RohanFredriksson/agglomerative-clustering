@@ -1,0 +1,30 @@
+runs 5; load before 0.63/1.29/2.20
+image	mode	config	colours	4.1.0 ms	new ms	change	identical
+k23	cluster	rgb8	72079	125	125	-0.2%	yes
+k23	cluster	rgb6	72079	47	46	-3.2%	yes
+k23	cluster	oklab8	72079	146	144	-1.7%	yes
+k23	quantize	none	72079	135	129	-4.7%	yes
+k23	quantize	fs	72079	151	150	-0.4%	yes
+k23	sliced	none	72079	7	5	-18.8%	yes
+k23	sliced	fs	72079	27	25	-5.9%	yes
+k23	oneshot	none	72079	6	5	-22.5%	yes
+k23	oneshot	fs	72079	27	25	-5.6%	yes
+fern	cluster	rgb8	331638	1299	1238	-4.6%	yes
+fern	cluster	rgb6	331638	373	302	-19.0%	yes
+fern	cluster	oklab8	331638	2286	2223	-2.8%	yes
+fern	quantize	none	331638	1837	1679	-8.6%	yes
+fern	quantize	fs	331638	2752	2605	-5.3%	yes
+fern	sliced	none	331638	539	454	-15.7%	yes
+fern	sliced	fs	331638	1453	1396	-3.9%	yes
+fern	oneshot	none	331638	522	447	-14.5%	yes
+fern	oneshot	fs	331638	1426	1375	-3.6%	yes
+night	cluster	rgb8	351004	1412	1356	-3.9%	yes
+night	cluster	rgb6	351004	304	252	-17.0%	yes
+night	cluster	oklab8	351004	1881	1805	-4.0%	yes
+night	quantize	none	351004	1699	1540	-9.4%	yes
+night	quantize	fs	351004	2654	2472	-6.9%	yes
+night	sliced	none	351004	242	179	-26.2%	yes
+night	sliced	fs	351004	1204	1121	-6.9%	yes
+night	oneshot	none	351004	237	168	-29.0%	yes
+night	oneshot	fs	351004	1200	1108	-7.7%	yes
+load after 1.29/1.23/1.96; outputs that differ: 0

@@ -11,7 +11,7 @@ const [newDir, oldDir, runsArg] = process.argv.slice(2);
 const runs = Number(runsArg ?? 5);
 const [next, old] = await Promise.all([import(newDir + '/index.mjs'), import(oldDir + '/index.mjs')]);
 const meta = JSON.parse(readFileSync('data/images.json', 'utf8'));
-const names = ['birch', 'city', 'fern', 'komar', 'night', 'old', 'pip', 'sky', 'sp', 'wk', 'k23'];
+const names = process.env.NAMES ? process.env.NAMES.split(',') : ['birch', 'city', 'fern', 'komar', 'night', 'old', 'pip', 'sky', 'sp', 'wk', 'k23'];
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 const load = () => loadavg().map((x) => x.toFixed(2)).join('/');
 const bytes = (r) => r.data ?? r;
