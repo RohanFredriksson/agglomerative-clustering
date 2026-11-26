@@ -1,0 +1,12 @@
+# kodim23 (RGBA, native clang -O2, callgrind via scripts/native.sh profile), 4.2.0 source (base) then this branch; 2026-11-26
+== base: full precision / precision 6
+==21== Collected : 894973705
+528,912,980 (59.10%)  native/../src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/src/build/native/profile]
+==46== Collected : 335899314
+186,414,097 (55.50%)  native/../src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/src/build/native/profile]
+== this branch
+==21== Collected : 916767858
+507,576,201 (55.37%)  native/../src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/src/build/native/profile]
+==46== Collected : 318259287
+164,932,316 (51.82%)  native/../src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/src/build/native/profile]
+== this branch, OKLab (format 0, precision 8, colour space 1): Collected 1067632457, search 552527779 (51.75%); 4.2.0's CLAUDE.md figure was 1,054M

@@ -1,0 +1,24 @@
+mode cluster runs 7; load before 1.06/1.48/1.85
+image	config	base ms	tight ms	tight change	identical
+k23	rgb8	130	130	-0.1%	yes
+mos12	rgb8	1046	894	-14.5%	yes
+fern	rgb8	1322	1140	-13.8%	yes
+night	rgb8	1450	1253	-13.6%	yes
+sky	rgb8	2137	1786	-16.4%	yes
+load after 3.71/1.99/1.98; outputs that differ: 0
+mode cluster runs 7; load before 3.71/1.99/1.98
+image	config	base ms	tight ms	tight change	identical
+k23	rgb6	115	107	-6.6%	yes
+mos12	rgb6	698	657	-5.9%	yes
+fern	rgb6	1187	1120	-5.7%	yes
+night	rgb6	360	342	-5.0%	yes
+sky	rgb6	376	318	-15.4%	yes
+load after 6.94/3.11/2.36; outputs that differ: 0
+mode cluster runs 7; load before 6.94/3.11/2.36
+image	config	base ms	tight ms	tight change	identical
+k23	oklab8	174	175	1.0%	yes
+mos12	oklab8	1936	1678	-13.3%	yes
+fern	oklab8	2382	2134	-10.4%	yes
+night	oklab8	1871	1680	-10.2%	yes
+sky	oklab8	1468	1201	-18.1%	yes
+load after 2.21/2.59/2.26; outputs that differ: 0

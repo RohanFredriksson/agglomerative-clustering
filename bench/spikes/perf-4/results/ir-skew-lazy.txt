@@ -1,0 +1,6 @@
+# callgrind Ir, native clang -O2, RGB full precision, 3 synthetic images (skA: 512x320 dense 64^3 block half + scatter, skB: 512x256 noise, skC: 512x512 dense 64^3 block). Hash identical in every row.
+# variant: lazy1 = mark dirty, refresh on every visit; lazy2 = refresh only when loose bounds don't reject; lazy3 = lazy2 + back-off (the one to ship)
+image	base	eager	lazy1	lazy2	lazy3
+skA	10233435055	13064771769	11744921075	11669353913	10260242680
+skB	504660594	542007374	533075255	533007808	516193681
+skC	2148905647	2325363284	2256859245	2254317755	2192672250

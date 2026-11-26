@@ -1,0 +1,8 @@
+load before 0.56/0.28/0.15
+block + 25% scatter	rgb8	longest slice: 4.2.0 67.3 ms	new 62.9 ms
+block + 25% scatter	oklab	longest slice: 4.2.0 136.8 ms	new 128.1 ms
+dark block + 25% scatter	rgb8	longest slice: 4.2.0 57.9 ms	new 59.5 ms
+dark block + 25% scatter	oklab	longest slice: 4.2.0 121.2 ms	new 126.0 ms
+noise 1024^2	rgb8	longest slice: 4.2.0 11.0 ms	new 10.6 ms
+noise 1024^2	oklab	longest slice: 4.2.0 17.4 ms	new 20.0 ms
+load after 0.77/0.37/0.19

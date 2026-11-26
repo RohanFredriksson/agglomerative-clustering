@@ -1,0 +1,14 @@
+load before 1.12/1.36/1.65
+dense block 64^3, all count 1	rgb8	4.2.0 200 ms	new 209 ms	4.5%	identical
+dense block 64^3, all count 1	rgb6	4.2.0 13 ms	new 13 ms	0.2%	identical
+dense block 64^3, all count 1	oklab	4.2.0 395 ms	new 410 ms	3.8%	identical
+dense block + 25% sparse scatter	rgb8	4.2.0 1709 ms	new 1736 ms	1.6%	identical
+dense block + 25% sparse scatter	rgb6	4.2.0 91 ms	new 92 ms	1.9%	identical
+dense block + 25% sparse scatter	oklab	4.2.0 988 ms	new 1008 ms	2.1%	identical
+noise 1024^2	rgb8	4.2.0 81 ms	new 80 ms	-1.0%	identical
+noise 1024^2	rgb6	4.2.0 71 ms	new 73 ms	4.1%	identical
+noise 1024^2	oklab	4.2.0 97 ms	new 99 ms	2.5%	identical
+dense 32^3 x 8 copies + scatter	rgb8	4.2.0 354 ms	new 362 ms	2.1%	identical
+dense 32^3 x 8 copies + scatter	rgb6	4.2.0 74 ms	new 77 ms	3.5%	identical
+dense 32^3 x 8 copies + scatter	oklab	4.2.0 253 ms	new 265 ms	4.5%	identical
+load after 1.06/1.31/1.62
