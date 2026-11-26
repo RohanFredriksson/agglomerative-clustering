@@ -107,6 +107,7 @@ private:
     enum class Review {idle, choose, rebuild};
     Review review = Review::idle;
     int review_index = 0;
+    int review_first = 0;  // the candidate the review started from (for review_fraction)
     size_t review_cursor = 0;
     size_t review_chunk = 0;
     size_t review_occupied = 0;
@@ -123,7 +124,8 @@ private:
     std::vector<Bucket> buckets;
     // Per bucket, the colour box of everything ever linked into it (`low` and `high`, lanes 0-2), which is
     // tighter than the cell's own extent, and the smallest count ever linked into it (`high` lane 3; `low` lane
-    // 3 is 0). Removals only loosen both, so they stay valid bounds. Floats, so search tests a cell with a few
+    // 3 is 0). `remove` recomputes them from the live lanes when the removed cluster was at an extreme (see there),
+    // so they stay valid bounds of the live clusters. Floats, so search tests a cell with a few
     // vector operations; colours are exact, and a count rounded to float is covered by the filter's margin.
     struct Bounds {
         f32x4 low = {far_away, far_away, far_away, 0.0f};
@@ -371,6 +373,7 @@ public:
             while (index > 0 && dimensions[index] > this->dimension) {index--;}
             if (this->next_review == std::numeric_limits<size_t>::max()) {index = int(std::size(dimensions)) - 1;}
             this->review_index = index;
+            this->review_first = index;
             this->review_cursor = 0;
             this->review_chunk = 0;
             this->review_occupied = 0;
@@ -400,6 +403,22 @@ public:
         return true;
     }
     bool reviewing() const {return this->review != Review::idle;}
+
+    // How far a review in progress has got, 0 to 1, for progress reports only: choosing a size is the first half,
+    // counted as if every candidate down to the coarsest were tried (so it can jump ahead, never back), and
+    // relinking the clusters is the second.
+    double review_fraction() const {
+        if (this->review == Review::rebuild) {
+            return 0.5 + 0.5 * (this->clusters.empty() ? 1.0 : double(this->review_cursor) / double(this->clusters.size()));
+        }
+        if (this->review != Review::choose || this->buckets.empty()) {return 0.0;}
+        double within = double(this->review_cursor);
+        if (this->review_cursor < this->buckets.size() && !this->buckets[this->review_cursor].chunks.empty()) {
+            within += double(this->review_chunk) / double(this->buckets[this->review_cursor].chunks.size());
+        }
+        within /= double(this->buckets.size());
+        return 0.5 * (double(this->review_first - this->review_index) + within) / double(this->review_first + 1);
+    }
 
     bool is_alive(int32_t id) const {return this->clusters[id].bucket != none;}
     size_t size() const {return this->alive;}

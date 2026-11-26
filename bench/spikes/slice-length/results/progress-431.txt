@@ -1,0 +1,19 @@
+# node gaps.mjs <dist> <raw dir from make-raw.mjs>: 4.3.0 (npm) then this branch (build and write stages report progress as they go), run back to back
+== 4.3.0
+load before 4.01/2.09/1.58
+block + 25% scatter	rgb8	longest slice (event-loop gap) 14.6 ms	longest onProgress gap 64.3 ms
+block + 25% scatter	oklab	longest slice (event-loop gap) 15.9 ms	longest onProgress gap 113.0 ms
+dark block + 25% scatter	rgb8	longest slice (event-loop gap) 12.1 ms	longest onProgress gap 52.6 ms
+dark block + 25% scatter	oklab	longest slice (event-loop gap) 15.2 ms	longest onProgress gap 118.4 ms
+noise 1024^2	rgb8	longest slice (event-loop gap) 11.2 ms	longest onProgress gap 11.1 ms
+noise 1024^2	oklab	longest slice (event-loop gap) 14.9 ms	longest onProgress gap 18.3 ms
+load after 3.54/2.12/1.60
+== branch
+load before 3.54/2.12/1.60
+block + 25% scatter	rgb8	longest slice (event-loop gap) 16.2 ms	longest onProgress gap 20.1 ms
+block + 25% scatter	oklab	longest slice (event-loop gap) 16.6 ms	longest onProgress gap 16.5 ms
+dark block + 25% scatter	rgb8	longest slice (event-loop gap) 13.8 ms	longest onProgress gap 13.7 ms
+dark block + 25% scatter	oklab	longest slice (event-loop gap) 15.9 ms	longest onProgress gap 15.8 ms
+noise 1024^2	rgb8	longest slice (event-loop gap) 10.6 ms	longest onProgress gap 10.3 ms
+noise 1024^2	oklab	longest slice (event-loop gap) 14.4 ms	longest onProgress gap 14.4 ms
+load after 2.89/2.06/1.60
