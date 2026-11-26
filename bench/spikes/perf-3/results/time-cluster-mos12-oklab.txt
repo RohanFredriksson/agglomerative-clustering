@@ -1,0 +1,4 @@
+mode cluster runs 5; load before 1.18/1.80/1.65
+image	config	base ms	scan-a ms	f1 ms	scan-a change	f1 change	identical
+mos12	oklab8	1612	1565	1587	-2.9%	-1.5%	yes
+load after 1.18/1.75/1.64; outputs that differ: 0

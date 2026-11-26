@@ -1,0 +1,1708 @@
+--------------------------------------------------------------------------------
+Profile data file 'build/prof/mp1-map-k23-k16-m2-s0.out' (creator: callgrind-3.22.0)
+--------------------------------------------------------------------------------
+I1 cache: 
+D1 cache: 
+LL cache: 
+Timerange: Basic block 0 - 158699127
+Trigger: Program termination
+Profiled target:  build/mp1/mapdriver-native data/k23.rgba 768 0 16 2 1 (PID 1, part 1)
+Events recorded:  Ir
+Events shown:     Ir
+Event sort order: Ir
+Thresholds:       99
+Include dirs:     
+User annotated:   
+Auto-annotation:  on
+
+--------------------------------------------------------------------------------
+Ir                   
+--------------------------------------------------------------------------------
+463,539,729 (100.0%)  PROGRAM TOTALS
+
+--------------------------------------------------------------------------------
+Ir                    file:function
+--------------------------------------------------------------------------------
+463,539,729 (100.0%)  ./csu/../csu/libc-start.c:__libc_start_main@@GLIBC_2.34 [/usr/lib/x86_64-linux-gnu/libc.so.6]
+463,539,729 (100.0%)  ./csu/../sysdeps/nptl/libc_start_call_main.h:(below main) [/usr/lib/x86_64-linux-gnu/libc.so.6]
+463,539,729 (100.0%)  /spikes/perf-3/mapdriver.cpp:main
+463,539,729 (100.0%)  ???:(below main) [/spikes/perf-3/build/mp1/mapdriver-native]
+463,539,729 (100.0%)  ???:0x000000000001f530 [/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2]
+463,539,729 (100.0%)  mapdriver.cpp:main [/spikes/perf-3/build/mp1/mapdriver-native]
+463,539,729 (100.0%)  mapdriver.cpp:mapping_call(unsigned char const*, int, unsigned char const*, unsigned long, int, double, int, int, bool) [/spikes/perf-3/build/mp1/mapdriver-native]
+463,539,709 (100.0%)  build/mp1/src/clustering.cpp:_quantize(unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int) [/spikes/perf-3/build/mp1/mapdriver-native]
+454,844,919 (98.12%)  build/mp1/src/clustering.cpp:MappingJob::step(bool, double) [/spikes/perf-3/build/mp1/mapdriver-native]
+ 23,125,713 ( 4.99%)  build/mp1/src/clustering.hpp:MappingJob::step(bool, double)
+ 12,189,696 ( 2.63%)  build/mp1/src/clustering.cpp:PixelSink::operator()(unsigned long, int) const [/spikes/perf-3/build/mp1/mapdriver-native]
+ 11,148,185 ( 2.41%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_algobase.h:MappingJob::step(bool, double)
+  8,692,434 ( 1.88%)  build/mp1/src/clustering.cpp:MappingTask::MappingTask(bool, unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int, int) [/spikes/perf-3/build/mp1/mapdriver-native]
+  8,690,267 ( 1.87%)  build/mp1/src/clustering.cpp:MappingJob::MappingJob(unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int, int, PixelSink const&) [/spikes/perf-3/build/mp1/mapdriver-native]
+  8,552,611 ( 1.85%)  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+  8,455,048 ( 1.82%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<int, std::allocator<int> >::_M_default_append(unsigned long) [/spikes/perf-3/build/mp1/mapdriver-native]
+  8,454,184 ( 1.82%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_algobase.h:std::vector<int, std::allocator<int> >::_M_default_append(unsigned long)
+  8,389,121 ( 1.81%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int, std::allocator<int> >::resize(unsigned long) [/spikes/perf-3/build/mp1/mapdriver-native]
+  7,641,742 ( 1.65%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/cmath:MappingJob::step(bool, double)
+  2,750,769 ( 0.59%)  ./math/../sysdeps/x86_64/fpu/multiarch/s_nearbyintf-sse4_1.S:__nearbyintf_sse41 [/usr/lib/x86_64-linux-gnu/libm.so.6]
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/cmath
+--------------------------------------------------------------------------------
+Ir                 
+
+-- line 2391 ----------------------------------------
+        .                                                         long>::__type
+        .               lround(_Tp __x)
+        .               { return __builtin_lround(__x); }
+        .           #endif
+        .           
+        .           #ifndef __CORRECT_ISO_CPP11_MATH_H_PROTO_FP
+        .             constexpr float
+        .             nearbyint(float __x)
+2,445,132 ( 0.53%)    { return __builtin_nearbyintf(__x); }
+2,750,769 ( 0.59%)  => ./math/../sysdeps/x86_64/fpu/multiarch/s_nearbyintf-sse4_1.S:__nearbyintf_sse41 (916,923x)
+      713 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+        .           
+        .             constexpr long double
+        .             nearbyint(long double __x)
+        .             { return __builtin_nearbyintl(__x); }
+        .           #endif
+        .           
+        .           #ifndef __CORRECT_ISO_CPP11_MATH_H_PROTO_INT
+        .             template<typename _Tp>
+-- line 2407 ----------------------------------------
+
+2,445,128 ( 0.53%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/cmath>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: build/mp1/src/clustering.cpp
+--------------------------------------------------------------------------------
+Ir                  
+
+-- line 21 ----------------------------------------
+         .           #include <memory>
+         .           #include <limits>
+         .           
+         .           using AgglomerativeClustering::ColorSpace;
+         .           using AgglomerativeClustering::ColorCoordinates;
+         .           
+         .           // Allocates a buffer with a 4-byte little-endian length prefix; returns the base pointer (payload starts at +4).
+         .           uint8_t* allocate_variable_size(size_t size) {
+         7 ( 0.00%)      uint8_t* output = (uint8_t*) std::malloc(4 + size);
+       906 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       309 ( 0.00%)  => ./malloc/./malloc/malloc.c:malloc (1x)
+         .               output[0] = (size >> 0) & 0xFF;
+         .               output[1] = (size >> 8) & 0xFF;
+         .               output[2] = (size >> 16) & 0xFF;
+         1 ( 0.00%)      output[3] = (size >> 24) & 0xFF;
+         .               return output;
+         .           }
+         .           
+         .           uint8_t* pack_variable_size(const std::vector<uint8_t>& vector) {
+         .               uint8_t* output = allocate_variable_size(vector.size());
+         .               if (!vector.empty()) {std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));}   // memcpy from an empty vector's null data() is undefined
+         .               return output;
+         .           }
+-- line 41 ----------------------------------------
+-- line 120 ----------------------------------------
+         .               int stride;
+         .               int r;
+         .               int b;
+         .               bool alpha;
+         .               bool opaque;
+         .           };
+         .           
+         .           PixelLayout layout_of(int image_format) {
+         6 ( 0.00%)      switch (image_format) {
+         .                   case 1: return {3, 0, 2, false, false};
+         .                   case 2: return {4, 2, 0, true, false};
+         .                   case 3: return {4, 0, 2, false, true};
+         .                   case 4: return {4, 2, 0, false, true};
+         .                   default: return {4, 0, 2, true, false};  // rgba; JS validates the format before any code reaches here
+         .               }
+         2 ( 0.00%)  }
+         .           
+         .           // Clusters the image's colours in `color_space`. With `weight_alpha`, an RGBA (or BGRA) pixel counts in proportion to its
+         .           // opacity, so fully transparent pixels drop out and Ward minimises the error that is actually visible. With
+         .           // `precision` below 8, colours are first grouped by the top `precision` bits of each channel, and each group
+         .           // enters the clustering as one cluster at the weighted mean of its colours: at most 2^(3 * precision) clusters,
+         .           // so time is bounded on images with very many distinct colours, while the means keep the palette close to exact.
+         .           //
+         .           // The work is a job that runs in slices: `step(budget)` does as much as fits the time budget and returns whether it
+-- line 143 ----------------------------------------
+-- line 794 ----------------------------------------
+         .               uint8_t* output;
+         .               const uint8_t* palette;       // colours: the palette the indices point into
+         .               uint32_t index_bytes;         // indices: 1, 2 or 4
+         .               int cutoff;                   // indices: alpha below this takes transparent_index (with `transparent`)
+         .               bool transparent;
+         .               int32_t transparent_index;
+         .           
+         .               void operator()(size_t p, int32_t index) const {
+   786,432 ( 0.17%)          if (colours) {
+   393,216 ( 0.08%)              const int increment = L.stride;
+ 1,179,648 ( 0.25%)              uint8_t* out = output + p * increment;
+ 1,179,648 ( 0.25%)              const uint8_t* colour = index < 0 ? nullptr : palette + 3 * size_t(index);
+ 2,359,296 ( 0.51%)              out[L.r] = colour ? colour[0] : 0;
+   786,432 ( 0.17%)              out[1] = colour ? colour[1] : 0;
+ 1,966,080 ( 0.42%)              out[L.b] = colour ? colour[2] : 0;
+ 2,752,512 ( 0.59%)              if (L.opaque) {out[3] = 255;} else if (L.alpha) {out[3] = image_data[p * increment + 3];}
+         .                   } else {
+         .                       if (transparent && image_data[p * 4 + 3] < cutoff) {index = transparent_index;}
+         .                       uint8_t* out = output + p * index_bytes;
+         .                       for (uint32_t b = 0; b < index_bytes; b++) {out[b] = (uint32_t(index) >> (8 * b)) & 0xFF;}
+         .                   }
+   393,216 ( 0.08%)      }
+         .           };
+         .           
+         .           // The mapping of one image to one palette, run in slices (see step): everything that lives across pixels, set up once
+         .           // in the constructor, so a slice resumes exactly where the last one stopped. Without a time budget step() runs the
+         .           // whole image in one go, never reading the clock: the one-shot exports (_quantize, _quantize_indices) take exactly
+         .           // the steps they always did. For each pixel p it calls `emit(p, index)` with the chosen palette index, or -1 when the
+         .           // palette is empty. With `dither` > 0 the remaining error is diffused to neighbouring pixels (see the methods below),
+         .           // which needs the image's `width`.
+         2 ( 0.00%)  class MappingJob {
+         .           
+         .               typedef AgglomerativeClustering::KDTree::Point Point;
+         .               static constexpr int memo_bits = 14;
+         .               enum class Method {plain, floyd_steinberg, atkinson, ordered};
+         .           
+         .               const uint8_t* image_data;
+         .               ColorSpace color_space;
+         .               ColorCoordinates space;
+         .               PixelLayout L;
+         .               size_t pixels;
+         .               size_t width;
+         1 ( 0.00%)      size_t height = 0;
+         .               int skip_below;
+         .               PixelSink emit;
+         1 ( 0.00%)      Method method = Method::plain;
+         7 ( 0.00%)      size_t cursor = 0;  // how many pixels are done, in the order the method visits them (serpentine rows dithered)
+         .           
+         .               std::vector<Point> points;
+         .               std::vector<uint32_t> keys;
+         .               // The indexes are built over distinct colours only: a supplied palette can repeat a colour any number of times, and
+         .               // equal entries would all land in the same cell lists and tree leaves, making each lookup a pass over the repeats
+         .               // (a 200,000-entry palette of one colour took seconds for a thousand pixels). Equal entries tie, and ties go to
+         .               // the first of them, so `first[u]` is the palette index of distinct colour `u`'s first occurrence.
+         .               std::vector<int32_t> first;
+         1 ( 0.00%)      bool small = true;
+         .               AgglomerativeClustering::PaletteIndex cells;
+         .               AgglomerativeClustering::KDTree tree;
+         .               // A direct-mapped memo of recent lookups: photos repeat colours, neighbouring pixels most of all, so most
+         .               // pixels skip the lookup. A colour always maps to the same palette entry, so the output is unchanged.
+         .               std::vector<uint32_t> memo_keys;
+         .               std::vector<int32_t> memo_values;
+         .           
+         .               // Dithering (see step for what each is)
+-- line 857 ----------------------------------------
+-- line 865 ----------------------------------------
+         .               size_t steps = 0;
+         .               float recipe_strength = 0.0f;
+         .               int recipe_bits = 0;
+         .               std::vector<uint32_t> recipe_keys;
+         .               std::vector<int32_t> recipes;
+         .               std::vector<uint64_t> brightness;
+         .               typedef int32_t i32x4 __attribute__((vector_size(16)));
+         .               bool scan = false;
+         7 ( 0.00%)      size_t groups = 0;
+         .               std::vector<i32x4> scan_r, scan_g, scan_b;
+         .               std::vector<int32_t> scan_index;
+         .           
+         .           public:
+         .           
+         .               MappingJob(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int skip_below, const PixelSink& emit)
+        33 ( 0.00%)          : image_data(image_data), color_space(color_space), space(color_space), L(layout_of(image_format)), width(width > 0 ? size_t(width) : 0), skip_below(skip_below), emit(emit) {
+         .           
+         7 ( 0.00%)          this->pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
+         .                   AgglomerativeClustering::AgglomerativeHistogram seen;
+        50 ( 0.00%)          for (size_t i = 0; i + 2 < palette_length; i += 3) {
+       112 ( 0.00%)              const uint32_t key = (uint32_t(palette[i]) << 16) | (uint32_t(palette[i+1]) << 8) | uint32_t(palette[i+2]);
+       112 ( 0.00%)              if (seen.add(key) < this->points.size()) {continue;}
+     2,887 ( 0.00%)  => build/mp1/src/clustering.hpp:AgglomerativeClustering::AgglomerativeHistogram::add(unsigned int, unsigned long) (16x)
+        48 ( 0.00%)              this->points.push_back(space.match(palette[i], palette[i+1], palette[i+2]));
+         .                       this->keys.push_back(key);
+        48 ( 0.00%)              this->first.push_back(int32_t(i / 3));
+         .                   }
+         .           
+         .                   // Up to 1024 colours a lazily built cell index answers lookups fastest (2.5 to 3 times faster than the k-d tree
+         .                   // from 257 to 1024 colours, on photos and random palettes). Each cell it builds costs a pass over the palette, so
+         .                   // larger palettes (only through a custom palette) use the k-d tree, which wins from about 4096. Both give the same
+         .                   // answers. The cell sizes were tuned on photos: OKLab colours fill less of their cube than RGB.
+         2 ( 0.00%)          this->small = this->points.size() <= 1024;
+        13 ( 0.00%)          if (this->small) {this->cells.build(this->points, this->keys, color_space == ColorSpace::rgb ? 8 : 16, color_space == ColorSpace::rgb ? 4 : 5);} else {this->tree.build(this->points, this->keys);}
+     5,869 ( 0.00%)  => build/mp1/src/clustering.hpp:AgglomerativeClustering::PaletteIndex::build(std::vector<std::array<unsigned short, 3ul>, std::allocator<std::array<unsigned short, 3ul> > > const&, std::vector<unsigned int, std::allocator<unsigned int> > const&, int, int) (1x)
+         .                   this->memo_keys.assign(size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+         .                   this->memo_values.resize(size_t(1) << memo_bits);
+         .           
+        15 ( 0.00%)          if (dither <= 0.0 || this->width == 0 || this->pixels % this->width != 0 || this->points.empty()) {return;}
+         .           
+         1 ( 0.00%)          this->height = this->pixels / this->width;
+         3 ( 0.00%)          this->strength = float(std::min(dither, 1.0));
+        42 ( 0.00%)          this->limit = color_space == ColorSpace::rgb ? 255.0f : 65535.0f;
+         .                   // The colour a pixel should take (its own plus the error it was given) can lie outside the cube. Close to it (dark
+         .                   // areas next to the palette's darkest colour) it is clamped to the cube, as most dithering does, and matched
+         .                   // through the index. Further out, the palette can't reach the image's colours (saturated cyan with a 7-colour
+         .                   // e-ink palette): clamping there would throw away the error that should move the next pixels to other entries,
+         .                   // so the same entry (blue, for cyan) would be picked every time. There the target is kept as it is and matched
+         .                   // exactly, by a pass over the palette: rare with palettes extracted from the image, and cheap with the small
+         .                   // ones that can't cover it. The error a pixel receives is limited in length (not per channel, which would push
+         .                   // it into a corner where several entries tie), so out-of-reach colours don't build it up without end and smear
+         .                   // it across the image.
+         2 ( 0.00%)          this->near = this->limit / 8.0f;
+         1 ( 0.00%)          this->most = this->limit;
+         .                   // OKLab conversion costs three cube roots, so dithering in OKLab memoises each pixel's coordinates the same
+         .                   // way as the lookups.
+         2 ( 0.00%)          this->match_keys.assign(color_space == ColorSpace::rgb ? 0 : size_t(1) << memo_bits, std::numeric_limits<uint32_t>::max());
+         .                   this->match_values.resize(this->match_keys.size());
+         .           
+         4 ( 0.00%)          if (dither_method == 2) {
+         1 ( 0.00%)              this->method = Method::ordered;
+         .                       // Steps 0 is the default: 64 for two colours, where every one of the matrix's 65 shades shows on a smooth
+         .                       // gradient (black and white), and 16 otherwise, where colours are closer together and 16 is where more steps
+         .                       // stop paying for their time (each doubling about doubles it).
+         7 ( 0.00%)              this->steps = dither_steps > 0 ? size_t(dither_steps) : this->points.size() <= 2 ? 64 : 16;
+         .                       // The error a recipe carries is scaled by an internal strength, which the strength given maps to through a
+         .                       // table per step count. Ordered dithering responds very steeply to it (with 64 steps, 0.01 already does a
+         .                       // third of what 1 does), and more steeply the more steps there are. The table was measured so that the share
+         .                       // of pixels a strength changes, against full strength, follows Floyd-Steinberg's at 0.05, 0.1, 0.25, 0.5 and
+         .                       // 0.75 (on photos, gradients and a grey ramp, with black and white, four greys, seven e-ink inks, and 4 and 16
+         .                       // colours from each image), so a strength means about the same for every method. Between the knots it is
+         .                       // interpolated geometrically, as the response is roughly logarithmic in the internal strength.
+         .                       static constexpr double knot_strengths[7] = {0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0};
+-- line 935 ----------------------------------------
+-- line 937 ----------------------------------------
+         .                           {0.0, 0.0322, 0.0669, 0.167, 0.408, 0.691, 1.0},      // 2 steps
+         .                           {0.0, 0.0180, 0.0392, 0.102, 0.278, 0.570, 1.0},      // 4
+         .                           {0.0, 0.00930, 0.0208, 0.0576, 0.166, 0.411, 1.0},    // 8
+         .                           {0.0, 0.00463, 0.0108, 0.0304, 0.0938, 0.285, 1.0},   // 16
+         .                           {0.0, 0.00241, 0.00555, 0.0158, 0.0505, 0.179, 1.0},  // 32
+         .                           {0.0, 0.00124, 0.00283, 0.00811, 0.0272, 0.107, 1.0}, // 64
+         .                       };
+         .                       size_t row = 0;
+        16 ( 0.00%)              for (size_t m = this->steps; m > 2; m >>= 1) {row++;}
+         .                       double internal = 1.0;
+         .                       for (size_t k = 1; k < 7; k++) {
+        13 ( 0.00%)                  if (double(this->strength) <= knot_strengths[k]) {
+         5 ( 0.00%)                      const double t = (double(this->strength) - knot_strengths[k - 1]) / (knot_strengths[k] - knot_strengths[k - 1]);
+         5 ( 0.00%)                      const double low = knot_internal[row][k - 1], high = knot_internal[row][k];
+         6 ( 0.00%)                      internal = low == 0.0 ? t * high : low * std::pow(high / low, t);
+       130 ( 0.00%)  => ./math/./w_pow_template.c:pow@@GLIBC_2.29 (1x)
+         .                               break;
+         .                           }
+         .                       }
+         3 ( 0.00%)              this->recipe_strength = float(internal);
+         .                       // Recipes are memoised by colour in a direct-mapped table. Up to 16 steps it holds 2^21 / steps recipes (8 MB
+         .                       // of entries, plus 4 MB of keys at 2 steps down to 0.5 MB at 16). Above that it holds 2^17, since a photo has
+         .                       // 50,000 to 100,000 colours and a slot two colours share is a recipe built twice: 16 MB of entries at 32
+         .                       // steps and 32 MB at 64 (the default for black and white), plus 0.5 MB of keys. It never holds more than
+         .                       // twice the image's pixels, so a small image doesn't pay for a large table. A recipe depends on nothing but
+         .                       // its colour, so the table changes speed only.
+         .                       int bits = 21;
+        25 ( 0.00%)              for (size_t m = this->steps; m > 1; m >>= 1) {bits--;}
+         3 ( 0.00%)              bits = std::max(bits, 17);
+         .                       int image_bits = 1;
+       112 ( 0.00%)              while (image_bits < bits && (size_t(1) << image_bits) < 2 * this->pixels) {image_bits++;}
+         5 ( 0.00%)              this->recipe_bits = std::max(4, std::min(bits, image_bits));
+         2 ( 0.00%)              this->recipe_keys.assign(size_t(1) << this->recipe_bits, std::numeric_limits<uint32_t>::max());
+         5 ( 0.00%)              this->recipes.resize((size_t(1) << this->recipe_bits) * this->steps);
+ 8,389,121 ( 1.81%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int, std::allocator<int> >::resize(unsigned long) (1x)
+         .                       // Brightness for sorting a recipe: luma in RGB (in integers, so ties are exact), L in OKLab. Ties go to the
+         .                       // smaller packed RGB key, so the order, and the output, don't depend on the palette's order. Both go into
+         .                       // one 64-bit order key per entry, so a comparison is one load and one compare.
+         1 ( 0.00%)              this->brightness.resize(this->points.size());
+       359 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<unsigned long, std::allocator<unsigned long> >::resize(unsigned long) (1x)
+        77 ( 0.00%)              for (size_t i = 0; i < this->points.size(); i++) {
+         .                           const Point& point = this->points[i];
+       144 ( 0.00%)                  const uint32_t luma = color_space == ColorSpace::rgb ? 299u * point[0] + 587u * point[1] + 114u * point[2] : point[0];
+        64 ( 0.00%)                  this->brightness[i] = uint64_t(luma) << 32 | this->keys[i];
+         .                       }
+         .                       // A recipe's targets are new colours step after step, so the lookup memo rarely saves a search for them. For
+         .                       // RGB palettes up to 96 colours a step compares the target with every colour, four at a time: squared 8-bit
+         .                       // RGB distances fit in 32 bits, so this is exact. The colours are laid out in packed-key order, four to a
+         .                       // group, so keeping only strictly nearer colours in each lane, then the nearest across lanes with ties to the
+         .                       // earlier position, gives ties to the smaller key, as the index does. Larger palettes and OKLab use `pick`.
+         .                       // The limit was measured on video frames (bench/spikes/recipe-reuse/sizes.mjs): the scan is 7-21% faster
+         .                       // than the index from 65 to 96 colours, about even at 128 and slower above (30% at 255).
+         3 ( 0.00%)              this->scan = color_space == ColorSpace::rgb && this->points.size() <= 96;
+         5 ( 0.00%)              this->groups = this->scan ? (this->points.size() + 3) / 4 : 0;
+         2 ( 0.00%)              this->scan_r.resize(this->groups);
+       396 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int __vector(4), std::allocator<int __vector(4)> >::resize(unsigned long) (1x)
+         3 ( 0.00%)              this->scan_g.resize(this->groups);
+       505 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int __vector(4), std::allocator<int __vector(4)> >::resize(unsigned long) (1x)
+         3 ( 0.00%)              this->scan_b.resize(this->groups);
+       293 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int __vector(4), std::allocator<int __vector(4)> >::resize(unsigned long) (1x)
+         3 ( 0.00%)              this->scan_index.assign(this->groups * 4, 0);
+         2 ( 0.00%)              if (this->scan) {
+         .                           std::vector<int32_t> order(this->points.size());
+        36 ( 0.00%)                  for (size_t i = 0; i < order.size(); i++) {order[i] = int32_t(i);}
+       168 ( 0.00%)                  AgglomerativeClustering::insertion_sort(order.data(), order.size(), [&](int32_t a, int32_t b) {return this->keys[size_t(a)] < this->keys[size_t(b)];});
+        84 ( 0.00%)                  for (size_t i = 0; i < this->groups * 4; i++) {
+         .                               // Unused lanes repeat the last colour: never strictly nearer than it, and later in order, so never chosen.
+        64 ( 0.00%)                      const int32_t source = order[std::min(i, order.size() - 1)];
+       128 ( 0.00%)                      this->scan_r[i / 4][i % 4] = this->points[size_t(source)][0];
+        48 ( 0.00%)                      this->scan_g[i / 4][i % 4] = this->points[size_t(source)][1];
+        48 ( 0.00%)                      this->scan_b[i / 4][i % 4] = this->points[size_t(source)][2];
+        16 ( 0.00%)                      this->scan_index[i] = source;
+         .                           }
+         .                       }
+         .                   } else if (dither_method == 1) {
+         .                       // Atkinson: three rows of error, with two pixels of padding on each side so no neighbour needs a check.
+         .                       this->method = Method::atkinson;
+         .                       this->atkinson_stride = 3 * (this->width + 4);
+         .                       this->rows.assign(3 * this->atkinson_stride, 0.0f);
+         .                   } else {
+         .                       // Floyd-Steinberg: error for the current and next rows, one pixel of padding on each side.
+         .                       this->method = Method::floyd_steinberg;
+         .                       this->current.assign(3 * (this->width + 2), 0.0f);
+         .                       this->next.assign(3 * (this->width + 2), 0.0f);
+         .                   }
+         8 ( 0.00%)      }
+         .           
+         .               // How far the mapping has got, from 0 to 999.
+         .               int progress() const {
+         .                   // In doubles: size_t is 32 bits in WebAssembly, so cursor * 1000 overflowed above 4.29 million pixels.
+         .                   return this->pixels == 0 ? 0 : std::min(999, int(1000.0 * double(this->cursor) / double(this->pixels)));
+         .               }
+         .           
+         .               // Maps pixels until `deadline` (with `timed`) or the end, and returns whether the whole image is done. The clock is
+         .               // read every 16,384 pixels without dithering and every 1,024 with it (a dithered pixel costs more; ordered also reads
+         .               // it after every 64 recipes it builds), and
+         .               // a slice may end anywhere in a row: everything the dithering methods carry from pixel to pixel is in the error
+         .               // rows and recipe table, which are members.
+        10 ( 0.00%)      bool step(bool timed, double deadline) {
+         .                   // The hot loops read these through local pointers: the output is written through a uint8_t pointer, which could
+         .                   // alias the job's own fields, so reading them through `this` would reload them after every pixel.
+         1 ( 0.00%)          const uint8_t* const image = this->image_data;
+         8 ( 0.00%)          const PixelLayout L = this->L;
+         .                   const size_t increment = size_t(L.stride);
+         .                   // A reference, not a copy: a local copy let its body be inlined at every call site below (4 KB of WebAssembly)
+         .                   // for no measured speed.
+         1 ( 0.00%)          const PixelSink& emit = this->emit;
+         6 ( 0.00%)          const ColorCoordinates space = this->space;
+       221 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms (1x)
+         1 ( 0.00%)          const size_t start = this->cursor;
+         1 ( 0.00%)          const Point* const points = this->points.data();
+         1 ( 0.00%)          const size_t count = this->points.size();
+         1 ( 0.00%)          const uint32_t* const keys = this->keys.data();
+         1 ( 0.00%)          const int32_t* const first = this->first.data();
+         1 ( 0.00%)          uint32_t* const memo_keys = this->memo_keys.data();
+         1 ( 0.00%)          int32_t* const memo_values = this->memo_values.data();
+         2 ( 0.00%)          const bool small = this->small;
+         1 ( 0.00%)          AgglomerativeClustering::PaletteIndex& cells = this->cells;
+         1 ( 0.00%)          const AgglomerativeClustering::KDTree& tree = this->tree;
+         2 ( 0.00%)          const bool rgb = this->color_space == ColorSpace::rgb;
+         1 ( 0.00%)          const int skip_below = this->skip_below;
+         1 ( 0.00%)          const size_t width = this->width;
+         .           
+         4 ( 0.00%)          auto lookup = [&](const Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
+         .                   // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
+ 2,752,513 ( 0.59%)          auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
+         .                   // Without dithering nothing but the output reads the memo, so it holds palette indices; with it, distinct-colour indices.
+         5 ( 0.00%)          const bool direct = this->method == Method::plain;
+        10 ( 0.00%)          auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
+         .                       uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+         .                       uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+         .                       if (memo_keys[slot] != key) {
+         .                           memo_keys[slot] = key;
+         .                           const int32_t u = lookup(space.match(r, g, b));
+         .                           memo_values[slot] = direct ? palette_index(u) : u;
+         .                       }
+         .                       return memo_values[slot];
+         .                   };
+         .           
+         1 ( 0.00%)          if (this->method == Method::plain) {
+         .                       constexpr size_t check = 16384;
+         .                       const size_t pixels = this->pixels;
+         .                       if (emit.colours && count > 0) {
+         .                           // Mapped output with a palette: written here, the sink's writes done inline (every pixel went through its call).
+         .                           const uint8_t* const palette = emit.palette;
+         .                           uint8_t* const output = emit.output;
+         .                           const int ro = L.r, bo = L.b;
+         .                           const bool opaque = L.opaque, has_alpha = L.alpha;
+-- line 1077 ----------------------------------------
+-- line 1092 ----------------------------------------
+         .                           if (timed && p > start && (p & (check - 1)) == 0 && emscripten_get_now() >= deadline) {this->cursor = p; return false;}
+         .                           const uint8_t* pixel = image + p * increment;
+         .                           emit(p, nearest_index(pixel[L.r], pixel[1], pixel[L.b]));
+         .                       }
+         .                       this->cursor = this->pixels;
+         .                       return true;
+         .                   }
+         .           
+         6 ( 0.00%)          const float strength = this->strength, limit = this->limit, near = this->near, most = this->most;
+         1 ( 0.00%)          const size_t height = this->height;
+         .                   // Whether a slice should end before the pixel `done` pixels into the image (see step's comment).
+         .                   constexpr size_t check = 1024;
+   786,432 ( 0.17%)          auto stop = [&](size_t done) {return timed && done > start && (done & (check - 1)) == 0 && emscripten_get_now() >= deadline;};
+         .                   uint32_t* const match_keys = this->match_keys.data();
+         .                   Point* const match_values = this->match_values.data();
+         5 ( 0.00%)          auto nearest_outside = [&](const float* wanted) {
+         .                       int32_t best = 0;
+         .                       double best_distance = std::numeric_limits<double>::infinity();
+         .                       for (size_t i = 0; i < count; i++) {
+         .                           double distance = 0.0;
+         .                           for (int c = 0; c < 3; c++) {
+         .                               const double d = double(wanted[c]) - double(points[i][c]);
+         .                               distance += d * d;
+         .                           }
+-- line 1115 ----------------------------------------
+-- line 1117 ----------------------------------------
+         .                           if (distance < best_distance || (distance == best_distance && keys[i] < keys[best])) {
+         .                               best = int32_t(i);
+         .                               best_distance = distance;
+         .                           }
+         .                       }
+         .                       return best;
+         .                   };
+         .                   auto match = [&](uint8_t r, uint8_t g, uint8_t b) -> Point {
+   540,162 ( 0.12%)              if (rgb) {return {r, g, b};}
+         .                       uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+         .                       uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
+         .                       if (match_keys[slot] != key) {
+         .                           match_keys[slot] = key;
+         .                           match_values[slot] = space.match(r, g, b);
+         .                       }
+         .                       return match_values[slot];
+         .                   };
+-- line 1133 ----------------------------------------
+-- line 1140 ----------------------------------------
+         .                           wanted[c] = float(base[c]) + e[c] * scale;
+         .                           e[c] = 0.0f;
+         .                       }
+         .                   };
+         .                   // The distinct-colour index nearest a wanted colour in matching coordinates, by the rule described in the
+         .                   // constructor: near the cube it is clamped to the cube (in place, so the error left over is measured from the
+         .                   // clamped colour) and looked up in the index; further out it is matched exactly, unclamped. Every method picks
+         .                   // its colours through this.
+        10 ( 0.00%)          auto pick = [&](float* wanted) -> int32_t {
+         .                       bool outside = false;
+         .                       for (int c = 0; c < 3; c++) {
+         .                           if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
+         .                       }
+         .                       if (outside) {return nearest_outside(wanted);}
+         .                       Point target;
+         .                       for (int c = 0; c < 3; c++) {
+         .                           wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+         .                           target[c] = uint16_t(round_nonnegative(wanted[c]));
+         .                       }
+         .                       return rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
+         .                   };
+         .           
+         7 ( 0.00%)          if (this->method == Method::ordered) {
+         .                       // Ordered (pattern) dithering, after Knoll: each colour gets a recipe of `steps` palette entries whose average
+         .                       // is close to it, built by picking the entry nearest the colour plus the error carried so far, `steps` times.
+         .                       // The recipe is sorted dark to light, and a pixel takes the entry its cell in an 8x8 Bayer matrix points to,
+         .                       // so two colours blend in steps + 1 shades. A pixel's colour depends only on its own colour and position, so
+         .                       // a still area of an animation dithers the same way in every frame, whatever changes elsewhere.
+         .                       static constexpr uint8_t bayer[8][8] = {
+         .                           { 0, 32,  8, 40,  2, 34, 10, 42}, {48, 16, 56, 24, 50, 18, 58, 26},
+         .                           {12, 44,  4, 36, 14, 46,  6, 38}, {60, 28, 52, 20, 62, 30, 54, 22},
+         .                           { 3, 35, 11, 43,  1, 33,  9, 41}, {51, 19, 59, 27, 49, 17, 57, 25},
+         .                           {15, 47,  7, 39, 13, 45,  5, 37}, {63, 31, 55, 23, 61, 29, 53, 21}};
+         1 ( 0.00%)              const size_t steps = this->steps;
+         1 ( 0.00%)              const float recipe_strength = this->recipe_strength;
+         .                       const int recipe_bits = this->recipe_bits;
+         .                       uint32_t* const recipe_keys = this->recipe_keys.data();
+         .                       int32_t* const recipes = this->recipes.data();
+         .                       const uint64_t* const brightness = this->brightness.data();
+         1 ( 0.00%)              const bool scan = this->scan;
+         1 ( 0.00%)              const size_t groups = this->groups;
+         .                       const i32x4* const scan_r = this->scan_r.data();
+         .                       const i32x4* const scan_g = this->scan_g.data();
+         .                       const i32x4* const scan_b = this->scan_b.data();
+         .                       const int32_t* const scan_index = this->scan_index.data();
+ 3,351,970 ( 0.72%)              auto darker = [&](int32_t a, int32_t b) {return brightness[size_t(a)] < brightness[size_t(b)];};
+         .                       // Inlined by force here and in pick_recipe: in a function this size the compiler kept them out of line, and
+         .                       // ordered dithering at 16 colours took 7% longer than when map_pixels was one function (3.6.0).
+         .                       auto scan_nearest = [&](const int32_t* target) __attribute__((always_inline)) -> int32_t {
+         .                           const i32x4 tr = {target[0], target[0], target[0], target[0]};
+         .                           const i32x4 tg = {target[1], target[1], target[1], target[1]};
+         .                           const i32x4 tb = {target[2], target[2], target[2], target[2]};
+         .                           i32x4 best = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
+         .                           i32x4 best_group = {0, 0, 0, 0};
+32,101,056 ( 6.93%)                  for (size_t g = 0; g < groups; g++) {
+29,631,744 ( 6.39%)                      const i32x4 dr = scan_r[g] - tr, dg = scan_g[g] - tg, db = scan_b[g] - tb;
+98,772,480 (21.31%)                      const i32x4 distance = dr * dr + dg * dg + db * db;
+ 9,877,248 ( 2.13%)                      const i32x4 nearer = distance < best;
+19,754,496 ( 4.26%)                      best = nearer ? distance : best;
+         .                               const int32_t gi = int32_t(g);
+ 9,877,248 ( 2.13%)                      const i32x4 here = {gi, gi, gi, gi};
+14,815,872 ( 3.20%)                      best_group = nearer ? here : best_group;
+         .                           }
+         .                           size_t chosen = 0;
+         .                           int32_t chosen_distance = INT32_MAX;
+         .                           for (int lane = 0; lane < 4; lane++) {
+14,815,872 ( 3.20%)                      const size_t position = size_t(best_group[lane]) * 4 + size_t(lane);
+22,085,792 ( 4.76%)                      if (best[lane] < chosen_distance || (best[lane] == chosen_distance && position < chosen)) {
+         .                                   chosen_distance = best[lane];
+         .                                   chosen = position;
+         .                               }
+         .                           }
+ 2,469,312 ( 0.53%)                  return scan_index[chosen];
+         .                       };
+         .                       auto pick_recipe = [&](float* wanted) __attribute__((always_inline)) -> int32_t {
+ 1,234,656 ( 0.27%)                  if (!scan) {return pick(wanted);}
+         .                           bool outside = false;
+         .                           for (int c = 0; c < 3; c++) {
+ 3,703,968 ( 0.80%)                      if (wanted[c] < -near || wanted[c] > limit + near) {outside = true;}
+         .                           }
+         .                           int32_t target[3];
+11,812,842 ( 2.55%)                  if (outside) {
+         .                               // Far outside the cube the target is matched as it is, unclamped (see `pick`). At full strength it is
+         .                               // a whole number (whole colours plus whole errors), and then the scan's integer distances are the
+         .                               // exact ones nearest_outside computes in doubles, as long as they fit in 32 bits: a target within
+         .                               // 20,000 of the cube keeps every squared distance under 1.3 billion.
+         .                               for (int c = 0; c < 3; c++) {
+         .                                   const float whole = std::nearbyint(wanted[c]);
+ 4,584,615 ( 0.99%)                          if (whole != wanted[c] || std::fabs(whole) > 20000.0f) {return nearest_outside(wanted);}
+         .                                   target[c] = int32_t(whole);
+         .                               }
+         .                               return scan_nearest(target);
+         .                           }
+         .                           for (int c = 0; c < 3; c++) {
+ 7,432,120 ( 1.60%)                      wanted[c] = std::clamp(wanted[c], 0.0f, limit);
+         .                               target[c] = round_nonnegative(wanted[c]);
+         .                           }
+         .                           return scan_nearest(target);
+         .                       };
+         .                       // A recipe of many steps over a large palette can take tens of microseconds, so the clock is also read after
+         .                       // every 64 recipes built.
+         .                       size_t built = 0;
+     2,569 ( 0.00%)              for (size_t y = start / width; y < height; y++) {
+ 1,180,678 ( 0.25%)                  for (size_t x = y == start / width ? start % width : 0; x < width; x++) {
+   393,216 ( 0.08%)                      const size_t p = y * width + x;
+         .                               if (stop(p)) {this->cursor = p; return false;}
+   786,432 ( 0.17%)                      const uint8_t* pixel = image + p * increment;
+ 1,572,864 ( 0.34%)                      if (L.alpha && pixel[3] < skip_below) {
+         .                                   emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+         .                                   continue;
+         .                               }
+ 2,752,512 ( 0.59%)                      const uint32_t key = (uint32_t(pixel[L.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[L.b]);
+ 1,179,648 ( 0.25%)                      const uint32_t slot = (key * 0x9E3779B1u) >> (32 - recipe_bits);
+ 1,966,080 ( 0.42%)                      int32_t* recipe = &recipes[size_t(slot) * steps];
+   786,432 ( 0.17%)                      if (recipe_keys[slot] != key) {
+    77,166 ( 0.02%)                          recipe_keys[slot] = key;
+   231,498 ( 0.05%)                          const Point base = match(pixel[L.r], pixel[1], pixel[L.b]);
+         .                                   float e[3] = {0.0f, 0.0f, 0.0f};
+ 3,781,134 ( 0.82%)                          for (size_t i = 0; i < steps; i++) {
+         .                                       float wanted[3];
+ 9,877,248 ( 2.13%)                              for (int c = 0; c < 3; c++) {wanted[c] = float(base[c]) + e[c] * recipe_strength;}
+         .                                       const int32_t chosen = pick_recipe(wanted);
+ 3,703,968 ( 0.80%)                              recipe[i] = chosen;
+14,815,872 ( 3.20%)                              for (int c = 0; c < 3; c++) {e[c] += float(base[c]) - float(points[size_t(chosen)][c]);}
+         .                                   }
+         .                                   AgglomerativeClustering::insertion_sort(recipe, steps, darker);
+   154,332 ( 0.03%)                          if (timed && (++built & 63) == 0 && emscripten_get_now() >= deadline) {
+         .                                       emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
+         .                                       this->cursor = p + 1;
+         .                                       return false;
+         .                                   }
+         .                               }
+ 2,752,512 ( 0.59%)                      emit(p, palette_index(recipe[size_t(bayer[y & 7][x & 7]) * steps / 64]));
+         .                           }
+         .                       }
+         .                       this->cursor = this->pixels;
+         .                       return true;
+         .                   }
+         .           
+         .                   if (this->method == Method::atkinson) {
+         .                       // Atkinson: serpentine like Floyd-Steinberg, but 1/8 of the error goes to each of six neighbours (two ahead,
+-- line 1280 ----------------------------------------
+-- line 1355 ----------------------------------------
+         .                               below[c + ahead] += error * (1.0f / 16.0f);
+         .                           }
+         .                       }
+         .                       std::swap(this->current, this->next);
+         .                       std::fill(this->next.begin(), this->next.end(), 0.0f);
+         .                   }
+         .                   this->cursor = this->pixels;
+         .                   return true;
+         8 ( 0.00%)      }
+         .           
+         .           };
+         .           
+         .           // What a mapping call returns, made in slices: the output buffer (length-prefixed, see allocate_variable_size), what
+         .           // the indexed header needs, and the job that fills it. `colours` chooses _quantize's output (the mapped image, in the
+         .           // input's format with alpha preserved; black for an empty palette) or _quantize_indices' (see there). The image must
+         .           // stay allocated until the mapping is done.
+         .           class MappingTask {
+         .           
+         .               std::vector<uint8_t> entries;  // the palette (for indices, with any added entries); it must outlive the job
+         5 ( 0.00%)      uint8_t* packed = nullptr;
+         .               std::unique_ptr<MappingJob> job;
+         .           
+         .           public:
+         .           
+        11 ( 0.00%)      MappingTask(bool colours, const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width, int cutoff) {
+         .                   const PixelLayout L = layout_of(image_format);
+         6 ( 0.00%)          const size_t pixels = image_length > 0 ? static_cast<size_t>(image_length) / L.stride : 0;
+         2 ( 0.00%)          if (colours) {
+         .                       // Its own copy of the palette, which the output's colours are read from, so the caller's can go.
+         1 ( 0.00%)              this->entries.assign(palette, palette + palette_length);
+         2 ( 0.00%)              this->packed = allocate_variable_size(pixels * size_t(L.stride));
+        10 ( 0.00%)              const PixelSink sink = {true, L, image_data, this->packed + 4, this->entries.data(), 0, 0, false, -1};
+        24 ( 0.00%)              this->job.reset(new MappingJob(image_data, image_length, image_format, this->entries.data(), palette_length, color_space, dither, dither_method, dither_steps, width, 1, sink));
+ 8,690,267 ( 1.87%)  => build/mp1/src/clustering.cpp:MappingJob::MappingJob(unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int, int, PixelSink const&) (1x)
+       378 ( 0.00%)  => ???:operator new(unsigned long) (1x)
+         .                       return;
+         .                   }
+         .                   // Each pixel's palette index instead of its colour. The length-prefixed payload is [entries (u32), transparent
+         .                   // index (i32, -1 for none), index bytes (u32)], then the palette (3 bytes per entry), then one little-endian index
+         .                   // of `index bytes` (1, 2 or 4) per pixel. With a `cutoff` (1-255) and input with alpha (RGBA or BGRA) that has
+         .                   // pixels with alpha below it, those pixels get an extra black entry appended after the palette, which takes no
+         .                   // part in matching (the callers cut the palette one colour smaller to make room, see colours_for_entries: `k`
+         .                   // counts the entries of the result); every other pixel maps to its nearest colour, fully opaque. Without one
+-- line 1395 ----------------------------------------
+-- line 1418 ----------------------------------------
+         .                   write32(output, uint32_t(count));
+         .                   write32(output + 4, uint32_t(transparent_index));
+         .                   write32(output + 8, index_bytes);
+         .                   if (!this->entries.empty()) {std::memcpy(output + header, this->entries.data(), this->entries.size());}
+         .                   uint8_t* indices = output + header + this->entries.size();
+         .           
+         .                   const PixelSink sink = {false, L, image_data, indices, nullptr, index_bytes, cutoff, transparent, transparent_index};
+         .                   this->job.reset(new MappingJob(image_data, image_length, image_format, this->entries.data(), colour_count * 3, color_space, dither, dither_method, dither_steps, width, transparent ? cutoff : 1, sink));
+         8 ( 0.00%)      }
+         .           
+         .               ~MappingTask() {free(this->packed);}
+         .           
+         3 ( 0.00%)      bool step(bool timed, double deadline) {return this->job->step(timed, deadline);}
+454,844,919 (98.12%)  => build/mp1/src/clustering.cpp:MappingJob::step(bool, double) (1x)
+         .               int progress() const {return this->job->progress();}
+         .           
+         .               // The output, which the caller frees. Only once the mapping is done.
+         .               uint8_t* take() {
+         1 ( 0.00%)          uint8_t* result = this->packed;
+         1 ( 0.00%)          this->packed = nullptr;
+         .                   return result;
+         .               }
+         .           
+         .           };
+         .           
+         .           // Maps the image to the palette in one go (see MappingTask).
+        13 ( 0.00%)  uint8_t* _quantize(const uint8_t* image_data, int image_length, int image_format, const uint8_t* palette, size_t palette_length, ColorSpace color_space, double dither, int dither_method, int dither_steps, int width) {
+         9 ( 0.00%)      MappingTask task(true, image_data, image_length, image_format, palette, palette_length, color_space, dither, dither_method, dither_steps, width, 0);
+ 8,692,434 ( 1.88%)  => build/mp1/src/clustering.cpp:MappingTask::MappingTask(bool, unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int, int) (1x)
+         .               task.step(false, 0);
+         .               return task.take();
+         5 ( 0.00%)  }
+         .           
+         .           // Whether indexed output with this cutoff will have a transparent entry: the image has alpha and some pixel is below it.
+         .           bool has_transparent_entry(const uint8_t* image_data, int image_length, int image_format, int cutoff) {
+         .               if (cutoff <= 0 || !layout_of(image_format).alpha || image_length < 4) {return false;}
+         .               for (size_t p = 0; p + 3 < size_t(image_length); p += 4) {if (image_data[p + 3] < cutoff) {return true;}}
+         .               return false;
+         .           }
+         .           
+-- line 1455 ----------------------------------------
+
+64,718,073 (13.96%)  <counts for unidentified lines in build/mp1/src/clustering.cpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h
+--------------------------------------------------------------------------------
+Ir           
+
+-- line 92 ----------------------------------------
+  .                 struct _Vector_impl_data
+  .                 {
+  .           	pointer _M_start;
+  .           	pointer _M_finish;
+  .           	pointer _M_end_of_storage;
+  .           
+  .           	_GLIBCXX20_CONSTEXPR
+  .           	_Vector_impl_data() _GLIBCXX_NOEXCEPT
+ 19 ( 0.00%)  	: _M_start(), _M_finish(), _M_end_of_storage()
+ 36 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms (1x)
+  .           	{ }
+  .           
+  .           #if __cplusplus >= 201103L
+  .           	_GLIBCXX20_CONSTEXPR
+  .           	_Vector_impl_data(_Vector_impl_data&& __x) noexcept
+  .           	: _M_start(__x._M_start), _M_finish(__x._M_finish),
+  .           	  _M_end_of_storage(__x._M_end_of_storage)
+  .           	{ __x._M_start = __x._M_finish = __x._M_end_of_storage = pointer(); }
+  .           #endif
+  .           
+  .           	_GLIBCXX20_CONSTEXPR
+  .           	void
+  .           	_M_copy_data(_Vector_impl_data const& __x) _GLIBCXX_NOEXCEPT
+  .           	{
+  6 ( 0.00%)  	  _M_start = __x._M_start;
+  6 ( 0.00%)  	  _M_finish = __x._M_finish;
+  7 ( 0.00%)  	  _M_end_of_storage = __x._M_end_of_storage;
+  .           	}
+  .           
+  .           	_GLIBCXX20_CONSTEXPR
+  .           	void
+  .           	_M_swap_data(_Vector_impl_data& __x) _GLIBCXX_NOEXCEPT
+  .           	{
+  .           	  // Do not use std::swap(_M_start, __x._M_start), etc as it loses
+  .           	  // information used by TBAA.
+-- line 125 ----------------------------------------
+-- line 361 ----------------------------------------
+  .                 _Vector_base(const allocator_type& __a, _Vector_base&& __x)
+  .                 : _M_impl(_Tp_alloc_type(__a), std::move(__x._M_impl))
+  .                 { }
+  .           #endif
+  .           
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 ~_Vector_base() _GLIBCXX_NOEXCEPT
+  .                 {
+ 31 ( 0.00%)  	_M_deallocate(_M_impl._M_start,
+  .           		      _M_impl._M_end_of_storage - _M_impl._M_start);
+  .                 }
+  .           
+  .               public:
+  .                 _Vector_impl _M_impl;
+  .           
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 pointer
+  .                 _M_allocate(size_t __n)
+  .                 {
+  .           	typedef __gnu_cxx::__alloc_traits<_Tp_alloc_type> _Tr;
+ 57 ( 0.00%)  	return __n != 0 ? _Tr::allocate(_M_impl, __n) : pointer();
+  .                 }
+  .           
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 _M_deallocate(pointer __p, size_t __n)
+  .                 {
+  .           	typedef __gnu_cxx::__alloc_traits<_Tp_alloc_type> _Tr;
+140 ( 0.00%)  	if (__p)
+  .           	  _Tr::deallocate(_M_impl, __p, __n);
+  .                 }
+  .           
+  .               protected:
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 _M_create_storage(size_t __n)
+  .                 {
+  1 ( 0.00%)  	this->_M_impl._M_start = this->_M_allocate(__n);
+  .           	this->_M_impl._M_finish = this->_M_impl._M_start;
+ 10 ( 0.00%)  	this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
+  .                 }
+  .               };
+  .           
+  .             /**
+  .              *  @brief A standard container which offers fixed time access to
+  .              *  individual elements in any order.
+  .              *
+  .              *  @ingroup sequences
+-- line 408 ----------------------------------------
+-- line 550 ----------------------------------------
+  .                  *
+  .                  *  This constructor fills the %vector with @a __n default
+  .                  *  constructed elements.
+  .                  */
+  .                 explicit
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 vector(size_type __n, const allocator_type& __a = allocator_type())
+  .                 : _Base(_S_check_init_len(__n, __a), __a)
+ 11 ( 0.00%)        { _M_default_initialize(__n); }
+  .           
+  .                 /**
+  .                  *  @brief  Creates a %vector with copies of an exemplar element.
+  .                  *  @param  __n  The number of elements to initially create.
+  .                  *  @param  __value  An element to copy.
+  .                  *  @param  __a  An allocator.
+  .                  *
+  .                  *  This constructor fills the %vector with @a __n copies of @a __value.
+-- line 566 ----------------------------------------
+-- line 801 ----------------------------------------
+  .                  *  This function fills a %vector with @a __n copies of the given
+  .                  *  value.  Note that the assignment completely changes the
+  .                  *  %vector and that the resulting %vector's size is the same as
+  .                  *  the number of elements assigned.
+  .                  */
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 assign(size_type __n, const value_type& __val)
+  6 ( 0.00%)        { _M_fill_assign(__n, __val); }
+5,430 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<std::pair<int, int>, std::allocator<std::pair<int, int> > >::_M_fill_assign(unsigned long, std::pair<int, int> const&) (1x)
+132 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<unsigned long, std::allocator<unsigned long> >::_M_fill_assign(unsigned long, unsigned long const&) (1x)
+  .           
+  .                 /**
+  .                  *  @brief  Assigns a range to a %vector.
+  .                  *  @param  __first  An input iterator.
+  .                  *  @param  __last   An input iterator.
+  .                  *
+  .                  *  This function fills a %vector with copies of the elements in the
+  .                  *  range [__first,__last).
+-- line 817 ----------------------------------------
+-- line 821 ----------------------------------------
+  .                  *  of elements assigned.
+  .                  */
+  .           #if __cplusplus >= 201103L
+  .                 template<typename _InputIterator,
+  .           	       typename = std::_RequireInputIter<_InputIterator>>
+  .           	_GLIBCXX20_CONSTEXPR
+  .           	void
+  .           	assign(_InputIterator __first, _InputIterator __last)
+  3 ( 0.00%)  	{ _M_assign_aux(__first, __last, std::__iterator_category(__first)); }
+470 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:void std::vector<unsigned char, std::allocator<unsigned char> >::_M_assign_aux<unsigned char const*>(unsigned char const*, unsigned char const*, std::forward_iterator_tag) (1x)
+  .           #else
+  .                 template<typename _InputIterator>
+  .           	void
+  .           	assign(_InputIterator __first, _InputIterator __last)
+  .           	{
+  .           	  // Check whether it's an integral type.  If so, it's not an iterator.
+  .           	  typedef typename std::__is_integer<_InputIterator>::__type _Integral;
+  .           	  _M_assign_dispatch(__first, __last, _Integral());
+-- line 837 ----------------------------------------
+-- line 985 ----------------------------------------
+  .                 { return const_reverse_iterator(begin()); }
+  .           #endif
+  .           
+  .                 // [23.2.4.2] capacity
+  .                 /**  Returns the number of elements in the %vector.  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 size_type
+  .                 size() const _GLIBCXX_NOEXCEPT
+541 ( 0.00%)        { return size_type(this->_M_impl._M_finish - this->_M_impl._M_start); }
+266 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:std::vector<int, std::allocator<int> >::vector(unsigned long, std::allocator<int> const&) (1x)
+  .           
+  .                 /**  Returns the size() of the largest possible %vector.  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 size_type
+  .                 max_size() const _GLIBCXX_NOEXCEPT
+  .                 { return _S_max_size(_M_get_Tp_allocator()); }
+  .           
+  .           #if __cplusplus >= 201103L
+-- line 1001 ----------------------------------------
+-- line 1007 ----------------------------------------
+  .                  *  number of elements.  If the number is smaller than the
+  .                  *  %vector's current size the %vector is truncated, otherwise
+  .                  *  default constructed elements are appended.
+  .                  */
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 resize(size_type __new_size)
+  .                 {
+ 20 ( 0.00%)  	if (__new_size > size())
+ 14 ( 0.00%)  	  _M_default_append(__new_size - size());
+65,937 ( 0.01%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<int, std::allocator<int> >::_M_default_append(unsigned long) (1x)
+  1 ( 0.00%)  	else if (__new_size < size())
+  .           	  _M_erase_at_end(this->_M_impl._M_start + __new_size);
+  .                 }
+  .           
+  .                 /**
+  .                  *  @brief  Resizes the %vector to the specified number of elements.
+  .                  *  @param  __new_size  Number of elements the %vector should contain.
+  .                  *  @param  __x  Data with which new elements should be populated.
+  .                  *
+-- line 1025 ----------------------------------------
+-- line 1071 ----------------------------------------
+  .           
+  .                 /**
+  .                  *  Returns the total number of elements that the %vector can
+  .                  *  hold before needing to allocate more memory.
+  .                  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 size_type
+  .                 capacity() const _GLIBCXX_NOEXCEPT
+  9 ( 0.00%)        { return size_type(this->_M_impl._M_end_of_storage
+ 23 ( 0.00%)  			 - this->_M_impl._M_start); }
+  .           
+  .                 /**
+  .                  *  Returns true if the %vector is empty.  (Thus begin() would
+  .                  *  equal end().)
+  .                  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 bool
+  .                 empty() const _GLIBCXX_NOEXCEPT
+-- line 1088 ----------------------------------------
+-- line 1121 ----------------------------------------
+  .                  *  out_of_range lookups are not defined. (For checked lookups
+  .                  *  see at().)
+  .                  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 reference
+  .                 operator[](size_type __n) _GLIBCXX_NOEXCEPT
+  .                 {
+  .           	__glibcxx_requires_subscript(__n);
+112 ( 0.00%)  	return *(this->_M_impl._M_start + __n);
+  .                 }
+  .           
+  .                 /**
+  .                  *  @brief  Subscript access to the data contained in the %vector.
+  .                  *  @param __n The index of the element for which data should be
+  .                  *  accessed.
+  .                  *  @return  Read-only (constant) reference to data.
+  .                  *
+-- line 1137 ----------------------------------------
+-- line 1253 ----------------------------------------
+  .                 // data access
+  .                 /**
+  .                  *   Returns a pointer such that [data(), data() + size()) is a valid
+  .                  *   range.  For a non-empty %vector, data() == &front().
+  .                  */
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 _Tp*
+  .                 data() _GLIBCXX_NOEXCEPT
+ 15 ( 0.00%)        { return _M_data_ptr(this->_M_impl._M_start); }
+  .           
+  .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+  .                 const _Tp*
+  .                 data() const _GLIBCXX_NOEXCEPT
+  .                 { return _M_data_ptr(this->_M_impl._M_start); }
+  .           
+  .                 // [23.2.4.3] modifiers
+  .                 /**
+-- line 1269 ----------------------------------------
+-- line 1275 ----------------------------------------
+  .                  *  to it.  Due to the nature of a %vector this operation can be
+  .                  *  done in constant time if the %vector has preallocated space
+  .                  *  available.
+  .                  */
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 push_back(const value_type& __x)
+  .                 {
+128 ( 0.00%)  	if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
+  .           	  {
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GROW(1);
+  .           	    _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+  .           				     __x);
+ 99 ( 0.00%)  	    ++this->_M_impl._M_finish;
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GREW(1);
+  .           	  }
+  .           	else
+  .           	  _M_realloc_insert(end(), __x);
+  .                 }
+  .           
+  .           #if __cplusplus >= 201103L
+  .                 _GLIBCXX20_CONSTEXPR
+-- line 1296 ----------------------------------------
+-- line 1598 ----------------------------------------
+  .                  *  Erases all the elements.  Note that this function only erases the
+  .                  *  elements, and that if the elements themselves are pointers, the
+  .                  *  pointed-to memory is not touched in any way.  Managing the pointer is
+  .                  *  the user's responsibility.
+  .                  */
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 clear() _GLIBCXX_NOEXCEPT
+  1 ( 0.00%)        { _M_erase_at_end(this->_M_impl._M_start); }
+  .           
+  .               protected:
+  .                 /**
+  .                  *  Memory expansion handler.  Uses the member allocation function to
+  .                  *  obtain @a n bytes of memory, and then copies [first,last) into it.
+  .                  */
+  .                 template<typename _ForwardIterator>
+  .           	_GLIBCXX20_CONSTEXPR
+-- line 1614 ----------------------------------------
+-- line 1709 ----------------------------------------
+  .                 }
+  .           
+  .           #if __cplusplus >= 201103L
+  .                 // Called by the vector(n) constructor.
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 _M_default_initialize(size_type __n)
+  .                 {
+  1 ( 0.00%)  	this->_M_impl._M_finish =
+  .           	  std::__uninitialized_default_n_a(this->_M_impl._M_start, __n,
+  .           					   _M_get_Tp_allocator());
+  .                 }
+  .           #endif
+  .           
+  .                 // Internal assign functions follow.  The *_aux functions do the actual
+  .                 // assignment work for the range versions.
+  .           
+-- line 1725 ----------------------------------------
+-- line 1890 ----------------------------------------
+  .                 { return _M_insert_rval(__position, std::move(__v)); }
+  .           #endif
+  .           
+  .                 // Called by _M_fill_insert, _M_insert_aux etc.
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 size_type
+  .                 _M_check_len(size_type __n, const char* __s) const
+  .                 {
+ 77 ( 0.00%)  	if (max_size() - size() < __n)
+  .           	  __throw_length_error(__N(__s));
+  .           
+174 ( 0.00%)  	const size_type __len = size() + (std::max)(size(), __n);
+ 87 ( 0.00%)  	return (__len < size() || __len > max_size()) ? max_size() : __len;
+  .                 }
+  .           
+  .                 // Called by constructors to check initial size.
+  .                 static _GLIBCXX20_CONSTEXPR size_type
+  .                 _S_check_init_len(size_type __n, const allocator_type& __a)
+  .                 {
+ 17 ( 0.00%)  	if (__n > _S_max_size(_Tp_alloc_type(__a)))
+  .           	  __throw_length_error(
+  .           	      __N("cannot create std::vector larger than max_size()"));
+  .           	return __n;
+  .                 }
+  .           
+  .                 static _GLIBCXX20_CONSTEXPR size_type
+  .                 _S_max_size(const _Tp_alloc_type& __a) _GLIBCXX_NOEXCEPT
+  .                 {
+-- line 1917 ----------------------------------------
+-- line 1927 ----------------------------------------
+  .                 // Internal erase functions follow.
+  .           
+  .                 // Called by erase(q1,q2), clear(), resize(), _M_fill_assign,
+  .                 // _M_assign_aux.
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 _M_erase_at_end(pointer __pos) _GLIBCXX_NOEXCEPT
+  .                 {
+  4 ( 0.00%)  	if (size_type __n = this->_M_impl._M_finish - __pos)
+  .           	  {
+  .           	    std::_Destroy(__pos, this->_M_impl._M_finish,
+  .           			  _M_get_Tp_allocator());
+  .           	    this->_M_impl._M_finish = __pos;
+  .           	    _GLIBCXX_ASAN_ANNOTATE_SHRINK(__n);
+  .           	  }
+  .                 }
+  .           
+-- line 1943 ----------------------------------------
+
+ 38 ( 0.00%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: mapdriver.cpp
+--------------------------------------------------------------------------------
+Ir         
+
+.           // Mapping driver: clusters the image once (RGB or OKLab), cuts k colours, then runs _quantize (or _quantize_indices) <runs> times and prints
+.           // each run's time and an FNV-1a hash of the output. Natively under callgrind, only `mapping_call` is collected (--toggle-collect).
+.           //   mapdriver <image.rgba> <width> <space 0|1> <k> <dither method -1 none|0 fs|1 atkinson|2 ordered> <runs> [indices 0|1]
+.           #include "clustering.cpp"
+.           #include <cstdio>
+.           #include <chrono>
+.           static double now() {return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+.           static uint64_t fnv(const uint8_t* p, size_t n) {uint64_t h = 1469598103934665603ull; for (size_t i = 0; i < n; i++) {h ^= p[i]; h *= 1099511628211ull;} return h;}
+6 ( 0.00%)  __attribute__((noinline)) uint8_t* mapping_call(const uint8_t* image, int length, const uint8_t* palette, size_t plen, int space, double dither, int method, int width, bool indices) {
+2 ( 0.00%)      if (indices) {return _quantize_indices(image, length, 0, palette, plen, ColorSpace(space), dither, method < 0 ? 0 : method, 0, width, 0);}
+7 ( 0.00%)      return _quantize(image, length, 0, palette, plen, ColorSpace(space), dither, method < 0 ? 0 : method, 0, width);
+463,539,709 (100.0%)  => build/mp1/src/clustering.cpp:_quantize(unsigned char const*, int, int, unsigned char const*, unsigned long, AgglomerativeClustering::ColorSpace, double, int, int, int) (1x)
+2 ( 0.00%)  }
+.           int main(int argc, char** argv) {
+.               if (argc < 7) {std::fprintf(stderr, "usage: mapdriver image.rgba width space k method runs [indices]\n"); return 2;}
+.               std::FILE* f = std::fopen(argv[1], "rb");
+.               if (!f) {std::perror(argv[1]); return 1;}
+.               std::fseek(f, 0, SEEK_END); size_t size = size_t(std::ftell(f)); std::fseek(f, 0, SEEK_SET);
+.               std::vector<uint8_t> image(size);
+.               if (std::fread(image.data(), 1, size, f) != size) {return 1;}
+.               std::fclose(f);
+-- line 20 ----------------------------------------
+
+3 ( 0.00%)  <counts for unidentified lines in mapdriver.cpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc
+--------------------------------------------------------------------------------
+Ir           
+
+-- line 106 ----------------------------------------
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 typename vector<_Tp, _Alloc>::reference
+  .           #else
+  .                 void
+  .           #endif
+  .                 vector<_Tp, _Alloc>::
+  .                 emplace_back(_Args&&... __args)
+  .                 {
+ 80 ( 0.00%)  	if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
+  .           	  {
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GROW(1);
+  .           	    _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+  .           				     std::forward<_Args>(__args)...);
+ 44 ( 0.00%)  	    ++this->_M_impl._M_finish;
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GREW(1);
+  .           	  }
+  .           	else
+  .           	  _M_realloc_insert(end(), std::forward<_Args>(__args)...);
+  .           #if __cplusplus > 201402L
+  .           	return back();
+  .           #endif
+  .                 }
+-- line 127 ----------------------------------------
+-- line 204 ----------------------------------------
+  .                 return __first;
+  .               }
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               vector<_Tp, _Alloc>&
+  .               vector<_Tp, _Alloc>::
+  .               operator=(const vector<_Tp, _Alloc>& __x)
+ 12 ( 0.00%)      {
+  4 ( 0.00%)        if (std::__addressof(__x) != this)
+  .           	{
+  .           	  _GLIBCXX_ASAN_ANNOTATE_REINIT;
+  .           #if __cplusplus >= 201103L
+  .           	  if (_Alloc_traits::_S_propagate_on_copy_assign())
+  .           	    {
+  .           	      if (!_Alloc_traits::_S_always_equal()
+  .           	          && _M_get_Tp_allocator() != __x._M_get_Tp_allocator())
+  .           	        {
+-- line 221 ----------------------------------------
+-- line 228 ----------------------------------------
+  .           		  this->_M_impl._M_finish = nullptr;
+  .           		  this->_M_impl._M_end_of_storage = nullptr;
+  .           		}
+  .           	      std::__alloc_on_copy(_M_get_Tp_allocator(),
+  .           				   __x._M_get_Tp_allocator());
+  .           	    }
+  .           #endif
+  .           	  const size_type __xlen = __x.size();
+  4 ( 0.00%)  	  if (__xlen > capacity())
+  .           	    {
+  .           	      pointer __tmp = _M_allocate_and_copy(__xlen, __x.begin(),
+  .           						   __x.end());
+  .           	      std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
+  .           			    _M_get_Tp_allocator());
+  .           	      _M_deallocate(this->_M_impl._M_start,
+  .           			    this->_M_impl._M_end_of_storage
+  .           			    - this->_M_impl._M_start);
+  2 ( 0.00%)  	      this->_M_impl._M_start = __tmp;
+  6 ( 0.00%)  	      this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __xlen;
+  .           	    }
+  .           	  else if (size() >= __xlen)
+  .           	    {
+  .           	      std::_Destroy(std::copy(__x.begin(), __x.end(), begin()),
+  .           			    end(), _M_get_Tp_allocator());
+  .           	    }
+  .           	  else
+  .           	    {
+  .           	      std::copy(__x._M_impl._M_start, __x._M_impl._M_start + size(),
+  .           			this->_M_impl._M_start);
+  .           	      std::__uninitialized_copy_a(__x._M_impl._M_start + size(),
+  .           					  __x._M_impl._M_finish,
+  .           					  this->_M_impl._M_finish,
+  .           					  _M_get_Tp_allocator());
+  .           	    }
+  4 ( 0.00%)  	  this->_M_impl._M_finish = this->_M_impl._M_start + __xlen;
+  .           	}
+ 14 ( 0.00%)        return *this;
+  .               }
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               void
+  .               vector<_Tp, _Alloc>::
+  .               _M_fill_assign(size_t __n, const value_type& __val)
+ 36 ( 0.00%)      {
+ 12 ( 0.00%)        if (__n > capacity())
+  .           	{
+  .           	  vector __tmp(__n, __val, _M_get_Tp_allocator());
+  .           	  __tmp._M_impl._M_swap_data(this->_M_impl);
+  .           	}
+  3 ( 0.00%)        else if (__n > size())
+  .           	{
+  .           	  std::fill(begin(), end(), __val);
+  .           	  const size_type __add = __n - size();
+  .           	  _GLIBCXX_ASAN_ANNOTATE_GROW(__add);
+  .           	  this->_M_impl._M_finish =
+  .           	    std::__uninitialized_fill_n_a(this->_M_impl._M_finish,
+  .           					  __add, __val, _M_get_Tp_allocator());
+  .           	  _GLIBCXX_ASAN_ANNOTATE_GREW(__add);
+  .           	}
+  .                 else
+  .                   _M_erase_at_end(std::fill_n(this->_M_impl._M_start, __n, __val));
+ 30 ( 0.00%)      }
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               template<typename _InputIterator>
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 vector<_Tp, _Alloc>::
+  .                 _M_assign_aux(_InputIterator __first, _InputIterator __last,
+  .           		    std::input_iterator_tag)
+-- line 298 ----------------------------------------
+-- line 310 ----------------------------------------
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               template<typename _ForwardIterator>
+  .                 _GLIBCXX20_CONSTEXPR
+  .                 void
+  .                 vector<_Tp, _Alloc>::
+  .                 _M_assign_aux(_ForwardIterator __first, _ForwardIterator __last,
+  .           		    std::forward_iterator_tag)
+  6 ( 0.00%)        {
+  .           	const size_type __len = std::distance(__first, __last);
+  .           
+  2 ( 0.00%)  	if (__len > capacity())
+  .           	  {
+  .           	    _S_check_init_len(__len, _M_get_Tp_allocator());
+  .           	    pointer __tmp(_M_allocate_and_copy(__len, __first, __last));
+  .           	    std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
+  .           			  _M_get_Tp_allocator());
+  .           	    _GLIBCXX_ASAN_ANNOTATE_REINIT;
+  .           	    _M_deallocate(this->_M_impl._M_start,
+  .           			  this->_M_impl._M_end_of_storage
+  .           			  - this->_M_impl._M_start);
+  1 ( 0.00%)  	    this->_M_impl._M_start = __tmp;
+  2 ( 0.00%)  	    this->_M_impl._M_finish = this->_M_impl._M_start + __len;
+  2 ( 0.00%)  	    this->_M_impl._M_end_of_storage = this->_M_impl._M_finish;
+  .           	  }
+  .           	else if (size() >= __len)
+  .           	  _M_erase_at_end(std::copy(__first, __last, this->_M_impl._M_start));
+  .           	else
+  .           	  {
+  .           	    _ForwardIterator __mid = __first;
+  .           	    std::advance(__mid, size());
+  .           	    std::copy(__first, __mid, this->_M_impl._M_start);
+-- line 341 ----------------------------------------
+-- line 342 ----------------------------------------
+  .           	    const size_type __attribute__((__unused__)) __n = __len - size();
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GROW(__n);
+  .           	    this->_M_impl._M_finish =
+  .           	      std::__uninitialized_copy_a(__mid, __last,
+  .           					  this->_M_impl._M_finish,
+  .           					  _M_get_Tp_allocator());
+  .           	    _GLIBCXX_ASAN_ANNOTATE_GREW(__n);
+  .           	  }
+  6 ( 0.00%)        }
+  .           
+  .           #if __cplusplus >= 201103L
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               auto
+  .               vector<_Tp, _Alloc>::
+  .               _M_insert_rval(const_iterator __position, value_type&& __v) -> iterator
+  .               {
+-- line 358 ----------------------------------------
+-- line 461 ----------------------------------------
+  .                 __try
+  .           	{
+  .           	  // The order of the three operations is dictated by the C++11
+  .           	  // case, where the moves could alter a new element belonging
+  .           	  // to the existing vector.  This is an issue only for callers
+  .           	  // taking the element by lvalue ref (see last bullet of C++11
+  .           	  // [res.on.arguments]).
+  .           	  _Alloc_traits::construct(this->_M_impl,
+  5 ( 0.00%)  				   __new_start + __elems_before,
+  .           #if __cplusplus >= 201103L
+  .           				   std::forward<_Args>(__args)...);
+  .           #else
+  .           				   __x);
+  .           #endif
+  .           	  __new_finish = pointer();
+  .           
+  .           #if __cplusplus >= 201103L
+  .           	  if _GLIBCXX17_CONSTEXPR (_S_use_relocate())
+  .           	    {
+  .           	      __new_finish = _S_relocate(__old_start, __position.base(),
+  .           					 __new_start, _M_get_Tp_allocator());
+  .           
+ 20 ( 0.00%)  	      ++__new_finish;
+  .           
+  .           	      __new_finish = _S_relocate(__position.base(), __old_finish,
+  .           					 __new_finish, _M_get_Tp_allocator());
+  .           	    }
+  .           	  else
+  .           #endif
+  .           	    {
+  .           	      __new_finish
+-- line 491 ----------------------------------------
+-- line 513 ----------------------------------------
+  .           	}
+  .           #if __cplusplus >= 201103L
+  .                 if _GLIBCXX17_CONSTEXPR (!_S_use_relocate())
+  .           #endif
+  .           	std::_Destroy(__old_start, __old_finish, _M_get_Tp_allocator());
+  .                 _GLIBCXX_ASAN_ANNOTATE_REINIT;
+  .                 _M_deallocate(__old_start,
+  .           		    this->_M_impl._M_end_of_storage - __old_start);
+ 25 ( 0.00%)        this->_M_impl._M_start = __new_start;
+ 30 ( 0.00%)        this->_M_impl._M_finish = __new_finish;
+ 80 ( 0.00%)        this->_M_impl._M_end_of_storage = __new_start + __len;
+  .               }
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               void
+  .               vector<_Tp, _Alloc>::
+  .               _M_fill_insert(iterator __position, size_type __n, const value_type& __x)
+  .               {
+-- line 531 ----------------------------------------
+-- line 628 ----------------------------------------
+  .               }
+  .           
+  .           #if __cplusplus >= 201103L
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               void
+  .               vector<_Tp, _Alloc>::
+  .               _M_default_append(size_type __n)
+ 42 ( 0.00%)      {
+ 12 ( 0.00%)        if (__n != 0)
+  .           	{
+  .           	  const size_type __size = size();
+  6 ( 0.00%)  	  size_type __navail = size_type(this->_M_impl._M_end_of_storage
+ 12 ( 0.00%)  					 - this->_M_impl._M_finish);
+  .           
+  .           	  if (__size > max_size() || __navail > max_size() - __size)
+  .           	    __builtin_unreachable();
+  .           
+ 12 ( 0.00%)  	  if (__navail >= __n)
+  .           	    {
+  .           	      _GLIBCXX_ASAN_ANNOTATE_GROW(__n);
+  .           	      this->_M_impl._M_finish =
+  .           		std::__uninitialized_default_n_a(this->_M_impl._M_finish,
+  .           						 __n, _M_get_Tp_allocator());
+  .           	      _GLIBCXX_ASAN_ANNOTATE_GREW(__n);
+  .           	    }
+  .           	  else
+-- line 654 ----------------------------------------
+-- line 660 ----------------------------------------
+  .           
+  .           	      const size_type __len =
+  .           		_M_check_len(__n, "vector::_M_default_append");
+  .           	      pointer __new_start(this->_M_allocate(__len));
+  .           	      if _GLIBCXX17_CONSTEXPR (_S_use_relocate())
+  .           		{
+  .           		  __try
+  .           		    {
+  6 ( 0.00%)  		      std::__uninitialized_default_n_a(__new_start + __size,
+  .           			      __n, _M_get_Tp_allocator());
+  .           		    }
+  .           		  __catch(...)
+  .           		    {
+  .           		      _M_deallocate(__new_start, __len);
+  .           		      __throw_exception_again;
+  .           		    }
+  .           		  _S_relocate(__old_start, __old_finish,
+-- line 676 ----------------------------------------
+-- line 697 ----------------------------------------
+  .           		      __throw_exception_again;
+  .           		    }
+  .           		  std::_Destroy(__old_start, __old_finish,
+  .           				_M_get_Tp_allocator());
+  .           		}
+  .           	      _GLIBCXX_ASAN_ANNOTATE_REINIT;
+  .           	      _M_deallocate(__old_start,
+  .           			    this->_M_impl._M_end_of_storage - __old_start);
+  9 ( 0.00%)  	      this->_M_impl._M_start = __new_start;
+ 15 ( 0.00%)  	      this->_M_impl._M_finish = __new_start + __size + __n;
+ 21 ( 0.00%)  	      this->_M_impl._M_end_of_storage = __new_start + __len;
+  .           	    }
+  .           	}
+ 48 ( 0.00%)      }
+  .           
+  .             template<typename _Tp, typename _Alloc>
+  .               _GLIBCXX20_CONSTEXPR
+  .               bool
+  .               vector<_Tp, _Alloc>::
+  .               _M_shrink_to_fit()
+  .               {
+  .                 if (capacity() == size())
+-- line 718 ----------------------------------------
+
+129 ( 0.00%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: build/mp1/src/clustering.hpp
+--------------------------------------------------------------------------------
+Ir                  
+
+-- line 626 ----------------------------------------
+         .           
+         .           };
+         .           
+         .           // Stable sorts in place of std::sort, whose instantiations were 3.3 to 3.8 KB of WebAssembly each (about a tenth of the
+         .           // module for three). Insertion sort for the short lists (recipes of at most 64 steps, palettes of at most 96 colours),
+         .           // which allocates nothing; a radix sort for the rest. Every caller's order is total or doesn't change results.
+         .           template <typename T, typename Less>
+         .           void insertion_sort(T* data, size_t n, Less less) {
+ 3,549,683 ( 0.77%)      for (size_t i = 1; i < n; i++) {
+ 1,157,505 ( 0.25%)          T value = data[i];
+         .                   size_t j = i;
+13,565,291 ( 2.93%)          for (; j > 0 && less(value, data[j - 1]); j--) {data[j] = data[j - 1];}
+ 1,157,505 ( 0.25%)          data[j] = value;
+         .               }
+         .           }
+         .           // A stable sort on a 32-bit key: insertion sort up to 256 items (measured: faster than radix there at 1024 colours), else an LSD radix sort through a buffer the caller keeps,
+         .           // skipping a pass whose byte is the same in every key. For the palette index's candidate lists.
+         .           template <typename T, typename Key>
+         .           void radix_sort(T* data, size_t n, Key key, std::vector<T>& buffer) {
+         .               if (n <= 256) {insertion_sort(data, n, [&](const T& x, const T& y) {return key(x) < key(y);}); return;}
+         .               if (buffer.size() < n) {buffer.resize(n);}
+-- line 646 ----------------------------------------
+-- line 660 ----------------------------------------
+         .           // Counts 8-bit colours, keeping them in order of first appearance.
+         .           // An open-addressing table with linear probing: each slot packs (colour + 1) << 32 | index into one word, so a
+         .           // probe is a single load, and 0 marks an empty slot. It grows with the number of distinct colours, not pixels.
+         .           class AgglomerativeHistogram {
+         .           
+         .           private:
+         .           
+         .               std::vector<uint64_t> slots;
+         5 ( 0.00%)      uint32_t mask = 0;
+         .               int shift = 0;
+         .               std::vector<uint32_t> keys;
+         .               std::vector<uint64_t> totals;
+         .               // A larger table being filled by make_room, and how many colours are in it so far.
+         .               std::vector<uint64_t> fresh;
+         .               int fresh_bits = 0;
+         1 ( 0.00%)      size_t fresh_cursor = 0;
+         .           
+         .               // Fibonacci hashing: the top bits of the product spread neighbouring colours across the table.
+         .               uint32_t home(uint32_t key) const {
+        48 ( 0.00%)          return uint32_t((uint64_t(key) * 0x9E3779B97F4A7C15ULL) >> this->shift);
+         .               }
+         .           
+         .               void resize(int bits) {
+         .                   this->slots.assign(size_t(1) << bits, 0u);
+         1 ( 0.00%)          this->mask = (uint32_t(1) << bits) - 1u;
+         .                   this->shift = 64 - bits;
+         .                   for (uint32_t index = 0; index < (uint32_t) this->keys.size(); index++) {
+         .                       uint32_t slot = this->home(this->keys[index]);
+         .                       while (this->slots[slot] != 0u) {slot = (slot + 1u) & this->mask;}
+         .                       this->slots[slot] = (uint64_t(this->keys[index]) + 1u) << 32 | index;
+         .                   }
+         .               }
+         .           
+-- line 692 ----------------------------------------
+-- line 693 ----------------------------------------
+         .           public:
+         .           
+         .               AgglomerativeHistogram() {
+         .                   this->resize(12);
+         .               }
+         .           
+         .               // Adds `weight` to the colour packed as r << 16 | g << 8 | b, and returns the colour's index. Weights are
+         .               // pixel counts, or alpha-weighted counts in units of 1/255 of a pixel; totals are 64-bit so neither overflows.
+       144 ( 0.00%)      uint32_t add(uint32_t key, uint64_t weight = 1u) {
+        32 ( 0.00%)          const uint64_t tag = uint64_t(key) + 1u;
+         .                   uint32_t slot = this->home(key);
+         .                   while (true) {
+        32 ( 0.00%)              uint64_t entry = this->slots[slot];
+        32 ( 0.00%)              if (entry == 0u) {break;}
+         .                       if ((entry >> 32) == tag) {this->totals[uint32_t(entry)] += weight; return uint32_t(entry);}
+         .                       slot = (slot + 1u) & this->mask;
+         .                   }
+         .                   uint32_t index = (uint32_t) this->keys.size();
+        80 ( 0.00%)          this->slots[slot] = tag << 32 | index;
+         .                   this->keys.push_back(key);
+         .                   this->totals.push_back(weight);
+         .                   // Keep the load factor at most 1/2 so probes stay short.
+        64 ( 0.00%)          if (2 * this->keys.size() > this->slots.size()) {this->resize(64 - this->shift + 1);}
+         .                   return index;
+       144 ( 0.00%)      }
+         .           
+         .               // Makes room for `extra` more distinct colours, so the next `extra` adds don't grow the table. Growing rehashes
+         .               // every colour, hundreds of milliseconds at millions of them, so with `timed` it stops at `deadline` and
+         .               // returns false, and the next call carries on; add must not be called until it returns true. Colours keep their
+         .               // indices, so where they sit in the table never shows in the results.
+         .               bool make_room(size_t extra, bool timed, double deadline) {
+         .                   constexpr size_t most = size_t(1) << 24;  // distinct 8-bit colours: never grow for more than these
+         .                   if (this->fresh_bits == 0) {
+-- line 725 ----------------------------------------
+-- line 845 ----------------------------------------
+         .                   this->cells[cell] = entry;
+         .                   return entry;
+         .               }
+         .           
+         .           public:
+         .           
+         .               // `coordinate_bits` is how many bits the coordinates use (8 for RGB values, 16 for OKLab), and the grid has
+         .               // 2^cell_bits cells per axis. Finer cells mean shorter lists but more of them to build.
+        11 ( 0.00%)      void build(const std::vector<Point>& points, const std::vector<uint32_t>& keys, int coordinate_bits, int cell_bits) {
+         1 ( 0.00%)          this->points = points;
+       134 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<std::array<unsigned short, 3ul>, std::allocator<std::array<unsigned short, 3ul> > >::operator=(std::vector<std::array<unsigned short, 3ul>, std::allocator<std::array<unsigned short, 3ul> > > const&) (1x)
+         3 ( 0.00%)          this->keys = keys;
+       120 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<unsigned int, std::allocator<unsigned int> >::operator=(std::vector<unsigned int, std::allocator<unsigned int> > const&) (1x)
+         1 ( 0.00%)          this->cell_bits = cell_bits;
+         3 ( 0.00%)          this->shift = coordinate_bits - cell_bits;
+         .                   // Squared distances are below 3 * 2^(2 * coordinate_bits).
+         6 ( 0.00%)          this->least_shift = std::max(0, 2 * coordinate_bits + 2 - 32);
+         5 ( 0.00%)          this->cells.assign(size_t(1) << (3 * cell_bits), {-1, 0});
+         .                   this->pool.clear();
+         2 ( 0.00%)          this->least.assign(points.size(), 0u);
+         7 ( 0.00%)      }
+         .           
+         .               // The index of the point nearest to `target`, or -1 if there are none.
+         .               [[nodiscard]] int32_t get_nearest(const Point& target) {
+         .                   if (this->points.empty()) {return -1;}
+         .                   const uint32_t cx = target[0] >> this->shift, cy = target[1] >> this->shift, cz = target[2] >> this->shift;
+         .                   const uint32_t cell = (((cx << this->cell_bits) | cy) << this->cell_bits) | cz;
+         .                   std::pair<int32_t, int32_t> entry = this->cells[cell];
+         .                   if (entry.first < 0) {entry = this->build_cell(cell, cx, cy, cz);}
+-- line 871 ----------------------------------------
+-- line 892 ----------------------------------------
+         .                   return best_index;
+         .               }
+         .           
+         .           };
+         .           
+         .           // Nearest-neighbour lookup over palette colours, in whichever coordinates the caller uses (8-bit RGB values,
+         .           // or scaled OKLab). Returns the index of the nearest point. Equally near points are told apart by their keys
+         .           // (the caller passes each colour's packed RGB), smallest first, so the answer doesn't depend on palette order.
+         1 ( 0.00%)  class KDTree {
+         .           
+         .           public:
+         .           
+         .               typedef std::array<uint16_t, 3> Point;
+         .           
+         .           private:
+         .           
+         .               struct Node {
+-- line 908 ----------------------------------------
+-- line 909 ----------------------------------------
+         .                   Point point;
+         .                   uint32_t key;
+         .                   int32_t index;
+         .                   int left = -1;
+         .                   int right = -1;
+         .               };
+         .           
+         .               std::vector<Node> nodes;
+         1 ( 0.00%)      int root = -1;
+         .           
+         .               std::vector<uint32_t> keys;
+         .           
+         .               int build(std::vector<std::pair<Point, int32_t>>& points, int start, int end, int depth) {
+         .           
+         .                   if (start >= end) {return -1;}
+         .                   int mid = (start + end) / 2;
+         .                   int axis = depth % 3;
+-- line 925 ----------------------------------------
+
+ 3,696,257 ( 0.80%)  <counts for unidentified lines in build/mp1/src/clustering.hpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_algobase.h
+--------------------------------------------------------------------------------
+Ir                 
+
+-- line 230 ----------------------------------------
+        .             template<typename _Tp>
+        .               _GLIBCXX14_CONSTEXPR
+        .               inline const _Tp&
+        .               min(const _Tp& __a, const _Tp& __b)
+        .               {
+        .                 // concept requirements
+        .                 __glibcxx_function_requires(_LessThanComparableConcept<_Tp>)
+        .                 //return __b < __a ? __b : __a;
+5,574,090 ( 1.20%)        if (__b < __a)
+        .           	return __b;
+        .                 return __a;
+        .               }
+        .           
+        .             /**
+        .              *  @brief This does what you think it does.
+        .              *  @ingroup sorting_algorithms
+        .              *  @param  __a  A thing of arbitrary type.
+-- line 246 ----------------------------------------
+-- line 254 ----------------------------------------
+        .             template<typename _Tp>
+        .               _GLIBCXX14_CONSTEXPR
+        .               inline const _Tp&
+        .               max(const _Tp& __a, const _Tp& __b)
+        .               {
+        .                 // concept requirements
+        .                 __glibcxx_function_requires(_LessThanComparableConcept<_Tp>)
+        .                 //return  __a < __b ? __b : __a;
+5,574,092 ( 1.20%)        if (__a < __b)
+        .           	return __b;
+        .                 return __a;
+        .               }
+        .           
+        .             /**
+        .              *  @brief This does what you think it does.
+        .              *  @ingroup sorting_algorithms
+        .              *  @param  __a  A thing of arbitrary type.
+-- line 270 ----------------------------------------
+-- line 428 ----------------------------------------
+        .               struct __copy_move<_IsMove, true, random_access_iterator_tag>
+        .               {
+        .                 template<typename _Tp, typename _Up>
+        .           	_GLIBCXX20_CONSTEXPR
+        .           	static _Up*
+        .           	__copy_m(_Tp* __first, _Tp* __last, _Up* __result)
+        .           	{
+        .           	  const ptrdiff_t _Num = __last - __first;
+        6 ( 0.00%)  	  if (__builtin_expect(_Num > 1, true))
+       15 ( 0.00%)  	    __builtin_memmove(__result, __first, sizeof(_Tp) * _Num);
+       12 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms (1x)
+        .           	  else if (_Num == 1)
+        .           	    std::__copy_move<_IsMove, false, random_access_iterator_tag>::
+        .           	      __assign_one(__result, __first);
+        .           	  return __result + _Num;
+        .           	}
+        .               };
+        .           
+        .           _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
+-- line 445 ----------------------------------------
+-- line 910 ----------------------------------------
+        .           
+        .             template<typename _ForwardIterator, typename _Tp>
+        .               _GLIBCXX20_CONSTEXPR
+        .               inline typename
+        .               __gnu_cxx::__enable_if<!__is_scalar<_Tp>::__value, void>::__type
+        .               __fill_a1(_ForwardIterator __first, _ForwardIterator __last,
+        .           	      const _Tp& __value)
+        .               {
+        9 ( 0.00%)        for (; __first != __last; ++__first)
+        9 ( 0.00%)  	*__first = __value;
+       36 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms (3x)
+        .               }
+        .           
+        .             template<typename _ForwardIterator, typename _Tp>
+        .               _GLIBCXX20_CONSTEXPR
+        .               inline typename
+        .               __gnu_cxx::__enable_if<__is_scalar<_Tp>::__value, void>::__type
+        .               __fill_a1(_ForwardIterator __first, _ForwardIterator __last,
+        .           	      const _Tp& __value)
+        .               {
+        3 ( 0.00%)        const _Tp __tmp = __value;
+       49 ( 0.00%)        for (; __first != __last; ++__first)
+   81,974 ( 0.02%)  	*__first = __tmp;
+       19 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms (1x)
+        .               }
+        .           
+        .             // Specialization: for char types we can use memset.
+        .             template<typename _Tp>
+        .               _GLIBCXX20_CONSTEXPR
+        .               inline typename
+        .               __gnu_cxx::__enable_if<__is_byte<_Tp>::__value, void>::__type
+        .               __fill_a1(_Tp* __first, _Tp* __last, const _Tp& __c)
+-- line 939 ----------------------------------------
+-- line 1115 ----------------------------------------
+        .               _GLIBCXX20_CONSTEXPR
+        .               inline _OutputIterator
+        .               __fill_n_a(_OutputIterator __first, _Size __n, const _Tp& __value,
+        .           	       std::random_access_iterator_tag)
+        .               {
+        .           #if __cplusplus >= 201103L
+        .                 static_assert(is_integral<_Size>{}, "fill_n must pass integral size");
+        .           #endif
+       16 ( 0.00%)        if (__n <= 0)
+        .           	return __first;
+        .           
+        .                 __glibcxx_requires_can_increment(__first, __n);
+        .           
+        .                 std::__fill_a(__first, __first + __n, __value);
+        .                 return __first + __n;
+        .               }
+        .           
+-- line 1131 ----------------------------------------
+
+       14 ( 0.00%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_algobase.h>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /spikes/perf-3/mapdriver.cpp
+--------------------------------------------------------------------------------
+  No information has been collected for /spikes/perf-3/mapdriver.cpp
+
+--------------------------------------------------------------------------------
+The following files chosen for auto-annotation could not be found:
+--------------------------------------------------------------------------------
+  ./csu/../csu/libc-start.c
+  ./csu/../sysdeps/nptl/libc_start_call_main.h
+  ./math/../sysdeps/x86_64/fpu/multiarch/s_nearbyintf-sse4_1.S
+  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+
+--------------------------------------------------------------------------------
+Ir                   
+--------------------------------------------------------------------------------
+381,321,140 (82.26%)  events annotated
+

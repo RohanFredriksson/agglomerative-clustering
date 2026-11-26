@@ -698,7 +698,11 @@ public:
 
     // Adds `weight` to the colour packed as r << 16 | g << 8 | b, and returns the colour's index. Weights are
     // pixel counts, or alpha-weighted counts in units of 1/255 of a pixel; totals are 64-bit so neither overflows.
-    uint32_t add(uint32_t key, uint64_t weight = 1u) {
+    uint32_t add(uint32_t key, uint64_t weight = 1u) {return this->add_inline(key, weight);}
+
+    // The same, forced inline for the pixel scan, which calls it once per pixel (as a call it was a quarter of the scan's instructions).
+    // Only the probe is inlined; a new colour goes through `insert`, so the inlined copies stay small. Same table, same indices.
+    __attribute__((always_inline)) uint32_t add_inline(uint32_t key, uint64_t weight) {
         const uint64_t tag = uint64_t(key) + 1u;
         uint32_t slot = this->home(key);
         while (true) {
@@ -707,6 +711,11 @@ public:
             if ((entry >> 32) == tag) {this->totals[uint32_t(entry)] += weight; return uint32_t(entry);}
             slot = (slot + 1u) & this->mask;
         }
+        return this->insert(slot, key, tag, weight);
+    }
+
+    // A colour not seen before goes at `slot`, the empty slot its probe ended on.
+    __attribute__((noinline)) uint32_t insert(uint32_t slot, uint32_t key, uint64_t tag, uint64_t weight) {
         uint32_t index = (uint32_t) this->keys.size();
         this->slots[slot] = tag << 32 | index;
         this->keys.push_back(key);

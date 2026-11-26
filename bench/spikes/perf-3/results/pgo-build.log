@@ -1,0 +1,3 @@
+warning: profile data may be out of date: of 139 functions, 1 has mismatched data that will be ignored [-Wprofile-instr-out-of-date]
+1 warning generated.
+wasm bytes 96561

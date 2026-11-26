@@ -1,0 +1,6 @@
+load [ 1.62, 1.94, 1.69 ]
+set into heap             4.8 ms
+new Uint8Array(subarray)  28.8 ms
+subarray.slice()          29.0 ms
+new Uint8Array(N)+set     28.4 ms
+Uint8Array.from copyWithin-free: heap.buffer.slice 29.7 ms

@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.2.0 (unreleased)
+
+### Changed
+- **Clustering and mapping are faster, and every output byte is the same as 4.1's.** The pixel scan reads the histogram's table through locals and adds each pixel without a call (the scan is a sixth to half of a clustering), the dithering rounds with an exact replacement for `lroundf` (checked over every float it can see by `native/round_check.cpp`, which CI runs), and undithered mapped output of four-byte pixels (`'rgba'`, `'bgra'`, `'rgbx'`, `'bgrx'`) goes through a memo that holds the output pixel. Measured in WebAssembly on ten real 16 to 24 MP photos and a Kodak photo, median of 5, against 4.1.0: on the nine photos with 150,000 to 350,000 colours, clustering takes 3.6% (`komar`) to 9.2% (`wk`, a mountain panorama) less time at full precision, 3.1% (`night`) to 8.5% less with `colorSpace: 'oklab'`, and 19% (`night`) to 31% (`wk`) less at `precision: 6`; `quantize` at `k = 16`, clustering included, takes 6.1% (`city`) to 16% (`wk`) less with `dither: false` and 6.4% (`komar`) to 11% less with `'floyd-steinberg'`; mapping alone takes 10% (`city`) to 45% less undithered, and 5% to 10% less with Floyd–Steinberg. The greyscale photo, with 256 colours, gains most (46% to 48% less to cluster, 52% less to `quantize` undithered), and the Kodak photo least (0.1% to 3% less). With `signal` or `onProgress` the sliced mapping is as fast as before or faster (undithered 7.5% to 43% less, Floyd–Steinberg 4.4% to 9.3% less; the greyscale photo 51% and 17%). <!-- bench/spikes/perf-3/release-check.mjs, results/results-release.txt: this branch's dist/ against 4.1.0's, same machine and run, load 1.0 to 3.1 over the run --> The `.wasm` grows by 3.7 KB (88,221 to 91,920 bytes; gzipped 41,484 to 42,513). Nothing in the API changes.
+
 ## 4.1.0
 
 ### Changed

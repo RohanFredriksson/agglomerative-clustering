@@ -1,0 +1,19 @@
+mode map runs 5; load before 1.20/1.26/1.43
+image	config	base ms	f1 ms	f1 change	identical
+k23	none	7	5	-18.2%	yes
+k23	fs	27	26	-6.0%	yes
+k23	atkinson	24	22	-7.4%	yes
+k23	ordered	62	55	-10.5%	yes
+fern	none	522	435	-16.7%	yes
+fern	fs	1436	1387	-3.4%	yes
+fern	atkinson	1239	1131	-8.7%	yes
+fern	ordered	3996	3629	-9.2%	yes
+night	none	239	164	-31.2%	yes
+night	fs	1210	1102	-8.9%	yes
+night	atkinson	1042	931	-10.7%	yes
+night	ordered	908	850	-6.4%	yes
+sky	none	362	309	-14.6%	yes
+sky	fs	1368	1276	-6.7%	yes
+sky	atkinson	1245	1122	-9.9%	yes
+sky	ordered	1441	1320	-8.4%	yes
+load after 1.17/1.24/1.39; outputs that differ: 0

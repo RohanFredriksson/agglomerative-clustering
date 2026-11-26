@@ -1,0 +1,2367 @@
+--------------------------------------------------------------------------------
+Profile data file 'build/prof/base-clust-night-s0-p8.out' (creator: callgrind-3.22.0)
+--------------------------------------------------------------------------------
+I1 cache: 
+D1 cache: 
+LL cache: 
+Timerange: Basic block 0 - 1157464682
+Trigger: Program termination
+Profiled target:  build/base/driver-native data/night.rgba 0 8 1 (PID 1, part 1)
+Events recorded:  Ir
+Events shown:     Ir
+Event sort order: Ir
+Thresholds:       99
+Include dirs:     
+User annotated:   
+Auto-annotation:  on
+
+--------------------------------------------------------------------------------
+Ir                     
+--------------------------------------------------------------------------------
+9,727,270,154 (100.0%)  PROGRAM TOTALS
+
+--------------------------------------------------------------------------------
+Ir                      file:function
+--------------------------------------------------------------------------------
+5,864,509,144 (60.29%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const [/spikes/perf-3/build/base/driver-native]
+  749,170,254 ( 7.70%)  build/base/src/clustering.hpp:AgglomerativeClustering::AgglomerativeHistogram::add(unsigned int, unsigned long) [/spikes/perf-3/build/base/driver-native]
+  598,862,111 ( 6.16%)  build/base/src/clustering.cpp:ClusteringJob::scan(bool, double) [/spikes/perf-3/build/base/driver-native]
+  590,682,595 ( 6.07%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::offer(int, AgglomerativeClustering::WardGrid::Candidates&, int, int, double) const [/spikes/perf-3/build/base/driver-native]
+  394,343,307 ( 4.05%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_iterator.h:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const
+  225,709,146 ( 2.32%)  build/base/src/clustering.cpp:ClusteringJob::write(bool, double) [/spikes/perf-3/build/base/driver-native]
+  178,924,410 ( 1.84%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const
+  146,134,176 ( 1.50%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::link(int) [/spikes/perf-3/build/base/driver-native]
+  125,707,188 ( 1.29%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::nearest(int, int) [/spikes/perf-3/build/base/driver-native]
+  105,838,785 ( 1.09%)  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+   83,427,371 ( 0.86%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::count_occupied(bool, double) [/spikes/perf-3/build/base/driver-native]
+   77,401,562 ( 0.80%)  build/base/src/clustering.cpp:clustering_crc_update(unsigned int, unsigned char const*, unsigned long, unsigned long) [/spikes/perf-3/build/base/driver-native]
+   69,752,487 ( 0.72%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::reindex(bool, double) [/spikes/perf-3/build/base/driver-native]
+   67,535,873 ( 0.69%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::remove(int) [/spikes/perf-3/build/base/driver-native]
+   48,578,003 ( 0.50%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:ClusteringJob::write(bool, double)
+   41,069,497 ( 0.42%)  build/base/src/clustering.cpp:ClusteringJob::merge_some(bool, double) [/spikes/perf-3/build/base/driver-native]
+   27,641,737 ( 0.28%)  driver.cpp:main [/spikes/perf-3/build/base/driver-native]
+   27,333,600 ( 0.28%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::AgglomerativeHistogram::add(unsigned int, unsigned long)
+   26,414,515 ( 0.27%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_pair.h:AgglomerativeClustering::WardGrid::is_before(int, double, int, double, int) const
+   21,060,210 ( 0.22%)  build/base/src/colorspace.hpp:ClusteringJob::write(bool, double)
+   20,347,953 ( 0.21%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::add(std::array<unsigned short, 3ul> const&, unsigned int) [/spikes/perf-3/build/base/driver-native]
+   20,195,604 ( 0.21%)  build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::is_before(int, double, int, double, int) const [/spikes/perf-3/build/base/driver-native]
+   18,878,727 ( 0.19%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::link(int)
+   17,208,274 ( 0.18%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_bvector.h:AgglomerativeClustering::WardGrid::nearest(int, int)
+   16,921,912 ( 0.17%)  build/base/src/clustering.hpp:ClusteringJob::merge_some(bool, double)
+   14,578,856 ( 0.15%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::count_occupied(bool, double)
+   13,843,474 ( 0.14%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:ClusteringJob::merge_some(bool, double)
+   11,495,664 ( 0.12%)  build/base/src/clustering.cpp:ClusteringJob::build(bool, double) [/spikes/perf-3/build/base/driver-native]
+   11,163,493 ( 0.11%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::remove(int)
+   10,524,980 ( 0.11%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::add(std::array<unsigned short, 3ul> const&, unsigned int)
+    8,390,987 ( 0.09%)  /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h:AgglomerativeClustering::WardGrid::reindex(bool, double)
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h
+--------------------------------------------------------------------------------
+Ir                   
+
+-- line 92 ----------------------------------------
+          .                 struct _Vector_impl_data
+          .                 {
+          .           	pointer _M_start;
+          .           	pointer _M_finish;
+          .           	pointer _M_end_of_storage;
+          .           
+          .           	_GLIBCXX20_CONSTEXPR
+          .           	_Vector_impl_data() _GLIBCXX_NOEXCEPT
+         24 ( 0.00%)  	: _M_start(), _M_finish(), _M_end_of_storage()
+          .           	{ }
+          .           
+          .           #if __cplusplus >= 201103L
+          .           	_GLIBCXX20_CONSTEXPR
+          .           	_Vector_impl_data(_Vector_impl_data&& __x) noexcept
+     32,768 ( 0.00%)  	: _M_start(__x._M_start), _M_finish(__x._M_finish),
+     32,768 ( 0.00%)  	  _M_end_of_storage(__x._M_end_of_storage)
+     32,770 ( 0.00%)  	{ __x._M_start = __x._M_finish = __x._M_end_of_storage = pointer(); }
+          .           #endif
+          .           
+          .           	_GLIBCXX20_CONSTEXPR
+          .           	void
+          .           	_M_copy_data(_Vector_impl_data const& __x) _GLIBCXX_NOEXCEPT
+          .           	{
+        106 ( 0.00%)  	  _M_start = __x._M_start;
+         25 ( 0.00%)  	  _M_finish = __x._M_finish;
+        104 ( 0.00%)  	  _M_end_of_storage = __x._M_end_of_storage;
+          .           	}
+          .           
+          .           	_GLIBCXX20_CONSTEXPR
+          .           	void
+          .           	_M_swap_data(_Vector_impl_data& __x) _GLIBCXX_NOEXCEPT
+          .           	{
+          .           	  // Do not use std::swap(_M_start, __x._M_start), etc as it loses
+          .           	  // information used by TBAA.
+-- line 125 ----------------------------------------
+-- line 361 ----------------------------------------
+          .                 _Vector_base(const allocator_type& __a, _Vector_base&& __x)
+          .                 : _M_impl(_Tp_alloc_type(__a), std::move(__x._M_impl))
+          .                 { }
+          .           #endif
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 ~_Vector_base() _GLIBCXX_NOEXCEPT
+          .                 {
+     21,631 ( 0.00%)  	_M_deallocate(_M_impl._M_start,
+          .           		      _M_impl._M_end_of_storage - _M_impl._M_start);
+          .                 }
+          .           
+          .               public:
+          .                 _Vector_impl _M_impl;
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 pointer
+          .                 _M_allocate(size_t __n)
+          .                 {
+          .           	typedef __gnu_cxx::__alloc_traits<_Tp_alloc_type> _Tr;
+    131,910 ( 0.00%)  	return __n != 0 ? _Tr::allocate(_M_impl, __n) : pointer();
+          .                 }
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 _M_deallocate(pointer __p, size_t __n)
+          .                 {
+          .           	typedef __gnu_cxx::__alloc_traits<_Tp_alloc_type> _Tr;
+    175,250 ( 0.00%)  	if (__p)
+          .           	  _Tr::deallocate(_M_impl, __p, __n);
+          .                 }
+          .           
+          .               protected:
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 _M_create_storage(size_t __n)
+          .                 {
+          2 ( 0.00%)  	this->_M_impl._M_start = this->_M_allocate(__n);
+          .           	this->_M_impl._M_finish = this->_M_impl._M_start;
+         19 ( 0.00%)  	this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
+          .                 }
+          .               };
+          .           
+          .             /**
+          .              *  @brief A standard container which offers fixed time access to
+          .              *  individual elements in any order.
+          .              *
+          .              *  @ingroup sequences
+-- line 408 ----------------------------------------
+-- line 727 ----------------------------------------
+          .                  *  The dtor only erases the elements, and note that if the
+          .                  *  elements themselves are pointers, the pointed-to memory is
+          .                  *  not touched in any way.  Managing the pointer is the user's
+          .                  *  responsibility.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 ~vector() _GLIBCXX_NOEXCEPT
+          .                 {
+          2 ( 0.00%)  	std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
+          .           		      _M_get_Tp_allocator());
+          .           	_GLIBCXX_ASAN_ANNOTATE_BEFORE_DEALLOC;
+          .                 }
+          .           
+          .                 /**
+          .                  *  @brief  %Vector assignment operator.
+          .                  *  @param  __x  A %vector of identical element and allocator types.
+          .                  *
+-- line 743 ----------------------------------------
+-- line 782 ----------------------------------------
+          .                  *  Note that the assignment completely changes the %vector and
+          .                  *  that the resulting %vector's size is the same as the number
+          .                  *  of elements assigned.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 vector&
+          .                 operator=(initializer_list<value_type> __l)
+          .                 {
+        302 ( 0.00%)  	this->_M_assign_aux(__l.begin(), __l.end(),
+         33 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:void std::vector<unsigned long, std::allocator<unsigned long> >::_M_assign_aux<unsigned long const*>(unsigned long const*, unsigned long const*, std::forward_iterator_tag) (1x)
+         32 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:void std::vector<std::array<unsigned short, 3ul>, std::allocator<std::array<unsigned short, 3ul> > >::_M_assign_aux<std::array<unsigned short, 3ul> const*>(std::array<unsigned short, 3ul> const*, std::array<unsigned short, 3ul> const*, std::forward_iterator_tag) (1x)
+          .           			    random_access_iterator_tag());
+          .           	return *this;
+          .                 }
+          .           #endif
+          .           
+          .                 /**
+          .                  *  @brief  Assigns a given value to a %vector.
+          .                  *  @param  __n  Number of elements to be assigned.
+-- line 798 ----------------------------------------
+-- line 801 ----------------------------------------
+          .                  *  This function fills a %vector with @a __n copies of the given
+          .                  *  value.  Note that the assignment completely changes the
+          .                  *  %vector and that the resulting %vector's size is the same as
+          .                  *  the number of elements assigned.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 assign(size_type __n, const value_type& __val)
+         62 ( 0.00%)        { _M_fill_assign(__n, __val); }
+    878,186 ( 0.01%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<double, std::allocator<double> >::_M_fill_assign(unsigned long, double const&) (1x)
+          .           
+          .                 /**
+          .                  *  @brief  Assigns a range to a %vector.
+          .                  *  @param  __first  An input iterator.
+          .                  *  @param  __last   An input iterator.
+          .                  *
+          .                  *  This function fills a %vector with copies of the elements in the
+          .                  *  range [__first,__last).
+-- line 817 ----------------------------------------
+-- line 985 ----------------------------------------
+          .                 { return const_reverse_iterator(begin()); }
+          .           #endif
+          .           
+          .                 // [23.2.4.2] capacity
+          .                 /**  Returns the number of elements in the %vector.  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 size_type
+          .                 size() const _GLIBCXX_NOEXCEPT
+ 21,933,628 ( 0.23%)        { return size_type(this->_M_impl._M_finish - this->_M_impl._M_start); }
+          .           
+          .                 /**  Returns the size() of the largest possible %vector.  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 size_type
+          .                 max_size() const _GLIBCXX_NOEXCEPT
+          .                 { return _S_max_size(_M_get_Tp_allocator()); }
+          .           
+          .           #if __cplusplus >= 201103L
+-- line 1001 ----------------------------------------
+-- line 1007 ----------------------------------------
+          .                  *  number of elements.  If the number is smaller than the
+          .                  *  %vector's current size the %vector is truncated, otherwise
+          .                  *  default constructed elements are appended.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 resize(size_type __new_size)
+          .                 {
+         47 ( 0.00%)  	if (__new_size > size())
+         18 ( 0.00%)  	  _M_default_append(__new_size - size());
+  3,159,056 ( 0.03%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<ClusteringJob::Merge, std::allocator<ClusteringJob::Merge> >::_M_default_append(unsigned long) (1x)
+         12 ( 0.00%)  	else if (__new_size < size())
+         12 ( 0.00%)  	  _M_erase_at_end(this->_M_impl._M_start + __new_size);
+          .                 }
+          .           
+          .                 /**
+          .                  *  @brief  Resizes the %vector to the specified number of elements.
+          .                  *  @param  __new_size  Number of elements the %vector should contain.
+          .                  *  @param  __x  Data with which new elements should be populated.
+          .                  *
+          .                  *  This function will %resize the %vector to the specified
+-- line 1026 ----------------------------------------
+-- line 1028 ----------------------------------------
+          .                  *  %vector's current size the %vector is truncated, otherwise
+          .                  *  the %vector is extended and new elements are populated with
+          .                  *  given data.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 resize(size_type __new_size, const value_type& __x)
+          .                 {
+          3 ( 0.00%)  	if (__new_size > size())
+          1 ( 0.00%)  	  _M_fill_insert(end(), __new_size - size(), __x);
+  7,371,599 ( 0.08%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<unsigned char, std::allocator<unsigned char> >::_M_fill_insert(__gnu_cxx::__normal_iterator<unsigned char*, std::vector<unsigned char, std::allocator<unsigned char> > >, unsigned long, unsigned char const&) (1x)
+          .           	else if (__new_size < size())
+          .           	  _M_erase_at_end(this->_M_impl._M_start + __new_size);
+          .                 }
+          .           #else
+          .                 /**
+          .                  *  @brief  Resizes the %vector to the specified number of elements.
+          .                  *  @param  __new_size  Number of elements the %vector should contain.
+          .                  *  @param  __x  Data with which new elements should be populated.
+-- line 1045 ----------------------------------------
+-- line 1071 ----------------------------------------
+          .           
+          .                 /**
+          .                  *  Returns the total number of elements that the %vector can
+          .                  *  hold before needing to allocate more memory.
+          .                  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 size_type
+          .                 capacity() const _GLIBCXX_NOEXCEPT
+        152 ( 0.00%)        { return size_type(this->_M_impl._M_end_of_storage
+        361 ( 0.00%)  			 - this->_M_impl._M_start); }
+          .           
+          .                 /**
+          .                  *  Returns true if the %vector is empty.  (Thus begin() would
+          .                  *  equal end().)
+          .                  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 bool
+          .                 empty() const _GLIBCXX_NOEXCEPT
+-- line 1088 ----------------------------------------
+-- line 1121 ----------------------------------------
+          .                  *  out_of_range lookups are not defined. (For checked lookups
+          .                  *  see at().)
+          .                  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 reference
+          .                 operator[](size_type __n) _GLIBCXX_NOEXCEPT
+          .                 {
+          .           	__glibcxx_requires_subscript(__n);
+114,646,901 ( 1.18%)  	return *(this->_M_impl._M_start + __n);
+          .                 }
+          .           
+          .                 /**
+          .                  *  @brief  Subscript access to the data contained in the %vector.
+          .                  *  @param __n The index of the element for which data should be
+          .                  *  accessed.
+          .                  *  @return  Read-only (constant) reference to data.
+          .                  *
+-- line 1137 ----------------------------------------
+-- line 1140 ----------------------------------------
+          .                  *  out_of_range lookups are not defined. (For checked lookups
+          .                  *  see at().)
+          .                  */
+          .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .                 const_reference
+          .                 operator[](size_type __n) const _GLIBCXX_NOEXCEPT
+          .                 {
+          .           	__glibcxx_requires_subscript(__n);
+166,620,626 ( 1.71%)  	return *(this->_M_impl._M_start + __n);
+          .                 }
+          .           
+          .               protected:
+          .                 /// Safety check used only from at().
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 _M_range_check(size_type __n) const
+          .                 {
+-- line 1156 ----------------------------------------
+-- line 1275 ----------------------------------------
+          .                  *  to it.  Due to the nature of a %vector this operation can be
+          .                  *  done in constant time if the %vector has preallocated space
+          .                  *  available.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 push_back(const value_type& __x)
+          .                 {
+  5,279,783 ( 0.05%)  	if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
+          .           	  {
+          .           	    _GLIBCXX_ASAN_ANNOTATE_GROW(1);
+          .           	    _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+          .           				     __x);
+  5,655,226 ( 0.06%)  	    ++this->_M_impl._M_finish;
+          .           	    _GLIBCXX_ASAN_ANNOTATE_GREW(1);
+          .           	  }
+          .           	else
+          .           	  _M_realloc_insert(end(), __x);
+          .                 }
+          .           
+          .           #if __cplusplus >= 201103L
+          .                 _GLIBCXX20_CONSTEXPR
+-- line 1296 ----------------------------------------
+-- line 1317 ----------------------------------------
+          .                  *  data is needed, it should be retrieved before pop_back() is
+          .                  *  called.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 pop_back() _GLIBCXX_NOEXCEPT
+          .                 {
+          .           	__glibcxx_requires_nonempty();
+    886,422 ( 0.01%)  	--this->_M_impl._M_finish;
+          .           	_Alloc_traits::destroy(this->_M_impl, this->_M_impl._M_finish);
+          .           	_GLIBCXX_ASAN_ANNOTATE_SHRINK(1);
+          .                 }
+          .           
+          .           #if __cplusplus >= 201103L
+          .                 /**
+          .                  *  @brief  Inserts an object in %vector before specified iterator.
+          .                  *  @param  __position  A const_iterator into the %vector.
+-- line 1333 ----------------------------------------
+-- line 1598 ----------------------------------------
+          .                  *  Erases all the elements.  Note that this function only erases the
+          .                  *  elements, and that if the elements themselves are pointers, the
+          .                  *  pointed-to memory is not touched in any way.  Managing the pointer is
+          .                  *  the user's responsibility.
+          .                  */
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 clear() _GLIBCXX_NOEXCEPT
+         28 ( 0.00%)        { _M_erase_at_end(this->_M_impl._M_start); }
+          .           
+          .               protected:
+          .                 /**
+          .                  *  Memory expansion handler.  Uses the member allocation function to
+          .                  *  obtain @a n bytes of memory, and then copies [first,last) into it.
+          .                  */
+          .                 template<typename _ForwardIterator>
+          .           	_GLIBCXX20_CONSTEXPR
+-- line 1614 ----------------------------------------
+-- line 1698 ----------------------------------------
+          .           	}
+          .           
+          .                 // Called by the first initialize_dispatch above and by the
+          .                 // vector(n,value,a) constructor.
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 _M_fill_initialize(size_type __n, const value_type& __value)
+          .                 {
+          2 ( 0.00%)  	this->_M_impl._M_finish =
+          .           	  std::__uninitialized_fill_n_a(this->_M_impl._M_start, __n, __value,
+          .           					_M_get_Tp_allocator());
+          .                 }
+          .           
+          .           #if __cplusplus >= 201103L
+          .                 // Called by the vector(n) constructor.
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+-- line 1714 ----------------------------------------
+-- line 1890 ----------------------------------------
+          .                 { return _M_insert_rval(__position, std::move(__v)); }
+          .           #endif
+          .           
+          .                 // Called by _M_fill_insert, _M_insert_aux etc.
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 size_type
+          .                 _M_check_len(size_type __n, const char* __s) const
+          .                 {
+    131,980 ( 0.00%)  	if (max_size() - size() < __n)
+          .           	  __throw_length_error(__N(__s));
+          .           
+    395,839 ( 0.00%)  	const size_type __len = size() + (std::max)(size(), __n);
+    197,920 ( 0.00%)  	return (__len < size() || __len > max_size()) ? max_size() : __len;
+          .                 }
+          .           
+          .                 // Called by constructors to check initial size.
+          .                 static _GLIBCXX20_CONSTEXPR size_type
+          .                 _S_check_init_len(size_type __n, const allocator_type& __a)
+          .                 {
+         25 ( 0.00%)  	if (__n > _S_max_size(_Tp_alloc_type(__a)))
+          .           	  __throw_length_error(
+          .           	      __N("cannot create std::vector larger than max_size()"));
+          .           	return __n;
+          .                 }
+          .           
+          .                 static _GLIBCXX20_CONSTEXPR size_type
+          .                 _S_max_size(const _Tp_alloc_type& __a) _GLIBCXX_NOEXCEPT
+          .                 {
+-- line 1917 ----------------------------------------
+-- line 1927 ----------------------------------------
+          .                 // Internal erase functions follow.
+          .           
+          .                 // Called by erase(q1,q2), clear(), resize(), _M_fill_assign,
+          .                 // _M_assign_aux.
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 void
+          .                 _M_erase_at_end(pointer __pos) _GLIBCXX_NOEXCEPT
+          .                 {
+        350 ( 0.00%)  	if (size_type __n = this->_M_impl._M_finish - __pos)
+          .           	  {
+          .           	    std::_Destroy(__pos, this->_M_impl._M_finish,
+          .           			  _M_get_Tp_allocator());
+         86 ( 0.00%)  	    this->_M_impl._M_finish = __pos;
+          .           	    _GLIBCXX_ASAN_ANNOTATE_SHRINK(__n);
+          .           	  }
+          .                 }
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 iterator
+          .                 _M_erase(iterator __position);
+          .           
+-- line 1947 ----------------------------------------
+
+ 24,671,122 ( 0.25%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_vector.h>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_pair.h
+--------------------------------------------------------------------------------
+Ir                 
+
+-- line 551 ----------------------------------------
+        .                 /// Construct from two const lvalues, allowing implicit conversions.
+        .                 template<typename _U1 = _T1, typename _U2=_T2, typename
+        .           	       enable_if<_PCCP::template
+        .           			   _ConstructiblePair<_U1, _U2>()
+        .           	                 && _PCCP::template
+        .           			   _ImplicitlyConvertiblePair<_U1, _U2>(),
+        .                                    bool>::type=true>
+        .                 constexpr pair(const _T1& __a, const _T2& __b)
+2,243,956 ( 0.02%)        : first(__a), second(__b) { }
+        .           
+        .                 /// Construct from two const lvalues, disallowing implicit conversions.
+        .                  template<typename _U1 = _T1, typename _U2=_T2, typename
+        .           		enable_if<_PCCP::template
+        .           			    _ConstructiblePair<_U1, _U2>()
+        .           	                  && !_PCCP::template
+        .           			    _ImplicitlyConvertiblePair<_U1, _U2>(),
+        .                                    bool>::type=false>
+-- line 567 ----------------------------------------
+-- line 828 ----------------------------------------
+        .              * For two pairs of the same type, `P` is ordered before `Q` if
+        .              * `P.first` is less than `Q.first`, or if `P.first` and `Q.first`
+        .              * are equivalent (neither is less than the other) and `P.second` is less
+        .              * than `Q.second`.
+        .             */
+        .             template<typename _T1, typename _T2>
+        .               inline _GLIBCXX_CONSTEXPR bool
+        .               operator<(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y)
+8,936,935 ( 0.09%)      { return __x.first < __y.first
+8,040,160 ( 0.08%)  	     || (!(__y.first < __x.first) && __x.second < __y.second); }
+        .           
+        .             /// Uses @c operator== to find the result.
+        .             template<typename _T1, typename _T2>
+        .               inline _GLIBCXX_CONSTEXPR bool
+        .               operator!=(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y)
+        .               { return !(__x == __y); }
+        .           
+        .             /// Uses @c operator< to find the result.
+-- line 845 ----------------------------------------
+
+7,193,464 ( 0.07%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_pair.h>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: build/base/src/clustering.hpp
+--------------------------------------------------------------------------------
+Ir                     
+
+-- line 15 ----------------------------------------
+            .           #if defined(__wasm_simd128__)
+            .           #include <wasm_simd128.h>
+            .           #endif
+            .           
+            .           namespace AgglomerativeClustering {
+            .           
+            .           // Spatial index over the live clusters, answering exact "cheapest partner by Ward cost" queries.
+            .           // Cells form a dense uniform grid that is rebuilt coarser as clusters merge, keeping a few clusters per cell.
+            4 ( 0.00%)  class WardGrid {
+            .           
+            .           public:
+            .           
+            .               static constexpr int32_t none = -1;
+            .           
+            .           private:
+            .           
+            .               // The grid sizes (cells per axis) to choose from, each with about twice the cells of the one before. Cells
+-- line 31 ----------------------------------------
+-- line 43 ----------------------------------------
+            .               static constexpr float far_away = 1e30f;
+            .           
+            .               // Whether any lane of a comparison mask is set: one v128.any_true in WASM, where reading the lanes one by
+            .               // one would cost four extracts and three ors.
+            .               static bool any_lane(u32x4 mask) {
+            .           #if defined(__wasm_simd128__)
+            .                   return wasm_v128_any_true((v128_t) mask);
+            .           #else
+  355,164,465 ( 3.65%)          return (mask[0] | mask[1] | mask[2] | mask[3]) != 0u;
+            .           #endif
+            .               }
+            .           
+            .               struct Chunk {
+      744,428 ( 0.01%)          f32x4 x = {far_away, far_away, far_away, far_away};
+      372,214 ( 0.00%)          f32x4 y = {far_away, far_away, far_away, far_away};
+      372,214 ( 0.00%)          f32x4 z = {far_away, far_away, far_away, far_away};
+      744,428 ( 0.01%)          u32x4 count = {1, 1, 1, 1};
+            .                   // The reciprocals of the counts as floats, for the float filter (see search).
+      744,428 ( 0.01%)          f32x4 inverse = {1.0f, 1.0f, 1.0f, 1.0f};
+      744,428 ( 0.01%)          int32_t id[4] = {none, none, none, none};
+            .               };
+            .           
+       32,766 ( 0.00%)      struct Bucket {
+            .                   std::vector<Chunk> chunks;
+       64,815 ( 0.00%)          int32_t size = 0;
+            .               };
+            .           
+            .               struct Cluster {
+            .                   std::array<uint16_t, 3> coords;
+            .                   uint32_t count;
+            .                   int32_t bucket;
+            .                   int32_t index;
+            .               };
+-- line 75 ----------------------------------------
+-- line 77 ----------------------------------------
+            .               // Candidate caches for clusters whose searches are expensive (see nearest). A cache starts with `cache_size`
+            .               // candidates; one that runs dry is rebuilt twice as large, up to `cache_max`.
+            .               static constexpr int cache_size = 16;
+            .               static constexpr int cache_max = 64;
+            .               static constexpr size_t cache_after = 1024;
+            .           
+            .               // The cheapest partners of one cluster in the total order of is_before, cheapest first.
+            .               struct Candidates {
+    1,799,144 ( 0.02%)          int size = 0;
+          384 ( 0.00%)  => ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms (6x)
+            .                   int32_t ids[cache_max];
+            .                   double costs[cache_max];
+            .               };
+            .           
+            .               // Every live cluster not in `candidates` costs at least `threshold`; clusters with ids from `seen` on
+            .               // were created after the list was built and haven't been offered yet.
+            .               struct Cache {
+            .                   Candidates candidates;
+            .                   // How many candidates the list holds when full.
+           24 ( 0.00%)          int limit = cache_size;
+            .                   int32_t seen = 0;
+           24 ( 0.00%)          double threshold = 0.0;
+            .               };
+            .           
+            .               std::vector<int32_t> cache_of;
+            .               std::vector<bool> expensive;
+            .               std::vector<Cache> caches;
+            .               std::vector<int32_t> free_caches;
+            .           
+            1 ( 0.00%)      size_t next_review = std::numeric_limits<size_t>::max();
+            .               // A review in progress (see reindex): which candidate size, how far through it, and the cells counted so far.
+            .               enum class Review {idle, choose, rebuild};
+            .               Review review = Review::idle;
+            4 ( 0.00%)      int review_index = 0;
+            .               size_t review_cursor = 0;
+            .               size_t review_chunk = 0;
+            .               size_t review_occupied = 0;
+            .               std::vector<uint64_t> occupancy;
+            .               // The grid has `dimension` cells per axis; a coordinate v is in cell (v * dimension) >> 16, and cell k
+            .               // starts at boundaries[k], the smallest coordinate in it (boundaries[dimension] is 65536).
+            .               int32_t dimension = 0;
+            .               std::vector<uint32_t> boundaries;
+            .               std::vector<int32_t> cells;
+            .               // Which cells of each (x, y) column have a bucket, one bit per z in `words` 64-bit words, so search steps
+            .               // over empty cells (most of them, in images) without touching `cells`.
+            1 ( 0.00%)      int32_t words = 1;
+            .               std::vector<uint64_t> columns;
+            .               std::vector<Bucket> buckets;
+            .               // Per bucket, the colour box of everything ever linked into it (`low` and `high`, lanes 0-2), which is
+            .               // tighter than the cell's own extent, and the smallest count ever linked into it (`high` lane 3; `low` lane
+            .               // 3 is 0). Removals only loosen both, so they stay valid bounds. Floats, so search tests a cell with a few
+            .               // vector operations; colours are exact, and a count rounded to float is covered by the filter's margin.
+            .               struct Bounds {
+       43,200 ( 0.00%)          f32x4 low = {far_away, far_away, far_away, 0.0f};
+       43,200 ( 0.00%)          f32x4 high = {0.0f, 0.0f, 0.0f, far_away};
+            .               };
+            .               std::vector<Bounds> bucket_bounds;
+            .               std::vector<Cluster> clusters;
+            .               size_t alive = 0;
+            .               // Live clusters with each count below `small`, and a lower bound of the smallest live count. Merging only
+            .               // makes counts larger, and the grid is filled before it is first searched, so no live cluster ever has a count
+            .               // below the bound; `search` uses it in place of one pixel for the lightest possible partner.
+            .               static constexpr uint32_t small = 4096;
+            .               std::vector<uint32_t> small_counts = std::vector<uint32_t>(small, 0u);
+            1 ( 0.00%)      uint32_t min_count = 1;
+            .           
+            .               static uint64_t get_distance(const std::array<uint16_t, 3>& a, const std::array<uint16_t, 3>& b) {
+   11,145,527 ( 0.11%)          uint64_t dx = static_cast<uint64_t>(a[0] > b[0] ? a[0] - b[0] : b[0] - a[0]);
+   11,145,527 ( 0.11%)          uint64_t dy = static_cast<uint64_t>(a[1] > b[1] ? a[1] - b[1] : b[1] - a[1]);
+   12,872,025 ( 0.13%)          uint64_t dz = static_cast<uint64_t>(a[2] > b[2] ? a[2] - b[2] : b[2] - a[2]);
+    7,505,485 ( 0.08%)          return dx * dx + dy * dy + dz * dz;
+            .               }
+            .           
+            .               static double get_weight(uint32_t a, uint32_t b) {
+   16,584,653 ( 0.17%)          return double(a) * double(b) / (double(a) + double(b));
+            .               }
+            .           
+            .               static uint64_t pack(const std::array<uint16_t, 3>& point) {
+   11,780,769 ( 0.12%)          return (uint64_t(point[0]) << 32) | (uint64_t(point[1]) << 16) | uint64_t(point[2]);
+            .               }
+            .           
+            .               // Image colours fill only a small part of the RGB cube, so the grid size is chosen from how crowded the
+            .               // occupied cells are rather than from the cluster count: the finest grid whose occupied cells hold at
+            .               // least `target_occupancy` clusters on average. Finer grids mean fewer distance evaluations per search but
+            .               // more empty cells to step over.
+            .               static constexpr double target_occupancy = 24.0;
+            .           
+            .               // Clusters only merge, so the grid only needs to get coarser: sizes are tried from the current one down,
+            .               // counting each one's occupied cells in a bitmap. The live clusters are read from the buckets, which hold
+            .               // only those (most of `clusters` is dead by the later reviews), and at the current size the occupied cells
+            .               // are just the non-empty buckets.
+            .               // One candidate size's occupied cells, counted from `review_cursor` on: at the current size just the non-empty
+            .               // buckets, else a bitmap of the cells the live clusters fall in. Returns whether the count is complete.
+          760 ( 0.00%)      bool count_occupied(bool timed, double deadline) {
+            .                   constexpr size_t block = 1024;  // buckets between clock checks (about 24 clusters each)
+          228 ( 0.00%)          const uint32_t d = uint32_t(dimensions[this->review_index]);
+          152 ( 0.00%)          if (int32_t(d) == this->dimension) {
+          460 ( 0.00%)              while (this->review_cursor < this->buckets.size()) {
+          429 ( 0.00%)                  const size_t end = std::min(this->buckets.size(), this->review_cursor + block);
+      441,696 ( 0.00%)                  for (; this->review_cursor < end; this->review_cursor++) {this->review_occupied += this->buckets[this->review_cursor].size > 0;}
+          313 ( 0.00%)                  if (timed && this->review_cursor < this->buckets.size() && emscripten_get_now() >= deadline) {return false;}
+            .                       }
+            .                       return true;
+            .                   }
+            .                   // Counted chunk by chunk (`review_chunk` within bucket `review_cursor`): at the first review every cluster is
+            .                   // still in the size-1 grid's one bucket.
+            .                   constexpr size_t chunks = 4096;  // chunks between clock checks (4 clusters each)
+          180 ( 0.00%)          if (this->review_cursor == 0 && this->review_chunk == 0) {this->occupancy.assign((size_t(d) * d * d + 63) / 64, 0u);}
+            .                   size_t counted = 0;
+       86,464 ( 0.00%)          while (this->review_cursor < this->buckets.size()) {
+            .                       const std::vector<Chunk>& list = this->buckets[this->review_cursor].chunks;
+    3,660,534 ( 0.04%)              for (; this->review_chunk < list.size(); this->review_chunk++) {
+            .                           const Chunk& chunk = list[this->review_chunk];
+    8,629,776 ( 0.09%)                  for (int lane = 0; lane < 4; lane++) {
+    5,753,184 ( 0.06%)                      if (chunk.id[lane] == none) {continue;}
+   14,222,235 ( 0.15%)                      const uint32_t x = uint32_t(chunk.x[lane]), y = uint32_t(chunk.y[lane]), z = uint32_t(chunk.z[lane]);
+   28,444,470 ( 0.29%)                      uint32_t cell = (((x * d) >> 16) * d + ((y * d) >> 16)) * d + ((z * d) >> 16);
+    5,688,894 ( 0.06%)                      uint64_t bit = uint64_t(1) << (cell & 63u);
+    8,533,341 ( 0.09%)                      this->review_occupied += (this->occupancy[cell >> 6] & bit) == 0;
+    5,688,894 ( 0.06%)                      this->occupancy[cell >> 6] |= bit;
+            .                           }
+    2,157,782 ( 0.02%)                  if (++counted % chunks == 0 && timed && emscripten_get_now() >= deadline) {this->review_chunk++; return false;}
+            .                       }
+       60,390 ( 0.00%)              this->review_cursor++;
+            .                       this->review_chunk = 0;
+            .                   }
+            .                   return true;
+          760 ( 0.00%)      }
+            .           
+            .               int32_t cell_of(uint16_t value) const {
+   21,955,226 ( 0.23%)          return int32_t((uint32_t(value) * uint32_t(this->dimension)) >> 16);
+            .               }
+            .           
+   11,524,632 ( 0.12%)      void link(int32_t id) {
+    1,440,579 ( 0.01%)          Cluster& cluster = this->clusters[id];
+   10,084,053 ( 0.10%)          int32_t cell = (this->cell_of(cluster.coords[0]) * this->dimension + this->cell_of(cluster.coords[1])) * this->dimension + this->cell_of(cluster.coords[2]);
+    4,321,737 ( 0.04%)          if (this->cells[cell] == none) {
+       21,600 ( 0.00%)              this->cells[cell] = (int32_t) this->buckets.size();
+            .                       int32_t z = this->cell_of(cluster.coords[2]);
+      172,800 ( 0.00%)              this->columns[size_t(cell / this->dimension) * this->words + z / 64] |= uint64_t(1) << (z % 64);
+            .                       this->buckets.emplace_back();
+           15 ( 0.00%)              this->bucket_bounds.emplace_back();
+            .                   }
+    2,881,158 ( 0.03%)          cluster.bucket = this->cells[cell];
+            .                   // Whole-vector min and max: lane 3 of `low` stays 0, and lane 3 of `high` takes the min of the counts.
+            .                   Bounds& bounds = this->bucket_bounds[cluster.bucket];
+   18,727,527 ( 0.19%)          const f32x4 point = {float(cluster.coords[0]), float(cluster.coords[1]), float(cluster.coords[2]), float(cluster.count)};
+    4,321,737 ( 0.04%)          const f32x4 origin = {float(cluster.coords[0]), float(cluster.coords[1]), float(cluster.coords[2]), 0.0f};
+    4,321,737 ( 0.04%)          bounds.low = bounds.low < origin ? bounds.low : origin;
+    4,321,737 ( 0.04%)          const f32x4 larger = bounds.high > point ? bounds.high : point;
+    1,440,579 ( 0.01%)          const f32x4 smaller = bounds.high < point ? bounds.high : point;
+    4,321,737 ( 0.04%)          bounds.high = __builtin_shufflevector(larger, smaller, 0, 1, 2, 7);
+    1,440,579 ( 0.01%)          Bucket& bucket = this->buckets[cluster.bucket];
+    5,762,316 ( 0.06%)          cluster.index = bucket.size++;
+    2,881,158 ( 0.03%)          if (cluster.index % 4 == 0) {bucket.chunks.emplace_back();}
+    2,881,158 ( 0.03%)          this->set_lane(bucket, cluster.index, cluster.coords, cluster.count, id);
+   11,524,632 ( 0.12%)      }
+            .           
+            .               // Writes one lane through memory: assigning a vector element at a variable index makes WASM spill the
+            .               // whole vector to the stack and reload it.
+            .               static void set_lane(Bucket& bucket, int32_t index, const std::array<uint16_t, 3>& coords, uint32_t count, int32_t id) {
+    2,088,071 ( 0.02%)          Chunk& chunk = bucket.chunks[index / 4];
+   17,140,680 ( 0.18%)          const size_t lane = size_t(index % 4) * 4u;
+   23,907,463 ( 0.25%)          const float x = float(coords[0]), y = float(coords[1]), z = float(coords[2]), inverse = 1.0f / float(count);
+    2,790,077 ( 0.03%)          std::memcpy(reinterpret_cast<char*>(&chunk.x) + lane, &x, 4);
+    2,790,077 ( 0.03%)          std::memcpy(reinterpret_cast<char*>(&chunk.y) + lane, &y, 4);
+    2,790,077 ( 0.03%)          std::memcpy(reinterpret_cast<char*>(&chunk.z) + lane, &z, 4);
+    2,790,077 ( 0.03%)          std::memcpy(reinterpret_cast<char*>(&chunk.count) + lane, &count, 4);
+    2,790,077 ( 0.03%)          std::memcpy(reinterpret_cast<char*>(&chunk.inverse) + lane, &inverse, 4);
+    3,437,569 ( 0.04%)          chunk.id[index % 4] = id;
+            .               }
+            .           
+            .               // Rebuilding the grid at a new size: the arrays first, then (link_some) every live cluster linked in id order
+            .               // from `review_cursor` on, so it can be resumed; link_some returns whether every cluster is linked.
+           98 ( 0.00%)      void start_rebuild(int32_t dimension) {
+           14 ( 0.00%)          this->dimension = dimension;
+           42 ( 0.00%)          this->boundaries.resize(size_t(dimension) + 1);
+        1,844 ( 0.00%)          for (int32_t k = 0; k <= dimension; k++) {this->boundaries[k] = uint32_t((uint64_t(k) * 65536u + uint64_t(dimension) - 1u) / uint64_t(dimension));}
+           70 ( 0.00%)          this->cells.assign(size_t(this->dimension) * this->dimension * this->dimension, none);
+           98 ( 0.00%)          this->words = (this->dimension + 63) / 64;
+           70 ( 0.00%)          this->columns.assign(size_t(this->dimension) * this->dimension * this->words, 0u);
+            .                   this->buckets.clear();
+            .                   this->bucket_bounds.clear();
+           14 ( 0.00%)          this->review_cursor = 0;
+           84 ( 0.00%)      }
+            .               bool link_some(bool timed, double deadline) {
+            .                   constexpr size_t block = 16384;  // clusters between clock checks
+        1,071 ( 0.00%)          while (this->review_cursor < this->clusters.size()) {
+        1,548 ( 0.00%)              const size_t end = std::min(this->clusters.size(), this->review_cursor + block);
+   35,028,304 ( 0.36%)              for (; this->review_cursor < end; this->review_cursor++) {
+   26,639,740 ( 0.27%)                  if (this->clusters[this->review_cursor].bucket != none) {this->link(int32_t(this->review_cursor));}
+  110,952,844 ( 1.14%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::link(int) (738,572x)
+            .                       }
+        1,032 ( 0.00%)              if (timed && this->review_cursor < this->clusters.size() && emscripten_get_now() >= deadline) {return false;}
+            .                   }
+            .                   return true;
+            .               }
+            .           
+            .           public:
+            .           
+            8 ( 0.00%)      explicit WardGrid(size_t expected) {
+            1 ( 0.00%)          this->clusters.reserve(2 * expected);
+            .                   this->cache_of.reserve(2 * expected);
+            .                   this->expensive.reserve(2 * expected);
+            3 ( 0.00%)          this->start_rebuild(1);
+          439 ( 0.00%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::start_rebuild(int) (1x)
+            6 ( 0.00%)      }
+            .           
+    5,616,056 ( 0.06%)      int32_t add(const std::array<uint16_t, 3>& coords, uint32_t count) {
+            .                   int32_t id = (int32_t) this->clusters.size();
+    2,808,028 ( 0.03%)          this->clusters.push_back({coords, count, none, none});
+            .                   this->cache_of.push_back(none);
+            .                   this->expensive.push_back(false);
+    2,797,778 ( 0.03%)          if (count < small) {this->small_counts[count]++;}
+    2,106,021 ( 0.02%)          this->link(id);
+   83,533,524 ( 0.86%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::link(int) (702,007x)
+      702,007 ( 0.01%)          this->alive++;
+    6,318,063 ( 0.06%)          return id;
+            .               }
+            .           
+    5,616,048 ( 0.06%)      void remove(int32_t id) {
+      702,006 ( 0.01%)          Cluster& cluster = this->clusters[id];
+    1,404,012 ( 0.01%)          Bucket& bucket = this->buckets[cluster.bucket];
+    2,808,024 ( 0.03%)          int32_t last = bucket.size - 1;
+    2,106,018 ( 0.02%)          if (cluster.index != last) {
+    9,984,950 ( 0.10%)              int32_t moved = bucket.chunks[last / 4].id[last % 4];
+            .                       Cluster& other = this->clusters[moved];
+      647,492 ( 0.01%)              this->set_lane(bucket, cluster.index, other.coords, other.count, moved);
+    1,294,984 ( 0.01%)              other.index = cluster.index;
+            .                   }
+            .                   this->set_lane(bucket, last, {0, 0, 0}, 1, none);
+            .                   Chunk& tail = bucket.chunks[last / 4];
+            .                   const size_t lane = size_t(last % 4) * 4u;
+      702,006 ( 0.01%)          std::memcpy(reinterpret_cast<char*>(&tail.x) + lane, &far_away, 4);
+      702,006 ( 0.01%)          std::memcpy(reinterpret_cast<char*>(&tail.y) + lane, &far_away, 4);
+      702,006 ( 0.01%)          std::memcpy(reinterpret_cast<char*>(&tail.z) + lane, &far_away, 4);
+      702,006 ( 0.01%)          bucket.size = last;
+    1,404,012 ( 0.01%)          if (last % 4 == 0) {bucket.chunks.pop_back();}
+      702,006 ( 0.01%)          cluster.bucket = none;
+    2,802,900 ( 0.03%)          if (cluster.count < small) {this->small_counts[cluster.count]--;}
+    2,106,018 ( 0.02%)          if (this->cache_of[id] != none) {
+            .                       this->free_caches.push_back(this->cache_of[id]);
+        4,907 ( 0.00%)              this->cache_of[id] = none;
+            .                   }
+      702,006 ( 0.01%)          this->alive--;
+    5,616,048 ( 0.06%)      }
+            .           
+            .               // Re-picks the grid size (after the initial adds, then each time the cluster count halves) and rebuilds
+            .               // the grid if it changed. On millions of clusters that takes hundreds of milliseconds, so with `timed` it stops
+            .               // at `deadline` and returns false, and later calls carry on (`reviewing()` until it returns true). Nothing may
+            .               // query or change the grid in between. Without `timed` it finishes in one call; either way the steps and their
+            .               // order are the same, so the grid is too.
+    2,808,032 ( 0.03%)      bool reindex(bool timed = false, double deadline = 0.0) {
+    1,755,020 ( 0.02%)          if (this->review == Review::idle) {
+    1,404,016 ( 0.01%)              if (this->alive > this->next_review) {return true;}
+            .                       int index = int(std::size(dimensions)) - 1;
+        2,374 ( 0.00%)              while (index > 0 && dimensions[index] > this->dimension) {index--;}
+          170 ( 0.00%)              if (this->next_review == std::numeric_limits<size_t>::max()) {index = int(std::size(dimensions)) - 1;}
+           85 ( 0.00%)              this->review_index = index;
+            .                       this->review_cursor = 0;
+          255 ( 0.00%)              this->review_chunk = 0;
+            .                       this->review_occupied = 0;
+           85 ( 0.00%)              this->review = Review::choose;
+            .                   }
+            .                   // The finest size from the current one down whose occupied cells hold `target_occupancy` clusters on average
+            .                   if (this->review == Review::choose) {
+          206 ( 0.00%)              while (this->review_index > 0) {
+          456 ( 0.00%)                  if (!this->count_occupied(timed, deadline)) {return false;}
+   98,088,546 ( 1.01%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::count_occupied(bool, double) (76x)
+        1,292 ( 0.00%)                  if (double(this->alive) >= target_occupancy * double(this->review_occupied)) {break;}
+           54 ( 0.00%)                  this->review_index--;
+            .                           this->review_cursor = 0;
+           54 ( 0.00%)                  this->review_chunk = 0;
+            .                           this->review_occupied = 0;
+            .                       }
+           85 ( 0.00%)              this->occupancy = {};
+          255 ( 0.00%)              const int32_t target = dimensions[this->review_index];
+            .                       // Review the grid size again when an eighth of the clusters are gone (it was when half were): the cells are rebuilt
+            .                       // only when the size changes, and a finer look steps down to a coarser grid sooner, which suits fewer, heavier clusters.
+          425 ( 0.00%)              this->next_review = this->alive * 7 / 8;
+          170 ( 0.00%)              if (target == this->dimension) {this->review = Review::idle; return true;}
+           26 ( 0.00%)              this->start_rebuild(target);
+    4,456,075 ( 0.05%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::start_rebuild(int) (13x)
+            .                       this->review = Review::rebuild;
+            .                   }
+            .                   if (!this->link_some(timed, deadline)) {return false;}
+            .                   this->review = Review::idle;
+            .                   return true;
+    2,106,024 ( 0.02%)      }
+            2 ( 0.00%)      bool reviewing() const {return this->review != Review::idle;}
+            .           
+    8,987,404 ( 0.09%)      bool is_alive(int32_t id) const {return this->clusters[id].bucket != none;}
+            .               size_t size() const {return this->alive;}
+      702,007 ( 0.01%)      const std::array<uint16_t, 3>& coords(int32_t id) const {return this->clusters[id].coords;}
+    1,755,015 ( 0.02%)      uint32_t count(int32_t id) const {return this->clusters[id].count;}
+            .               int32_t capacity() const {return (int32_t) this->clusters.size();}
+            .           
+            .               // Ward cost of merging two clusters: the increase in total squared error, n_a * n_b / (n_a + n_b) * |a - b|^2.
+            .               double cost(int32_t a, int32_t b) const {
+            .                   const Cluster& x = this->clusters[a];
+      863,249 ( 0.01%)          const Cluster& y = this->clusters[b];
+    6,803,479 ( 0.07%)          return get_weight(x.count, y.count) * double(get_distance(x.coords, y.coords));
+            .               }
+            .           
+            .               // A strict total order on candidate partners of `a`: by cost, then by the partner's packed colour and id.
+            .               // Every cluster ranks partners the same way, which is what keeps the nearest-neighbour chain acyclic.
+      560,989 ( 0.01%)      bool is_before(int32_t a, double cost, int32_t candidate, double best_cost, int32_t best) const {
+    1,121,978 ( 0.01%)          if (best == none) {return true;}
+    1,682,967 ( 0.02%)          if (cost != best_cost) {return cost < best_cost;}
+      560,989 ( 0.01%)          uint64_t candidate_key = pack(this->clusters[candidate].coords);
+      560,989 ( 0.01%)          uint64_t best_key = pack(this->clusters[best].coords);
+      560,989 ( 0.01%)          uint64_t own_key = pack(this->clusters[a].coords);
+            .                   // Compare the unordered pairs {a, candidate} and {a, best} by their smaller then larger (key, id).
+            .                   auto lower = [&](uint64_t key, int32_t id) {return std::make_pair(std::min(std::make_pair(own_key, a), std::make_pair(key, id)), std::max(std::make_pair(own_key, a), std::make_pair(key, id)));};
+            .                   return lower(candidate_key, candidate) < lower(best_key, best);
+    3,365,934 ( 0.03%)      }
+            .           
+            .           private:
+            .           
+            .               // Inserts a candidate if it ranks among the best `limit`; returns the cost of any candidate pushed out, else infinity.
+   40,901,630 ( 0.42%)      double offer(int32_t id, Candidates& list, int limit, int32_t candidate, double cost) const {
+            .                   // The same order as is_before, with its first test (different costs) inline: is_before is called only for equal costs.
+   11,154,990 ( 0.11%)          if (list.size == limit) {
+    6,944,648 ( 0.07%)              const double worst = list.costs[limit - 1];
+   18,599,338 ( 0.19%)              if (cost > worst || (cost == worst && !this->is_before(id, cost, candidate, worst, list.ids[limit - 1]))) {return cost;}
+   45,578,873 ( 0.47%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::is_before(int, double, int, double, int) const (523,338x)
+            .                   }
+    9,487,154 ( 0.10%)          double evicted = list.size == limit ? list.costs[limit - 1] : std::numeric_limits<double>::infinity();
+      984,024 ( 0.01%)          int i = list.size == limit ? limit - 1 : list.size++;
+  202,629,324 ( 2.08%)          while (i > 0) {
+   40,435,549 ( 0.42%)              const double above = list.costs[i - 1];
+   87,449,890 ( 0.90%)              if (!(cost < above || (cost == above && this->is_before(id, cost, candidate, above, list.ids[i - 1])))) {break;}
+    3,275,202 ( 0.03%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::is_before(int, double, int, double, int) const (37,651x)
+   77,836,604 ( 0.80%)              list.ids[i] = list.ids[i - 1];
+   38,918,302 ( 0.40%)              list.costs[i] = above;
+            .                       i--;
+            .                   }
+    7,944,277 ( 0.08%)          list.ids[i] = candidate;
+    6,427,030 ( 0.07%)          list.costs[i] = cost;
+            .                   return evicted;
+   29,746,640 ( 0.31%)      }
+            .           
+            .               // Collects the `limit` cheapest partners of `id`, searching outward ring by ring and stopping once no
+            .               // unvisited cell can hold a cheaper one. Every partner has at least `min_count` pixels (a lower bound of the
+            .               // smallest live count), so beyond distance d the cost is at least n * m / (n + m) * d^2, with m = `min_count`. Returns how many clusters were examined.
+    7,252,168 ( 0.07%)      size_t search(int32_t id, Candidates& list, int limit, int32_t hint = none) const {
+            .           
+      906,521 ( 0.01%)          const Cluster& self = this->clusters[id];
+            .                   const std::array<uint16_t, 3>& p = self.coords;
+    2,719,563 ( 0.03%)          const int32_t c[3] = {this->cell_of(p[0]), this->cell_of(p[1]), this->cell_of(p[2])};
+      906,521 ( 0.01%)          const int32_t last = this->dimension - 1;
+    1,813,042 ( 0.02%)          const double minimum_weight = get_weight(self.count, this->min_count) * (1.0 - 1e-12);
+            .                   size_t examined = 0;
+      906,521 ( 0.01%)          list.size = 0;
+            .           
+            .                   // The cost a candidate must beat to make the list: its worst entry once full.
+            .                   double bound = std::numeric_limits<double>::infinity();
+      906,521 ( 0.01%)          const f32x4 px = {float(p[0]), float(p[0]), float(p[0]), float(p[0])};
+   13,923,858 ( 0.14%)          const f32x4 py = {float(p[1]), float(p[1]), float(p[1]), float(p[1])};
+            .                   const f32x4 pz = {float(p[2]), float(p[2]), float(p[2]), float(p[2])};
+            .                   const f64x4 own_count = {double(self.count), double(self.count), double(self.count), double(self.count)};
+    2,719,563 ( 0.03%)          const f32x4 own_count_f = {float(self.count), float(self.count), float(self.count), float(self.count)};
+    5,439,126 ( 0.06%)          const f32x4 position = {float(p[0]), float(p[1]), float(p[2]), 0.0f};
+            .           
+            .                   // Cells and chunks first go through cheap float filters: a partner can only beat the bound if
+            .                   // n_a * n_b * d^2 <= bound * (n_a + n_b), which needs no division and takes one f32x4 per operation
+            .                   // instead of two f64x2. Chunks test the same thing divided through, d^2 <= bound / n_b + bound / n_a, with
+            .                   // 1 / n_b stored per lane and bound / n_a kept here, which saves two multiplies. Float rounding is a few
+            .                   // ulps (~1e-7) on each side, so widening the bound by 1e-4 never rejects a lane the exact test would keep;
+            .                   // chunks that pass get exact costs as before. While the bound is infinite, so is the filter's, and
+            .                   // everything passes.
+            .                   const float infinity = std::numeric_limits<float>::infinity();
+            .                   f32x4 filter_bound = {infinity, infinity, infinity, infinity};
+            .                   f32x4 filter_own = filter_bound;
+            .                   auto tighten = [&](double value) __attribute__((always_inline)) {
+            .                       bound = value;
+   13,136,535 ( 0.14%)              float widened = float(value) * 1.0001f;
+    4,378,845 ( 0.05%)              filter_bound = f32x4{widened, widened, widened, widened};
+   11,514,440 ( 0.12%)              filter_own = filter_bound / own_count_f;
+            .                   };
+            .           
+            .                   // A known partner bounds the search from the start. The scan meets it again, but an equal entry never
+            .                   // displaces itself, so it isn't listed twice; that only holds for a list of one.
+    2,705,533 ( 0.03%)          if (hint != none && limit == 1) {
+      863,249 ( 0.01%)              list.ids[0] = hint;
+      863,249 ( 0.01%)              list.costs[0] = this->cost(id, hint);
+      863,249 ( 0.01%)              list.size = 1;
+            .                       tighten(list.costs[0]);
+            .                   }
+            .           
+            .                   // Called for every cell of every ring, so force it inline: as a call it costs about as much as the scan.
+            .                   auto scan = [&](int32_t x, int32_t y, int32_t z) __attribute__((always_inline)) {
+  196,006,919 ( 2.02%)              int32_t bucket = this->cells[(x * this->dimension + y) * this->dimension + z];
+   23,450,508 ( 0.24%)              if (bucket == none) {return;}
+            .                       // No member of this cell can cost less than its lightest possible member at the nearest point of the
+            .                       // cell's colour box. Lane 3 of the gap is 0 (low and position are 0 there, high is a count).
+            .                       const Bounds& bounds = this->bucket_bounds[bucket];
+   46,901,016 ( 0.48%)              f32x4 gap = bounds.low - position;
+   70,351,524 ( 0.72%)              f32x4 above = position - bounds.high;
+   23,450,508 ( 0.24%)              gap = gap > above ? gap : above;
+   23,450,508 ( 0.24%)              gap = gap > 0.0f ? gap : 0.0f;
+   23,450,508 ( 0.24%)              gap *= gap;
+   23,450,508 ( 0.24%)              float lightest = bounds.high[3];
+  281,406,096 ( 2.89%)              if (own_count_f[0] * lightest * (gap[0] + gap[1] + gap[2]) > filter_bound[0] * (own_count_f[0] + lightest)) {return;}
+            .                       const Bucket& members = this->buckets[bucket];
+   26,119,228 ( 0.27%)              examined += members.size;
+  142,342,114 ( 1.46%)              for (const Chunk& chunk : members.chunks) {
+  710,328,930 ( 7.30%)                  f32x4 dx = chunk.x - px, dy = chunk.y - py, dz = chunk.z - pz;
+1,302,269,705 (13.39%)                  u32x4 maybe = (u32x4) (dx * dx + dy * dy + dz * dz <= filter_bound * chunk.inverse + filter_own);
+  118,388,155 ( 1.22%)                  if (!any_lane(maybe)) {continue;}
+            .                           // Exact Ward costs for all four lanes: integer differences and their squares are exact in double,
+            .                           // and the weight uses the same operations as get_weight, so these match the scalar costs bit for bit.
+   32,967,423 ( 0.34%)                  f64x4 ex = __builtin_convertvector(dx, f64x4), ey = __builtin_convertvector(dy, f64x4), ez = __builtin_convertvector(dz, f64x4);
+   36,630,470 ( 0.38%)                  f64x4 distance = ex * ex + ey * ey + ez * ez;
+   29,304,376 ( 0.30%)                  f64x4 counts = __builtin_convertvector(chunk.count, f64x4);
+   36,630,470 ( 0.38%)                  f64x4 cost = own_count * counts / (own_count + counts) * distance;
+    7,326,094 ( 0.08%)                  f64x4 bound_vector = {bound, bound, bound, bound};
+   14,652,188 ( 0.15%)                  i64x4 cheap = cost <= bound_vector;
+   18,315,235 ( 0.19%)                  if (!(cheap[0] | cheap[1] | cheap[2] | cheap[3])) {continue;}
+            .                           for (int lane = 0; lane < 4; lane++) {
+   76,838,404 ( 0.79%)                      if (!cheap[lane] || chunk.id[lane] == none || chunk.id[lane] == id) {continue;}
+   10,443,976 ( 0.11%)                      if (cost[lane] > bound) {continue;}
+   27,662,115 ( 0.28%)                      this->offer(id, list, limit, chunk.id[lane], cost[lane]);
+  639,249,274 ( 6.57%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::offer(int, AgglomerativeClustering::WardGrid::Candidates&, int, int, double) const (3,715,749x)
+   14,662,843 ( 0.15%)                      if (list.size == limit) {tighten(list.costs[limit - 1]);}
+            .                           }
+            .                       }
+            .                   };
+            .           
+            .                   // Distance along one axis from the colour to a cell's interval: every cluster in the cell is at least this far.
+            .                   auto axis_gap = [&](int axis, int32_t cell) __attribute__((always_inline)) -> uint64_t {
+  104,561,240 ( 1.07%)              const uint64_t low = this->boundaries[cell], high = uint64_t(this->boundaries[cell + 1]) - 1u, v = p[axis];
+   90,231,355 ( 0.93%)              return v < low ? low - v : (v > high ? v - high : 0u);
+            .                   };
+            .           
+   14,564,666 ( 0.15%)          for (int32_t ring = 0; ; ring++) {
+            .           
+            .                       // Anything outside the cells already searched lies past one of the cube's faces.
+   45,496,985 ( 0.47%)              if (ring > 0) {
+            .                           uint64_t gap = std::numeric_limits<uint64_t>::max();
+            .                           for (int axis = 0; axis < 3; axis++) {
+   36,957,568 ( 0.38%)                      if (c[axis] - ring >= 0) {gap = std::min<uint64_t>(gap, uint64_t(p[axis]) - (this->boundaries[c[axis] - ring + 1] - 1u));}
+   42,836,998 ( 0.44%)                      if (c[axis] + ring <= last) {gap = std::min<uint64_t>(gap, this->boundaries[c[axis] + ring] - uint64_t(p[axis]));}
+            .                           }
+    5,469,291 ( 0.06%)                  if (gap == std::numeric_limits<uint64_t>::max()) {break;}
+   18,208,020 ( 0.19%)                  if (minimum_weight * double(gap * gap) > bound) {break;}
+            .                       }
+            .           
+            .                       // Column bits for this ring: the z range of edge rows, and the two end cells of interior rows (a zero
+            .                       // bit where that end lies outside the grid, or both ends are the same cell at ring 0).
+    1,823,097 ( 0.02%)              uint64_t span[2] = {0u, 0u};
+   12,761,679 ( 0.13%)              for (int32_t word = 0; word < this->words; word++) {
+    5,469,291 ( 0.06%)                  int32_t low = std::max(c[2] - ring - 64 * word, 0), high = std::min(c[2] + ring, last) - 64 * word;
+   29,169,552 ( 0.30%)                  if (high >= 0 && low <= 63) {span[word] = (~uint64_t(0) << low) & (~uint64_t(0) >> (63 - std::min(high, 63)));}
+            .                       }
+   16,407,873 ( 0.17%)              const int32_t below_word = c[2] - ring >= 0 ? (c[2] - ring) / 64 : 0;
+   12,761,679 ( 0.13%)              const uint64_t below_bit = c[2] - ring >= 0 ? uint64_t(1) << ((c[2] - ring) % 64) : 0u;
+    5,461,333 ( 0.06%)              const int32_t above_word = ring > 0 && c[2] + ring <= last ? (c[2] + ring) / 64 : 0;
+    4,526,744 ( 0.05%)              const uint64_t above_bit = ring > 0 && c[2] + ring <= last ? uint64_t(1) << ((c[2] + ring) % 64) : 0u;
+            .           
+   41,624,474 ( 0.43%)              for (int32_t x = std::max(c[0] - ring, 0); x <= std::min(c[0] + ring, last); x++) {
+   17,617,456 ( 0.18%)                  bool x_edge = x == c[0] - ring || x == c[0] + ring;
+            .                           const uint64_t gx = axis_gap(0, x);
+   44,043,640 ( 0.45%)                  if (minimum_weight * double(gx * gx) > bound) {continue;}
+  114,735,423 ( 1.18%)                  for (int32_t y = std::max(c[1] - ring, 0); y <= std::min(c[1] + ring, last); y++) {
+            .                               const uint64_t gy = axis_gap(1, y);
+  244,638,218 ( 2.51%)                      if (minimum_weight * double(gx * gx + gy * gy) > bound) {continue;}
+   19,905,088 ( 0.20%)                      bool xy_edge = x_edge || y == c[1] - ring || y == c[1] + ring;
+  139,335,616 ( 1.43%)                      const uint64_t* column = &this->columns[size_t(x * this->dimension + y) * this->words];
+   71,455,912 ( 0.73%)                      if (xy_edge) {
+            .                                   // The ring's whole z range, visiting only occupied cells, in increasing z.
+   35,565,657 ( 0.37%)                          for (int32_t word = 0; word < this->words; word++) {
+   10,327,496 ( 0.11%)                              uint64_t bits = column[word] & span[word];
+   48,126,798 ( 0.49%)                              while (bits != 0u) {
+   37,799,302 ( 0.39%)                                  scan(x, y, word * 64 + __builtin_ctzll(bits));
+   18,899,651 ( 0.19%)                                  bits &= bits - 1u;
+            .                                       }
+            .                                   }
+            .                               } else {
+   29,482,680 ( 0.30%)                          if (column[below_word] & below_bit) {scan(x, y, c[2] - ring);}
+   29,482,680 ( 0.30%)                          if (column[above_word] & above_bit) {scan(x, y, c[2] + ring);}
+            .                               }
+            .                           }
+            .                       }
+            .           
+            .                   }
+            .           
+    8,158,689 ( 0.08%)          return examined;
+            .           
+            .               }
+            .           
+            .           public:
+            .           
+            .               // Returns the live cluster that is cheapest to merge with `id`.
+            .               //
+            .               // A cluster at the base of the nearest-neighbour chain is queried again after every merge above it, and a
+            .               // large cluster's search reaches far (its bound can only assume a partner with the smallest live count). So once a search has been
+            .               // expensive, the cluster keeps its `cache_size` cheapest candidates and a threshold below which no
+            .               // unlisted cluster can cost. Live clusters never change, so the next query only has to drop dead
+            .               // candidates and offer the clusters created since; it falls back to a full search when the cheapest
+            .               // remaining candidate isn't strictly below the threshold.
+   12,341,028 ( 0.13%)      [[nodiscard]] int32_t nearest(int32_t id, int32_t hint = none) {
+            .           
+    8,254,629 ( 0.08%)          while (this->min_count < small && this->small_counts[this->min_count] == 0u) {this->min_count++;}
+            .           
+    3,085,257 ( 0.03%)          int32_t slot = this->cache_of[id];
+            .           
+    1,028,419 ( 0.01%)          if (slot != none) {
+            .                       Cache& cache = this->caches[slot];
+            .                       Candidates& list = cache.candidates;
+            .                       int kept = 0;
+   23,553,803 ( 0.24%)              for (int i = 0; i < list.size; i++) {
+    7,819,756 ( 0.08%)                  if (!this->is_alive(list.ids[i])) {continue;}
+    7,542,282 ( 0.08%)                  list.ids[kept] = list.ids[i];
+    7,542,282 ( 0.08%)                  list.costs[kept] = list.costs[i];
+    3,771,141 ( 0.04%)                  kept++;
+            .                       }
+      124,003 ( 0.00%)              list.size = kept;
+            .                       int32_t end = this->capacity();
+    3,055,540 ( 0.03%)              for (int32_t other = cache.seen; other < end; other++) {
+    1,175,628 ( 0.01%)                  if (other == id || !this->is_alive(other)) {continue;}
+            .                           double cost = this->cost(id, other);
+      573,690 ( 0.01%)                  if (cost >= cache.threshold) {continue;}
+       30,972 ( 0.00%)                  cache.threshold = std::min(cache.threshold, this->offer(id, list, cache.limit, other, cost));
+      287,396 ( 0.00%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::offer(int, AgglomerativeClustering::WardGrid::Candidates&, int, int, double) const (2,581x)
+            .                       }
+      124,003 ( 0.00%)              cache.seen = end;
+      991,451 ( 0.01%)              if (list.size > 0 && list.costs[0] < cache.threshold) {return list.ids[0];}
+       14,735 ( 0.00%)              cache.limit = std::min(cache.limit * 2, cache_max);
+       10,525 ( 0.00%)              this->search(id, list, cache.limit);
+3,205,888,473 (32.96%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const (2,105x)
+       12,630 ( 0.00%)              cache.threshold = list.size == cache.limit ? list.costs[cache.limit - 1] : std::numeric_limits<double>::infinity();
+        4,210 ( 0.00%)              return list.size > 0 ? list.ids[0] : none;
+            .                   }
+            .           
+            .                   // A cluster whose search was expensive before goes straight to building its cache: the search that fills the
+            .                   // list also finds the nearest, so the search for one candidate first would be wasted.
+      904,416 ( 0.01%)          if (this->expensive[id]) {
+        4,910 ( 0.00%)              if (this->free_caches.empty()) {
+            .                           slot = (int32_t) this->caches.size();
+            .                           this->caches.emplace_back();
+            .                       } else {
+        4,886 ( 0.00%)                  slot = this->free_caches.back();
+            .                           this->free_caches.pop_back();
+            .                       }
+        4,910 ( 0.00%)              Cache& cache = this->caches[slot];
+        9,820 ( 0.00%)              cache.limit = cache_size;
+       29,460 ( 0.00%)              const size_t examined = this->search(id, cache.candidates, cache_size);
+  401,431,210 ( 4.13%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const (4,910x)
+        4,910 ( 0.00%)              cache.seen = this->capacity();
+       29,460 ( 0.00%)              cache.threshold = cache.candidates.size == cache_size ? cache.candidates.costs[cache_size - 1] : std::numeric_limits<double>::infinity();
+        9,820 ( 0.00%)              const int32_t best = cache.candidates.size > 0 ? cache.candidates.ids[0] : none;
+       19,634 ( 0.00%)              if (examined > cache_after) {this->cache_of[id] = slot;} else {this->free_caches.push_back(slot);}
+            .                       return best;
+            .                   }
+            .           
+            .                   Candidates list;
+    6,296,542 ( 0.06%)          if (this->search(id, list, 1, hint) > cache_after) {this->expensive[id] = true;}
+3,469,706,452 (35.67%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::search(int, AgglomerativeClustering::WardGrid::Candidates&, int, int) const (899,506x)
+    2,698,518 ( 0.03%)          return list.size > 0 ? list.ids[0] : none;
+            .           
+    9,255,771 ( 0.10%)      }
+            .           
+            .           };
+            .           
+            .           // Stable sorts in place of std::sort, whose instantiations were 3.3 to 3.8 KB of WebAssembly each (about a tenth of the
+            .           // module for three). Insertion sort for the short lists (recipes of at most 64 steps, palettes of at most 96 colours),
+            .           // which allocates nothing; a radix sort for the rest. Every caller's order is total or doesn't change results.
+            .           template <typename T, typename Less>
+            .           void insertion_sort(T* data, size_t n, Less less) {
+-- line 633 ----------------------------------------
+-- line 660 ----------------------------------------
+            .           // Counts 8-bit colours, keeping them in order of first appearance.
+            .           // An open-addressing table with linear probing: each slot packs (colour + 1) << 32 | index into one word, so a
+            .           // probe is a single load, and 0 marks an empty slot. It grows with the number of distinct colours, not pixels.
+            .           class AgglomerativeHistogram {
+            .           
+            .           private:
+            .           
+            .               std::vector<uint64_t> slots;
+            7 ( 0.00%)      uint32_t mask = 0;
+            .               int shift = 0;
+            .               std::vector<uint32_t> keys;
+            .               std::vector<uint64_t> totals;
+            .               // A larger table being filled by make_room, and how many colours are in it so far.
+            .               std::vector<uint64_t> fresh;
+            .               int fresh_bits = 0;
+            2 ( 0.00%)      size_t fresh_cursor = 0;
+            .           
+            .               // Fibonacci hashing: the top bits of the product spread neighbouring colours across the table.
+            .               uint32_t home(uint32_t key) const {
+   59,885,568 ( 0.62%)          return uint32_t((uint64_t(key) * 0x9E3779B97F4A7C15ULL) >> this->shift);
+            .               }
+            .           
+            .               void resize(int bits) {
+            .                   this->slots.assign(size_t(1) << bits, 0u);
+            2 ( 0.00%)          this->mask = (uint32_t(1) << bits) - 1u;
+            .                   this->shift = 64 - bits;
+            .                   for (uint32_t index = 0; index < (uint32_t) this->keys.size(); index++) {
+            .                       uint32_t slot = this->home(this->keys[index]);
+            .                       while (this->slots[slot] != 0u) {slot = (slot + 1u) & this->mask;}
+            .                       this->slots[slot] = (uint64_t(this->keys[index]) + 1u) << 32 | index;
+            .                   }
+            .               }
+            .           
+-- line 692 ----------------------------------------
+-- line 693 ----------------------------------------
+            .           public:
+            .           
+            .               AgglomerativeHistogram() {
+            .                   this->resize(12);
+            .               }
+            .           
+            .               // Adds `weight` to the colour packed as r << 16 | g << 8 | b, and returns the colour's index. Weights are
+            .               // pixel counts, or alpha-weighted counts in units of 1/255 of a pixel; totals are 64-bit so neither overflows.
+  179,656,704 ( 1.85%)      uint32_t add(uint32_t key, uint64_t weight = 1u) {
+   39,923,712 ( 0.41%)          const uint64_t tag = uint64_t(key) + 1u;
+            .                   uint32_t slot = this->home(key);
+            .                   while (true) {
+   41,082,706 ( 0.42%)              uint64_t entry = this->slots[slot];
+   42,317,008 ( 0.44%)              if (entry == 0u) {break;}
+  122,301,088 ( 1.26%)              if ((entry >> 32) == tag) {this->totals[uint32_t(entry)] += weight; return uint32_t(entry);}
+    2,317,988 ( 0.02%)              slot = (slot + 1u) & this->mask;
+            .                   }
+            .                   uint32_t index = (uint32_t) this->keys.size();
+    1,679,712 ( 0.02%)          this->slots[slot] = tag << 32 | index;
+            .                   this->keys.push_back(key);
+            .                   this->totals.push_back(weight);
+            .                   // Keep the load factor at most 1/2 so probes stay short.
+    1,404,016 ( 0.01%)          if (2 * this->keys.size() > this->slots.size()) {this->resize(64 - this->shift + 1);}
+            .                   return index;
+  179,656,704 ( 1.85%)      }
+            .           
+            .               // Makes room for `extra` more distinct colours, so the next `extra` adds don't grow the table. Growing rehashes
+            .               // every colour, hundreds of milliseconds at millions of them, so with `timed` it stops at `deadline` and
+            .               // returns false, and the next call carries on; add must not be called until it returns true. Colours keep their
+            .               // indices, so where they sit in the table never shows in the results.
+        3,050 ( 0.00%)      bool make_room(size_t extra, bool timed, double deadline) {
+            .                   constexpr size_t most = size_t(1) << 24;  // distinct 8-bit colours: never grow for more than these
+          915 ( 0.00%)          if (this->fresh_bits == 0) {
+        1,220 ( 0.00%)              const size_t wanted = std::min(most, this->keys.size() + extra);
+          915 ( 0.00%)              if (2 * wanted <= this->slots.size()) {return true;}
+            .                       int bits = 64 - this->shift + 1;
+           56 ( 0.00%)              while ((size_t(1) << bits) < 2 * wanted) {bits++;}
+            .                       // Nothing reads the old table while growing (adds wait, and the rehash reads `keys`), so it goes first,
+            .                       // keeping the peak memory to one table. The new one is reserved, then zeroed in parts below: at 2^25
+            .                       // slots it is 256 MB.
+            .                       this->slots = {};
+            .                       this->fresh.reserve(size_t(1) << bits);
+            4 ( 0.00%)              this->fresh_bits = bits;
+            4 ( 0.00%)              this->fresh_cursor = 0;
+            .                   }
+            .                   constexpr size_t zeroed = size_t(1) << 20;  // slots zeroed between clock checks (8 MB)
+            .                   const size_t size = size_t(1) << this->fresh_bits;
+           16 ( 0.00%)          while (this->fresh.size() < size) {
+           16 ( 0.00%)              this->fresh.resize(std::min(size, this->fresh.size() + zeroed));
+            8 ( 0.00%)              if (timed && this->fresh.size() < size && emscripten_get_now() >= deadline) {return false;}
+            .                   }
+           16 ( 0.00%)          const uint32_t mask = (uint32_t(1) << this->fresh_bits) - 1u;
+            4 ( 0.00%)          const int shift = 64 - this->fresh_bits;
+            .                   constexpr size_t block = 65536;
+           26 ( 0.00%)          while (this->fresh_cursor < this->keys.size()) {
+           21 ( 0.00%)              const size_t end = std::min(this->keys.size(), this->fresh_cursor + block);
+    1,336,454 ( 0.01%)              for (; this->fresh_cursor < end; this->fresh_cursor++) {
+      267,288 ( 0.00%)                  const uint32_t key = this->keys[this->fresh_cursor];
+    1,069,152 ( 0.01%)                  uint32_t slot = uint32_t((uint64_t(key) * 0x9E3779B97F4A7C15ULL) >> shift);
+      929,809 ( 0.01%)                  while (this->fresh[slot] != 0u) {slot = (slot + 1u) & mask;}
+    1,336,440 ( 0.01%)                  this->fresh[slot] = (uint64_t(key) + 1u) << 32 | uint32_t(this->fresh_cursor);
+            .                       }
+           15 ( 0.00%)              if (timed && this->fresh_cursor < this->keys.size() && emscripten_get_now() >= deadline) {return false;}
+            .                   }
+            .                   this->slots.swap(this->fresh);
+            .                   this->fresh = {};
+            4 ( 0.00%)          this->fresh_bits = 0;
+            4 ( 0.00%)          this->mask = mask;
+            8 ( 0.00%)          this->shift = shift;
+            .                   return true;
+        2,440 ( 0.00%)      }
+            .           
+            .               // The index of a colour already added, or -1. Not during make_room. Also serves, in place of std::unordered_map
+            .               // (about 3 KB of WebAssembly), as the colour-to-index table where clusterings and palettes are read.
+            .               int64_t find(uint32_t key) const {
+            .                   const uint64_t tag = uint64_t(key) + 1u;
+            .                   for (uint32_t slot = this->home(key);; slot = (slot + 1u) & this->mask) {
+            .                       const uint64_t entry = this->slots[slot];
+            .                       if (entry == 0u) {return -1;}
+-- line 771 ----------------------------------------
+
+  810,870,116 ( 8.34%)  <counts for unidentified lines in build/base/src/clustering.hpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: driver.cpp
+--------------------------------------------------------------------------------
+Ir                  
+
+-- line 2 ----------------------------------------
+         .           // prints the time of each run and an FNV-1a hash of the clustering, writes the clustering to $DUMP, and, in a build with
+         .           // -DCOUNTERS (variants/count), the search counters. The same file builds with em++ (node) and natively (clang++, callgrind).
+         .           //   driver <image.rgba> <space 0|1> <precision> <runs>
+         .           #include "clustering.cpp"
+         .           #include <cstdio>
+         .           #include <chrono>
+         .           #include <algorithm>
+         .           #include <string>
+         8 ( 0.00%)  static double now() {return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+       918 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       927 ( 0.00%)  => ???:std::chrono::_V2::steady_clock::now() (2x)
+27,641,594 ( 0.28%)  static uint64_t fnv(const uint8_t* p, size_t n) {uint64_t h = 1469598103934665603ull; for (size_t i = 0; i < n; i++) {h ^= p[i]; h *= 1099511628211ull;} return h;}
+         .           
+         .           #ifdef COUNTERS
+         .           static void print_counters() {
+         .               using namespace AgglomerativeClustering;
+         .               const SearchCounters& s = g_sc;
+         .               const char* names[3] = {"fresh", "exposed", "start"};
+         .               auto sum2 = [](const uint64_t (&a)[3][3], int c) {return a[c][0] + a[c][1];};
+         .               std::printf("C merges %llu chain_starts %llu chain_pushes %llu chain_max %llu\n", (unsigned long long) s.merges, (unsigned long long) s.chain_starts, (unsigned long long) s.chain_pushes, (unsigned long long) s.chain_max);
+-- line 19 ----------------------------------------
+-- line 33 ----------------------------------------
+         .               for (int i = 0; i < 8; i++) {std::printf(" %d%s:%llu", i, i == 7 ? "+" : "", (unsigned long long) hist[i]);}
+         .               std::printf("\n");
+         .               uint64_t maxn = 0, over100 = 0, sum_over100 = 0; for (uint32_t n : s.per_id_nearest) {maxn = std::max<uint64_t>(maxn, n); if (n > 100) {over100++; sum_over100 += n;}}
+         .               std::printf("C per_id_nearest max %llu clusters_over_100_calls %llu their_calls %llu\n", (unsigned long long) maxn, (unsigned long long) over100, (unsigned long long) sum_over100);
+         .               for (int l = 0; l < 32; l++) {if (s.by_log2_searches[l]) {std::printf("C by_log2count %d searches %llu examined %llu chunks_exact %llu\n", l, (unsigned long long) s.by_log2_searches[l], (unsigned long long) s.by_log2_examined[l], (unsigned long long) s.by_log2_exact[l]);}}
+         .           }
+         .           #endif
+         .           
+         7 ( 0.00%)  int main(int argc, char** argv) {
+         2 ( 0.00%)      if (argc < 5) {std::fprintf(stderr, "usage: driver image.rgba space precision runs\n"); return 2;}
+         8 ( 0.00%)      std::FILE* f = std::fopen(argv[1], "rb");
+       794 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       619 ( 0.00%)  => ./libio/./libio/iofopen.c:fopen@@GLIBC_2.2.5 (1x)
+         2 ( 0.00%)      if (!f) {std::perror(argv[1]); return 1;}
+        22 ( 0.00%)      std::fseek(f, 0, SEEK_END); size_t size = size_t(std::ftell(f)); std::fseek(f, 0, SEEK_SET);
+     1,602 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (2x)
+       747 ( 0.00%)  => ./libio/./libio/fseek.c:fseek (2x)
+       115 ( 0.00%)  => ./libio/./libio/ioftell.c:ftell (1x)
+         .               std::vector<uint8_t> image(size);
+        13 ( 0.00%)      if (std::fread(image.data(), 1, size, f) != size) {return 1;}
+       786 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       165 ( 0.00%)  => ./libio/./libio/iofread.c:fread (1x)
+         7 ( 0.00%)      std::fclose(f);
+       774 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       570 ( 0.00%)  => ./libio/./libio/iofclose.c:fclose@@GLIBC_2.2.5 (1x)
+         3 ( 0.00%)      const int space = std::atoi(argv[2]), precision = std::atoi(argv[3]), runs = std::atoi(argv[4]);
+         .               std::vector<uint8_t> clustering;
+         5 ( 0.00%)      for (int r = 0; r < runs; r++) {
+         .                   double t0 = now();
+        10 ( 0.00%)          clustering = _get_clustering(image.data(), int(size), 0, ColorSpace(space), precision, true, 0);
+9,617,916,316 (98.88%)  => build/base/src/clustering.cpp:_get_clustering(unsigned char*, int, int, AgglomerativeClustering::ColorSpace, int, bool, int) (1x)
+         .                   double t1 = now();
+        10 ( 0.00%)          std::printf("RUN %d TOTAL %.3f\n", r, t1 - t0);
+       809 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+     4,727 ( 0.00%)  => ./stdio-common/./stdio-common/printf.c:printf (1x)
+         4 ( 0.00%)          std::printf("HASH %016llx\n", (unsigned long long) fnv(clustering.data(), clustering.size()));
+       841 ( 0.00%)  => ./stdio-common/./stdio-common/printf.c:printf (1x)
+         8 ( 0.00%)          std::fflush(stdout);
+       773 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       180 ( 0.00%)  => ./libio/./libio/iofflush.c:fflush (1x)
+         .           #ifdef COUNTERS
+         .                   if (r == 0) {print_counters();}
+         .           #endif
+         .               }
+         9 ( 0.00%)      if (const char* dump = std::getenv("DUMP")) {std::FILE* d = std::fopen(dump, "wb"); std::fwrite(clustering.data(), 1, clustering.size(), d); std::fclose(d);}
+       856 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+       101 ( 0.00%)  => ./stdlib/./stdlib/getenv.c:getenv (1x)
+         .               return 0;
+         9 ( 0.00%)  }
+
+        16 ( 0.00%)  <counts for unidentified lines in driver.cpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_bvector.h
+--------------------------------------------------------------------------------
+Ir                 
+
+-- line 92 ----------------------------------------
+        .               _Bit_reference() _GLIBCXX_NOEXCEPT : _M_p(0), _M_mask(0) { }
+        .           
+        .           #if __cplusplus >= 201103L
+        .               _Bit_reference(const _Bit_reference&) = default;
+        .           #endif
+        .           
+        .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .               operator bool() const _GLIBCXX_NOEXCEPT
+1,808,832 ( 0.02%)      { return !!(*_M_p & _M_mask); }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               _Bit_reference&
+        .               operator=(bool __x) _GLIBCXX_NOEXCEPT
+        .               {
+        .                 if (__x)
+   12,185 ( 0.00%)  	*_M_p |= _M_mask;
+        .                 else
+1,404,014 ( 0.01%)  	*_M_p &= ~_M_mask;
+        .                 return *this;
+        .               }
+        .           
+        .           #if __cplusplus > 202002L
+        .               constexpr const _Bit_reference&
+        .               operator=(bool __x) const noexcept
+        .               {
+        .                 if (__x)
+-- line 117 ----------------------------------------
+-- line 188 ----------------------------------------
+        .           #if __has_attribute(__assume__) && !defined(__clang__)
+        .                 unsigned int __ofst = _M_offset;
+        .                 __attribute__ ((__assume__ (__ofst < unsigned(_S_word_bit))));
+        .           #endif
+        .               }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               _Bit_iterator_base(_Bit_type * __x, unsigned int __y)
+        6 ( 0.00%)      : _M_p(__x), _M_offset(__y) { }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               void
+        .               _M_bump_up()
+        .               {
+        .                 _M_assume_normalized();
+2,808,028 ( 0.03%)        if (_M_offset++ == int(_S_word_bit) - 1)
+        .           	{
+   10,968 ( 0.00%)  	  _M_offset = 0;
+   21,936 ( 0.00%)  	  ++_M_p;
+        .           	}
+        .               }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               void
+        .               _M_bump_down()
+        .               {
+        .                 _M_assume_normalized();
+-- line 214 ----------------------------------------
+-- line 220 ----------------------------------------
+        .               }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               void
+        .               _M_incr(ptrdiff_t __i)
+        .               {
+        .                 _M_assume_normalized();
+        .                 difference_type __n = __i + _M_offset;
+3,629,849 ( 0.04%)        _M_p += __n / int(_S_word_bit);
+8,139,744 ( 0.08%)        __n = __n % int(_S_word_bit);
+1,808,832 ( 0.02%)        if (__n < 0)
+        .           	{
+        .           	  __n += int(_S_word_bit);
+        .           	  --_M_p;
+        .           	}
+        .                 _M_offset = static_cast<unsigned int>(__n);
+        .               }
+        .           
+        .               _GLIBCXX_NODISCARD
+-- line 238 ----------------------------------------
+-- line 321 ----------------------------------------
+        .               _M_const_cast() const
+        .               { return *this; }
+        .           
+        .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .               reference
+        .               operator*() const
+        .               {
+        .                 _M_assume_normalized();
+  904,416 ( 0.01%)        return reference(_M_p, 1UL << _M_offset);
+        .               }
+        .           
+        .               _GLIBCXX20_CONSTEXPR
+        .               iterator&
+        .               operator++()
+        .               {
+        .                 _M_bump_up();
+        .                 return *this;
+-- line 337 ----------------------------------------
+-- line 544 ----------------------------------------
+        .           	  void operator=(_Bit_iterator __it) { _M_p = __it._M_p; }
+        .           	} _M_start;
+        .           #endif
+        .           	_Bit_iterator	_M_finish;
+        .           	_Bit_pointer	_M_end_of_storage;
+        .           
+        .           	_GLIBCXX20_CONSTEXPR
+        .           	_Bvector_impl_data() _GLIBCXX_NOEXCEPT
+        4 ( 0.00%)  	: _M_start(), _M_finish(), _M_end_of_storage()
+        .           	{ }
+        .           
+        .           #if __cplusplus >= 201103L
+        .           	_Bvector_impl_data(const _Bvector_impl_data&) = default;
+        .           
+        .           	_Bvector_impl_data&
+        .           	operator=(const _Bvector_impl_data&) = default;
+        .           
+-- line 560 ----------------------------------------
+-- line 570 ----------------------------------------
+        .           	  *this = __x;
+        .           	  __x._M_reset();
+        .           	}
+        .           #endif
+        .           
+        .           	_GLIBCXX20_CONSTEXPR
+        .           	void
+        .           	_M_reset() _GLIBCXX_NOEXCEPT
+        5 ( 0.00%)  	{ *this = _Bvector_impl_data(); }
+        .           
+        .           	_GLIBCXX20_CONSTEXPR
+        .           	void
+        .           	_M_swap_data(_Bvector_impl_data& __x) _GLIBCXX_NOEXCEPT
+        .           	{
+        .           	  // Do not use std::swap(_M_start, __x._M_start), etc as it loses
+        .           	  // information used by TBAA.
+        .           	  std::swap(*this, __x);
+-- line 586 ----------------------------------------
+-- line 687 ----------------------------------------
+        .           #endif
+        .           	return __p;
+        .                 }
+        .           
+        .                 _GLIBCXX20_CONSTEXPR
+        .                 void
+        .                 _M_deallocate()
+        .                 {
+        5 ( 0.00%)  	if (_M_impl._M_start._M_p)
+        .           	  {
+        .           	    const size_t __n = _M_impl._M_end_addr() - _M_impl._M_start._M_p;
+        .           	    _Bit_alloc_traits::deallocate(_M_impl,
+        .           					  _M_impl._M_end_of_storage - __n,
+        .           					  __n);
+        .           	    _M_impl._M_reset();
+        .           	  }
+        .                 }
+-- line 703 ----------------------------------------
+-- line 707 ----------------------------------------
+        .                 void
+        .                 _M_move_data(_Bvector_base&& __x) noexcept
+        .                 { _M_impl._M_move_data(std::move(__x._M_impl)); }
+        .           #endif
+        .           
+        .                 _GLIBCXX_CONSTEXPR
+        .                 static size_t
+        .                 _S_nword(size_t __n)
+        1 ( 0.00%)        { return (__n + int(_S_word_bit) - 1) / int(_S_word_bit); }
+        .               };
+        .           
+        .             /**
+        .              *  @brief  A specialization of vector for booleans which offers fixed time
+        .              *  access to individual elements in any order.
+        .              *
+        .              *  @ingroup sequences
+        .              *  @headerfile vector
+-- line 723 ----------------------------------------
+-- line 988 ----------------------------------------
+        .                 void
+        .                 assign(initializer_list<bool> __l)
+        .                 { _M_assign_aux(__l.begin(), __l.end(), random_access_iterator_tag()); }
+        .           #endif
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 iterator
+        .                 begin() _GLIBCXX_NOEXCEPT
+        1 ( 0.00%)        { return iterator(this->_M_impl._M_start._M_p, 0); }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 const_iterator
+        .                 begin() const _GLIBCXX_NOEXCEPT
+        .                 { return const_iterator(this->_M_impl._M_start._M_p, 0); }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 iterator
+        .                 end() _GLIBCXX_NOEXCEPT
+        2 ( 0.00%)        { return this->_M_impl._M_finish; }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 const_iterator
+        .                 end() const _GLIBCXX_NOEXCEPT
+        .                 { return this->_M_impl._M_finish; }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 reverse_iterator
+-- line 1014 ----------------------------------------
+-- line 1122 ----------------------------------------
+        .           
+        .                 _GLIBCXX20_CONSTEXPR
+        .                 void
+        .                 reserve(size_type __n)
+        .                 {
+        .           	if (__n > max_size())
+        .           	  __throw_length_error(__N("vector::reserve"));
+        .           	if (capacity() < __n)
+        3 ( 0.00%)  	  _M_reallocate(__n);
+      331 ( 0.00%)  => /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/vector.tcc:std::vector<bool, std::allocator<bool> >::_M_reallocate(unsigned long) (1x)
+        .                 }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+        .                 reference
+        .                 front()
+        .                 { return *begin(); }
+        .           
+        .                 _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+-- line 1138 ----------------------------------------
+-- line 1149 ----------------------------------------
+        .                 const_reference
+        .                 back() const
+        .                 { return *(end() - 1); }
+        .           
+        .                 _GLIBCXX20_CONSTEXPR
+        .                 void
+        .                 push_back(bool __x)
+        .                 {
+2,106,021 ( 0.02%)  	if (this->_M_impl._M_finish._M_p != this->_M_impl._M_end_addr())
+        .           	  *this->_M_impl._M_finish++ = __x;
+        .           	else
+        .           	  _M_insert_aux(end(), __x);
+        .                 }
+        .           
+        .                 _GLIBCXX20_CONSTEXPR
+        .                 void
+        .                 swap(vector& __x) _GLIBCXX_NOEXCEPT
+-- line 1165 ----------------------------------------
+
+2,308,432 ( 0.02%)  <counts for unidentified lines in /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_bvector.h>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: build/base/src/colorspace.hpp
+--------------------------------------------------------------------------------
+Ir                  
+
+-- line 11 ----------------------------------------
+         .           
+         .           // The space colours are clustered and matched in. Codes match the JS wrapper's `colorSpace` option.
+         .           enum class ColorSpace : int {
+         .               rgb = 0,    // sRGB values as stored: fast, and what MSE/PSNR measure
+         .               oklab = 1,  // OKLab (Björn Ottosson, 2020): distances track perceived colour difference
+         .           };
+         .           
+         .           inline uint16_t uint8_to_uint16(uint8_t value) {
+ 2,106,024 ( 0.02%)      return (uint16_t(value) * std::numeric_limits<uint16_t>::max()) / std::numeric_limits<uint8_t>::max();
+         .           }
+         .           
+         .           inline uint8_t uint16_to_uint8(uint16_t value) {
+12,636,126 ( 0.13%)      return static_cast<uint8_t>((static_cast<uint32_t>(value) * std::numeric_limits<uint8_t>::max() + (std::numeric_limits<uint16_t>::max() / 2)) / std::numeric_limits<uint16_t>::max());
+         .           }
+         .           
+         .           // sRGB <-> OKLab, with OKLab stored in 16-bit coordinates. All three axes share one scale (L, a + 0.5 and
+         .           // b + 0.5, times 65535), so squared coordinate distances stay proportional to squared OKLab distances, which
+         .           // is what Ward's criterion needs. For sRGB colours L is in [0, 1] and a, b in about [-0.32, 0.28].
+         .           class OKLab {
+         .           
+         .           private:
+         .           
+         .               static constexpr double scale = 65535.0;
+         .           
+         .               static double to_linear(double c) {
+     2,003 ( 0.00%)          return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+    31,826 ( 0.00%)  => ./math/./w_pow_template.c:pow@@GLIBC_2.29 (245x)
+       718 ( 0.00%)  => ./elf/../sysdeps/x86_64/dl-trampoline.h:_dl_runtime_resolve_xsave (1x)
+         .               }
+         .           
+         .               static double to_gamma(double c) {
+         .                   return c <= 0.0031308 ? 12.92 * c : 1.055 * std::pow(c, 1.0 / 2.4) - 0.055;
+         .               }
+         .           
+         .               static uint16_t to_coordinate(double v) {
+         .                   return uint16_t(std::clamp(std::lround(v * scale), 0L, 65535L));
+-- line 44 ----------------------------------------
+-- line 45 ----------------------------------------
+         .               }
+         .           
+         .               // sRGB 8-bit values decoded to linear light.
+         .               std::array<double, 256> linear;
+         .           
+         .           public:
+         .           
+         .               OKLab() {
+     1,664 ( 0.00%)          for (int i = 0; i < 256; i++) {this->linear[i] = to_linear(i / 255.0);}
+         .               }
+         .           
+         .               std::array<uint16_t, 3> from_rgb(uint8_t r8, uint8_t g8, uint8_t b8) const {
+         .                   double r = this->linear[r8], g = this->linear[g8], b = this->linear[b8];
+         .                   double l = std::cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+         .                   double m = std::cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+         .                   double s = std::cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+         .                   double L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+-- line 61 ----------------------------------------
+-- line 88 ----------------------------------------
+         .           
+         .           private:
+         .           
+         .               ColorSpace space;
+         .               OKLab oklab;
+         .           
+         .           public:
+         .           
+         5 ( 0.00%)      explicit ColorCoordinates(ColorSpace space) : space(space) {}
+         .           
+         .               // Coordinates for clustering: RGB is upscaled to 16 bits so weighted-average merges keep precision.
+         .               std::array<uint16_t, 3> cluster(uint8_t r, uint8_t g, uint8_t b) const {
+   702,008 ( 0.01%)          if (this->space == ColorSpace::oklab) {return this->oklab.from_rgb(r, g, b);}
+         .                   return {uint8_to_uint16(r), uint8_to_uint16(g), uint8_to_uint16(b)};
+ 2,106,024 ( 0.02%)      }
+         .           
+         .               // Coordinates for nearest-colour matching. RGB uses the 8-bit values as they are, which keeps matching
+         .               // exactly as it was before colour spaces existed.
+         .               std::array<uint16_t, 3> match(uint8_t r, uint8_t g, uint8_t b) const {
+         .                   if (this->space == ColorSpace::oklab) {return this->oklab.from_rgb(r, g, b);}
+         .                   return {r, g, b};
+         .               }
+         .           
+         .               std::array<uint8_t, 3> to_rgb(const std::array<uint16_t, 3>& coords) const {
+ 1,404,014 ( 0.01%)          if (this->space == ColorSpace::oklab) {return this->oklab.to_rgb(coords);}
+ 2,106,021 ( 0.02%)          return {uint16_to_uint8(coords[0]), uint16_to_uint8(coords[1]), uint16_to_uint8(coords[2])};
+ 4,914,049 ( 0.05%)      }
+         .           
+         .           };
+         .           
+         .           }
+         .           
+         .           #endif
+
+ 1,053,624 ( 0.01%)  <counts for unidentified lines in build/base/src/colorspace.hpp>
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: /usr/bin/../lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/stl_iterator.h
+--------------------------------------------------------------------------------
+Ir                   
+
+-- line 1069 ----------------------------------------
+          .                 using iterator_concept = std::__detail::__iter_concept<_Iterator>;
+          .           #endif
+          .           
+          .                 _GLIBCXX_CONSTEXPR __normal_iterator() _GLIBCXX_NOEXCEPT
+          .                 : _M_current(_Iterator()) { }
+          .           
+          .                 explicit _GLIBCXX20_CONSTEXPR
+          .                 __normal_iterator(const _Iterator& __i) _GLIBCXX_NOEXCEPT
+ 28,180,980 ( 0.29%)        : _M_current(__i) { }
+          .           
+          .                 // Allow iterator to const_iterator conversion
+          .           #if __cplusplus >= 201103L
+          .                 template<typename _Iter, typename = __convertible_from<_Iter>>
+          .           	_GLIBCXX20_CONSTEXPR
+          .           	__normal_iterator(const __normal_iterator<_Iter, _Container>& __i)
+          .           	noexcept
+          .           #else
+-- line 1085 ----------------------------------------
+-- line 1150 ----------------------------------------
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 __normal_iterator&
+          .                 operator-=(difference_type __n) _GLIBCXX_NOEXCEPT
+          .                 { _M_current -= __n; return *this; }
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 __normal_iterator
+          .                 operator-(difference_type __n) const _GLIBCXX_NOEXCEPT
+      4,886 ( 0.00%)        { return __normal_iterator(_M_current - __n); }
+          .           
+          .                 _GLIBCXX20_CONSTEXPR
+          .                 const _Iterator&
+          .                 base() const _GLIBCXX_NOEXCEPT
+          .                 { return _M_current; }
+          .               };
+          .           
+          .             // Note: In what follows, the left- and right-hand-side iterators are
+-- line 1166 ----------------------------------------
+-- line 1220 ----------------------------------------
+          .               { return __lhs.base() == __rhs.base(); }
+          .           
+          .             template<typename _Iterator, typename _Container>
+          .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .               inline bool
+          .               operator==(const __normal_iterator<_Iterator, _Container>& __lhs,
+          .           	       const __normal_iterator<_Iterator, _Container>& __rhs)
+          .               _GLIBCXX_NOEXCEPT
+  1,033,330 ( 0.01%)      { return __lhs.base() == __rhs.base(); }
+          .           
+          .             template<typename _IteratorL, typename _IteratorR, typename _Container>
+          .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .               inline bool
+          .               operator!=(const __normal_iterator<_IteratorL, _Container>& __lhs,
+          .           	       const __normal_iterator<_IteratorR, _Container>& __rhs)
+          .               _GLIBCXX_NOEXCEPT
+          .               { return __lhs.base() != __rhs.base(); }
+          .           
+          .             template<typename _Iterator, typename _Container>
+          .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .               inline bool
+          .               operator!=(const __normal_iterator<_Iterator, _Container>& __lhs,
+          .           	       const __normal_iterator<_Iterator, _Container>& __rhs)
+          .               _GLIBCXX_NOEXCEPT
+368,224,080 ( 3.79%)      { return __lhs.base() != __rhs.base(); }
+          .           
+          .             // Random access iterator requirements
+          .             template<typename _IteratorL, typename _IteratorR, typename _Container>
+          .               _GLIBCXX_NODISCARD
+          .               inline bool
+          .               operator<(const __normal_iterator<_IteratorL, _Container>& __lhs,
+          .           	      const __normal_iterator<_IteratorR, _Container>& __rhs)
+          .               _GLIBCXX_NOEXCEPT
+-- line 1252 ----------------------------------------
+-- line 1329 ----------------------------------------
+          .               { return __lhs.base() - __rhs.base(); }
+          .           
+          .             template<typename _Iterator, typename _Container>
+          .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .               inline typename __normal_iterator<_Iterator, _Container>::difference_type
+          .               operator-(const __normal_iterator<_Iterator, _Container>& __lhs,
+          .           	      const __normal_iterator<_Iterator, _Container>& __rhs)
+          .               _GLIBCXX_NOEXCEPT
+    263,581 ( 0.00%)      { return __lhs.base() - __rhs.base(); }
+          .           
+          .             template<typename _Iterator, typename _Container>
+          .               _GLIBCXX_NODISCARD _GLIBCXX20_CONSTEXPR
+          .               inline __normal_iterator<_Iterator, _Container>
+          .               operator+(typename __normal_iterator<_Iterator, _Container>::difference_type
+          .           	      __n, const __normal_iterator<_Iterator, _Container>& __i)
+          .               _GLIBCXX_NOEXCEPT
+          .               { return __normal_iterator<_Iterator, _Container>(__i.base() + __n); }
+-- line 1345 ----------------------------------------
+
+--------------------------------------------------------------------------------
+-- Auto-annotated source: build/base/src/clustering.cpp
+--------------------------------------------------------------------------------
+Ir                   
+
+-- line 38 ----------------------------------------
+          .               uint8_t* output = allocate_variable_size(vector.size());
+          .               if (!vector.empty()) {std::memcpy(output + 4, vector.data(), vector.size() * sizeof(uint8_t));}   // memcpy from an empty vector's null data() is undefined
+          .               return output;
+          .           }
+          .           
+          .           typedef std::array<uint8_t, 3> Rgb;
+          .           
+          .           void write_color(std::vector<uint8_t>& clustering, size_t offset, const Rgb& rgb) {
+  6,318,060 ( 0.06%)      for (int c = 0; c < 3; c++) {clustering[offset + c] = rgb[c];}
+          .           }
+          .           
+          .           // Clustering format version 3: a header, then the root colour, then one record per merge in split order, then
+          .           // zero padding. Multi-byte values are little-endian.
+          .           //   header (22 bytes): [magic 0xAC, version 3, header length, record length, colour space, precision,
+          .           //                       weight unit (0 = pixels, 1 = 1/255 of a pixel), weight shift, total weight (u32), transparent cutoff,
+          .           //                       grouped error (f32), checksum (u32), 1 zero byte]
+          .           // The checksum is the CRC-32 (the one zlib and PNG use) of the whole clustering with the checksum's own 4 bytes read as
+-- line 54 ----------------------------------------
+-- line 75 ----------------------------------------
+          .           constexpr uint8_t clustering_magic = 0xAC;
+          .           constexpr uint8_t clustering_version = 3;
+          .           constexpr size_t clustering_header = 22;
+          .           constexpr size_t clustering_min_header = 13;
+          .           constexpr size_t clustering_record = 21;
+          .           constexpr size_t clustering_checksum = 17;
+          .           
+          .           void write_u32(uint8_t* at, uint32_t value) {
+  1,053,012 ( 0.01%)      for (int b = 0; b < 4; b++) {at[b] = (value >> (8 * b)) & 0xFF;}
+          .           }
+          .           
+          .           uint32_t read_u32(const uint8_t* at) {
+          .               return uint32_t(at[0]) | (uint32_t(at[1]) << 8) | (uint32_t(at[2]) << 16) | (uint32_t(at[3]) << 24);
+          .           }
+          .           
+          .           // CRC-32 (reflected, polynomial 0xEDB88320) of a clustering, reading the checksum field as zeros. The JavaScript
+          .           // (shared.js) computes the same to check a clustering before it is used.
+          .           // CRC-32 of bytes [from, to) of a clustering, continuing from `crc` (start at 0xFFFFFFFF, finish by inverting), with the
+          .           // checksum's own 4 bytes read as zeros.
+          8 ( 0.00%)  uint32_t clustering_crc_update(uint32_t crc, const uint8_t* data, size_t from, size_t to) {
+          .               static uint32_t table[256];
+          .               static bool ready = false;
+         16 ( 0.00%)      if (!ready) {
+        192 ( 0.00%)          for (uint32_t n = 0; n < 256; n++) {
+          .                       uint32_t c = n;
+      4,736 ( 0.00%)              for (int b = 0; b < 8; b++) {c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;}
+         64 ( 0.00%)              table[n] = c;
+          .                   }
+          1 ( 0.00%)          ready = true;
+          .               }
+ 11,056,704 ( 0.11%)      for (size_t i = from; i < to; i++) {
+ 33,169,892 ( 0.34%)          const uint8_t byte = i >= clustering_checksum && i < clustering_checksum + 4 ? 0 : data[i];
+ 18,427,720 ( 0.19%)          crc = table[(crc ^ byte) & 0xFF] ^ (crc >> 8);
+          .               }
+          8 ( 0.00%)      return crc;
+          .           }
+          .           uint32_t clustering_crc(const uint8_t* data, size_t length) {
+          .               return clustering_crc_update(0xFFFFFFFFu, data, 0, length) ^ 0xFFFFFFFFu;
+          .           }
+          .           
+          .           // Where an image format keeps its channels: the bytes per pixel, the offsets of red and blue (green is always byte 1),
+          .           // whether byte 3 is alpha, and whether it is padding instead (the 'x' formats: every pixel is opaque, and mapped output
+          .           // writes 255 there). Read at run time rather than compiled per format, so the pixel loops exist once.
+-- line 117 ----------------------------------------
+-- line 120 ----------------------------------------
+          .               int stride;
+          .               int r;
+          .               int b;
+          .               bool alpha;
+          .               bool opaque;
+          .           };
+          .           
+          .           PixelLayout layout_of(int image_format) {
+          3 ( 0.00%)      switch (image_format) {
+          .                   case 1: return {3, 0, 2, false, false};
+          .                   case 2: return {4, 2, 0, true, false};
+          .                   case 3: return {4, 0, 2, false, true};
+          .                   case 4: return {4, 2, 0, false, true};
+          .                   default: return {4, 0, 2, true, false};  // rgba; JS validates the format before any code reaches here
+          .               }
+          .           }
+          .           
+-- line 136 ----------------------------------------
+-- line 140 ----------------------------------------
+          .           // enters the clustering as one cluster at the weighted mean of its colours: at most 2^(3 * precision) clusters,
+          .           // so time is bounded on images with very many distinct colours, while the means keep the palette close to exact.
+          .           //
+          .           // The work is a job that runs in slices: `step(budget)` does as much as fits the time budget and returns whether it
+          .           // has finished, so a caller can look at the world between slices (to cancel, or report progress). The stages are
+          .           // scanning the pixels, building the grid from the distinct colours, merging clusters, and writing the records;
+          .           // scanning and merging are interruptible, the other two are short next to them. Slicing never changes the result:
+          .           // the same steps run in the same order however they are divided.
+          7 ( 0.00%)  class ClusteringJob {
+          .           
+          .           public:
+          .           
+          .               // The image must stay where it is until the job has scanned it (the first stage).
+          1 ( 0.00%)      ClusteringJob(const uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision, bool weight_alpha, int cutoff)
+          7 ( 0.00%)          : image_data(image_data), layout(layout_of(image_format)), color_space(color_space), precision(precision), cutoff(cutoff),
+         10 ( 0.00%)            space(color_space), clustering(clustering_header, 0) {
+          1 ( 0.00%)          this->clustering[0] = clustering_magic;
+          .                   this->clustering[1] = clustering_version;
+          .                   this->clustering[2] = uint8_t(clustering_header);
+          .                   this->clustering[3] = uint8_t(clustering_record);
+          1 ( 0.00%)          this->clustering[4] = uint8_t(color_space);
+          1 ( 0.00%)          this->clustering[5] = uint8_t(precision);
+          5 ( 0.00%)          this->limit = int64_t(image_length) - (this->layout.stride - 1);
+          2 ( 0.00%)          this->increment = this->layout.stride;
+          .                   // With a cutoff (formats with alpha only), pixels with alpha below it are left out and the rest count whole: it is the
+          .                   // indexed-output model, where a pixel is either transparent or fully shown.
+          6 ( 0.00%)          this->binary = cutoff > 0 && this->layout.alpha;
+          5 ( 0.00%)          this->weight_alpha = weight_alpha && this->layout.alpha && !this->binary;
+          3 ( 0.00%)          this->clustering[12] = this->binary ? uint8_t(cutoff) : 0;
+          8 ( 0.00%)      }
+          .           
+          .               // Runs until the clustering is finished or `budget_ms` milliseconds have passed (checked between small units
+          .               // of work, so a slice can overrun a little). An infinite budget never reads the clock. Returns whether finished.
+          5 ( 0.00%)      bool step(double budget_ms) {
+         17 ( 0.00%)          const bool timed = budget_ms < std::numeric_limits<double>::infinity();
+          1 ( 0.00%)          const double deadline = timed ? emscripten_get_now() + budget_ms : 0.0;
+          9 ( 0.00%)          if (this->stage == Stage::scan && !this->scan(timed, deadline)) {return false;}
+1,399,317,929 (14.39%)  => build/base/src/clustering.cpp:ClusteringJob::scan(bool, double) (1x)
+         10 ( 0.00%)          if (this->stage == Stage::build && !this->build(timed, deadline)) {return false;}
+237,657,971 ( 2.44%)  => build/base/src/clustering.cpp:ClusteringJob::build(bool, double) (1x)
+         11 ( 0.00%)          if (this->stage == Stage::chain && !this->merge_some(timed, deadline)) {return false;}
+7,596,498,998 (78.09%)  => build/base/src/clustering.cpp:ClusteringJob::merge_some(bool, double) (1x)
+         10 ( 0.00%)          if (this->stage == Stage::write && !this->write(timed, deadline)) {return false;}
+384,333,968 ( 3.95%)  => build/base/src/clustering.cpp:ClusteringJob::write(bool, double) (1x)
+          4 ( 0.00%)          return this->stage == Stage::done;
+          3 ( 0.00%)      }
+          .           
+          .               // How far along it is, 0 to 1000 (approximate, and not linear in time). Scanning is the first tenth, building
+          .               // the next twentieth, merging most of the rest, writing the last twentieth; building and writing report where
+          .               // they start (they are short next to merging, and JS keeps the reports monotonic).
+          .               int progress() const {
+          .                   switch (this->stage) {
+          .                       case Stage::scan: return this->limit > 0 ? int(100.0 * double(this->position) / double(this->limit)) : 0;
+          .                       case Stage::build: return 100;
+-- line 189 ----------------------------------------
+-- line 190 ----------------------------------------
+          .                       case Stage::chain: return n > 1 ? 150 + int(800.0 * double(this->merges.size()) / double(this->n - 1)) : 150;
+          .                       case Stage::write: return 950;
+          .                       default: return 1000;
+          .                   }
+          .               }
+          .           
+          .               // The finished clustering, sealed with its checksum (computed while writing, or here for a header-only one).
+          .               std::vector<uint8_t> take() {
+          4 ( 0.00%)          if (this->crc_cursor < this->clustering.size()) {
+          .                       this->crc = clustering_crc_update(this->crc, this->clustering.data(), this->crc_cursor, this->clustering.size());
+          .                       this->crc_cursor = this->clustering.size();
+          .                   }
+          1 ( 0.00%)          write_u32(&this->clustering[clustering_checksum], this->crc ^ 0xFFFFFFFFu);
+          .                   return std::move(this->clustering);
+          .               }
+          .           
+          .           private:
+          .           
+          .               enum class Stage {scan, build, chain, write, done};
+          .               enum class Phase {convert, group, grouped_error, grid, index};
+          .               enum class Writing {colors, sort, records, checksum};
+-- line 210 ----------------------------------------
+-- line 218 ----------------------------------------
+          .           
+          .               const uint8_t* image_data;
+          .               PixelLayout layout;
+          .               ColorSpace color_space;
+          .               int precision;
+          .               int cutoff;
+          .               ColorCoordinates space;
+          .               std::vector<uint8_t> clustering;
+          1 ( 0.00%)      Stage stage = Stage::scan;
+          .           
+          .               // Scanning
+          .               AgglomerativeClustering::AgglomerativeHistogram histogram;
+          .               int64_t limit = 0;
+          1 ( 0.00%)      int64_t position = 0;
+          1 ( 0.00%)      int increment = 4;
+          1 ( 0.00%)      bool binary = false;
+          .               bool weight_alpha = false;
+          1 ( 0.00%)      bool partial = false;
+          .           
+          .               // Building
+          1 ( 0.00%)      Phase phase = Phase::convert;
+         11 ( 0.00%)      size_t cursor = 0;
+          .               std::vector<std::array<uint16_t, 3>> unique_colors;
+          .               std::vector<uint64_t> unique_counts;
+          .               AgglomerativeClustering::AgglomerativeHistogram bins;  // the groups, with `precision` below 8
+          .               std::vector<std::array<uint64_t, 3>> sums;
+          .               std::vector<std::array<uint16_t, 3>> group_colors;
+          .               std::vector<uint32_t> bin_of;
+          .               uint32_t total_weight = 0;
+          .           
+          .               // Building and merging
+          1 ( 0.00%)      size_t n = 0;
+          1 ( 0.00%)      int shift = 0;
+          9 ( 0.00%)      double grouped_error = 0;  // squared error lost by grouping, in unscaled weights times squared coordinates
+          .               std::unique_ptr<AgglomerativeClustering::WardGrid> grid;
+          .               std::vector<Merge> merges;
+          .               std::vector<double> heights;
+          .               std::vector<int32_t> chain;
+          .               int32_t next_start = 0;
+          .           
+          .               // Writing
+          .               Writing writing = Writing::colors;
+          .               std::vector<Rgb> rgb;
+          .               std::vector<Merge> sorted;
+          4 ( 0.00%)      size_t sort_width = 1, sort_left = 0, sort_i = 0, sort_j = 0, sort_k = 0;
+          .               bool sort_active = false;
+          .               std::vector<uint32_t> index;
+          1 ( 0.00%)      uint32_t crc = 0xFFFFFFFFu;
+          1 ( 0.00%)      size_t crc_cursor = 0;
+          .           
+          .               // Pass 1: build the histogram and collect unique colours. Alpha weights are in units of 1/255 of a pixel.
+          8 ( 0.00%)      bool scan(bool timed, double deadline) {
+          .                   constexpr int64_t block = 65536;
+        614 ( 0.00%)          while (this->position < this->limit) {
+      1,525 ( 0.00%)              const int64_t end = std::min(this->limit, this->position + block * this->increment);
+          .                       // Room for this block's new colours first, so the table never grows (rehashing every colour) in one go.
+      2,135 ( 0.00%)              if (!this->histogram.make_room(size_t(block), timed, deadline)) {return false;}
+ 20,724,764 ( 0.21%)  => build/base/src/clustering.hpp:AgglomerativeClustering::AgglomerativeHistogram::make_room(unsigned long, bool, double) (305x)
+ 99,810,500 ( 1.03%)              for (; this->position < end; this->position += this->increment) {
+ 39,923,712 ( 0.41%)                  const uint8_t* pixel = this->image_data + this->position;
+ 99,809,280 ( 1.03%)                  uint32_t key = (uint32_t(pixel[this->layout.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[this->layout.b]);
+ 39,923,712 ( 0.41%)                  if (this->binary) {
+          .                               if (pixel[3] >= this->cutoff) {this->histogram.add(key);}
+          .                               continue;
+          .                           }
+ 39,923,712 ( 0.41%)                  if (!this->weight_alpha) {this->histogram.add(key); continue;}
+ 39,923,712 ( 0.41%)                  uint8_t alpha = pixel[3];
+ 19,961,856 ( 0.21%)                  if (alpha == 0) {continue;}
+ 99,809,280 ( 1.03%)                  this->partial = this->partial || alpha != 255;
+          .                           this->histogram.add(key, alpha);
+          .                       }
+        610 ( 0.00%)              if (timed && this->position < this->limit && emscripten_get_now() >= deadline) {return false;}
+          .                   }
+          3 ( 0.00%)          this->stage = Stage::build;
+          .                   return true;
+          7 ( 0.00%)      }
+          .           
+          .               // From the distinct colours to the grid, one cluster per colour (and the header fields that depend on them). It is a
+          .               // pass over the distinct colours, several with `precision` below 8, so on an image of millions of colours it is
+          .               // interruptible like the scan: each phase keeps its place (`cursor`) and checks the clock every `block` colours.
+          .               // The phases run the same operations in the same order however they are sliced.
+         10 ( 0.00%)      bool build(bool timed, double deadline) {
+          .                   constexpr size_t block = 65536;
+         32 ( 0.00%)          const auto expired = [&](size_t done, size_t total) {return timed && done < total && emscripten_get_now() >= deadline;};
+          .                   const std::vector<uint32_t>& keys = this->histogram.colors();
+          .           
+          .                   // Each distinct colour to clustering coordinates. With no partly transparent pixels every weight is a whole
+          .                   // number of pixels: count in pixels, so an opaque image (or one with only fully transparent holes) clusters
+          .                   // exactly as with alpha ignored.
+          4 ( 0.00%)          if (this->phase == Phase::convert) {
+          3 ( 0.00%)              if (this->cursor == 0) {
+          .                           this->unique_counts = std::vector<uint64_t>(this->histogram.counts());
+          .                           this->unique_colors.reserve(keys.size());
+          6 ( 0.00%)                  this->clustering[6] = this->weight_alpha && this->partial ? 1 : 0;
+          .                       }
+          4 ( 0.00%)              const bool whole_pixels = this->weight_alpha && !this->partial;
+         15 ( 0.00%)              while (this->cursor < keys.size()) {
+         18 ( 0.00%)                  const size_t end = std::min(keys.size(), this->cursor + block);
+  2,106,036 ( 0.02%)                  for (; this->cursor < end; this->cursor++) {
+    351,004 ( 0.00%)                      const uint32_t key = keys[this->cursor];
+  1,404,016 ( 0.01%)                      this->unique_colors.push_back(this->space.cluster(uint8_t(key >> 16), uint8_t(key >> 8), uint8_t(key)));
+  2,106,024 ( 0.02%)                      if (whole_pixels) {this->unique_counts[this->cursor] /= 255u;}
+          .                           }
+          .                           if (expired(this->cursor, keys.size())) {return false;}
+          .                       }
+          1 ( 0.00%)              this->cursor = 0;
+          5 ( 0.00%)              this->phase = this->precision < 8 ? Phase::group : Phase::grid;
+          .                   }
+          .           
+          .                   // With `precision` below 8: colours grouped by their top bits, each group entering as one cluster at the
+          .                   // count-weighted mean of its colours.
+          2 ( 0.00%)          if (this->phase == Phase::group) {
+          .                       const uint32_t channel = (0xFFu << (8 - this->precision)) & 0xFFu;
+          .                       const uint32_t mask = (channel << 16) | (channel << 8) | channel;
+          .                       if (this->cursor == 0) {this->bin_of = std::vector<uint32_t>(this->unique_colors.size());}
+          .                       while (this->cursor < this->unique_colors.size()) {
+          .                           const size_t end = std::min(this->unique_colors.size(), this->cursor + block);
+          .                           for (size_t i = this->cursor; i < end; i++) {
+          .                               uint32_t bin = this->bins.add(keys[i] & mask, this->unique_counts[i]);
+          .                               this->bin_of[i] = bin;
+-- line 336 ----------------------------------------
+-- line 347 ----------------------------------------
+          .                           for (int c = 0; c < 3; c++) {this->group_colors[b][c] = uint16_t(this->sums[b][c] / group_counts[b]);}
+          .                       }
+          .                       this->cursor = 0;
+          .                       this->phase = Phase::grouped_error;
+          .                   }
+          .           
+          .                   // What grouping discarded: each original colour's squared distance to the mean that now stands for it. Then the
+          .                   // groups replace the colours.
+          4 ( 0.00%)          if (this->phase == Phase::grouped_error) {
+          .                       while (this->cursor < this->unique_colors.size()) {
+          .                           const size_t end = std::min(this->unique_colors.size(), this->cursor + block);
+          .                           for (size_t i = this->cursor; i < end; i++) {
+          .                               double squared = 0;
+          .                               for (int c = 0; c < 3; c++) {
+          .                                   const double d = double(this->unique_colors[i][c]) - double(this->group_colors[this->bin_of[i]][c]);
+          .                                   squared += d * d;
+          .                               }
+-- line 363 ----------------------------------------
+-- line 370 ----------------------------------------
+          .                       this->unique_counts = std::vector<uint64_t>(this->bins.counts());
+          .                       this->bin_of = {};
+          .                       this->sums = {};
+          .                       this->cursor = 0;
+          .                       this->phase = Phase::grid;
+          .                   }
+          .           
+          .                   if (this->phase == Phase::grid) {
+          3 ( 0.00%)              if (this->cursor == 0) {
+          .                           // An image with no visible pixels has no hierarchy: the result is just the header, which cuts to an
+          .                           // empty palette.
+          1 ( 0.00%)                  this->n = this->unique_colors.size();
+          6 ( 0.00%)                  if (this->n == 0) {this->stage = Stage::done; return true;}
+          .                           // Pad so the length is 7 more than a multiple of 9, which no 1.x clustering can be.
+          4 ( 0.00%)                  size_t length = clustering_header + 3 + clustering_record * (this->n - 1);
+         14 ( 0.00%)                  this->clustering.resize(length + (7 + 9 - length % 9) % 9, 0);
+          .           
+          .                           // The grid counts in 32 bits. Weights only exceed that for partly transparent images above ~16.8 MP;
+          .                           // scale those down by the smallest power of two that fits, keeping every visible colour at least 1.
+          .                           uint64_t total = 0;
+    614,278 ( 0.01%)                  for (uint64_t count : this->unique_counts) {total += count;}
+          4 ( 0.00%)                  while ((total >> this->shift) > std::numeric_limits<uint32_t>::max() / 2u) {this->shift++;}
+          1 ( 0.00%)                  this->clustering[7] = uint8_t(this->shift);
+          .                           this->grid = std::make_unique<AgglomerativeClustering::WardGrid>(this->n);
+          .                       }
+          .                       // Pass 2: one cluster per unique colour
+         16 ( 0.00%)              while (this->cursor < this->n) {
+         18 ( 0.00%)                  const size_t end = std::min(this->n, this->cursor + block);
+  1,755,038 ( 0.02%)                  for (; this->cursor < end; this->cursor++) {
+  1,755,020 ( 0.02%)                      uint32_t weight = uint32_t(std::max<uint64_t>(this->unique_counts[this->cursor] >> this->shift, 1u));
+    702,008 ( 0.01%)                      this->grid->add(this->unique_colors[this->cursor], weight);
+ 64,865,901 ( 0.67%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::add(std::array<unsigned short, 3ul> const&, unsigned int) (351,004x)
+    351,004 ( 0.00%)                      this->total_weight += weight;
+          .                           }
+          6 ( 0.00%)                  if (expired(this->cursor, this->n)) {return false;}
+          .                       }
+          1 ( 0.00%)              write_u32(&this->clustering[8], this->total_weight);
+          1 ( 0.00%)              this->unique_colors = {};
+          1 ( 0.00%)              this->unique_counts = {};
+          1 ( 0.00%)              this->cursor = 0;  // writing uses it next
+          1 ( 0.00%)              this->phase = Phase::index;
+          .                   }
+          .           
+          .                   // The grid's first size, picked from how crowded the colours are (resumable too: on millions of clusters
+          .                   // it is the longest part of building).
+          5 ( 0.00%)          if (this->phase == Phase::index && !this->grid->reindex(timed, deadline)) {return false;}
+141,485,265 ( 1.45%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::reindex(bool, double) (1x)
+          .           
+          .                   // Merges come out of the nearest-neighbour chain in chain order, not cost order. A merge's height is its
+          .                   // cost, raised to its children's heights where centroid rounding would put it below them, so sorting by
+          .                   // height keeps every merge after the merges that formed its clusters.
+          2 ( 0.00%)          this->merges.reserve(this->n - 1);
+          3 ( 0.00%)          this->heights.assign(2 * this->n, 0.0);
+          .                   this->stage = Stage::chain;
+          .                   return true;
+          8 ( 0.00%)      }
+          .           
+          .               // Ward's criterion is reducible, so merging mutual cheapest partners as the chain finds them gives the
+          .               // same hierarchy as always merging the globally cheapest pair.
+         10 ( 0.00%)      bool merge_some(bool timed, double deadline) {
+          .                   AgglomerativeClustering::WardGrid& grid = *this->grid;
+          .                   // A review of the grid's size left unfinished by the last slice comes first: nothing may query the grid during one.
+          1 ( 0.00%)          if (grid.reviewing() && !grid.reindex(timed, deadline)) {return false;}
+          .                   unsigned iterations = 0;
+  2,056,840 ( 0.02%)          while (grid.size() > 1) {
+          .           
+  2,056,838 ( 0.02%)              if (timed && (++iterations & 3u) == 0 && emscripten_get_now() >= deadline) {return false;}
+          .           
+  1,028,419 ( 0.01%)              if (this->chain.empty()) {
+  2,228,952 ( 0.02%)                  while (!grid.is_alive(this->next_start)) {this->next_start++;}
+          .                           this->chain.push_back(this->next_start);
+          .                       }
+          .           
+  1,028,419 ( 0.01%)              int32_t a = this->chain.back();
+          .                       // The cluster below `a` in the chain is a live partner, so its cost bounds the search.
+  7,047,486 ( 0.07%)              int32_t b = grid.nearest(a, this->chain.size() >= 2 ? this->chain[this->chain.size() - 2] : AgglomerativeClustering::WardGrid::none);
+7,222,724,388 (74.25%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::nearest(int, int) (1,028,419x)
+          .           
+  3,810,782 ( 0.04%)              if (this->chain.size() < 2 || this->chain[this->chain.size() - 2] != b) {
+          .                           this->chain.push_back(b);
+          .                           continue;
+          .                       }
+          .           
+          .                       this->chain.pop_back();
+          .                       this->chain.pop_back();
+          .           
+          .                       uint32_t a_count = grid.count(a);
+          .                       uint32_t b_count = grid.count(b);
+    351,003 ( 0.00%)              uint32_t count = a_count + b_count;
+          .                       const std::array<uint16_t, 3>& ac = grid.coords(a);
+          .                       const std::array<uint16_t, 3>& bc = grid.coords(b);
+          .                       std::array<uint16_t, 3> merged = {
+  4,563,149 ( 0.05%)                  static_cast<uint16_t>((uint64_t(ac[0]) * a_count + uint64_t(bc[0]) * b_count) / count),
+  3,510,160 ( 0.04%)                  static_cast<uint16_t>((uint64_t(ac[1]) * a_count + uint64_t(bc[1]) * b_count) / count),
+  3,510,157 ( 0.04%)                  static_cast<uint16_t>((uint64_t(ac[2]) * a_count + uint64_t(bc[2]) * b_count) / count)
+          .                       };
+          .           
+          .                       double cost = grid.cost(a, b);
+    702,006 ( 0.01%)              double height = std::max({cost, this->heights[a], this->heights[b]});
+  1,053,009 ( 0.01%)              grid.remove(a);
+ 39,039,238 ( 0.40%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::remove(int) (351,003x)
+  1,053,009 ( 0.01%)              grid.remove(b);
+ 39,666,051 ( 0.41%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::remove(int) (351,003x)
+  1,755,015 ( 0.02%)              int32_t m = grid.add(merged, count);
+ 62,911,593 ( 0.65%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::add(std::array<unsigned short, 3ul> const&, unsigned int) (351,003x)
+    702,006 ( 0.01%)              this->heights[m] = height;
+          .                       // Heavier child first, so cutting the hierarchy knows which half of a split keeps the parent's place.
+    702,006 ( 0.01%)              if (b_count > a_count) {this->merges.push_back({height, m, b, a, cost, a_count});} else {this->merges.push_back({height, m, a, b, cost, b_count});}
+  1,053,009 ( 0.01%)              if (!grid.reindex(timed, deadline)) {return false;}
+150,158,406 ( 1.54%)  => build/base/src/clustering.hpp:AgglomerativeClustering::WardGrid::reindex(bool, double) (351,003x)
+          .           
+          .                   }
+          3 ( 0.00%)          this->stage = Stage::write;
+          .                   return true;
+          8 ( 0.00%)      }
+          .           
+          .               // Writing the records, interruptible like the other stages: on millions of merges it is a conversion of every
+          .               // cluster, a sort and the records themselves, so each part keeps its place and checks the clock every `block`
+          .               // steps. The steps and their order are the same however it is sliced.
+         10 ( 0.00%)      bool write(bool timed, double deadline) {
+          .                   constexpr size_t block = 65536;
+          .                   AgglomerativeClustering::WardGrid& grid = *this->grid;
+          .           
+          .                   // Every cluster (dead ones keep their coordinates) is converted to 8-bit sRGB once: in OKLab that takes
+          .                   // three powers, and most clusters appear in two records.
+          3 ( 0.00%)          if (this->writing == Writing::colors) {
+          5 ( 0.00%)              if (this->cursor == 0) {this->rgb = std::vector<Rgb>(size_t(grid.capacity()));}
+          1 ( 0.00%)              const size_t total = size_t(grid.capacity());
+         24 ( 0.00%)              while (this->cursor < total) {
+         33 ( 0.00%)                  const size_t end = std::min(total, this->cursor + block);
+  4,914,071 ( 0.05%)                  for (; this->cursor < end; this->cursor++) {this->rgb[this->cursor] = this->space.to_rgb(grid.coords(int32_t(this->cursor)));}
+         31 ( 0.00%)                  if (timed && this->cursor < total && emscripten_get_now() >= deadline) {return false;}
+          .                       }
+          1 ( 0.00%)              this->cursor = 0;
+          .                       this->sorted.reserve(this->merges.size());
+          1 ( 0.00%)              this->writing = Writing::sort;
+          .                   }
+          .           
+          .                   // Merged ids increase in chain order, so breaking height ties by them keeps chain order, as a stable sort would.
+          .                   // The order is total (merged ids are unique), so any sort gives these bytes. A plain bottom-up merge sort, not
+          .                   // std::sort: its unrolled instantiation for Merge was 16 KB of WebAssembly, an eighth of the module. It keeps
+          .                   // its place within a merge of two runs, since the last merges are as long as the whole list.
+          .                   if (this->writing == Writing::sort) {
+ 34,286,478 ( 0.35%)              auto before = [](const Merge& x, const Merge& y) {return x.height < y.height || (x.height == y.height && x.merged < y.merged);};
+          .                       std::vector<Merge>& a = this->merges;
+          1 ( 0.00%)              std::vector<Merge>& b = this->sorted;
+          .                       const size_t n = a.size();
+          .                       // The second buffer, zeroed in parts first: it is as large as the merges (160 MB at four million).
+          4 ( 0.00%)              while (b.size() < n) {
+          4 ( 0.00%)                  b.resize(std::min(n, b.size() + block * 16));
+          3 ( 0.00%)                  if (timed && b.size() < n && emscripten_get_now() >= deadline) {return false;}
+          .                       }
+          .                       size_t done = 0;
+         41 ( 0.00%)              while (this->sort_width < n) {
+          .                           const size_t width = this->sort_width;
+    702,079 ( 0.01%)                  while (this->sort_left < n) {
+  2,457,077 ( 0.03%)                      const size_t middle = std::min(this->sort_left + width, n), right = std::min(this->sort_left + 2 * width, n);
+    702,098 ( 0.01%)                      if (!this->sort_active) {
+    351,011 ( 0.00%)                          this->sort_i = this->sort_left;
+    351,011 ( 0.00%)                          this->sort_j = middle;
+    351,011 ( 0.00%)                          this->sort_k = this->sort_left;
+    351,011 ( 0.00%)                          this->sort_active = true;
+          .                               }
+          .                               size_t& i = this->sort_i;
+          .                               size_t& j = this->sort_j;
+          .                               size_t& k = this->sort_k;
+ 14,040,136 ( 0.14%)                      while (k < right) {
+          .                                   // The left run's element first unless the right one is strictly before it.
+107,076,477 ( 1.10%)                          if (i < middle && (j >= right || !before(a[j], a[i]))) {b[k++] = a[i++];} else {b[k++] = a[j++];}
+ 20,007,373 ( 0.21%)                          if (++done % block == 0 && timed && k < right && emscripten_get_now() >= deadline) {return false;}
+          .                               }
+    351,011 ( 0.00%)                      this->sort_active = false;
+  1,755,055 ( 0.02%)                      this->sort_left += 2 * width;
+          .                           }
+          .                           a.swap(b);
+         95 ( 0.00%)                  this->sort_width *= 2;
+         19 ( 0.00%)                  this->sort_left = 0;
+         38 ( 0.00%)                  if (timed && this->sort_width < n && emscripten_get_now() >= deadline) {return false;}
+          .                       }
+          .                       this->sorted = {};
+          2 ( 0.00%)              this->index = std::vector<uint32_t>(size_t(grid.capacity()), 0u);
+          .                       // The error that grouping discarded, in the same units as the costs.
+          3 ( 0.00%)              const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
+         15 ( 0.00%)              const float grouped = float(this->grouped_error / double(uint64_t(1) << this->shift) / (scale * scale));
+          .                       uint32_t bits;
+          .                       std::memcpy(&bits, &grouped, 4);
+          .                       write_u32(&this->clustering[13], bits);
+          2 ( 0.00%)              this->writing = Writing::records;
+          .                   }
+          .           
+          .                   // Records go in split order, the reverse of merge order. Each cluster's split-order index: the root is 0,
+          .                   // the heavier child keeps its parent's index, and record i's lighter child is i + 1. Costs are converted from
+          .                   // 16-bit coordinates to squared 8-bit RGB values or squared OKLab units.
+          2 ( 0.00%)          if (this->writing == Writing::records) {
+          7 ( 0.00%)              const double scale = this->color_space == ColorSpace::rgb ? 65535.0 / 255.0 : 65535.0;
+          .                       const size_t total = this->merges.size();
+         15 ( 0.00%)              while (this->cursor < total) {
+         18 ( 0.00%)                  const size_t end = std::min(total, this->cursor + block);
+  1,755,027 ( 0.02%)                  for (; this->cursor < end; this->cursor++) {
+          .                               const size_t i = this->cursor;
+    702,006 ( 0.01%)                      const Merge& merge = this->merges[total - 1 - i];
+  1,755,015 ( 0.02%)                      this->index[merge.a] = this->index[merge.merged];
+  1,053,009 ( 0.01%)                      this->index[merge.b] = uint32_t(i + 1);
+    702,006 ( 0.01%)                      uint8_t* record = &this->clustering[clustering_header + 3 + clustering_record * i];
+  1,053,009 ( 0.01%)                      write_color(this->clustering, record - this->clustering.data(), this->rgb[merge.merged]);
+  1,053,009 ( 0.01%)                      write_color(this->clustering, record - this->clustering.data() + 3, this->rgb[merge.a]);
+    702,006 ( 0.01%)                      write_color(this->clustering, record - this->clustering.data() + 6, this->rgb[merge.b]);
+    702,006 ( 0.01%)                      write_u32(record + 9, this->index[merge.merged]);
+    351,003 ( 0.00%)                      write_u32(record + 13, merge.light);
+  1,053,009 ( 0.01%)                      float cost = float(merge.cost / (scale * scale));
+          .                               uint32_t bits;
+          .                               std::memcpy(&bits, &cost, 4);
+          .                               write_u32(record + 17, bits);
+          .                           }
+         16 ( 0.00%)                  if (timed && this->cursor < total && emscripten_get_now() >= deadline) {return false;}
+          .                       }
+          .                       // Add the k=1 clustering colour
+          4 ( 0.00%)              write_color(this->clustering, clustering_header, this->rgb[this->merges.empty() ? 0 : this->merges.back().merged]);
+          .                       this->rgb = {};
+          1 ( 0.00%)              this->index = {};
+          2 ( 0.00%)              this->writing = Writing::checksum;
+          .                   }
+          .           
+          .                   // The checksum, over the finished bytes (take() writes it).
+          .                   constexpr size_t bytes = size_t(1) << 20;
+         19 ( 0.00%)          while (this->crc_cursor < this->clustering.size()) {
+         32 ( 0.00%)              const size_t end = std::min(this->clustering.size(), this->crc_cursor + bytes);
+         32 ( 0.00%)              this->crc = clustering_crc_update(this->crc, this->clustering.data(), this->crc_cursor, end);
+ 77,401,562 ( 0.80%)  => build/base/src/clustering.cpp:clustering_crc_update(unsigned int, unsigned char const*, unsigned long, unsigned long) (8x)
+          8 ( 0.00%)              this->crc_cursor = end;
+         16 ( 0.00%)              if (timed && this->crc_cursor < this->clustering.size() && emscripten_get_now() >= deadline) {return false;}
+          .                   }
+          2 ( 0.00%)          this->stage = Stage::done;
+          .                   return true;
+          8 ( 0.00%)      }
+          .           
+          .           };
+          .           
+          .           // The whole clustering in one go.
+          6 ( 0.00%)  std::vector<uint8_t> _get_clustering(uint8_t* image_data, int image_length, int image_format, ColorSpace color_space, int precision, bool weight_alpha, int cutoff = 0) {
+          7 ( 0.00%)      ClusteringJob job(image_data, image_length, image_format, color_space, precision, weight_alpha, cutoff);
+    103,305 ( 0.00%)  => build/base/src/clustering.cpp:ClusteringJob::ClusteringJob(unsigned char const*, int, int, AgglomerativeClustering::ColorSpace, int, bool, int) (1x)
+          2 ( 0.00%)      job.step(std::numeric_limits<double>::infinity());
+9,617,808,937 (98.87%)  => build/base/src/clustering.cpp:ClusteringJob::step(double) (1x)
+          .               return job.take();
+          6 ( 0.00%)  }
+      4,034 ( 0.00%)  => build/base/src/clustering.cpp:ClusteringJob::~ClusteringJob() (1x)
+          .           
+          .           // A clustering (version 2 or 3), located: `body` is the root colour followed by `merges` records of `record` bytes each.
+          .           struct ClusteringView {
+          .               bool valid = false;
+          .               int version = 0;
+          .               ColorSpace color_space = ColorSpace::rgb;
+          .               bool empty = true;
+          .               const uint8_t* body = nullptr;
+-- line 613 ----------------------------------------
+
+157,482,479 ( 1.62%)  <counts for unidentified lines in build/base/src/clustering.cpp>
+
+--------------------------------------------------------------------------------
+The following files chosen for auto-annotation could not be found:
+--------------------------------------------------------------------------------
+  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+
+--------------------------------------------------------------------------------
+Ir                     
+--------------------------------------------------------------------------------
+8,556,403,421 (87.96%)  events annotated
+

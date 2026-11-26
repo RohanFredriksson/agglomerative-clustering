@@ -1,0 +1,4 @@
+basecnt k23 CNT searches 192900 examined 38635358 caches_built 290 cells_scanned 680051 chunks 9916060
+basecnt fern CNT searches 854077 examined 355670567 caches_built 12280 cells_scanned 9024061 chunks 92262630
+clscnt k23 CNT searches 193566 examined 32124457 caches_built 115 cells_scanned 900447 chunks 8356399
+clscnt fern CNT searches 862967 examined 205612092 caches_built 4214 cells_scanned 9640572 chunks 54280625

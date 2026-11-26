@@ -1,0 +1,6 @@
+== k23
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== birch
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== pip
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
