@@ -268,24 +268,44 @@ private:
     // Pass 1: build the histogram and collect unique colours. Alpha weights are in units of 1/255 of a pixel.
     bool scan(bool timed, double deadline) {
         constexpr int64_t block = 65536;
-        while (this->position < this->limit) {
-            const int64_t end = std::min(this->limit, this->position + block * this->increment);
+        // Everything the loop reads is in a local: the histogram's table is written through uint64_t pointers, which could alias
+        // the job's own fields, so reading them through `this` reloaded them after every pixel. Pixels are added in the same
+        // order with the same keys and weights, so the histogram (colour order, totals) is what it was; only the loads changed.
+        const uint8_t* const image = this->image_data;
+        const int64_t increment = this->increment;
+        const int64_t limit = this->limit;
+        const int ro = this->layout.r, bo = this->layout.b;
+        const bool binary = this->binary, weight_alpha = this->weight_alpha;
+        const int cutoff = this->cutoff;
+        AgglomerativeClustering::AgglomerativeHistogram& histogram = this->histogram;
+        while (this->position < limit) {
+            const int64_t end = std::min(limit, this->position + block * increment);
             // Room for this block's new colours first, so the table never grows (rehashing every colour) in one go.
-            if (!this->histogram.make_room(size_t(block), timed, deadline)) {return false;}
-            for (; this->position < end; this->position += this->increment) {
-                const uint8_t* pixel = this->image_data + this->position;
-                uint32_t key = (uint32_t(pixel[this->layout.r]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[this->layout.b]);
-                if (this->binary) {
-                    if (pixel[3] >= this->cutoff) {this->histogram.add(key);}
-                    continue;
+            if (!histogram.make_room(size_t(block), timed, deadline)) {return false;}
+            int64_t position = this->position;
+            bool partial = this->partial;
+            if (binary) {
+                for (; position < end; position += increment) {
+                    const uint8_t* pixel = image + position;
+                    if (pixel[3] >= cutoff) {histogram.add_inline((uint32_t(pixel[ro]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[bo]), 1u);}
                 }
-                if (!this->weight_alpha) {this->histogram.add(key); continue;}
-                uint8_t alpha = pixel[3];
-                if (alpha == 0) {continue;}
-                this->partial = this->partial || alpha != 255;
-                this->histogram.add(key, alpha);
+            } else if (!weight_alpha) {
+                for (; position < end; position += increment) {
+                    const uint8_t* pixel = image + position;
+                    histogram.add_inline((uint32_t(pixel[ro]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[bo]), 1u);
+                }
+            } else {
+                for (; position < end; position += increment) {
+                    const uint8_t* pixel = image + position;
+                    const uint8_t alpha = pixel[3];
+                    if (alpha == 0) {continue;}
+                    partial = partial || alpha != 255;
+                    histogram.add_inline((uint32_t(pixel[ro]) << 16) | (uint32_t(pixel[1]) << 8) | uint32_t(pixel[bo]), alpha);
+                }
             }
-            if (timed && this->position < this->limit && emscripten_get_now() >= deadline) {return false;}
+            this->position = position;
+            this->partial = partial;
+            if (timed && position < limit && emscripten_get_now() >= deadline) {return false;}
         }
         this->stage = Stage::build;
         return true;
@@ -780,6 +800,11 @@ std::vector<double> _get_palette_weights(const uint8_t* clustering, size_t clust
 
 }
 
+// lround for a float in [0, 2^23): adding the largest float below one half and truncating gives the integer that rounding halves away
+// from zero gives, without lroundf's call. Exhaustively checked against lround over every non-negative float up to 65,535
+// (1,199,570,689 values) by native/round_check.cpp, which CI runs; the dither targets are clamped to [0, limit] first, and limit is at most 65,535.
+static inline int32_t round_nonnegative(float x) {return int32_t(x + 0x1.fffffep-2f);}
+
 // What a MappingJob does with each pixel's index: write its colour (_quantize) or the index itself (_quantize_indices). One
 // type with a mode, not a template parameter, so the pixel loops are compiled once (they are most of the module; two
 // copies cost about 19 KB of WebAssembly). The mode test is the same for every pixel, so it predicts perfectly.
@@ -849,6 +874,10 @@ class MappingJob {
     // pixels skip the lookup. A colour always maps to the same palette entry, so the output is unchanged.
     std::vector<uint32_t> memo_keys;
     std::vector<int32_t> memo_values;
+    // The same for the four-byte fast path of undithered mapped output (see step): keyed by the pixel's raw first three bytes, holding the
+    // output pixel. Made on the first slice and kept, so a sliced run doesn't rebuild it per slice.
+    struct RawMemo {uint32_t raw; uint32_t out;};
+    std::vector<RawMemo> raw_memo;
 
     // Dithering (see step for what each is)
     float strength = 0.0f, limit = 0.0f, near = 0.0f, most = 0.0f;
@@ -1047,25 +1076,75 @@ public:
         const size_t width = this->width;
 
         auto lookup = [&](const Point& target) {return small ? cells.get_nearest(target) : tree.get_nearest(target);};
+        // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
+        auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
+        // Without dithering nothing but the output reads the memo, so it holds palette indices (one fewer step per pixel); with it,
+        // distinct-colour indices. A colour maps to the same entry either way, so the output is unchanged.
+        const bool direct = this->method == Method::plain;
         auto nearest_index = [&](uint8_t r, uint8_t g, uint8_t b) {
             uint32_t key = (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
             uint32_t slot = (key * 0x9E3779B1u) >> (32 - memo_bits);
             if (memo_keys[slot] != key) {
                 memo_keys[slot] = key;
-                memo_values[slot] = lookup(space.match(r, g, b));
+                const int32_t u = lookup(space.match(r, g, b));
+                memo_values[slot] = direct ? palette_index(u) : u;
             }
             return memo_values[slot];
         };
-        // Lookups give distinct-colour indices (see `first`); `palette_index` turns one into the caller's palette index.
-        auto palette_index = [&](int32_t u) {return u < 0 ? u : first[size_t(u)];};
 
         if (this->method == Method::plain) {
             constexpr size_t check = 16384;
             const size_t pixels = this->pixels;
+            if (emit.colours && count > 0 && L.stride == 4) {
+                // Four-byte pixels (RGBA, BGRA, RGBX, BGRX) to mapped output: the memo is keyed by the pixel's first three bytes as they lie (no
+                // reordering) and holds the output pixel itself, so a hit is one compare, a load and a store with the alpha byte put back.
+                // Each pixel gets the colour of the same nearest entry and the same alpha byte (or 255) that the sink writes, so the bytes match.
+                if (this->raw_memo.empty()) {this->raw_memo.assign(size_t(1) << memo_bits, RawMemo{0xFFFFFFFFu, 0u});}
+                RawMemo* const memo = this->raw_memo.data();
+                uint8_t* const output = emit.output;
+                const int ro = L.r, bo = L.b;
+                const uint32_t alpha_mask = L.alpha ? 0xFF000000u : 0u, opaque_bits = L.opaque ? 0xFF000000u : 0u;
+                for (size_t p = start; p < pixels; p++) {
+                    if (timed && p > start && (p & (check - 1)) == 0 && emscripten_get_now() >= deadline) {this->cursor = p; return false;}
+                    uint32_t v;
+                    std::memcpy(&v, image + p * 4, 4);
+                    const uint32_t raw = v & 0x00FFFFFFu;
+                    RawMemo& entry = memo[(raw * 0x9E3779B1u) >> (32 - memo_bits)];
+                    if (entry.raw != raw) {
+                        const int32_t u = lookup(space.match(uint8_t(raw >> (8 * ro)), uint8_t(raw >> 8), uint8_t(raw >> (8 * bo))));
+                        const uint32_t key = keys[size_t(u)];
+                        entry.raw = raw;
+                        entry.out = (((key >> 16) & 0xFFu) << (8 * ro)) | (((key >> 8) & 0xFFu) << 8) | ((key & 0xFFu) << (8 * bo)) | opaque_bits;
+                    }
+                    const uint32_t out = entry.out | (v & alpha_mask);
+                    std::memcpy(output + p * 4, &out, 4);
+                }
+                this->cursor = this->pixels;
+                return true;
+            }
+            if (emit.colours && count > 0) {
+                // Mapped output with a palette, other layouts: the sink's writes done inline (every pixel went through its call).
+                const uint8_t* const palette = emit.palette;
+                uint8_t* const output = emit.output;
+                const int ro = L.r, bo = L.b;
+                const bool opaque = L.opaque, has_alpha = L.alpha;
+                for (size_t p = start; p < pixels; p++) {
+                    if (timed && p > start && (p & (check - 1)) == 0 && emscripten_get_now() >= deadline) {this->cursor = p; return false;}
+                    const uint8_t* pixel = image + p * increment;
+                    const uint8_t* colour = palette + 3 * size_t(nearest_index(pixel[ro], pixel[1], pixel[bo]));
+                    uint8_t* out = output + p * increment;
+                    out[ro] = colour[0];
+                    out[1] = colour[1];
+                    out[bo] = colour[2];
+                    if (opaque) {out[3] = 255;} else if (has_alpha) {out[3] = pixel[3];}
+                }
+                this->cursor = this->pixels;
+                return true;
+            }
             for (size_t p = start; p < pixels; p++) {
                 if (timed && p > start && (p & (check - 1)) == 0 && emscripten_get_now() >= deadline) {this->cursor = p; return false;}
                 const uint8_t* pixel = image + p * increment;
-                emit(p, palette_index(nearest_index(pixel[L.r], pixel[1], pixel[L.b])));
+                emit(p, nearest_index(pixel[L.r], pixel[1], pixel[L.b]));
             }
             this->cursor = this->pixels;
             return true;
@@ -1128,7 +1207,7 @@ public:
             Point target;
             for (int c = 0; c < 3; c++) {
                 wanted[c] = std::clamp(wanted[c], 0.0f, limit);
-                target[c] = uint16_t(std::lround(wanted[c]));
+                target[c] = uint16_t(round_nonnegative(wanted[c]));
             }
             return rgb ? nearest_index(uint8_t(target[0]), uint8_t(target[1]), uint8_t(target[2])) : lookup(target);
         };
@@ -1206,7 +1285,7 @@ public:
                 }
                 for (int c = 0; c < 3; c++) {
                     wanted[c] = std::clamp(wanted[c], 0.0f, limit);
-                    target[c] = int32_t(std::lround(wanted[c]));
+                    target[c] = round_nonnegative(wanted[c]);
                 }
                 return scan_nearest(target);
             };

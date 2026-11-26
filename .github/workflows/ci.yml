@@ -170,6 +170,8 @@ jobs:
       - name: Install clang (with libFuzzer)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq clang
       - run: scripts/native.sh fuzz 120
+      - name: Exhaustive rounding check
+        run: scripts/native.sh round
       - name: Keep the failing input
         if: failure()
         uses: actions/upload-artifact@v4

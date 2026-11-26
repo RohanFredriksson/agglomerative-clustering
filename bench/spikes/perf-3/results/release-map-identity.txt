@@ -1,0 +1,20 @@
+== mapid-birch.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-city.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-fern.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-k03,k20,k23.log
+120 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-komar.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-night.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-old.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-pip.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-sky.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)
+== mapid-sp.log
+40 cases identical, 0 different (each case: quantize and quantizeToIndices, 4.1.0 against new, one-shot and sliced)

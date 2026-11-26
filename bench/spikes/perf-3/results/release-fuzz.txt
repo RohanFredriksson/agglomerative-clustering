@@ -1,0 +1,7 @@
+== fuzz_clustering_bytes, 120 s
+Done 5478 runs in 121 second(s)
+== fuzz_images, 120 s
+Done 738 runs in 165 second(s)
+== fuzz_identical, 120 s
+Done 980 runs in 121 second(s)
+Done 4924 runs in 662 second(s)

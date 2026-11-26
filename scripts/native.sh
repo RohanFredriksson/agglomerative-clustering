@@ -3,6 +3,8 @@
 #   scripts/native.sh fuzz [seconds]            build the libFuzzer targets in native/ with ASan and UBSan and run each
 #                                               for `seconds` (default 60); a crash, a broken invariant or a clustering
 #                                               that differs from the 4.0.0 reference fails
+#   scripts/native.sh round                     exhaustively check round_nonnegative (the dithering's rounding) against lround
+#                                               over every float from 0 to 65,535 (native/round_check.cpp)
 #   scripts/native.sh profile <image> [format] [precision] [color space]
 #                                               one clustering under callgrind, printing its instruction count (an
 #                                               image .png is converted to raw RGBA first; anything else is raw pixels)
@@ -38,6 +40,10 @@ case "${1:-}" in
             "$out/$target" "$out/corpus/$target" -max_total_time="$seconds" -max_len=20000 -rss_limit_mb=2048 -timeout=30 -print_final_stats=1
         done
         ;;
+    round)
+        "$cxx" -std=c++17 -O2 "$root/native/round_check.cpp" -o "$out/round_check"
+        "$out/round_check"
+        ;;
     profile)
         image="${2:?usage: scripts/native.sh profile <image> [format] [precision] [color space]}"
         "$cxx" -std=c++17 -O2 -g "$root/native/profile.cpp" -o "$out/profile"
@@ -53,7 +59,7 @@ case "${1:-}" in
         echo "Per function: callgrind_annotate $out/callgrind.out | head -30"
         ;;
     *)
-        sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
         exit 2
         ;;
 esac
