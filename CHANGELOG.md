@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0 (in beta: 4.0.0-beta.5)
+## 4.0.0
 
 Premultiplied input, stricter image objects and result types that keep the input's. This is 4.0 in two parts: premultiplied input and the image types, then the removals and new errors (Node 20, the bare-image warnings, `transparent` on formats without alpha, the `…FromClustering` and `get…` functions). Output for every input without `premultiplied: true` is unchanged. See [Migrating](docs/migrating.md#from-3x-to-40).
 

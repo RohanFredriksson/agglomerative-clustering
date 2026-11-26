@@ -41,12 +41,12 @@ The package exports the file as `agglomerative-clustering/clustering.wasm`, so a
 
 ```html
 <script type="module">
-  import { buildSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/index.mjs';
-  import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@3/dist/worker.mjs';
+  import { buildSwatches } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@4/dist/index.mjs';
+  import { createWorker } from 'https://cdn.jsdelivr.net/npm/agglomerative-clustering@4/dist/worker.mjs';
 </script>
 ```
 
-- **Paths.** Import `dist/index.mjs` and `dist/worker.mjs` by their paths (jsDelivr and unpkg don't follow the package's `exports` for subpaths such as `/worker`); `https://esm.sh/agglomerative-clustering@3` works too. The `.wasm` is found next to the script, so `init` needs no `wasm` option. Pin an exact version in production, as `@3.0.0` rather than the range `@3`.
+- **Paths.** Import `dist/index.mjs` and `dist/worker.mjs` by their paths (jsDelivr and unpkg don't follow the package's `exports` for subpaths such as `/worker`); `https://esm.sh/agglomerative-clustering@4` works too. The `.wasm` is found next to the script, so `init` needs no `wasm` option. Pin an exact version in production, as `@3.0.0` rather than the range `@3`.
 - **Content-Security-Policy.** It needs the CDN in `script-src` and `connect-src` (the `.wasm` is fetched) and `'wasm-unsafe-eval'` in `script-src`. The worker entry starts its worker through a `blob:` script that imports from the CDN, so it also needs `worker-src blob:` *and* the CDN: `worker-src blob: https://cdn.jsdelivr.net`.
 
 ## Deno, Bun and Cloudflare Workers
