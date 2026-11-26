@@ -2,15 +2,15 @@
   "hero": {
     "width": 768,
     "height": 512,
-    "clusterMs": 129,
-    "cutsMs": 4.4,
-    "totalMs": 134.3,
+    "clusterMs": 153.9,
+    "cutsMs": 5.8,
+    "totalMs": 160,
     "runsTotalMs": [
-      128.2,
-      134.3,
-      134.9,
-      140.8,
-      133.1
+      160,
+      155.4,
+      161.9,
+      161.1,
+      158.5
     ],
     "settings": {
       "photo": "kodim23",
@@ -25,18 +25,18 @@
   "machine": "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz x 8, linux 7.3.4-200.fc44.x86_64",
   "node": "v24.18.0",
   "load": {
-    "before": 0.77,
-    "after": 0.77
+    "before": 1.65,
+    "after": 1.65
   },
   "files": {
-    "animation.gif": 92436,
-    "eink.gif": 39664,
+    "animation.gif": 134539,
+    "eink.png": 288712,
     "hero.gif": 489547,
-    "indexed.gif": 253263,
-    "nesting.png": 5361,
-    "pixel-art.gif": 48652,
-    "swatches.png": 162807,
-    "threads.png": 188922
+    "nesting.png": 17147,
+    "pixel-art.gif": 68609,
+    "swatches.png": 153789,
+    "threads.png": 181483,
+    "transparency.png": 23860
   },
   "animation": {
     "photo": "kodim08",
@@ -46,5 +46,12 @@
       "floyd-steinberg": 4.1,
       "ordered": 0
     }
+  },
+  "transparency": {
+    "paletteEntries": 5,
+    "paletteEntriesNearBackgroundColours": 0,
+    "indexedEntries": 6,
+    "transparentIndex": 5,
+    "transparentPixels": 28090
   }
 }

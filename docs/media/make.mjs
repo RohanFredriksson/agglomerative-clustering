@@ -2,7 +2,7 @@
 //
 //   npm run build && node docs/media/make.mjs [--only <name>]
 //
-// Names: hero, nesting, pixel-art, eink, threads, indexed, swatches, animation.
+// Names: hero, nesting, pixel-art, eink, threads, transparency, swatches, animation.
 // Every GIF frame is the library's own indexed output (quantizeToIndices* with the palette it returns); swatch bars are
 // drawn into the same index arrays, so a frame needs no colour of its own beyond one background entry.
 // Output is deterministic (fixed photos, crops, frame lists, no dates), except the timings in results.json.
@@ -10,6 +10,7 @@
 
 import { readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import os from 'node:os';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -17,7 +18,7 @@ import gifenc from 'gifenc';
 const { GIFEncoder } = gifenc;
 import { encode } from 'fast-png';
 import quantizeMMCQ from 'quantize';
-import { buildClustering, quantizeToIndicesWithPalette } from '../../dist/index.mjs';
+import { buildClustering, buildPalette, quantizeToIndices, quantizeToIndicesWithPalette } from '../../dist/index.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const photos = path.join(here, '../../fixtures/images');
@@ -132,6 +133,53 @@ function rgbaCanvas(width, height, color = BG) {
     };
 }
 
+
+const FONT = 'DejaVu Sans, Liberation Sans, Arial, sans-serif';
+const escapeXml = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** An SVG of text items [{x, y (baseline), text, size, weight?, anchor?}] on nothing, to composite over a canvas. */
+function textSvg(width, height, items, fill = '#ececf0') {
+    const texts = items
+        .map((t) => `<text x="${t.x}" y="${t.y}" font-family="${FONT}" font-size="${t.size}" font-weight="${t.weight ?? 'normal'}" text-anchor="${t.anchor ?? 'start'}" fill="${fill}">${escapeXml(t.text)}</text>`)
+        .join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${texts}</svg>`;
+}
+
+/** Like writePng, with text drawn over the canvas (an SVG overlay composited by sharp); the result stays opaque. */
+async function writeLabelled(file, canvas, items) {
+    const base = Buffer.from(encode({ width: canvas.width, height: canvas.height, data: canvas.data, channels: 4, depth: 8 }));
+    await sharp(base)
+        .composite([{ input: Buffer.from(textSvg(canvas.width, canvas.height, items)) }])
+        .removeAlpha()
+        .png({ compressionLevel: 9 })
+        .toFile(file);
+}
+
+/** A palette PNG: 8-bit indices, PLTE, and a tRNS chunk making `transparentIndex` (the last entry) fully transparent. */
+function indexedPng(width, height, indices, palette, transparentIndex) {
+    const chunk = (type, data) => {
+        const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+        const head = Buffer.alloc(4);
+        head.writeUInt32BE(data.length);
+        const crc = Buffer.alloc(4);
+        crc.writeUInt32BE(zlib.crc32(body));
+        return Buffer.concat([head, body, crc]);
+    };
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(width, 0);
+    header.writeUInt32BE(height, 4);
+    header.set([8, 3, 0, 0, 0], 8); // 8 bits, palette colour, deflate, no filter method, no interlace
+    const rows = Buffer.alloc(height * (width + 1));
+    for (let y = 0; y < height; y++) rows.set(indices.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
+    const alpha = Buffer.alloc(transparentIndex + 1, 255);
+    alpha[transparentIndex] = 0;
+    return Buffer.concat([
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        chunk('IHDR', header), chunk('PLTE', Buffer.from(palette)), chunk('tRNS', alpha),
+        chunk('IDAT', zlib.deflateSync(rows, { level: 9 })), chunk('IEND', Buffer.alloc(0)),
+    ]);
+}
+
 const median = (list) => [...list].sort((a, b) => a - b)[list.length >> 1];
 const palCol = (flat, i) => [flat[3 * i], flat[3 * i + 1], flat[3 * i + 2]];
 
@@ -207,8 +255,8 @@ async function hero() {
         const flat = new Uint8Array(3 * (k + 1));
         flat.set(palette);
         flat.set(BG, 3 * k);
-        // 2 colours is a slow start worth showing; 64 is the held end.
-        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 2 ? 700 : k === 64 ? 2200 : 90 });
+        // A short hold on each doubling of k, a longer one on 64; about 8.4 s for the loop.
+        frames.push({ pixels: canvas.pixels, palette: flat, delay: [2, 4, 8, 16, 32].includes(k) ? 700 : k === 64 ? 1500 : 60 });
     }
     await writeGif(out('hero.gif'), width, height, frames, { delta: true });
 }
@@ -225,13 +273,21 @@ async function nesting() {
     // swatch becoming two in the row below and every other swatch staying exactly where it was.
     const ks = [4, 5, 6, 7, 8, 9, 10, 11, 12];
     const barWidth = 400;
-    const barHeight = 28;
-    const rowGap = 6;
-    const margin = 18;
-    const middle = 44;
-    const width = margin * 2 + barWidth * 2 + middle;
-    const height = margin * 2 + ks.length * barHeight + (ks.length - 1) * rowGap;
+    const barHeight = 34;
+    const rowGap = 8;
+    const margin = 24;
+    const labelWidth = 96;
+    const header = 52;
+    const middle = 40;
+    const width = margin * 2 + labelWidth + barWidth * 2 + middle;
+    const height = header + margin + ks.length * barHeight + (ks.length - 1) * rowGap + margin;
     const canvas = rgbaCanvas(width, height);
+    const leftX = margin + labelWidth;
+    const rightX = leftX + barWidth + middle;
+    const labels = [
+        { x: leftX, y: 34, text: 'median cut (color-thief)', size: 22, weight: 'bold' },
+        { x: rightX, y: 34, text: 'agglomerative-clustering', size: 22, weight: 'bold' },
+    ];
 
     // The share of pixels whose nearest colour (in RGB) is each of the median cut's colours.
     const shareOf = (colours) => {
@@ -258,29 +314,28 @@ async function nesting() {
         order.splice(order.indexOf(parent) + 1, 0, k - 1);
         previous = palette;
         if (!ks.includes(k)) continue;
-        const y = margin + ks.indexOf(k) * (barHeight + rowGap);
-        for (const seg of segments(order, shares, barWidth, 2)) {
-            canvas.rect(margin + barWidth + middle + seg.x, y, seg.w, barHeight, palCol(palette, seg.index));
-        }
+        const y = header + margin + ks.indexOf(k) * (barHeight + rowGap);
+        labels.push({ x: margin, y: y + barHeight / 2 + 7, text: `k = ${k}`, size: 20 });
+        for (const seg of segments(order, shares, barWidth, 2)) canvas.rect(rightX + seg.x, y, seg.w, barHeight, palCol(palette, seg.index));
         // Median cut (`quantize`, as color-thief uses it), in the order it returns its colours.
         const mmcq = quantizeMMCQ(pixels, k).palette();
         const counts = shareOf(mmcq);
-        for (const seg of segments(mmcq.map((_, i) => i), counts, barWidth, 2)) canvas.rect(margin + seg.x, y, seg.w, barHeight, mmcq[seg.index]);
+        for (const seg of segments(mmcq.map((_, i) => i), counts, barWidth, 2)) canvas.rect(leftX + seg.x, y, seg.w, barHeight, mmcq[seg.index]);
     }
-    await writePng(out('nesting.png'), canvas);
+    await writeLabelled(out('nesting.png'), canvas, labels);
 }
 
-// ---------------------------------------------------------------- pixel art: 4, 8, 16 colours, ordered dither
+// ---------------------------------------------------------------- pixel art: few colours, hard pixels
 
 async function pixelArt() {
-    const small = await load('kodim22', 120, 80);
-    const scale = 3;
+    const small = await load('kodim03', 128, 85);
+    const scale = 4;
     const clustering = await buildClustering(small);
     const width = small.width * scale;
-    const barHeight = 18;
+    const barHeight = 20;
     const height = small.height * scale + 8 + barHeight;
     const frames = [];
-    for (const k of [4, 8, 16, 8]) {
+    for (const k of PIXEL_ART_COLOURS) {
         const { palette, indices } = await clustering.quantizeToIndices(small, k, { dither: 'ordered' });
         const n = palette.length / 3;
         const canvas = indexCanvas(width, height, n);
@@ -298,12 +353,13 @@ async function pixelArt() {
         const flat = new Uint8Array(3 * (n + 1));
         flat.set(palette);
         flat.set(BG, 3 * n);
-        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 16 ? 1400 : 1000 });
+        frames.push({ pixels: canvas.pixels, palette: flat, delay: 1500 });
     }
     await writeGif(out('pixel-art.gif'), width, height, frames);
 }
+const PIXEL_ART_COLOURS = [8, 16, 32];
 
-// ---------------------------------------------------------------- e-ink: seven inks, with and without dithering
+// ---------------------------------------------------------------- e-ink: the photo next to its seven-ink version
 
 /**
  * The recipe from docs/api.md "Dithering to a few inks: mix in light", copied as it stands there: it dithers in
@@ -331,17 +387,28 @@ async function ditherInLight(image, inks, options = {}) {
 }
 
 async function eink() {
-    const image = await load('kodim12', 400, 267);
+    const image = await load('kodim23', 384, 256);
     // docs/guides.md "Fixed palettes": black white green blue red yellow orange
     const inks = [0, 0, 0, 255, 255, 255, 0, 255, 0, 0, 0, 255, 255, 0, 0, 255, 255, 0, 255, 128, 0];
-    const frames = [];
-    const plain = await quantizeToIndicesWithPalette(image, inks, { dither: false });
-    frames.push({ pixels: plain.indices, palette: plain.palette, delay: 1500 });
-    for (const dither of ['floyd-steinberg', 'ordered']) {
-        const { indices, palette } = await ditherInLight(image, inks, { dither });
-        frames.push({ pixels: indices, palette, delay: 1500 });
-    }
-    await writeGif(out('eink.gif'), image.width, image.height, frames);
+    const { indices, palette } = await ditherInLight(image, inks, { dither: 'floyd-steinberg' });
+    const margin = 16;
+    const gap = 16;
+    const top = 44;
+    const chips = 26;
+    const width = margin * 2 + image.width * 2 + gap;
+    const height = top + image.height + 14 + chips + margin;
+    const canvas = rgbaCanvas(width, height);
+    canvas.blit(margin, top, image);
+    const mapped = { width: image.width, height: image.height, data: new Uint8Array(image.width * image.height * 4) };
+    for (let i = 0; i < indices.length; i++) mapped.data.set([...palCol(palette, indices[i]), 255], 4 * i);
+    const x2 = margin + image.width + gap;
+    canvas.blit(x2, top, mapped);
+    const chipW = Math.floor(image.width / 7);
+    for (let i = 0; i < 7; i++) canvas.rect(x2 + i * chipW, top + image.height + 14, chipW - 4, chips, palCol(inks, i));
+    await writeLabelled(out('eink.png'), canvas, [
+        { x: margin, y: 30, text: 'original', size: 20, weight: 'bold' },
+        { x: x2, y: 30, text: '7 e-ink inks, Floyd–Steinberg', size: 20, weight: 'bold' },
+    ]);
 }
 
 // ---------------------------------------------------------------- threads: choose k colours from a fixed set
@@ -360,66 +427,106 @@ async function threadsCard() {
     const image = await load('kodim15', 320, 214);
     const chart = threads.flat();
     const clustering = await buildClustering(image);
-    const choice = await clustering.chooseFrom(chart, 8);
+    const choice = await clustering.chooseFrom(chart, 12);
     const { indices, palette } = await quantizeToIndicesWithPalette(image, choice.palette);
 
-    const margin = 14;
+    const margin = 16;
     const gap = 14;
-    const cols = 24;
-    const cell = Math.floor((image.width * 2 + gap) / cols); // 27
-    const rowWidth = cell * cols;
-    const width = margin * 2 + Math.max(rowWidth, image.width * 2 + gap);
+    const inner = image.width * 2 + gap; // 654
+    const width = margin * 2 + inner;
     const photoTop = margin;
-    const stripTop = photoTop + image.height + 18;
-    const height = stripTop + 44 + margin;
+    const chosenLabelY = photoTop + image.height + 34;
+    const chosenTop = chosenLabelY + 12;
+    const chosenH = 46;
+    const allLabelY = chosenTop + chosenH + 34;
+    const allTop = allLabelY + 12;
+    const allH = 30;
+    const height = allTop + allH + margin;
     const canvas = rgbaCanvas(width, height);
     canvas.blit(margin, photoTop, image);
-    // The mapped image, from the library's indices.
     const mapped = { width: image.width, height: image.height, data: new Uint8Array(image.width * image.height * 4) };
     for (let i = 0; i < indices.length; i++) mapped.data.set([...palCol(palette, indices[i]), 255], 4 * i);
     canvas.blit(margin + image.width + gap, photoTop, mapped);
-    const chosen = new Set(choice.indices);
-    for (let i = 0; i < cols; i++) {
-        const x = margin + i * cell;
-        if (chosen.has(i)) {
-            canvas.rect(x, stripTop, cell - 2, 34, threads[i]);
-            canvas.rect(x, stripTop + 38, cell - 2, 4, [245, 245, 245]);
-        } else {
-            canvas.rect(x, stripTop + 8, cell - 2, 26, threads[i].map((v, c) => Math.round(BG[c] + (v - BG[c]) * 0.35)));
-        }
-    }
-    await writePng(out('threads.png'), canvas);
+    const chosenCell = Math.floor(inner / 12);
+    choice.indices.forEach((entry, i) => canvas.rect(margin + i * chosenCell, chosenTop, chosenCell - 4, chosenH, threads[entry]));
+    const allCell = Math.floor(inner / 24);
+    threads.forEach((c, i) => canvas.rect(margin + i * allCell, allTop, allCell - 2, allH, c));
+    await writeLabelled(out('threads.png'), canvas, [
+        { x: margin, y: chosenLabelY, text: 'chosen 12 of 24', size: 20, weight: 'bold' },
+        { x: margin, y: allLabelY, text: 'the set of 24 colours (illustrative)', size: 18 },
+    ]);
 }
 
-// ---------------------------------------------------------------- indexed output: one palette for a whole GIF
+// ---------------------------------------------------------------- transparency: a logo's palette has no background
 
-async function indexed() {
-    const full = await load('kodim20', 640, 427);
-    const view = { w: 320, h: 214 };
-    const crop = async (zoom) => {
-        const w = Math.round(full.width / zoom);
-        const h = Math.round(full.height / zoom);
-        const left = Math.round((full.width - w) * 0.28);
-        const top = Math.round((full.height - h) * 0.36);
-        const { data } = await sharp(Buffer.from(full.data.buffer, full.data.byteOffset, full.data.length), { raw: { width: full.width, height: full.height, channels: 4 } })
-            .extract({ left, top, width: w, height: h })
-            .resize(view.w, view.h, { kernel: 'lanczos3' })
-            .raw()
-            .toBuffer({ resolveWithObject: true });
-        return { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: view.w, height: view.h };
+/** A simple logo on a transparent background (alpha 0), flat colours, antialiased edges: drawn from an SVG. */
+async function logo(size) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 200 200">
+<circle cx="100" cy="100" r="86" fill="#2f6fdb"/>
+<circle cx="100" cy="100" r="58" fill="#f8dfae"/>
+<path d="M100 44 L148 128 L52 128 Z" fill="#f2a516"/>
+<circle cx="100" cy="106" r="17" fill="#d8453f"/>
+<rect x="30" y="150" width="140" height="14" rx="7" fill="#1e2a5a"/>
+</svg>`;
+    const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    return { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: info.width, height: info.height };
+}
+
+async function transparency() {
+    const image = await logo(260);
+    const k = 5;
+    const palette = await buildPalette(image, k);
+    const indexed = await quantizeToIndices(image, k + 1, { transparent: true });
+    // The palette PNG with its transparent entry (written by hand: the transparent entry is last, so tRNS is one byte
+    // short of the palette), then read back by sharp as a viewer would show it.
+    const png = indexedPng(image.width, image.height, indexed.indices, indexed.palette, indexed.transparentIndex);
+    const shown = await sharp(png).ensureAlpha().raw().toBuffer();
+
+    const board = (x, y) => (((x >> 4) + (y >> 4)) & 1 ? [204, 204, 208] : [244, 244, 246]);
+    const over = (canvas, left, top, rgba, w, h) => {
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const p = 4 * (y * w + x);
+                const a = rgba[p + 3] / 255;
+                const b = board(x, y);
+                // The source is not premultiplied; blend each channel over the checkerboard.
+                canvas.rect(left + x, top + y, 1, 1, [0, 1, 2].map((c) => Math.round(rgba[p + c] * a + b[c] * (1 - a))));
+            }
+        }
     };
-    const zooms = [1, 1.1, 1.25, 1.45, 1.7, 2, 2.35, 2.35, 2, 1.7, 1.45, 1.25, 1.1, 1];
-    const images = [];
-    for (const z of zooms) images.push(await crop(z));
-    // One palette for every frame (so there is one colour table): cluster the first frame, map them all to it.
-    const clustering = await buildClustering(images[0]);
-    const palette = await clustering.getPalette(32);
-    const frames = [];
-    for (const image of images) {
-        const result = await quantizeToIndicesWithPalette(image, palette, { dither: true });
-        frames.push({ pixels: result.indices, palette: result.palette, delay: 100 });
-    }
-    await writeGif(out('indexed.gif'), view.w, view.h, frames);
+    const margin = 20;
+    const gap = 24;
+    const top = 52;
+    const panel = image.width;
+    const width = margin * 2 + panel * 3 + gap * 2;
+    const height = top + panel + 52;
+    const canvas = rgbaCanvas(width, height);
+    over(canvas, margin, top, image.data, panel, panel);
+    // The palette: its colours as swatches on the page's background (no checkerboard: there is no background colour in it).
+    const side = 3;
+    const cell = Math.floor((panel - 12 * (side - 1)) / side);
+    for (let i = 0; i < k; i++) canvas.rect(margin + panel + gap + (i % side) * (cell + 12), top + Math.floor(i / side) * (cell + 12), cell, cell, palCol(palette, i));
+    over(canvas, margin + (panel + gap) * 2, top, shown, panel, panel);
+    const y = top + panel + 30;
+    await writeLabelled(out('transparency.png'), canvas, [
+        { x: margin, y: 32, text: 'logo, transparent', size: 18, weight: 'bold' },
+        { x: margin + panel + gap, y: 32, text: 'buildPalette(logo, 5)', size: 18, weight: 'bold' },
+        { x: margin + (panel + gap) * 2, y: 32, text: 'quantizeToIndices', size: 18, weight: 'bold' },
+        { x: margin, y, text: 'on a checkerboard', size: 16 },
+        { x: margin + panel + gap, y, text: 'no background colour', size: 16 },
+        { x: margin + (panel + gap) * 2, y, text: 'palette PNG, index 5 clear', size: 16 },
+    ]);
+    // The palette must hold the logo's colours only: count entries near the transparent pixels' stored colour (black)
+    // or either checkerboard colour.
+    const background = [[0, 0, 0], [204, 204, 208], [244, 244, 246]];
+    const near = (c) => background.some((b) => Math.hypot(c[0] - b[0], c[1] - b[1], c[2] - b[2]) < 30);
+    results.transparency = {
+        paletteEntries: palette.length / 3,
+        paletteEntriesNearBackgroundColours: rgbList(palette).filter(near).length,
+        indexedEntries: indexed.palette.length / 3,
+        transparentIndex: indexed.transparentIndex,
+        transparentPixels: indexed.indices.filter((v) => v === indexed.transparentIndex).length,
+    };
 }
 
 // ---------------------------------------------------------------- swatches: colours with their share of the image
@@ -431,27 +538,29 @@ async function swatchesCard() {
     const { palette, shares } = await clustering.getSwatches(k);
     const order = [...shares.keys()].sort((a, b) => shares[b] - shares[a] || a - b);
     const margin = 14;
-    const gap = 14;
-    const rowH = 22;
-    const rowGap = 5;
-    const panelW = 190;
+    const gap = 16;
+    const rowH = 24;
+    const rowGap = 4;
+    const panelW = 270;
     const width = margin * 2 + image.width + gap + panelW;
     const height = margin * 2 + image.height;
     const canvas = rgbaCanvas(width, height);
     canvas.blit(margin, margin, image);
     const x0 = margin + image.width + gap;
     const top = margin + Math.round((image.height - (k * rowH + (k - 1) * rowGap)) / 2);
-    const barMax = panelW - rowH - 8;
+    const barMax = panelW - rowH - 8 - 64;
     const biggest = shares[order[0]];
+    const labels = [];
     order.forEach((index, r) => {
         const y = top + r * (rowH + rowGap);
         const c = palCol(palette, index);
         canvas.rect(x0, y, rowH, rowH, c);
-        // A bar for the share, in the swatch's colour, on a lighter track so dark colours stay visible.
-        canvas.rect(x0 + rowH + 8, y + 7, barMax, 8, [50, 50, 56]);
-        canvas.rect(x0 + rowH + 8, y + 7, Math.max(3, Math.round((barMax * shares[index]) / biggest)), 8, c);
+        canvas.rect(x0 + rowH + 8, y + 8, barMax, 8, [50, 50, 56]);
+        canvas.rect(x0 + rowH + 8, y + 8, Math.max(3, Math.round((barMax * shares[index]) / biggest)), 8, c);
+        const pct = shares[index] * 100;
+        labels.push({ x: x0 + rowH + 8 + barMax + 10, y: y + 18, text: pct < 1 ? '<1%' : `${Math.round(pct)}%`, size: 15 });
     });
-    await writePng(out('swatches.png'), canvas);
+    await writeLabelled(out('swatches.png'), canvas, labels);
 }
 
 // ---------------------------------------------------------------- animation: ordered dithering keeps still areas still
@@ -480,11 +589,43 @@ async function animation() {
     for (let t = 0; t < frameCount; t++) clips.push(render(t));
     // One fixed 12-colour palette for the whole clip, from the middle frame.
     const palette = await (await buildClustering(clips[frameCount >> 1])).getPalette(12);
+    const n = palette.length / 3;
+
+    // Palette entries after the 12 colours: the page background, a six-step ramp from it to white for the labels, black and magenta.
+    const RAMP = 6;
+    const bg = n, ramp = n + 1, black = n + 1 + RAMP, magenta = black + 1;
+    const flat = new Uint8Array(3 * (magenta + 1));
+    flat.set(palette);
+    flat.set(BG, 3 * bg);
+    for (let i = 0; i < RAMP; i++) flat.set(BG.map((v) => Math.round(v + ((236 - v) * i) / (RAMP - 1))), 3 * (ramp + i));
+    flat.set([0, 0, 0], 3 * black);
+    flat.set([255, 0, 255], 3 * magenta);
+
     const gutter = 4;
     const width = base.width * 2 + gutter;
-    const height = base.height;
-    const frames = [];
-    // For results.json: the share of pixels away from the ball (further than its radius + 8 from where it was in either
+    const labelH = 26;
+    const height = labelH + base.height + labelH + base.height;
+    // A strip of text as palette indices: rendered by sharp, then each pixel's brightness picks a step of the ramp.
+    const textStrip = async (items) => {
+        const svg = textSvg(width, labelH, items);
+        const raw = await sharp({ create: { width, height: labelH, channels: 3, background: { r: BG[0], g: BG[1], b: BG[2] } } })
+            .composite([{ input: Buffer.from(svg) }]).removeAlpha().raw().toBuffer();
+        const strip = new Uint8Array(width * labelH);
+        for (let i = 0; i < strip.length; i++) {
+            const level = (raw[3 * i] - BG[0]) / (236 - BG[0]);
+            strip[i] = ramp + Math.max(0, Math.min(RAMP - 1, Math.round(level * (RAMP - 1))));
+        }
+        return strip;
+    };
+    const top = await textStrip([
+        { x: base.width / 2, y: 18, text: 'Floyd–Steinberg', size: 16, weight: 'bold', anchor: 'middle' },
+        { x: base.width + gutter + base.width / 2, y: 18, text: 'ordered', size: 16, weight: 'bold', anchor: 'middle' },
+    ]);
+    const middle = await textStrip([
+        { x: width / 2, y: 18, text: 'pixels that changed since the last frame, away from the disk', size: 14, anchor: 'middle' },
+    ]);
+
+    // For results.json: the share of pixels away from the disk (further than its radius + 8 from where it was in either
     // frame) that change between one frame and the next, for each method.
     const away = (t, previous, i) => {
         const x = i % base.width + 0.5, y = Math.floor(i / base.width) + 0.5;
@@ -492,37 +633,42 @@ async function animation() {
         return Math.hypot(x - here.x, y - here.y) > here.r + 8 && Math.hypot(x - before.x, y - before.y) > before.r + 8;
     };
     const changed = { 'floyd-steinberg': [0, 0], ordered: [0, 0] };
+    const frames = [];
     let last = null;
     for (const [t, image] of clips.entries()) {
         const left = await quantizeToIndicesWithPalette(image, palette, { dither: 'floyd-steinberg' });
         const right = await quantizeToIndicesWithPalette(image, palette, { dither: 'ordered' });
+        const canvas = indexCanvas(width, height, bg);
+        canvas.blit(0, 0, top, width, labelH);
+        canvas.blit(0, labelH, left.indices, base.width, base.height);
+        canvas.blit(base.width + gutter, labelH, right.indices, base.width, base.height);
+        canvas.blit(0, labelH + base.height, middle, width, labelH);
+        const marks = [new Uint8Array(base.width * base.height).fill(black), new Uint8Array(base.width * base.height).fill(black)];
         if (last) {
-            for (const [name, now, then] of [['floyd-steinberg', left.indices, last.left], ['ordered', right.indices, last.right]]) {
+            [['floyd-steinberg', left.indices, last.left], ['ordered', right.indices, last.right]].forEach(([name, now, then], m) => {
                 for (let i = 0; i < now.length; i++) {
                     if (!away(t, t - 1, i)) continue;
                     changed[name][1]++;
-                    if (now[i] !== then[i]) changed[name][0]++;
+                    if (now[i] !== then[i]) {
+                        changed[name][0]++;
+                        marks[m][i] = magenta;
+                    }
                 }
-            }
+            });
         }
+        canvas.blit(0, 2 * labelH + base.height, marks[0], base.width, base.height);
+        canvas.blit(base.width + gutter, 2 * labelH + base.height, marks[1], base.width, base.height);
         last = { left: left.indices, right: right.indices };
-        const n = palette.length / 3;
-        const canvas = indexCanvas(width, height, n);
-        canvas.blit(0, 0, left.indices, base.width, base.height);
-        canvas.blit(base.width + gutter, 0, right.indices, base.width, base.height);
-        const flat = new Uint8Array(3 * (n + 1));
-        flat.set(left.palette);
-        flat.set(BG, 3 * n);
         frames.push({ pixels: canvas.pixels, palette: flat, delay: 100 });
     }
     await writeGif(out('animation.gif'), width, height, frames, { delta: true });
-    const pct = ([n, d]) => Math.round((1000 * n) / d) / 10;
+    const pct = ([a, b]) => Math.round((1000 * a) / b) / 10;
     results.animation = { photo: 'kodim08', frames: frameCount, colours: 12, pixelsChangedAwayFromBallPercent: { 'floyd-steinberg': pct(changed['floyd-steinberg']), ordered: pct(changed.ordered) } };
 }
 
 // ---------------------------------------------------------------- run
 
-const jobs = { hero, nesting, 'pixel-art': pixelArt, eink, threads: threadsCard, indexed, swatches: swatchesCard, animation };
+const jobs = { hero, nesting, 'pixel-art': pixelArt, eink, threads: threadsCard, transparency, swatches: swatchesCard, animation };
 if (only && !jobs[only]) throw new Error(`unknown name "${only}"; names: ${Object.keys(jobs).join(', ')}`);
 for (const [name, job] of Object.entries(jobs)) if (wanted(name)) await job();
 

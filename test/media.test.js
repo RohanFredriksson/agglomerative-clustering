@@ -11,8 +11,8 @@ const resultsPath = path.join(dir, 'results.json');
 const present = existsSync(resultsPath);
 if (!present) console.warn('test/media.test.js skipped: docs/media/results.json is missing; run `node docs/media/make.mjs` to make the media.');
 
-const required = ['hero.gif', 'nesting.png', 'pixel-art.gif', 'eink.gif', 'threads.png', 'indexed.gif', 'swatches.png', 'animation.gif'];
-const cards = ['pixel-art.gif', 'eink.gif', 'threads.png', 'indexed.gif', 'swatches.png', 'animation.gif'];
+const required = ['hero.gif', 'nesting.png', 'pixel-art.gif', 'eink.png', 'threads.png', 'transparency.png', 'swatches.png', 'animation.gif'];
+const cards = ['pixel-art.gif', 'eink.png', 'threads.png', 'transparency.png', 'swatches.png', 'animation.gif'];
 const size = (name) => statSync(path.join(dir, name)).size;
 
 describe.skipIf(!present)('README media', () => {
