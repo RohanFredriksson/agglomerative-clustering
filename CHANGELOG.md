@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.3.0 (unreleased)
+
+### Changed
+- **Clustering is faster on photos, and every output byte is the same as 4.2's.** The grid's cells keep a box around their clusters and the lightest count among them, and `search` skips a cell whose box can't hold a cheaper partner. After clusters were merged away those bounds still described them, so the test let through cells and chunks that held nothing; now a cell's bounds are recomputed from its live clusters whenever the cluster removed was at an edge of the box or the lightest. A looser bound only costs time, so no output changes (114 of 114 clusterings equal 4.2's, and `fuzz_identical` found no difference). Measured in WebAssembly on ten real 16 to 24 MP photos and a Kodak photo, median of 5, against 4.2.0: on the nine photos with 150,000 to 350,000 colours, clustering takes 1.5% (`old`) to 20.7% (`sky`) less time at full precision, 7.5% (`sp`) to 21.4% (`birch`) less with `colorSpace: 'oklab'`, and between 0.1% more (`wk`) and 11.9% less (`sky` and `sp`) at `precision: 6`; the greyscale photo, with 256 colours, changes by 0.4% to 1.8% more, and the Kodak photo, with 72,079 colours, by 0.9% to 3.9% less. <!-- bench/spikes/perf-4/release-check.mjs, results/results-release.txt: this branch's dist/ against 4.2.0's, same machine and run, load 0.8 to 1.6 --> The `.wasm` grows by 945 bytes (91,920 to 92,865; gzipped 42,513 to 42,862). Nothing in the API changes.
+
 ## 4.2.0
 
 ### Changed
