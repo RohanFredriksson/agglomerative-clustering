@@ -302,51 +302,39 @@ async function nesting() {
     await writeLabelled(out('nesting.png'), canvas, labels);
 }
 
-// ---------------------------------------------------------------- pixel art: flat blocks, no dither
+// ---------------------------------------------------------------- pixel art: 4, 8, 16 colours, ordered dither
 
 async function pixelArt() {
-    // The row of hats, tightly cropped: clustered in RGB at 24 colours (OKLab at 16 and 24 turned the green and pink hats
-    // olive and red), mapped with no dither, blocks scaled up.
-    const crop = { left: 60, top: 120, width: 640, height: 290 };
-    const smallWidth = 72;
-    const k = 24;
-    const scale = 6;
-    const smallHeight = Math.round((smallWidth * crop.height) / crop.width);
-    const source = { clone: () => sharp(path.join(photos, 'kodim03.png')).extract(crop) };
-    const { data } = await source.clone().resize(smallWidth, smallHeight, { kernel: 'lanczos3' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const small = { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: smallWidth, height: smallHeight };
+    const small = await load('kodim22', 120, 80);
+    const scale = 3;
     const clustering = await buildClustering(small);
-    const { palette, indices } = await clustering.quantizeToIndices(small, k);
-    const w = smallWidth * scale;
-    const h = smallHeight * scale;
-    const smooth = await source.clone().resize(w, h, { kernel: 'lanczos3' }).ensureAlpha().raw().toBuffer();
-
-    const margin = 16;
-    const gap = 16;
-    const top = 44;
-    const chips = 28;
-    const width = margin * 2 + w * 2 + gap;
-    const height = top + h + 14 + chips + margin;
-    const canvas = rgbaCanvas(width, height);
-    canvas.blit(margin, top, { width: w, height: h, data: smooth });
-    const x2 = margin + w + gap;
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const v = indices[Math.floor(y / scale) * smallWidth + Math.floor(x / scale)];
-            canvas.rect(x2 + x, top + y, 1, 1, palCol(palette, v));
+    const width = small.width * scale;
+    const barHeight = 18;
+    const height = small.height * scale + 8 + barHeight;
+    const frames = [];
+    for (const k of [4, 8, 16, 8]) {
+        const { palette, indices } = await clustering.quantizeToIndices(small, k, { dither: 'ordered' });
+        const n = palette.length / 3;
+        const canvas = indexCanvas(width, height, n);
+        for (let y = 0; y < small.height; y++) {
+            for (let x = 0; x < small.width; x++) {
+                const v = indices[y * small.width + x];
+                for (let j = 0; j < scale; j++) canvas.pixels.fill(v, (y * scale + j) * width + x * scale, (y * scale + j) * width + x * scale + scale);
+            }
         }
+        const cellW = width / n;
+        for (let i = 0; i < n; i++) {
+            const x0 = Math.round(i * cellW);
+            canvas.rect(x0, small.height * scale + 8, Math.round((i + 1) * cellW) - x0, barHeight, i);
+        }
+        const flat = new Uint8Array(3 * (n + 1));
+        flat.set(palette);
+        flat.set(BG, 3 * n);
+        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 16 ? 1400 : 1000 });
     }
-    const n = palette.length / 3;
-    const chipW = w / n;
-    for (let i = 0; i < n; i++) {
-        const x0 = Math.round(i * chipW);
-        canvas.rect(x2 + x0, top + h + 14, Math.round((i + 1) * chipW) - x0 - 3, chips, palCol(palette, i));
-    }
-    await writeLabelled(out('pixel-art.png'), canvas, [
-        { x: margin, y: 30, text: 'original', size: 20, weight: 'bold' },
-        { x: x2, y: 30, text: `${k} colours, ${smallWidth} px wide`, size: 20, weight: 'bold' },
-    ]);
+    await writeGif(out('pixel-art.gif'), width, height, frames);
 }
+
 
 // ---------------------------------------------------------------- e-ink: the photo next to its seven-ink version
 
