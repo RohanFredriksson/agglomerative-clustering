@@ -1,0 +1,12 @@
+base fern rgb8 8032647679 9e52fe27c7bf091a yes
+base k23 rgb8 899390919 a85df0f5c7b15c9a yes
+base night rgb8 9195749659 e8661cd479c54141 yes
+base sky rgb8 8118445602 bb1791809be6a65e yes
+eager fern rgb8 7194666439 9e52fe27c7bf091a yes
+eager k23 rgb8 921207074 a85df0f5c7b15c9a yes
+eager night rgb8 8084501061 e8661cd479c54141 yes
+eager sky rgb8 7072171285 bb1791809be6a65e yes
+lazy3 fern rgb8 7215308283 9e52fe27c7bf091a yes
+lazy3 k23 rgb8 897574697 a85df0f5c7b15c9a yes
+lazy3 night rgb8 8126347378 e8661cd479c54141 yes
+lazy3 sky rgb8 7106932062 bb1791809be6a65e yes

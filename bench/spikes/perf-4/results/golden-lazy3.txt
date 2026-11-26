@@ -1,0 +1,8 @@
+ RUN  v4.1.5 /home/rohan/Programming/agglomerative-clustering
+
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  23:20:22
+   Duration  20.36s (transform 118ms, setup 33ms, import 136ms, tests 20.02s, environment 0ms)
+

@@ -52,3 +52,42 @@ node time-dist.mjs cluster 7 k23,mos12,fern,night,sky rgb8 base=./build/dist-bas
 NATIVEFLAGS="-DCLS_N=2 -DCLS_T1=32 -DCLS_TIGHT" ./build.sh T2s native    # (copy variants/cls to variants/T2s first)
 ```
 `variants/tight/clustering.hpp` is the shipped `src/clustering.hpp` with the change; `data` is a link to the chain spike's photos; tools are copies of perf-3's (`native-run.sh` points at perf-4).
+
+## Lazy bounds (the worst cases for the eager recompute)
+
+Eager `tight` (now in `src/`) is slower than 4.2.0 on images where every colour appears once or counts tie, because almost every removal hits the "was an extreme or the lightest" test and recomputes the cell's bounds, while the recomputed bounds rarely reject anything more. `skew-check.mjs` (copied here; WebAssembly, median of 5, alternating with 4.2.0, load 0.4 to 1.1 before and after each batch) and callgrind on three small versions of the same images (`results/ir-skew-lazy.txt`) show it. Output is byte-identical in every row.
+
+Variants (`variants/<name>/clustering.hpp`, all on top of the eager source):
+- `eager`: the current `src/` (03e78ac).
+- `lazy1`: `remove` marks the cell dirty (`bounds_dirty`); `search` recomputes a dirty cell on every visit, before the cell test.
+- `lazy2`: as lazy1, but a dirty cell is recomputed only when its loose (valid) bounds do not already reject it.
+- **`lazy3`**: lazy2 plus a per-cell back-off: a recompute that does not make the cell test reject the cell is a strike; after s strikes in a row the next 2^s - 1 recomputes of that cell are skipped (loose bounds are valid, so this changes speed only); a recompute that rejects resets it. Two bytes per cell more (`refresh_strikes`, `refresh_skip`); `bounds_dirty` is cleared with the other per-cell vectors when the grid is rebuilt.
+- `lazy4`: lazy3 with 16-bit skip and up to 1023 skipped visits: same Ir as lazy3 on the synthetic images and k23, slightly faster on photos in WebAssembly (`results/release-sub-lazy4.txt`).
+- `lazy6`: lazy3 with the dirty path out of line (to save size): slower (skC +4.4% Ir), not pursued. `lazy5`, `lazyN`, `lazy4c`: diagnostics (a first-visit skip changes nothing; never marking dirty costs +0.4% Ir from the checks alone; counters).
+
+Why lazy1 and lazy2 are not enough: on the dense block the eager version recomputes 0.9 M chunks to save 1 M chunk visits (skA: 44 M chunks recomputed against 243 M scanned, 1% fewer visited). Lazy refresh only moves the recompute to the visit; most dirty cells that are visited do get recomputed. On photos the same counters are 5% of scanned chunks recomputed, for 37% fewer chunks (fern 92.3 M to 58.2 M).
+
+WebAssembly, clustering time against 4.2.0 (`results/skew-eager.txt`, `skew-lazy1.txt`, `skew-lazy3.txt`):
+
+| image | config | eager | lazy1 | lazy3 |
+|---|---|---|---|---|
+| dense 64^3 block | full / 6 / OKLab | -0.4 / -3.0 / +6.5% | +4.5 / +2.1 / +9.2% | +4.5 / +0.2 / +3.8% |
+| block + 25% scatter | full / 6 / OKLab | +16.9 / -1.0 / +14.4% | +7.5 / +0.8 / +12.4% | +1.6 / +1.9 / +2.1% |
+| noise 1024^2 | full / 6 / OKLab | +9.3 / +5.3 / +5.9% | +7.4 / +8.6 / +1.8% | -1.0 / +4.1 / +2.5% |
+| 32^3 x 8 + scatter | full / 6 / OKLab | +1.8 / +2.7 / +5.6% | +3.6 / +4.6 / +5.4% | +2.1 / +3.5 / +4.5% |
+
+Callgrind Ir (native, RGB full precision), lazy3 against the 4.2.0 source: skA (block + scatter) +0.3% (eager +27.7%), skB (noise) +2.3% (eager +7.4%), skC (block) +2.0% (eager +8.2%). Never marking dirty costs +0.4% on skC, so the remaining 1.6% is the first recompute of each cell.
+
+Photos (`release-check.mjs`, ten photos plus k23, median of 5, 4.2.0 alternating; `results/release-lazy3.txt`, `release-eager.txt`): mean over nine photos (excluding pip and k23):
+
+| config | eager | lazy3 |
+|---|---|---|
+| full precision | -15.0% | -11.9% |
+| `precision: 6` | -5.7% | -3.9% |
+| OKLab | -14.3% | -11.1% |
+
+k23 (small, 24 ms-class noise of about 4%): eager -4.1 / -5.1 / +0.4%, lazy3 +4.4 / -3.2 / +4.9%. pip: within 2.3%. Callgrind on the photos (`results/ir-lazy.txt`) shows lazy3 keeps the gain in instructions (fern -10.2%, night -11.6%, sky -12.5%, k23 -0.2% against eager -10.4, -12.1, -12.9, +2.4), so the 3 points it loses in V8 are not instruction count; the extra byte vectors and the dirty branch in the hot `scan` lambda are the suspects, not measured further. `.wasm`: 4.2.0 91,920 bytes, eager 92,865, lazy3 95,879 (lazy4 96,082, lazy6 94,126).
+
+Identity of lazy3: 114 of 114 native clusterings equal the shipped hashes (`results/identical-lazy.txt`); `test/golden.test.js` passes (17 of 17, built into `dist/` from the variant: `results/golden-lazy3.txt`); `fuzz_identical` 301 s, 12,151 runs, ASan and UBSan, no crash and no difference (`results/fuzz-lazy3.txt`); every timing row identical = yes.
+
+Recommendation: lazy3 meets the goal only in part. It is within ±2% on 4 of 12 skew rows and +4.5% at worst (eager +16.9%), and it gives up 1.8 to 3.2 points of the photo gain. Eager is simpler (about 40 lines, one vector fewer, 3 KB smaller) and better on every real image; lazy3 is better only on tied-count synthetic images, where it still is not better than 4.2.0. Ship eager unless slowing images of that kind by up to 17% matters more than the 3 points on photos; if it does, take lazy3 (lazy4 if the extra 2 bytes per cell are acceptable) and expect +2 to +4% on the dense images.
