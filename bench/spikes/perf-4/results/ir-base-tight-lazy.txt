@@ -1,0 +1,12 @@
+base k23 rgb8 899390940 a85df0f5c7b15c9a yes
+base fern rgb8 8032647674 9e52fe27c7bf091a yes
+base sky rgb8 8118445603 bb1791809be6a65e yes
+base night rgb8 9195749636 e8661cd479c54141 yes
+tight k23 rgb8 921207091 a85df0f5c7b15c9a yes
+tight sky rgb8 7072171249 bb1791809be6a65e yes
+tight fern rgb8 7194666429 9e52fe27c7bf091a yes
+tight night rgb8 8084501029 e8661cd479c54141 yes
+L1 k23 rgb8 927030476 a85df0f5c7b15c9a yes
+L1 sky rgb8 7261661724 bb1791809be6a65e yes
+L1 fern rgb8 7370413731 9e52fe27c7bf091a yes
+L1 night rgb8 8224269151 e8661cd479c54141 yes

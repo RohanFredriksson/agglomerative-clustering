@@ -1,0 +1,192 @@
+{
+ "birch": {
+  "rgb8": "d86957da77cc28f2",
+  "rgb6": "dad1adeabc22258d",
+  "oklab8": "ea5092489d04dda7"
+ },
+ "city": {
+  "rgb8": "7affdd7c46d2bbd1",
+  "rgb6": "82ac73b851331f5c",
+  "oklab8": "ada9117fb85c3a4f"
+ },
+ "fern": {
+  "rgb8": "9e52fe27c7bf091a",
+  "rgb6": "3f00f43ea83ae0f0",
+  "oklab8": "ba880a74f3de4e0b"
+ },
+ "komar": {
+  "rgb8": "48f40f6ce161df74",
+  "rgb6": "c7cd8731523645f5",
+  "oklab8": "b212e14968ecd0c7"
+ },
+ "night": {
+  "rgb8": "e8661cd479c54141",
+  "rgb6": "8de8736e8f947622",
+  "oklab8": "1fc443edc416c733"
+ },
+ "old": {
+  "rgb8": "d7177da841192b80",
+  "rgb6": "a7afdcf530a61fc4",
+  "oklab8": "d1e614c544e396cb"
+ },
+ "pip": {
+  "rgb8": "b499c6c4d9631c62",
+  "rgb6": "a7c78b5de34be14b",
+  "oklab8": "b988465e11fbff53"
+ },
+ "sky": {
+  "rgb8": "bb1791809be6a65e",
+  "rgb6": "ba66de9af62cf529",
+  "oklab8": "5ac65004ddc96ba4"
+ },
+ "sp": {
+  "rgb8": "c3687a727e837cca",
+  "rgb6": "ed3134b7fef5e662",
+  "oklab8": "8fd144fea8c43f6f"
+ },
+ "wk": {
+  "rgb8": "63da22e4790d91a1",
+  "rgb6": "fbc304b97067a32a",
+  "oklab8": "cdc2ccd290ccbf64"
+ },
+ "k23": {
+  "rgb8": "a85df0f5c7b15c9a",
+  "rgb6": "deebf8ccfc3bdce2",
+  "oklab8": "c034faa898898f03"
+ },
+ "k03": {
+  "rgb8": "37ccb757e591c575",
+  "rgb6": "0a40829fd3e18255",
+  "oklab8": "631439b7808c7b79"
+ },
+ "k20": {
+  "rgb8": "7ed79c6bfd5d2876",
+  "rgb6": "ba4b7e6baa2e100d",
+  "oklab8": "daa837458414a587"
+ },
+ "up12": {
+  "rgb8": "f0958588fb787674",
+  "rgb6": "bb58a671c12b591c",
+  "oklab8": "04cd6c5169346f18"
+ },
+ "up50": {
+  "rgb8": "7974be1556a0b9de",
+  "rgb6": "b9a423e7bdbb6c29",
+  "oklab8": "879f72f114659690"
+ },
+ "mos12": {
+  "rgb8": "1a83ebf8c5224ed8",
+  "rgb6": "01342c340a6a41fa",
+  "oklab8": "fda456f1e67ee896"
+ },
+ "mos50": {
+  "rgb8": "b7e92f7fe4147b28",
+  "rgb6": "83a32e28dadd9a41",
+  "oklab8": "75b091148d3cef87"
+ },
+ "k01": {
+  "rgb8": "be07a2386d3c7a04",
+  "rgb6": "9d78e62ae740339f",
+  "oklab8": "a3ff1324c3601a04"
+ },
+ "k02": {
+  "rgb8": "61f12df7d3ae059e",
+  "rgb6": "1942315ddcc50595",
+  "oklab8": "357897930d78fd1e"
+ },
+ "k04": {
+  "rgb8": "adaa502c78279a52",
+  "rgb6": "babd13f903343e51",
+  "oklab8": "b6840e1c805569f2"
+ },
+ "k05": {
+  "rgb8": "3ac7d0cc5c48d062",
+  "rgb6": "a2f7ceb0ef9433cc",
+  "oklab8": "4ee17b8c22640641"
+ },
+ "k06": {
+  "rgb8": "b79cac7796d0486a",
+  "rgb6": "6f2c5927e888a1cf",
+  "oklab8": "db9ccb1a6751c126"
+ },
+ "k07": {
+  "rgb8": "1642b387f6a6abba",
+  "rgb6": "2ceccf2412d79d01",
+  "oklab8": "51895bb6a1c9c530"
+ },
+ "k08": {
+  "rgb8": "e8f52b3efdd38620",
+  "rgb6": "6c65dbd0ec9e808d",
+  "oklab8": "58756936a911cd30"
+ },
+ "k09": {
+  "rgb8": "b16ff04f1a0dd879",
+  "rgb6": "926dffb975733413",
+  "oklab8": "4156abde6d14734f"
+ },
+ "k10": {
+  "rgb8": "0f36bc1ebc7588fe",
+  "rgb6": "42f3aa5baf3d451f",
+  "oklab8": "b80f360c1c526e67"
+ },
+ "k11": {
+  "rgb8": "f4d422df50a9ac43",
+  "rgb6": "27e304dec31e38aa",
+  "oklab8": "01b9e2e373391d31"
+ },
+ "k12": {
+  "rgb8": "0c8508fd1012dbbd",
+  "rgb6": "f764b327076ba3b6",
+  "oklab8": "8ab88cb646c237da"
+ },
+ "k13": {
+  "rgb8": "083831e96339c3e9",
+  "rgb6": "cfba6c52dbf4214e",
+  "oklab8": "c9a1cf0b4766c454"
+ },
+ "k14": {
+  "rgb8": "45305b3085399df4",
+  "rgb6": "ef20a02093c5f488",
+  "oklab8": "25086960534988b0"
+ },
+ "k15": {
+  "rgb8": "9407f67e5998423d",
+  "rgb6": "1e14bcdab0a1a45d",
+  "oklab8": "01fa7f2a8fa3a8fc"
+ },
+ "k16": {
+  "rgb8": "6c52ca6702ed2b10",
+  "rgb6": "b05761ba421d4d57",
+  "oklab8": "1a16990f60ce525b"
+ },
+ "k17": {
+  "rgb8": "e7d4aa951540736a",
+  "rgb6": "10198d665f2a1b85",
+  "oklab8": "8bcd92418a139d5a"
+ },
+ "k18": {
+  "rgb8": "bfb8961973fd56ba",
+  "rgb6": "646363d2f06489e2",
+  "oklab8": "7561e2988ee40e24"
+ },
+ "k19": {
+  "rgb8": "73ead77c38f9d7f6",
+  "rgb6": "ed1631bd53bd99cb",
+  "oklab8": "5d3fc5c633cf1af2"
+ },
+ "k21": {
+  "rgb8": "f70f5f795a278b60",
+  "rgb6": "14d8993b54a91db3",
+  "oklab8": "9cd44e6f7e54200d"
+ },
+ "k22": {
+  "rgb8": "d4851e87129699b9",
+  "rgb6": "4090620eacdd6157",
+  "oklab8": "c4d2688ac343b65c"
+ },
+ "k24": {
+  "rgb8": "f94f155e2f60561e",
+  "rgb6": "e6914d2d113ff415",
+  "oklab8": "73d5e24035ac4a9a"
+ }
+}
