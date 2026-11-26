@@ -2,7 +2,7 @@
 
 Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, export the same functions; the worker entry runs them in a worker (see [Worker entry](#worker-entry)). For recipes, see the [guides](guides.md).
 
-- [Terms](#terms)
+- [Terms](#terms) and [naming](#naming)
 - [Input](#input) and [output](#output)
 - [Options](#options): [choosing a colour space](#choosing-a-colour-space), [choosing a dither method](#choosing-a-dither-method), [transparency](#transparency)
 - [Palette and Clustering](#palette-and-clustering), and [methods on a clustering](#clustering-methods)
@@ -21,9 +21,17 @@ Both entries, `agglomerative-clustering` and `agglomerative-clustering/worker`, 
 - **build… and get…**: a name says how much work a call does. `build…` clusters an image; `get…` reads or cuts what a clustering or a worker handle already holds, so `buildPalette(image, k)` takes tens of milliseconds for a photo and `clustering.getPalette(k)` well under one. `quantize…` maps pixels, and may cluster first.
 - **clustering and mapping**: "clustering" functions build a clustering (`buildClustering`, `buildPalette`, `buildSwatches`, `quantize`, `quantizeToIndices`); "mapping" functions map pixels to a palette (`quantize`, `clustering.quantize`, `quantizeWithPalette` and the indexed versions). A function that does both takes both sets of options.
 
+### Naming
+
+The verb says how much work a call does. `build…` clusters an image (tens of milliseconds for a photo). `get…` reads or cuts what a clustering or a worker handle already holds (well under a millisecond). `quantize…` maps pixels. So `buildPalette(image, k)` and `clustering.getPalette(k)` give the same kind of result from different starting points. [Migrating](migrating.md) lists the names 4.0 removed.
+
+A clustering you hold has **methods** that take the colours from it, and **`…WithPalette`** takes colours you supply; with neither, the image is clustered for you. `buildClustering` builds a clustering, and `init` loads the WebAssembly module (optional).
+
+**Where to call them.** On the main thread, or in a Node script, use the methods: they are the shortest way to cut one clustering many times. **Off the thread, use a handle**: `worker.cluster(image)` keeps an image and its clustering in the worker, and `worker.load(clustering)` keeps a stored clustering (`await using loaded = await worker.load(stored)`, then `loaded.getPalette(k)` and `loaded.quantize(image, k)`). The methods always run on the thread that calls them, with the main entry, and reject with `wasm-load-failed` where only the worker entry is imported.
+
 ## Input
 
-Every function that takes an image accepts:
+Input is decoded pixels: a bare `Uint8Array` of RGBA bytes, an `ImageData`, or `{ data, format, width?, height? }`. BGRA suits Electron's `nativeImage` and Windows bitmaps, and the `x` formats suit buffers whose fourth byte isn't alpha (GDI screenshots, WebCodecs `'BGRX'`, ffmpeg `bgr0`). To start from a PNG, JPEG, WebP or GIF file, decode it first ([Decoding image files](guides.md#decoding-image-files)). Every function that takes an image accepts:
 
 ```ts
 Uint8Array                                   // raw RGBA bytes
