@@ -302,7 +302,7 @@ async function nesting() {
     await writeLabelled(out('nesting.png'), canvas, labels);
 }
 
-// ---------------------------------------------------------------- pixel art: 4, 8, 16 colours, ordered dither
+// ---------------------------------------------------------------- pixel art: 4 to 64 colours and back, ordered dither
 
 async function pixelArt() {
     const small = await load('kodim22', 120, 80);
@@ -312,7 +312,7 @@ async function pixelArt() {
     const barHeight = 18;
     const height = small.height * scale + 8 + barHeight;
     const frames = [];
-    for (const k of [4, 8, 16, 8]) {
+    for (const k of [4, 8, 16, 32, 64, 32, 16, 8]) {
         const { palette, indices } = await clustering.quantizeToIndices(small, k, { dither: 'ordered' });
         const n = palette.length / 3;
         const canvas = indexCanvas(width, height, n);
@@ -330,7 +330,7 @@ async function pixelArt() {
         const flat = new Uint8Array(3 * (n + 1));
         flat.set(palette);
         flat.set(BG, 3 * n);
-        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 16 ? 1400 : 1000 });
+        frames.push({ pixels: canvas.pixels, palette: flat, delay: k === 64 ? 1600 : 1000 });
     }
     await writeGif(out('pixel-art.gif'), width, height, frames);
 }
