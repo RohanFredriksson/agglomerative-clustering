@@ -495,11 +495,11 @@ async function icon(size) {
 
 async function transparency() {
     const image = await icon(256);
-    const k = 16;
+    const k = 24;
     const palette = await buildPalette(image, k);
     // Mapped output keeps each pixel's own alpha. quantizeToIndices (palette indices) cannot: an indexed pixel is
     // opaque unless it takes the one transparent entry, so a soft shadow would come out as a hard-edged opaque shape.
-    const mapped = await quantize(image, k, { dither: true });
+    const mapped = await quantize(image, k, { dither: 0.5 });
     const board = (x, y) => (((x >> 4) + (y >> 4)) & 1 ? [204, 204, 208] : [244, 244, 246]);
     const dark = [52, 54, 66];
     const over = (canvas, left, top, rgba, w, h, background) => {
@@ -531,11 +531,11 @@ async function transparency() {
     }
     await writeLabelled(out('transparency.png'), canvas, [
         { x: margin, y: 32, text: 'original, on a checkerboard', size: 17, weight: 'bold' },
-        { x: margin + panel + gap, y: 32, text: 'quantize(icon, 16, { dither: true })', size: 17, weight: 'bold' },
+        { x: margin + panel + gap, y: 32, text: 'quantize(icon, 24, { dither: 0.5 })', size: 17, weight: 'bold' },
         { x: margin + (panel + gap) * 2, y: 32, text: 'the same pixels on dark', size: 17, weight: 'bold' },
         { x: margin, y: top + panel + 28, text: 'soft shadow, antialiased edges', size: 15 },
         { x: margin + panel + gap, y: top + panel + 28, text: 'each pixel keeps its alpha', size: 15 },
-        { x: margin, y: chipTop - 10, text: '16 colours, no background colour', size: 18, weight: 'bold' },
+        { x: margin, y: chipTop - 10, text: '24 colours, no background colour', size: 18, weight: 'bold' },
     ]);
     // The palette holds the icon's colours only: count entries near either checkerboard colour or the dark background.
     // (A near-black entry is the shadow's faintest pixels, whose colour is dark by construction; it is counted apart.)
