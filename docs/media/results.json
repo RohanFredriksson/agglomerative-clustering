@@ -1,0 +1,59 @@
+{
+  "hero": {
+    "width": 768,
+    "height": 512,
+    "clusterMs": 111.4,
+    "cutsMs": 4.1,
+    "totalMs": 115.4,
+    "runsTotalMs": [
+      119.1,
+      117,
+      113.7,
+      115.4,
+      115.3
+    ],
+    "settings": {
+      "photo": "kodim23",
+      "width": 768,
+      "height": 512,
+      "colorSpace": "rgb",
+      "precision": 8,
+      "k": "2..64",
+      "runs": 5
+    }
+  },
+  "machine": "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz x 8, linux 7.3.4-200.fc44.x86_64",
+  "node": "v24.18.0",
+  "load": {
+    "before": 0.86,
+    "after": 0.86
+  },
+  "files": {
+    "animation.gif": 134539,
+    "eink.png": 288712,
+    "hero.gif": 436741,
+    "nesting.png": 17147,
+    "pixel-art.gif": 87955,
+    "swatches.png": 153789,
+    "threads.png": 181483,
+    "transparency.png": 72614
+  },
+  "animation": {
+    "photo": "kodim08",
+    "frames": 20,
+    "colours": 12,
+    "pixelsChangedAwayFromBallPercent": {
+      "floyd-steinberg": 4.1,
+      "ordered": 0
+    }
+  },
+  "transparency": {
+    "output": "quantize (mapped): palette colours with each pixel's own alpha",
+    "paletteEntries": 24,
+    "paletteEntriesNearBackgroundColours": 0,
+    "paletteEntriesNearBlack": 1,
+    "outputDistinctColours": 24,
+    "partiallyTransparentPixels": 20324,
+    "outputAlphaIdenticalToInput": true
+  }
+}
