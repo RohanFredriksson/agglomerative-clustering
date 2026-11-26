@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "width": 768,
+    "height": 512,
+    "clusterMs": 129,
+    "cutsMs": 4.4,
+    "totalMs": 134.3,
+    "runsTotalMs": [
+      128.2,
+      134.3,
+      134.9,
+      140.8,
+      133.1
+    ],
+    "settings": {
+      "photo": "kodim23",
+      "width": 768,
+      "height": 512,
+      "colorSpace": "rgb",
+      "precision": 8,
+      "k": "2..64",
+      "runs": 5
+    }
+  },
+  "machine": "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz x 8, linux 7.3.4-200.fc44.x86_64",
+  "node": "v24.18.0",
+  "load": {
+    "before": 0.77,
+    "after": 0.77
+  },
+  "files": {
+    "animation.gif": 92436,
+    "eink.gif": 39664,
+    "hero.gif": 489547,
+    "indexed.gif": 253263,
+    "nesting.png": 5361,
+    "pixel-art.gif": 48652,
+    "swatches.png": 162807,
+    "threads.png": 188922
+  },
+  "animation": {
+    "photo": "kodim08",
+    "frames": 20,
+    "colours": 12,
+    "pixelsChangedAwayFromBallPercent": {
+      "floyd-steinberg": 4.1,
+      "ordered": 0
+    }
+  }
+}
