@@ -331,16 +331,17 @@ async function nesting() {
 // ---------------------------------------------------------------- pixel art: flat blocks, no dither
 
 async function pixelArt() {
-    // The row of hats, tightly cropped: clustered in OKLab at 16 colours, mapped with no dither, blocks scaled up.
-    const crop = { left: 0, top: 30, width: 768, height: 380 };
+    // The row of hats, tightly cropped: clustered in RGB at 24 colours (OKLab at 16 and 24 turned the green and pink hats
+    // olive and red), mapped with no dither, blocks scaled up.
+    const crop = { left: 60, top: 120, width: 640, height: 290 };
     const smallWidth = 72;
-    const k = 16;
+    const k = 24;
     const scale = 6;
     const smallHeight = Math.round((smallWidth * crop.height) / crop.width);
-    const source = sharp(path.join(photos, 'kodim03.png')).extract(crop);
+    const source = { clone: () => sharp(path.join(photos, 'kodim03.png')).extract(crop) };
     const { data } = await source.clone().resize(smallWidth, smallHeight, { kernel: 'lanczos3' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const small = { data: new Uint8Array(data.buffer, data.byteOffset, data.length), format: 'rgba', width: smallWidth, height: smallHeight };
-    const clustering = await buildClustering(small, { colorSpace: 'oklab' });
+    const clustering = await buildClustering(small);
     const { palette, indices } = await clustering.quantizeToIndices(small, k);
     const w = smallWidth * scale;
     const h = smallHeight * scale;
@@ -498,7 +499,7 @@ async function transparency() {
     const palette = await buildPalette(image, k);
     // Mapped output keeps each pixel's own alpha. quantizeToIndices (palette indices) cannot: an indexed pixel is
     // opaque unless it takes the one transparent entry, so a soft shadow would come out as a hard-edged opaque shape.
-    const mapped = await quantize(image, k);
+    const mapped = await quantize(image, k, { dither: true });
     const board = (x, y) => (((x >> 4) + (y >> 4)) & 1 ? [204, 204, 208] : [244, 244, 246]);
     const dark = [52, 54, 66];
     const over = (canvas, left, top, rgba, w, h, background) => {
@@ -530,7 +531,7 @@ async function transparency() {
     }
     await writeLabelled(out('transparency.png'), canvas, [
         { x: margin, y: 32, text: 'original, on a checkerboard', size: 17, weight: 'bold' },
-        { x: margin + panel + gap, y: 32, text: 'quantize(icon, 16)', size: 17, weight: 'bold' },
+        { x: margin + panel + gap, y: 32, text: 'quantize(icon, 16, { dither: true })', size: 17, weight: 'bold' },
         { x: margin + (panel + gap) * 2, y: 32, text: 'the same pixels on dark', size: 17, weight: 'bold' },
         { x: margin, y: top + panel + 28, text: 'soft shadow, antialiased edges', size: 15 },
         { x: margin + panel + gap, y: top + panel + 28, text: 'each pixel keeps its alpha', size: 15 },
