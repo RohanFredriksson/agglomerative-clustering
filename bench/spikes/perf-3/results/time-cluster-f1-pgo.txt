@@ -1,0 +1,13 @@
+mode cluster runs 5; load before 0.89/1.45/1.54
+image	config	base ms	f1 ms	f1-pgo ms	f1 change	f1-pgo change	identical
+k23	rgb8	127	130	128	2.7%	1.2%	yes
+k23	rgb6	48	49	47	2.7%	-0.8%	yes
+fern	rgb8	1305	1234	1254	-5.5%	-3.9%	yes
+fern	rgb6	374	299	307	-20.1%	-18.0%	yes
+night	rgb8	1441	1380	1395	-4.2%	-3.2%	yes
+night	rgb6	308	244	249	-20.8%	-18.9%	yes
+sky	rgb8	1296	1226	1232	-5.4%	-5.0%	yes
+sky	rgb6	358	287	292	-19.8%	-18.5%	yes
+mos12	rgb8	1057	1008	1017	-4.6%	-3.7%	yes
+mos12	rgb6	276	239	245	-13.3%	-11.2%	yes
+load after 0.98/1.32/1.49; outputs that differ: 0

@@ -1,0 +1,6 @@
+load before: 1.65 1.94 1.69 1/1539 807311
+base night wasm mapping only, k=16 no dither, runs 1-5 (ms), run 0 is the first: 296.471 202.969 208.093 205.521 204.166 
+base fern wasm mapping only, k=16 no dither, runs 1-5 (ms), run 0 is the first: 658.541 514.271 508.280 508.770 508.985 
+f1 night wasm mapping only, k=16 no dither, runs 1-5 (ms), run 0 is the first: 176.977 130.543 130.393 130.336 138.807 
+f1 fern wasm mapping only, k=16 no dither, runs 1-5 (ms), run 0 is the first: 466.037 407.899 403.901 409.268 409.324 
+load after: 1.55 1.91 1.68 2/1547 807368

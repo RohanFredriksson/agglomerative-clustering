@@ -1,0 +1,32 @@
+load before: 1.26 1.83 1.67 1/1539 804114
+fern base scan_ms 247.637 hash a0d7eba2a5a2226f
+fern scan-a scan_ms 170.257 hash a0d7eba2a5a2226f
+fern scan-b scan_ms 269.786 hash a0d7eba2a5a2226f
+fern scan-c scan_ms 169.846 hash a0d7eba2a5a2226f
+fern f1 scan_ms 173.317 hash a0d7eba2a5a2226f
+night base scan_ms 167.453 hash caea28a4446e01b9
+night scan-a scan_ms 111.264 hash caea28a4446e01b9
+night scan-b scan_ms 145.889 hash caea28a4446e01b9
+night scan-c scan_ms 110.312 hash caea28a4446e01b9
+night f1 scan_ms 110.590 hash caea28a4446e01b9
+sky base scan_ms 218.328 hash 9ca3eb4611c84b15
+sky scan-a scan_ms 150.286 hash 9ca3eb4611c84b15
+sky scan-b scan_ms 231.920 hash 9ca3eb4611c84b15
+sky scan-c scan_ms 146.123 hash 9ca3eb4611c84b15
+sky f1 scan_ms 147.910 hash 9ca3eb4611c84b15
+pip base scan_ms 113.348 hash 7395d20af8fd0843
+pip scan-a scan_ms 59.113 hash 7395d20af8fd0843
+pip scan-b scan_ms 48.881 hash 7395d20af8fd0843
+pip scan-c scan_ms 60.969 hash 7395d20af8fd0843
+pip f1 scan_ms 57.291 hash 7395d20af8fd0843
+k23 base scan_ms 4.859 hash 9fd00317fe8e8770
+k23 scan-a scan_ms 4.048 hash 9fd00317fe8e8770
+k23 scan-b scan_ms 5.039 hash 9fd00317fe8e8770
+k23 scan-c scan_ms 3.802 hash 9fd00317fe8e8770
+k23 f1 scan_ms 3.720 hash 9fd00317fe8e8770
+mos50 base scan_ms 503.111 hash 7b04cb5ad93d86b7
+mos50 scan-a scan_ms 340.087 hash 7b04cb5ad93d86b7
+mos50 scan-b scan_ms 561.916 hash 7b04cb5ad93d86b7
+mos50 scan-c scan_ms 318.017 hash 7b04cb5ad93d86b7
+mos50 f1 scan_ms 326.965 hash 7b04cb5ad93d86b7
+load after: 1.14 1.74 1.64 1/1529 804604

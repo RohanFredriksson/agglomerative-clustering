@@ -1,0 +1,12 @@
+k23 SIM classes 8,128 cells 680051 chunks 9916060 saved_chunks 2233249 (22.5%) extra_cell_tests 544252 split_cells 495596
+fern SIM classes 8,128 cells 9024061 chunks 92262630 saved_chunks 48220280 (52.3%) extra_cell_tests 6239697 split_cells 5574646
+night SIM classes 8,128 cells 13059614 chunks 118388155 saved_chunks 65600875 (55.4%) extra_cell_tests 6047646 split_cells 5452149
+sky SIM classes 8,128 cells 11101158 chunks 83718760 saved_chunks 50459271 (60.3%) extra_cell_tests 7358945 split_cells 6732239
+k23 SIM classes 4,32 cells 680051 chunks 9916060 saved_chunks 2654876 (26.8%) extra_cell_tests 696775 split_cells 549691
+fern SIM classes 4,32 cells 9024061 chunks 92262630 saved_chunks 49274827 (53.4%) extra_cell_tests 6182556 split_cells 5281529
+night SIM classes 4,32 cells 13059614 chunks 118388155 saved_chunks 66859278 (56.5%) extra_cell_tests 6792182 split_cells 6093018
+sky SIM classes 4,32 cells 11101158 chunks 83718760 saved_chunks 50323735 (60.1%) extra_cell_tests 6625103 split_cells 5991157
+k23 SIM classes 32,100000 cells 680051 chunks 9916060 saved_chunks 1434588 (14.5%) extra_cell_tests 271542 split_cells 271542
+fern SIM classes 32,100000 cells 9024061 chunks 92262630 saved_chunks 42155989 (45.7%) extra_cell_tests 3701765 split_cells 3701765
+night SIM classes 32,100000 cells 13059614 chunks 118388155 saved_chunks 60180537 (50.8%) extra_cell_tests 3268321 split_cells 3264772
+sky SIM classes 32,100000 cells 11101158 chunks 83718760 saved_chunks 46782035 (55.9%) extra_cell_tests 4714705 split_cells 4714705
