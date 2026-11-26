@@ -1,0 +1,14 @@
+10092 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base.mjs
+87320 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base.wasm
+em++: warning: -pthread + ALLOW_MEMORY_GROWTH may run non-wasm code slowly, consider -sGROWABLE_ARRAYBUFFERS=2 [-Wpthreads-mem-growth]
+23622 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-pthread.mjs
+99627 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-pthread.wasm
+em++: warning: -pthread + ALLOW_MEMORY_GROWTH may run non-wasm code slowly, consider -sGROWABLE_ARRAYBUFFERS=2 [-Wpthreads-mem-growth]
+24563 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-threaded.mjs
+103422 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-threaded.wasm
+10917 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-o2.mjs
+85814 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-o2.wasm
+10098 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-os.mjs
+73804 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-os.wasm
+10108 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-relaxed.mjs
+87257 /home/rohan/Programming/agglomerative-clustering/bench/spikes/perf-measure/build/lib-base-relaxed.wasm

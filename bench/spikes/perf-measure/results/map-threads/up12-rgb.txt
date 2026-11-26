@@ -1,0 +1,30 @@
+MAPT 16 none 0 158.085 01cb6d36f7c6f18a identical 0
+MAPT 16 none 1 160.599 01cb6d36f7c6f18a identical 0 spawn_ms 0.072
+MAPT 16 none 2 97.189 01cb6d36f7c6f18a identical 0 spawn_ms 0.095
+MAPT 16 none 4 61.762 01cb6d36f7c6f18a identical 0 spawn_ms 0.068
+MAPT 16 none 8 53.906 01cb6d36f7c6f18a identical 0 spawn_ms 0.134
+MAPT 16 ordered 0 1384.860 a4a98d3976b21d59 identical 0
+MAPT 16 ordered 1 1354.674 a4a98d3976b21d59 identical 0 spawn_ms 0.057
+MAPT 16 ordered 2 882.369 a4a98d3976b21d59 identical 0 spawn_ms 0.123
+MAPT 16 ordered 4 645.641 a4a98d3976b21d59 identical 0 spawn_ms 0.073
+MAPT 16 ordered 8 515.711 a4a98d3976b21d59 identical 0 spawn_ms 0.140
+MAPT 16 fs-stripes 0 769.274 efbb02a59b9c16c8 identical 0
+MAPT 16 fs-stripes 1 767.032 efbb02a59b9c16c8 identical 0 spawn_ms 0.051
+MAPT 16 fs-stripes 2 455.650 0e9711c47e13c541 DIFFERENT 2405224 spawn_ms 0.063
+MAPT 16 fs-stripes 4 277.098 61ef8187a8b9b107 DIFFERENT 3605213 spawn_ms 0.077
+MAPT 16 fs-stripes 8 230.753 b6149bca9fe535c4 DIFFERENT 4348981 spawn_ms 0.151
+MAPT 256 none 0 207.335 e569eb7819ce1b26 identical 0
+MAPT 256 none 1 210.497 e569eb7819ce1b26 identical 0 spawn_ms 0.074
+MAPT 256 none 2 132.587 e569eb7819ce1b26 identical 0 spawn_ms 0.058
+MAPT 256 none 4 84.342 e569eb7819ce1b26 identical 0 spawn_ms 0.103
+MAPT 256 none 8 70.913 e569eb7819ce1b26 identical 0 spawn_ms 0.160
+MAPT 256 ordered 0 2644.686 6f087a46a8332dec identical 0
+MAPT 256 ordered 1 2777.652 6f087a46a8332dec identical 0 spawn_ms 0.055
+MAPT 256 ordered 2 1712.999 6f087a46a8332dec identical 0 spawn_ms 0.088
+MAPT 256 ordered 4 1283.761 6f087a46a8332dec identical 0 spawn_ms 0.080
+MAPT 256 ordered 8 1024.223 6f087a46a8332dec identical 0 spawn_ms 0.138
+MAPT 256 fs-stripes 0 1029.845 ab40d912c64e0185 identical 0
+MAPT 256 fs-stripes 1 1017.221 ab40d912c64e0185 identical 0 spawn_ms 0.069
+MAPT 256 fs-stripes 2 632.573 3eceba87a1c9ea38 DIFFERENT 2929550 spawn_ms 0.050
+MAPT 256 fs-stripes 4 386.822 f12dc510149bcdcf DIFFERENT 4388661 spawn_ms 0.124
+MAPT 256 fs-stripes 8 324.392 6c240bedde008676 DIFFERENT 5176280 spawn_ms 0.151

@@ -1,0 +1,34 @@
+== up12 rgb8 chain, started from the newest cluster
+RUN 0
+STAGE scan 678.661
+STAGE convert 15.099
+STAGE grid_add 86.333
+STAGE reindex 146.164
+STAGE chain 181971.769
+STAGE w_colors 15.984
+STAGE w_sort 367.897
+STAGE w_records 98.840
+STAGE w_checksum 71.347
+TOTAL 183477.972
+SEARCHES 2722488
+HASH 0c0cfbf6676603a2
+lengths 19057489 19057489 identical bytes: false
+records 907498 differing at same position 846443 first 0
+records of b whose (colours, weight, cost) are not in a: 85470
+header bytes differing 17,18,19,20
+k=2: error 6.063283e+10 vs 6.078488e+10, ratio 1.002508
+k=4: error 3.108658e+10 vs 3.169558e+10, ratio 1.019591
+k=16: error 6.225453e+9 vs 6.112936e+9, ratio 0.981926
+k=64: error 1.872903e+9 vs 1.872819e+9, ratio 0.999955
+k=256: error 6.256382e+8 vs 6.246027e+8, ratio 0.998345
+k=1024: error 2.230783e+8 vs 2.230024e+8, ratio 0.999660
+k=4096: error 8.290055e+7 vs 8.290004e+7, ratio 0.999994
+k=2: 2 colours vs 2, shared 0
+k=16: 16 colours vs 16, shared 9
+k=64: 64 colours vs 64, shared 56
+k=256: 256 colours vs 256, shared 244
+k=1024: 1024 colours vs 1024, shared 1010
+k=4096: 4096 colours vs 4096, shared 4085
+k=16384: 16384 colours vs 16384, shared 16376
+k=32768: 32768 colours vs 32768, shared 32761
+k=65536: 65536 colours vs 65536, shared 65531

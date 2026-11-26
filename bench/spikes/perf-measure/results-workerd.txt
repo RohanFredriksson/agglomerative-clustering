@@ -1,0 +1,1 @@
+{"SharedArrayBuffer":"function","Worker":"undefined","crossOriginIsolated":"undefined","threadsNavigator":"Cloudflare-Workers","sharedMemory":"constructs"}

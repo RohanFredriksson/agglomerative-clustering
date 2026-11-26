@@ -1,0 +1,53 @@
+== up12 rgb6 chain
+RUN 0
+STAGE scan 411.221
+STAGE convert 12.470
+STAGE group 26.956
+STAGE grouped_error 6.202
+STAGE grid_add 2.077
+STAGE reindex 4.195
+STAGE chain 292.445
+STAGE w_colors 0.332
+STAGE w_sort 5.007
+STAGE w_records 0.434
+STAGE w_checksum 1.816
+TOTAL 764.927
+SEARCHES 101223
+HASH bb58a671c12b591c
+== up12 rgb6 rounds, 1 thread, partner cache
+RUN 0
+STAGE scan 414.193
+STAGE convert 11.310
+STAGE group 21.936
+STAGE grouped_error 4.087
+STAGE grid_add 1.460
+STAGE reindex 2.645
+STAGE w_colors 468.454
+STAGE w_sort 8.914
+STAGE w_records 0.891
+STAGE w_checksum 2.575
+TOTAL 940.005
+SEARCHES 0
+ROUNDS 54 merges_first 3234 merges_median 120 merges_last 1 searches 206239 t_search 440.416 t_merge 20.984 t_other 5.969
+HASH 91ca9ceeaa5918f3
+== compare
+lengths 729718 729718 identical bytes: false
+records 34747 differing at same position 1268 first 6293
+records of b whose (colours, weight, cost) are not in a: 530
+header bytes differing 17,18,19,20
+k=2: error 5.623685e+10 vs 5.623685e+10, ratio 1.000000
+k=4: error 2.956511e+10 vs 2.956511e+10, ratio 1.000000
+k=16: error 6.092619e+9 vs 6.092619e+9, ratio 1.000000
+k=64: error 1.801553e+9 vs 1.801553e+9, ratio 1.000000
+k=256: error 5.956201e+8 vs 5.956201e+8, ratio 1.000000
+k=1024: error 1.870755e+8 vs 1.870755e+8, ratio 1.000000
+k=4096: error 4.599035e+7 vs 4.599035e+7, ratio 1.000000
+k=2: 2 colours vs 2, shared 2
+k=16: 16 colours vs 16, shared 16
+k=64: 64 colours vs 64, shared 64
+k=256: 256 colours vs 256, shared 256
+k=1024: 1024 colours vs 1024, shared 1024
+k=4096: 4096 colours vs 4096, shared 4096
+k=16384: 16384 colours vs 16384, shared 16384
+k=32768: 32768 colours vs 32768, shared 32768
+k=65536: 34748 colours vs 34748, shared 34748
