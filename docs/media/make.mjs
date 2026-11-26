@@ -10,7 +10,6 @@
 
 import { readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import os from 'node:os';
-import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -153,31 +152,6 @@ async function writeLabelled(file, canvas, items) {
         .removeAlpha()
         .png({ compressionLevel: 9 })
         .toFile(file);
-}
-
-/** A palette PNG: 8-bit indices, PLTE, and a tRNS chunk making `transparentIndex` (the last entry) fully transparent. */
-function indexedPng(width, height, indices, palette, transparentIndex) {
-    const chunk = (type, data) => {
-        const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-        const head = Buffer.alloc(4);
-        head.writeUInt32BE(data.length);
-        const crc = Buffer.alloc(4);
-        crc.writeUInt32BE(zlib.crc32(body));
-        return Buffer.concat([head, body, crc]);
-    };
-    const header = Buffer.alloc(13);
-    header.writeUInt32BE(width, 0);
-    header.writeUInt32BE(height, 4);
-    header.set([8, 3, 0, 0, 0], 8); // 8 bits, palette colour, deflate, no filter method, no interlace
-    const rows = Buffer.alloc(height * (width + 1));
-    for (let y = 0; y < height; y++) rows.set(indices.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
-    const alpha = Buffer.alloc(transparentIndex + 1, 255);
-    alpha[transparentIndex] = 0;
-    return Buffer.concat([
-        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-        chunk('IHDR', header), chunk('PLTE', Buffer.from(palette)), chunk('tRNS', alpha),
-        chunk('IDAT', zlib.deflateSync(rows, { level: 9 })), chunk('IEND', Buffer.alloc(0)),
-    ]);
 }
 
 const median = (list) => [...list].sort((a, b) => a - b)[list.length >> 1];
