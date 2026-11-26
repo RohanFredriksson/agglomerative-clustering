@@ -346,7 +346,8 @@ public:
             }
             this->occupancy = {};
             const int32_t target = dimensions[this->review_index];
-            // Removals only loosen the cells' bounds, so review (and rebuild them) when an eighth of the clusters are gone.
+            // Review the grid size again when an eighth of the clusters are gone (it was when half were): the cells are rebuilt
+            // only when the size changes, and a finer look steps down to a coarser grid sooner, which suits fewer, heavier clusters.
             this->next_review = this->alive * 7 / 8;
             if (target == this->dimension) {this->review = Review::idle; return true;}
             this->start_rebuild(target);
@@ -408,8 +409,8 @@ private:
     }
 
     // Collects the `limit` cheapest partners of `id`, searching outward ring by ring and stopping once no
-    // unvisited cell can hold a cheaper one. Every partner has at least one pixel, so beyond distance d the
-    // cost is at least n / (n + 1) * d^2. Returns how many clusters were examined.
+    // unvisited cell can hold a cheaper one. Every partner has at least `min_count` pixels (a lower bound of the
+    // smallest live count), so beyond distance d the cost is at least n * m / (n + m) * d^2, with m = `min_count`. Returns how many clusters were examined.
     size_t search(int32_t id, Candidates& list, int limit, int32_t hint = none) const {
 
         const Cluster& self = this->clusters[id];

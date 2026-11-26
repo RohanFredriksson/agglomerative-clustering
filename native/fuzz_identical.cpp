@@ -6,7 +6,7 @@
 // The input is read as fuzz_images.cpp's is, so its seeds are valid here: [format, colour space, precision, weight alpha,
 // k (here: how many generated pixels), dither (here: how far they scatter), method (here: how they are drawn), steps (here:
 // how many centres), transparent cutoff, palette colours (here: centres from the data), width seed], those palette colours,
-// then pixels taken as they are. A short input can still make a large image: the generated pixels (up to 16,384) are
+// then pixels taken as they are. A short input can still make a large image: the generated pixels (up to 8,192) are
 // scattered around the centres, so they give the many colours and the heavy clusters that the search's caches and bounds
 // act on, which a few thousand bytes of fuzzer data cannot.
 #include "../src/clustering.cpp"
