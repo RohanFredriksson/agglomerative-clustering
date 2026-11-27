@@ -20,7 +20,7 @@ const chart = Uint8Array.from({ length: 72 }, (_, i) => (i * 53 + 17) % 256);
 // What the README says about each snippet's result.
 const pixels = width * width;
 const checks = {
-    pixelart: (frames) => {
+    pixelart: ({ frames }) => {
         expect(frames).toHaveLength(4);
         frames.forEach((f, i) => {
             expect(f.indices).toHaveLength(pixels);
@@ -28,24 +28,24 @@ const checks = {
             expect(Math.max(...f.indices)).toBeLessThan(f.palette.length / 3);
         });
     },
-    eink: (indices) => {
+    eink: ({ indices }) => {
         expect(indices).toHaveLength(pixels);
         expect(Math.max(...indices)).toBeLessThan(7);
     },
-    threads: (indices) => {
+    threads: ({ indices }) => {
         expect(indices).toHaveLength(pixels);
         expect(Math.max(...indices)).toBeLessThan(12);
     },
-    transparency: (reduced) => {
+    transparency: ({ reduced }) => {
         expect(reduced.format).toBe('rgba');
         expect(reduced.data).toHaveLength(data.length);
         for (let i = 3; i < data.length; i += 4) expect(reduced.data[i]).toBe(data[i]);
     },
-    swatches: (shares) => {
+    swatches: ({ shares }) => {
         expect(shares).toHaveLength(8);
         expect(Math.abs(Array.from(shares).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(1e-9);
     },
-    animation: (frame) => {
+    animation: ({ frame }) => {
         expect(frame.indices).toHaveLength(pixels);
         expect(Math.max(...frame.indices)).toBeLessThan(frame.palette.length / 3);
     },
@@ -59,15 +59,16 @@ describe('README snippets', () => {
     });
     for (const [id, code] of snippets) {
         it(`runs snippet ${id}: ${code.split('\n').find((l) => l.trim() && !l.startsWith('import')).slice(0, 50)}`, async () => {
-            const lines = code.split('\n');
-            const last = lines.pop().trim().replace(/;$/, '');
-            const body = lines
-                .join('\n')
-                .replace(/^import \{([^}]*)\} from 'agglomerative-clustering';$/gm, 'const {$1} = library;');
+            const body = code.replace(/^import \{([^}]*)\} from 'agglomerative-clustering';$/gm, 'const {$1} = library;');
             expect(body).not.toMatch(/\bimport\b/);
-            const run = new AsyncFunction('library', 'image', 'imageData', 'chart', `${body}\nreturn (${last});`);
+            // The values the block declares at its top level, by name (the imported functions among them).
+            const names = [...body.matchAll(/^(?:const|let) (\{[^}]*\}|\w+)/gm)]
+                .flatMap((m) => m[1].replace(/[{}]/g, '').split(',').map((n) => n.trim().split(':').pop().trim()))
+                .filter(Boolean);
+            const run = new AsyncFunction('library', 'image', 'imageData', 'chart', `${body}\nreturn { ${names.join(', ')} };`);
             const result = await run(library, image, imageData, chart);
-            expect(result).not.toBeUndefined();
+            expect(Object.keys(result).length).toBeGreaterThan(0);
+            for (const [name, value] of Object.entries(result)) expect(value, name).not.toBeUndefined();
             checks[id]?.(result);
         });
     }
