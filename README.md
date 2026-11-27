@@ -2,6 +2,8 @@
 
 **Exact Ward colour quantization for JavaScript. Cluster an image once, then cut it to a palette of any size in under a millisecond.** Palettes of different sizes nest, so a colour-count slider, a set of 8, 16, 32 and 64 colour versions, or an error curve cost one clustering, not one per size.
 
+**[Try the interactive demo](https://rohanfredriksson.github.io/agglomerative-clustering/)** — quantize your own images in the browser.
+
 [![npm](https://img.shields.io/npm/v/agglomerative-clustering)](https://www.npmjs.com/package/agglomerative-clustering)
 [![license](https://img.shields.io/npm/l/agglomerative-clustering)](LICENSE)
 ![types](https://img.shields.io/badge/types-included-blue)
