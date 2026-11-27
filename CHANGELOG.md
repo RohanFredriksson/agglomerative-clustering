@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.3.1 (unreleased)
+## 4.3.1
 
 ### Fixed
 - **`onProgress` no longer stalls while a clustering builds its grid or writes its result.** Those two stages reported one fixed value each (10% and 95%), and `onProgress` only fires when the value rises, so on images with many distinct colours, where each stage spans several slices, a progress bar stood still for up to 118 ms. They now advance through their parts (10% to 15% building, 95% to 99.9% writing), so the longest gap between `onProgress` calls on those images went from 53–118 ms to 14–20 ms, about one slice. <!-- bench/spikes/slice-length/gaps.mjs, results/progress-431.txt: 4.3.0 against this build, back to back, load 2.9 to 4.0 --> Progress is still approximate, as documented; only the values reported during those stages change. The slices themselves were always about 10 ms, and output is unchanged. The `.wasm` grows by 1,034 bytes.
