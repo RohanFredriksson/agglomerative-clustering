@@ -8,19 +8,19 @@
 
 ![A photo cut from 2 to 64 colours, over a swatch bar that grows by splitting one colour at a time](https://raw.githubusercontent.com/RohanFredriksson/agglomerative-clustering/master/docs/media/hero.gif)
 
-*Every palette size from one clustering, in 157 ms (a 768×512 photo, 2 to 64 colours, including all 63 cuts).* <!-- docs/media/results.json: hero.totalMs, median of 5; TODO(task 3): re-measure on 4.3 -->
+*Every palette size from one clustering, in 115 ms (a 768×512 photo, 2 to 64 colours, including all 63 cuts).* <!-- docs/media/results.json: hero.totalMs, median of 5, measured on 4.3.0 -->
 
 ## Why this one
 
 Most colour quantizers answer one question: *give me k colours*. Ask for a different k and they start over. This one builds the whole tree of an image's colours once, and a palette of any size is a cut of it.
 
-1. **Every palette size from one pass, and the palettes nest.** The 16-colour palette is the 32-colour one with pairs merged, so swatches don't jump around as the count changes. A cut takes under a millisecond<!-- docs/media/results.json: hero.cutsMs, 5.4 ms for 63 cuts -->. Median cut starts over for each k:
+1. **Every palette size from one pass, and the palettes nest.** The 16-colour palette is the 32-colour one with pairs merged, so swatches don't jump around as the count changes. A cut takes under a millisecond<!-- docs/media/results.json: hero.cutsMs, 4.1 ms for 63 cuts -->. Median cut starts over for each k:
 
    ![Two rows of swatches for 4 to 12 colours: median cut (MMCQ) reshuffles, this library splits one swatch at a time](https://raw.githubusercontent.com/RohanFredriksson/agglomerative-clustering/master/docs/media/nesting.png)
 
    *Other quantizers start over for each k (here MMCQ, color-thief's median cut, in the order it returns); these palettes nest.*
 
-2. **The lowest error of the libraries benchmarked.** On the 24 Kodak photos at 64 colours, the nearest, image-q Wu, has 1.05× our mean squared error; see [Benchmarks](#benchmarks). <!-- TODO(task 3): numbers and wording from the 4.3 run -->
+2. **The lowest error of the libraries benchmarked, from 64 colours up.** On the 24 Kodak photos, none of the five other libraries has lower mean squared error on any photo at 64, 128 or 256 colours; at 64 the nearest, image-q Wu, has 1.05× ours. At 16 colours Wu and libimagequant do better on 4 and 5 of the 24 photos, by up to 4.2%. See [Benchmarks](#benchmarks). <!-- bench/COMPARISON.md Summary and Kodak tables, from bench/results-4.3.0.json -->
 3. **It knows the image.** Each colour's share of the pixels (`buildSwatches`), the error at every palette size, so you can pick a size from an error target (`getClusteringInfo`), and the best fit of `k` entries from a fixed palette such as a thread chart (`chooseFrom`).
 4. **Real-world input.** Transparency (a logo's background never ends up in its palette), premultiplied canvas pixels, BGRA and other pixel layouts, and a worker entry that keeps the page responsive.
 5. **Runs everywhere.** Node and browsers, about 42 KB of WebAssembly gzipped<!-- gzip -9 of dist/clustering.wasm at 4.3.0: 42,862 bytes, bench/spikes/slicing-mapping/results-size.txt -->, no dependencies, deterministic output.
@@ -85,7 +85,7 @@ const clustering = await buildClustering(imageData);                   // the ex
 
 slider.oninput = async () => {
   const palette = await clustering.getPalette(Number(slider.value));        // under 1 ms for any k
-  ctx.putImageData(await quantizeWithPalette(imageData, palette), 0, 0);   // ~5-12 ms at 768×512
+  ctx.putImageData(await quantizeWithPalette(imageData, palette), 0, 0);   // a few ms at 768×512
 };
 ```
 
@@ -199,18 +199,17 @@ Guides: [Animated GIFs and sets of images](https://github.com/RohanFredriksson/a
 
 ## Benchmarks
 
-<!-- TODO(task 3): re-run on 4.3, and regenerate bench/COMPARISON.md -->
-The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared error relative to this library, so 1.08× means 8% more error. Every palette is mapped to pixels the same way, so palettes are compared like for like. Times are medians per image, in WASM on Node 24 on a laptop (Intel Core i7-1185G7).
+The 24 Kodak photos (768×512) at 64 colours. "Error vs ours" is mean squared error relative to this library, so 1.08× means 8% more error. Every palette is mapped to pixels the same way, so palettes are compared like for like. Times are medians per image, in WASM on Node 24 on a laptop (Intel Core i7-1185G7), for version 4.3.0. <!-- bench/results-4.3.0.json, summarised in bench/COMPARISON.md -->
 
 | Library | PSNR | Error vs ours | One palette | Palettes at 16/64/128/256 |
 |---|---|---|---|---|
-| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 70 ms | **69 ms** |
-| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 24 ms | 23 ms |
-| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 79 ms | 323 ms |
-| image-q Wu | 35.51 dB | 1.05× | 532 ms | 2404 ms |
-| image-q NeuQuant | 34.41 dB | 1.35× | 428 ms | 2562 ms |
-| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 19 ms | 98 ms |
-| image-q RgbQuant | 31.95 dB | 2.38× | 242 ms | 1006 ms |
+| **agglomerative-clustering** | **35.72 dB** | **1.00×** | 53 ms | **53 ms** |
+| agglomerative-clustering, `precision: 6` | 35.70 dB | 1.00× | 18 ms | 18 ms |
+| libimagequant (pngquant's engine) | 35.39 dB | 1.08× | 64 ms | 262 ms |
+| image-q Wu | 35.51 dB | 1.05× | 433 ms | 1989 ms |
+| image-q NeuQuant | 34.41 dB | 1.35× | 361 ms | 2147 ms |
+| MMCQ (color-thief's algorithm) | 32.53 dB | 2.08× | 20 ms | 82 ms |
+| image-q RgbQuant | 31.95 dB | 2.38× | 194 ms | 791 ms |
 
 All rows are from one run. Full results at every palette size, on synthetic images too, with ΔE2000 and the method, are in [bench/COMPARISON.md](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/bench/COMPARISON.md); reproduce them with `node bench/run.js`. These numbers are a snapshot, so expect them to move with the hardware and the versions.
 

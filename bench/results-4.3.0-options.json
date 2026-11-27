@@ -1,0 +1,7539 @@
+{
+  "meta": {
+    "date": "2026-11-27T08:35:16.391Z",
+    "commit": "9187d2f",
+    "node": "v24.18.0",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz",
+    "reference": "agglomerative",
+    "args": {
+      "sets": [
+        "kodak"
+      ],
+      "libs": [],
+      "k": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "runs": 3,
+      "kodakLimit": 24,
+      "ac": [
+        {
+          "name": "agglomerative",
+          "path": "dist/index.mjs",
+          "options": {}
+        },
+        {
+          "name": "precision5",
+          "path": "dist/index.mjs",
+          "options": {
+            "precision": 5
+          }
+        },
+        {
+          "name": "dither",
+          "path": "dist/index.mjs",
+          "options": {
+            "dither": true
+          }
+        }
+      ],
+      "pipeline": true,
+      "label": "options-4.3"
+    },
+    "elapsedSeconds": 117
+  },
+  "results": [
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 32.788791000000174,
+      "shared": {
+        "mse": 35.24356163872613,
+        "psnr": 32.66000570041506,
+        "deltaE": 3.0180903782714847
+      },
+      "pipelineMs": 35.70639099999994,
+      "own": {
+        "mse": 35.24356163872613,
+        "psnr": 32.66000570041506,
+        "deltaE": 3.018853128236747
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 31.538622000000032,
+      "shared": {
+        "mse": 9.961575826009115,
+        "psnr": 38.147523157768674,
+        "deltaE": 2.081148388108035
+      },
+      "pipelineMs": 35.2523470000001,
+      "own": {
+        "mse": 9.961575826009115,
+        "psnr": 38.147523157768674,
+        "deltaE": 2.0815357252323214
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 31.921543999999813,
+      "shared": {
+        "mse": 5.867094251844618,
+        "psnr": 40.44657295878571,
+        "deltaE": 1.7738888254471457
+      },
+      "pipelineMs": 35.54576800000041,
+      "own": {
+        "mse": 5.867094251844618,
+        "psnr": 40.44657295878571,
+        "deltaE": 1.7741033846846932
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 31.926394000000073,
+      "shared": {
+        "mse": 3.5341178046332464,
+        "psnr": 42.64799338886342,
+        "deltaE": 1.4177423146510355
+      },
+      "pipelineMs": 37.4467910000003,
+      "own": {
+        "mse": 3.5341178046332464,
+        "psnr": 42.64799338886342,
+        "deltaE": 1.4174345802129953
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 4.182128000000375,
+      "shared": {
+        "mse": 35.68130662706163,
+        "psnr": 32.606396112811844,
+        "deltaE": 3.0062914921972155
+      },
+      "pipelineMs": 7.38857999999982,
+      "own": {
+        "mse": 35.68130662706163,
+        "psnr": 32.606396112811844,
+        "deltaE": 3.006218837435781
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 4.2547169999998005,
+      "shared": {
+        "mse": 10.087047153049046,
+        "psnr": 38.09316309875974,
+        "deltaE": 2.081090454795164
+      },
+      "pipelineMs": 8.049181999999746,
+      "own": {
+        "mse": 10.087047153049046,
+        "psnr": 38.09316309875974,
+        "deltaE": 2.082177023010932
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 4.083885000000009,
+      "shared": {
+        "mse": 6.056610107421875,
+        "psnr": 40.308507438903156,
+        "deltaE": 1.800700121200241
+      },
+      "pipelineMs": 8.478186000000278,
+      "own": {
+        "mse": 6.056610107421875,
+        "psnr": 40.308507438903156,
+        "deltaE": 1.8011780548677976
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 4.515377000000171,
+      "shared": {
+        "mse": 4.047697279188368,
+        "psnr": 42.05872336011993,
+        "deltaE": 1.5163925289466453
+      },
+      "pipelineMs": 8.685489999999845,
+      "own": {
+        "mse": 4.047697279188368,
+        "psnr": 42.05872336011993,
+        "deltaE": 1.5190415980875007
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 31.78537600000027,
+      "shared": {
+        "mse": 35.24356163872613,
+        "psnr": 32.66000570041506,
+        "deltaE": 3.0180903782714847
+      },
+      "pipelineMs": 54.771803999999975,
+      "own": {
+        "mse": 76.98163943820529,
+        "psnr": 29.266932050656337,
+        "deltaE": 3.6258665488358495
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 32.28595399999995,
+      "shared": {
+        "mse": 9.961575826009115,
+        "psnr": 38.147523157768674,
+        "deltaE": 2.081148388108035
+      },
+      "pipelineMs": 63.904667999999674,
+      "own": {
+        "mse": 29.301008436414932,
+        "psnr": 33.46197793386368,
+        "deltaE": 2.6472658771613946
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 32.219028000000435,
+      "shared": {
+        "mse": 5.867094251844618,
+        "psnr": 40.44657295878571,
+        "deltaE": 1.7738888254471457
+      },
+      "pipelineMs": 68.40849300000082,
+      "own": {
+        "mse": 16.8667967054579,
+        "psnr": 35.86047750432847,
+        "deltaE": 2.2293670812146673
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 33.17172499999924,
+      "shared": {
+        "mse": 3.5341178046332464,
+        "psnr": 42.64799338886342,
+        "deltaE": 1.4177423146510355
+      },
+      "pipelineMs": 73.50662699999975,
+      "own": {
+        "mse": 8.66630638970269,
+        "psnr": 38.75246321795565,
+        "deltaE": 1.7437377308782993
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 20.978283999999803,
+      "shared": {
+        "mse": 26.650667826334637,
+        "psnr": 33.873722645913205,
+        "deltaE": 1.616228790136366
+      },
+      "pipelineMs": 23.187439000000268,
+      "own": {
+        "mse": 26.650667826334637,
+        "psnr": 33.873722645913205,
+        "deltaE": 1.616236916334364
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 21.175188000000162,
+      "shared": {
+        "mse": 6.584362453884548,
+        "psnr": 39.94566631101524,
+        "deltaE": 0.8864822683866511
+      },
+      "pipelineMs": 24.03593700000056,
+      "own": {
+        "mse": 6.584362453884548,
+        "psnr": 39.94566631101524,
+        "deltaE": 0.8864637841767955
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 20.763170000000173,
+      "shared": {
+        "mse": 3.513169182671441,
+        "psnr": 42.67381296378631,
+        "deltaE": 0.6991184644654815
+      },
+      "pipelineMs": 24.123069000000214,
+      "own": {
+        "mse": 3.513169182671441,
+        "psnr": 42.67381296378631,
+        "deltaE": 0.6991871268315862
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 20.677526999999827,
+      "shared": {
+        "mse": 1.9316914876302083,
+        "psnr": 45.271425948540085,
+        "deltaE": 0.5330095924918922
+      },
+      "pipelineMs": 24.61175600000024,
+      "own": {
+        "mse": 1.9316914876302083,
+        "psnr": 45.271425948540085,
+        "deltaE": 0.5324022144893866
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 3.7816030000003593,
+      "shared": {
+        "mse": 27.188145107693142,
+        "psnr": 33.78700781708967,
+        "deltaE": 1.631292465047972
+      },
+      "pipelineMs": 5.978963000000476,
+      "own": {
+        "mse": 27.188145107693142,
+        "psnr": 33.78700781708967,
+        "deltaE": 1.63127211203234
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 3.6589160000003176,
+      "shared": {
+        "mse": 6.749747382269965,
+        "psnr": 39.83792841746394,
+        "deltaE": 0.916969075008331
+      },
+      "pipelineMs": 6.364531999999599,
+      "own": {
+        "mse": 6.749747382269965,
+        "psnr": 39.83792841746394,
+        "deltaE": 0.9173142564945379
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 3.6624940000001516,
+      "shared": {
+        "mse": 4.08840094672309,
+        "psnr": 42.01526880685789,
+        "deltaE": 0.782557226969975
+      },
+      "pipelineMs": 7.184581000000435,
+      "own": {
+        "mse": 4.08840094672309,
+        "psnr": 42.01526880685789,
+        "deltaE": 0.7826177140045875
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 3.6665010000006077,
+      "shared": {
+        "mse": 3.0664070977105036,
+        "psnr": 43.26450549373461,
+        "deltaE": 0.7172303071947583
+      },
+      "pipelineMs": 7.157842999999957,
+      "own": {
+        "mse": 3.0664070977105036,
+        "psnr": 43.26450549373461,
+        "deltaE": 0.718026973064467
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 20.909561000000394,
+      "shared": {
+        "mse": 26.650667826334637,
+        "psnr": 33.873722645913205,
+        "deltaE": 1.616228790136366
+      },
+      "pipelineMs": 41.47884200000044,
+      "own": {
+        "mse": 47.676429748535156,
+        "psnr": 31.34776635078786,
+        "deltaE": 1.928004087295461
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 21.176887999999963,
+      "shared": {
+        "mse": 6.584362453884548,
+        "psnr": 39.94566631101524,
+        "deltaE": 0.8864822683866511
+      },
+      "pipelineMs": 52.85759899999994,
+      "own": {
+        "mse": 13.53735097249349,
+        "psnr": 36.81546672189656,
+        "deltaE": 1.1172600978253644
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 22.119580000000497,
+      "shared": {
+        "mse": 3.513169182671441,
+        "psnr": 42.67381296378631,
+        "deltaE": 0.6991184644654815
+      },
+      "pipelineMs": 61.98904500000026,
+      "own": {
+        "mse": 8.681224399142796,
+        "psnr": 38.74499378515079,
+        "deltaE": 0.9202855086192877
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 20.89953499999956,
+      "shared": {
+        "mse": 1.9316914876302083,
+        "psnr": 45.271425948540085,
+        "deltaE": 0.5330095924918922
+      },
+      "pipelineMs": 66.13382499999989,
+      "own": {
+        "mse": 4.82309807671441,
+        "psnr": 41.297542675666385,
+        "deltaE": 0.699158383416349
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 50.912241999999424,
+      "shared": {
+        "mse": 105.12154727511935,
+        "psnr": 27.913886162615945,
+        "deltaE": 4.591081906179802
+      },
+      "pipelineMs": 54.5394610000003,
+      "own": {
+        "mse": 105.12154727511935,
+        "psnr": 27.913886162615945,
+        "deltaE": 4.5913838963315055
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 51.11130300000059,
+      "shared": {
+        "mse": 24.53643798828125,
+        "psnr": 34.232688454401085,
+        "deltaE": 2.197537376611468
+      },
+      "pipelineMs": 53.36062700000002,
+      "own": {
+        "mse": 24.53643798828125,
+        "psnr": 34.232688454401085,
+        "deltaE": 2.1975303392757657
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 53.33093700000063,
+      "shared": {
+        "mse": 12.513392130533854,
+        "psnr": 37.15705306659751,
+        "deltaE": 1.730262587490884
+      },
+      "pipelineMs": 54.16055799999958,
+      "own": {
+        "mse": 12.513392130533854,
+        "psnr": 37.15705306659751,
+        "deltaE": 1.7307696931774599
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 52.44715299999916,
+      "shared": {
+        "mse": 6.714624192979601,
+        "psnr": 39.860586499662986,
+        "deltaE": 1.3509041922478966
+      },
+      "pipelineMs": 55.10560799999985,
+      "own": {
+        "mse": 6.714624192979601,
+        "psnr": 39.860586499662986,
+        "deltaE": 1.3513282894622887
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 9.617586000000301,
+      "shared": {
+        "mse": 104.1050270928277,
+        "psnr": 27.9560865935006,
+        "deltaE": 4.646256341372913
+      },
+      "pipelineMs": 11.450128000000404,
+      "own": {
+        "mse": 104.1050270928277,
+        "psnr": 27.9560865935006,
+        "deltaE": 4.646256341372913
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 8.443508000000293,
+      "shared": {
+        "mse": 24.81114281548394,
+        "psnr": 34.184335922817965,
+        "deltaE": 2.3044858924881417
+      },
+      "pipelineMs": 12.006239000000278,
+      "own": {
+        "mse": 24.81114281548394,
+        "psnr": 34.184335922817965,
+        "deltaE": 2.3067184656394013
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 8.59446299999945,
+      "shared": {
+        "mse": 12.679032219780815,
+        "psnr": 37.0999425540178,
+        "deltaE": 1.719394704990436
+      },
+      "pipelineMs": 12.178819000000658,
+      "own": {
+        "mse": 12.679032219780815,
+        "psnr": 37.0999425540178,
+        "deltaE": 1.7189313899370546
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 8.627161000000342,
+      "shared": {
+        "mse": 7.031365288628472,
+        "psnr": 39.660407001797864,
+        "deltaE": 1.4121619078536503
+      },
+      "pipelineMs": 12.87308000000121,
+      "own": {
+        "mse": 7.031365288628472,
+        "psnr": 39.660407001797864,
+        "deltaE": 1.4120733877273175
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 51.04326500000025,
+      "shared": {
+        "mse": 105.12154727511935,
+        "psnr": 27.913886162615945,
+        "deltaE": 4.591081906179802
+      },
+      "pipelineMs": 72.96816799999942,
+      "own": {
+        "mse": 263.08128611246747,
+        "psnr": 23.92990404561555,
+        "deltaE": 6.003494582246767
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 50.44252199999937,
+      "shared": {
+        "mse": 24.53643798828125,
+        "psnr": 34.232688454401085,
+        "deltaE": 2.197537376611468
+      },
+      "pipelineMs": 77.60101000000031,
+      "own": {
+        "mse": 84.11108144124348,
+        "psnr": 28.882271440028802,
+        "deltaE": 3.477157281005194
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 52.16450000000077,
+      "shared": {
+        "mse": 12.513392130533854,
+        "psnr": 37.15705306659751,
+        "deltaE": 1.730262587490884
+      },
+      "pipelineMs": 79.11398199999894,
+      "own": {
+        "mse": 43.38992479112413,
+        "psnr": 31.75691463511874,
+        "deltaE": 2.5277714590446094
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 50.98886500000117,
+      "shared": {
+        "mse": 6.714624192979601,
+        "psnr": 39.860586499662986,
+        "deltaE": 1.3509041922478966
+      },
+      "pipelineMs": 84.93481599999905,
+      "own": {
+        "mse": 21.21986982557509,
+        "psnr": 34.86337645497114,
+        "deltaE": 1.892827216759031
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 52.02398399999947,
+      "shared": {
+        "mse": 83.3016374376085,
+        "psnr": 28.92426822568823,
+        "deltaE": 5.187274455210905
+      },
+      "pipelineMs": 56.58600599999954,
+      "own": {
+        "mse": 83.3016374376085,
+        "psnr": 28.92426822568823,
+        "deltaE": 5.187404617034919
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 52.08425299999908,
+      "shared": {
+        "mse": 20.715865241156685,
+        "psnr": 34.96777283643332,
+        "deltaE": 2.475609166066285
+      },
+      "pipelineMs": 57.64391000000069,
+      "own": {
+        "mse": 20.715865241156685,
+        "psnr": 34.96777283643332,
+        "deltaE": 2.4756912390380696
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 52.60049800000161,
+      "shared": {
+        "mse": 11.431255764431423,
+        "psnr": 37.54986419045986,
+        "deltaE": 1.9498132566200628
+      },
+      "pipelineMs": 55.3691689999996,
+      "own": {
+        "mse": 11.431255764431423,
+        "psnr": 37.54986419045986,
+        "deltaE": 1.9540263333847714
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 52.421581000000515,
+      "shared": {
+        "mse": 6.507778591579861,
+        "psnr": 39.99647591970455,
+        "deltaE": 1.5460140885945393
+      },
+      "pipelineMs": 57.84988499999963,
+      "own": {
+        "mse": 6.507778591579861,
+        "psnr": 39.99647591970455,
+        "deltaE": 1.546266373878586
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.04892800000016,
+      "shared": {
+        "mse": 83.3490473429362,
+        "psnr": 28.921797205439628,
+        "deltaE": 4.518234951767903
+      },
+      "pipelineMs": 9.30956999999944,
+      "own": {
+        "mse": 83.3490473429362,
+        "psnr": 28.921797205439628,
+        "deltaE": 4.518232465944281
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.284131000000343,
+      "shared": {
+        "mse": 20.74966091579861,
+        "psnr": 34.96069356860802,
+        "deltaE": 2.4919647346802516
+      },
+      "pipelineMs": 9.460151999999653,
+      "own": {
+        "mse": 20.74966091579861,
+        "psnr": 34.96069356860802,
+        "deltaE": 2.492145068654691
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.554579999999987,
+      "shared": {
+        "mse": 11.587736341688368,
+        "psnr": 37.49081755821561,
+        "deltaE": 1.9668069423841796
+      },
+      "pipelineMs": 10.040039999999863,
+      "own": {
+        "mse": 11.587736341688368,
+        "psnr": 37.49081755821561,
+        "deltaE": 1.966407091820515
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.8361819999990985,
+      "shared": {
+        "mse": 6.628201802571614,
+        "psnr": 39.91684638367277,
+        "deltaE": 1.5405659890639498
+      },
+      "pipelineMs": 10.89190199999939,
+      "own": {
+        "mse": 6.628201802571614,
+        "psnr": 39.91684638367277,
+        "deltaE": 1.5399296361270778
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 53.1056150000004,
+      "shared": {
+        "mse": 83.3016374376085,
+        "psnr": 28.92426822568823,
+        "deltaE": 5.187274455210905
+      },
+      "pipelineMs": 74.56199399999969,
+      "own": {
+        "mse": 232.802118089464,
+        "psnr": 24.460934335568044,
+        "deltaE": 5.733079706299332
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 52.10640200000125,
+      "shared": {
+        "mse": 20.715865241156685,
+        "psnr": 34.96777283643332,
+        "deltaE": 2.475609166066285
+      },
+      "pipelineMs": 79.26872000000003,
+      "own": {
+        "mse": 51.54329935709635,
+        "psnr": 31.009081459793904,
+        "deltaE": 3.1556444079055512
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 53.32092499999999,
+      "shared": {
+        "mse": 11.431255764431423,
+        "psnr": 37.54986419045986,
+        "deltaE": 1.9498132566200628
+      },
+      "pipelineMs": 86.82260499999938,
+      "own": {
+        "mse": 29.633883158365887,
+        "psnr": 33.412917966726205,
+        "deltaE": 2.499198261033048
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 53.94973299999947,
+      "shared": {
+        "mse": 6.507778591579861,
+        "psnr": 39.99647591970455,
+        "deltaE": 1.5460140885945393
+      },
+      "pipelineMs": 92.81346800000028,
+      "own": {
+        "mse": 18.981441921657986,
+        "psnr": 35.34751160425029,
+        "deltaE": 2.070148434451835
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 98.63452300000063,
+      "shared": {
+        "mse": 127.73832024468317,
+        "psnr": 27.067591599686118,
+        "deltaE": 7.111352763767063
+      },
+      "pipelineMs": 102.09151900000143,
+      "own": {
+        "mse": 127.73832024468317,
+        "psnr": 27.067591599686118,
+        "deltaE": 7.1124649669923725
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 98.61608699999852,
+      "shared": {
+        "mse": 36.996260748969185,
+        "psnr": 32.449225291834246,
+        "deltaE": 3.760701164513728
+      },
+      "pipelineMs": 105.79360599999927,
+      "own": {
+        "mse": 36.996260748969185,
+        "psnr": 32.449225291834246,
+        "deltaE": 3.7605779578686014
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 95.00178599999708,
+      "shared": {
+        "mse": 21.45225101047092,
+        "psnr": 34.816074909143474,
+        "deltaE": 3.0784273072450676
+      },
+      "pipelineMs": 105.19036200000119,
+      "own": {
+        "mse": 21.45225101047092,
+        "psnr": 34.816074909143474,
+        "deltaE": 3.0776102411995634
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 96.20782699999836,
+      "shared": {
+        "mse": 12.751948886447483,
+        "psnr": 37.075037975920885,
+        "deltaE": 2.5832481887893053
+      },
+      "pipelineMs": 105.90573799999765,
+      "own": {
+        "mse": 12.751948886447483,
+        "psnr": 37.075037975920885,
+        "deltaE": 2.582526715959547
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 12.97355400000015,
+      "shared": {
+        "mse": 124.42770385742188,
+        "psnr": 27.181632739786778,
+        "deltaE": 6.627040303185137
+      },
+      "pipelineMs": 17.938955999998143,
+      "own": {
+        "mse": 124.42770385742188,
+        "psnr": 27.181632739786778,
+        "deltaE": 6.626626950673095
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 12.77676000000065,
+      "shared": {
+        "mse": 37.098236083984375,
+        "psnr": 32.43727100234099,
+        "deltaE": 3.7606437486302866
+      },
+      "pipelineMs": 19.083878000001278,
+      "own": {
+        "mse": 37.098236083984375,
+        "psnr": 32.43727100234099,
+        "deltaE": 3.760545343784239
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 12.710150999999314,
+      "shared": {
+        "mse": 21.64397939046224,
+        "psnr": 34.77743249145196,
+        "deltaE": 3.084917687488709
+      },
+      "pipelineMs": 20.824988999997004,
+      "own": {
+        "mse": 21.64397939046224,
+        "psnr": 34.77743249145196,
+        "deltaE": 3.083296896253343
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 12.734943999999814,
+      "shared": {
+        "mse": 12.808915032280815,
+        "psnr": 37.05568016091922,
+        "deltaE": 2.5989891179576077
+      },
+      "pipelineMs": 22.51897100000133,
+      "own": {
+        "mse": 12.808915032280815,
+        "psnr": 37.05568016091922,
+        "deltaE": 2.59662420494829
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 94.94595599999957,
+      "shared": {
+        "mse": 127.73832024468317,
+        "psnr": 27.067591599686118,
+        "deltaE": 7.111352763767063
+      },
+      "pipelineMs": 121.85693600000013,
+      "own": {
+        "mse": 313.5833570692274,
+        "psnr": 23.16727355722854,
+        "deltaE": 8.19591314490457
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 96.95391999999993,
+      "shared": {
+        "mse": 36.996260748969185,
+        "psnr": 32.449225291834246,
+        "deltaE": 3.760701164513728
+      },
+      "pipelineMs": 121.69137699999919,
+      "own": {
+        "mse": 83.55680762396918,
+        "psnr": 28.91098521921763,
+        "deltaE": 4.634001552831536
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 100.76048300000184,
+      "shared": {
+        "mse": 21.45225101047092,
+        "psnr": 34.816074909143474,
+        "deltaE": 3.0784273072450676
+      },
+      "pipelineMs": 123.00497900000119,
+      "own": {
+        "mse": 48.03155178493924,
+        "psnr": 31.315537429828616,
+        "deltaE": 3.855268735038568
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 98.37511699999959,
+      "shared": {
+        "mse": 12.751948886447483,
+        "psnr": 37.075037975920885,
+        "deltaE": 2.5832481887893053
+      },
+      "pipelineMs": 128.4243690000003,
+      "own": {
+        "mse": 29.59668646918403,
+        "psnr": 33.418372690218476,
+        "deltaE": 3.272999005790572
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 43.428570000000036,
+      "shared": {
+        "mse": 52.27924516465929,
+        "psnr": 30.947510524871355,
+        "deltaE": 3.644645355441139
+      },
+      "pipelineMs": 44.26460399999996,
+      "own": {
+        "mse": 52.27924516465929,
+        "psnr": 30.947510524871355,
+        "deltaE": 3.6446731368206535
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 40.90645500000028,
+      "shared": {
+        "mse": 13.704395718044704,
+        "psnr": 36.76220470361569,
+        "deltaE": 2.123032160976245
+      },
+      "pipelineMs": 45.98517499999798,
+      "own": {
+        "mse": 13.704395718044704,
+        "psnr": 36.76220470361569,
+        "deltaE": 2.1220867989675134
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 40.96770400000241,
+      "shared": {
+        "mse": 8.044126722547743,
+        "psnr": 39.07601457263728,
+        "deltaE": 1.7129864488780653
+      },
+      "pipelineMs": 47.84762300000148,
+      "own": {
+        "mse": 8.044126722547743,
+        "psnr": 39.07601457263728,
+        "deltaE": 1.7126130631768646
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 43.205000000001746,
+      "shared": {
+        "mse": 4.7470550537109375,
+        "psnr": 41.3665609241388,
+        "deltaE": 1.393368392725493
+      },
+      "pipelineMs": 47.618203999998514,
+      "own": {
+        "mse": 4.7470550537109375,
+        "psnr": 41.3665609241388,
+        "deltaE": 1.3925359917880937
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 5.129676999997173,
+      "shared": {
+        "mse": 51.259279039171005,
+        "psnr": 31.033078673207314,
+        "deltaE": 3.5186124579165714
+      },
+      "pipelineMs": 8.805245999999897,
+      "own": {
+        "mse": 51.259279039171005,
+        "psnr": 31.033078673207314,
+        "deltaE": 3.518716350712612
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 4.878975999999966,
+      "shared": {
+        "mse": 13.765018039279514,
+        "psnr": 36.74303575988222,
+        "deltaE": 2.1222269022502975
+      },
+      "pipelineMs": 9.28070999999909,
+      "own": {
+        "mse": 13.765018039279514,
+        "psnr": 36.74303575988222,
+        "deltaE": 2.12173309384706
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 5.102778000000399,
+      "shared": {
+        "mse": 8.047032674153646,
+        "psnr": 39.07444596129023,
+        "deltaE": 1.7017089355787458
+      },
+      "pipelineMs": 10.19039100000009,
+      "own": {
+        "mse": 8.047032674153646,
+        "psnr": 39.07444596129023,
+        "deltaE": 1.702893092706403
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.477977999998984,
+      "shared": {
+        "mse": 5.120635138617621,
+        "psnr": 41.03756528780865,
+        "deltaE": 1.43404820107157
+      },
+      "pipelineMs": 12.124746999998024,
+      "own": {
+        "mse": 5.120635138617621,
+        "psnr": 41.03756528780865,
+        "deltaE": 1.434133144694641
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 43.26096300000063,
+      "shared": {
+        "mse": 52.27924516465929,
+        "psnr": 30.947510524871355,
+        "deltaE": 3.644645355441139
+      },
+      "pipelineMs": 63.896081000002596,
+      "own": {
+        "mse": 111.34032609727647,
+        "psnr": 27.664278719189028,
+        "deltaE": 4.191380553846724
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 40.638011999999435,
+      "shared": {
+        "mse": 13.704395718044704,
+        "psnr": 36.76220470361569,
+        "deltaE": 2.123032160976245
+      },
+      "pipelineMs": 69.35479699999996,
+      "own": {
+        "mse": 44.84256490071615,
+        "psnr": 31.613899155005043,
+        "deltaE": 2.938145374138529
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 42.68390399999771,
+      "shared": {
+        "mse": 8.044126722547743,
+        "psnr": 39.07601457263728,
+        "deltaE": 1.7129864488780653
+      },
+      "pipelineMs": 75.85969499999919,
+      "own": {
+        "mse": 26.41106414794922,
+        "psnr": 33.91294460824498,
+        "deltaE": 2.3781153317515678
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 41.21550500000012,
+      "shared": {
+        "mse": 4.7470550537109375,
+        "psnr": 41.3665609241388,
+        "deltaE": 1.393368392725493
+      },
+      "pipelineMs": 81.84460599999875,
+      "own": {
+        "mse": 13.577652825249565,
+        "psnr": 36.80255661110919,
+        "deltaE": 1.8840374947295853
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 60.50014999999985,
+      "shared": {
+        "mse": 70.36464182535808,
+        "psnr": 29.657258795332503,
+        "deltaE": 4.105706270621707
+      },
+      "pipelineMs": 63.30221700000038,
+      "own": {
+        "mse": 70.36464182535808,
+        "psnr": 29.657258795332503,
+        "deltaE": 4.105385410973057
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 58.68417800000316,
+      "shared": {
+        "mse": 17.92173851860894,
+        "psnr": 35.59700224268582,
+        "deltaE": 2.2676736056485836
+      },
+      "pipelineMs": 63.6847740000012,
+      "own": {
+        "mse": 17.92173851860894,
+        "psnr": 35.59700224268582,
+        "deltaE": 2.268489254051977
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 63.57171599999856,
+      "shared": {
+        "mse": 10.091191609700521,
+        "psnr": 38.09137908311725,
+        "deltaE": 1.8087818799151678
+      },
+      "pipelineMs": 64.84496899999795,
+      "own": {
+        "mse": 10.091191609700521,
+        "psnr": 38.09137908311725,
+        "deltaE": 1.8092439354876217
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 58.98998500000016,
+      "shared": {
+        "mse": 5.844667222764757,
+        "psnr": 40.463205720477674,
+        "deltaE": 1.4882649391535612
+      },
+      "pipelineMs": 63.24434800000017,
+      "own": {
+        "mse": 5.844667222764757,
+        "psnr": 40.463205720477674,
+        "deltaE": 1.4888182926628781
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 7.28013799999826,
+      "shared": {
+        "mse": 68.60039520263672,
+        "psnr": 29.767537432102845,
+        "deltaE": 4.0368174011087605
+      },
+      "pipelineMs": 10.858323000000382,
+      "own": {
+        "mse": 68.60039520263672,
+        "psnr": 29.767537432102845,
+        "deltaE": 4.036571674229501
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 7.011814999998023,
+      "shared": {
+        "mse": 18.2990968492296,
+        "psnr": 35.50650705185299,
+        "deltaE": 2.3224140707747036
+      },
+      "pipelineMs": 11.391309999999066,
+      "own": {
+        "mse": 18.2990968492296,
+        "psnr": 35.50650705185299,
+        "deltaE": 2.322721161080995
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.760260999999446,
+      "shared": {
+        "mse": 10.161072625054253,
+        "psnr": 38.06140805424532,
+        "deltaE": 1.853848136228261
+      },
+      "pipelineMs": 11.554931999999098,
+      "own": {
+        "mse": 10.161072625054253,
+        "psnr": 38.06140805424532,
+        "deltaE": 1.8542248757077777
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 6.8950369999984105,
+      "shared": {
+        "mse": 6.184634738498264,
+        "psnr": 40.21766305365002,
+        "deltaE": 1.5516109350526615
+      },
+      "pipelineMs": 12.031190000001516,
+      "own": {
+        "mse": 6.184634738498264,
+        "psnr": 40.21766305365002,
+        "deltaE": 1.5515603071270323
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 58.938842999999906,
+      "shared": {
+        "mse": 70.36464182535808,
+        "psnr": 29.657258795332503,
+        "deltaE": 4.105706270621707
+      },
+      "pipelineMs": 82.17601099999956,
+      "own": {
+        "mse": 192.27148946126303,
+        "psnr": 25.291654702207996,
+        "deltaE": 5.089517977740927
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 60.05300899999929,
+      "shared": {
+        "mse": 17.92173851860894,
+        "psnr": 35.59700224268582,
+        "deltaE": 2.2676736056485836
+      },
+      "pipelineMs": 85.78787700000248,
+      "own": {
+        "mse": 52.18968963623047,
+        "psnr": 30.954956466848635,
+        "deltaE": 3.1410539161127713
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 58.71544399999766,
+      "shared": {
+        "mse": 10.091191609700521,
+        "psnr": 38.09137908311725,
+        "deltaE": 1.8087818799151678
+      },
+      "pipelineMs": 92.72382399999333,
+      "own": {
+        "mse": 25.947692023383247,
+        "psnr": 33.9898162627825,
+        "deltaE": 2.400246667172404
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 59.46656800000346,
+      "shared": {
+        "mse": 5.844667222764757,
+        "psnr": 40.463205720477674,
+        "deltaE": 1.4882649391535612
+      },
+      "pipelineMs": 97.36667999999918,
+      "own": {
+        "mse": 16.15825737847222,
+        "psnr": 36.04685839313132,
+        "deltaE": 1.9788391349884922
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 68.1482410000026,
+      "shared": {
+        "mse": 89.07029893663194,
+        "psnr": 28.63347450976007,
+        "deltaE": 5.759138703420075
+      },
+      "pipelineMs": 71.10702400000446,
+      "own": {
+        "mse": 89.07029893663194,
+        "psnr": 28.63347450976007,
+        "deltaE": 5.759210203699079
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 65.91031099999964,
+      "shared": {
+        "mse": 24.530601501464844,
+        "psnr": 34.23372163433466,
+        "deltaE": 3.7270547718366456
+      },
+      "pipelineMs": 74.26656599999842,
+      "own": {
+        "mse": 24.530601501464844,
+        "psnr": 34.23372163433466,
+        "deltaE": 3.7276016112391908
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 67.20105199999671,
+      "shared": {
+        "mse": 14.012479146321615,
+        "psnr": 36.66565381590961,
+        "deltaE": 2.923825819457884
+      },
+      "pipelineMs": 74.15903400000389,
+      "own": {
+        "mse": 14.012479146321615,
+        "psnr": 36.66565381590961,
+        "deltaE": 2.922902864869656
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 66.23805599999469,
+      "shared": {
+        "mse": 8.447280883789062,
+        "psnr": 38.86363425552139,
+        "deltaE": 2.3151967639010675
+      },
+      "pipelineMs": 76.73488600000564,
+      "own": {
+        "mse": 8.447280883789062,
+        "psnr": 38.86363425552139,
+        "deltaE": 2.3151335924619207
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.88308600000164,
+      "shared": {
+        "mse": 86.99433305528429,
+        "psnr": 28.735893979386965,
+        "deltaE": 5.933813620998706
+      },
+      "pipelineMs": 12.699933999996574,
+      "own": {
+        "mse": 86.99433305528429,
+        "psnr": 28.735893979386965,
+        "deltaE": 5.933738031754995
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.442418999999063,
+      "shared": {
+        "mse": 24.317012363009983,
+        "psnr": 34.271701452821404,
+        "deltaE": 3.6966357432050088
+      },
+      "pipelineMs": 12.762172999995528,
+      "own": {
+        "mse": 24.317012363009983,
+        "psnr": 34.271701452821404,
+        "deltaE": 3.696631809675574
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.658475000003818,
+      "shared": {
+        "mse": 14.201777988009983,
+        "psnr": 36.60737641693039,
+        "deltaE": 2.984870815923426
+      },
+      "pipelineMs": 13.762679999999818,
+      "own": {
+        "mse": 14.201777988009983,
+        "psnr": 36.60737641693039,
+        "deltaE": 2.983961470067129
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 7.001470000002882,
+      "shared": {
+        "mse": 8.601929558648003,
+        "psnr": 38.78484479080404,
+        "deltaE": 2.3278433816205872
+      },
+      "pipelineMs": 16.238908999999694,
+      "own": {
+        "mse": 8.601929558648003,
+        "psnr": 38.78484479080404,
+        "deltaE": 2.329641075643266
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 66.3046020000038,
+      "shared": {
+        "mse": 89.07029893663194,
+        "psnr": 28.63347450976007,
+        "deltaE": 5.759138703420075
+      },
+      "pipelineMs": 89.92838800000027,
+      "own": {
+        "mse": 195.31736924913196,
+        "psnr": 25.223394947759946,
+        "deltaE": 6.482540945577859
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 67.38215599999967,
+      "shared": {
+        "mse": 24.530601501464844,
+        "psnr": 34.23372163433466,
+        "deltaE": 3.7270547718366456
+      },
+      "pipelineMs": 94.44302299999981,
+      "own": {
+        "mse": 62.17130788167318,
+        "psnr": 30.194903572633205,
+        "deltaE": 4.4355145695845755
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 68.09248500000103,
+      "shared": {
+        "mse": 14.012479146321615,
+        "psnr": 36.66565381590961,
+        "deltaE": 2.923825819457884
+      },
+      "pipelineMs": 99.99414999999863,
+      "own": {
+        "mse": 34.68981255425347,
+        "psnr": 32.72878407721536,
+        "deltaE": 3.502181545577485
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 67.22702199999912,
+      "shared": {
+        "mse": 8.447280883789062,
+        "psnr": 38.86363425552139,
+        "deltaE": 2.3151967639010675
+      },
+      "pipelineMs": 105.73769000000175,
+      "own": {
+        "mse": 19.13340335422092,
+        "psnr": 35.312881338361436,
+        "deltaE": 2.7776133763969404
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 38.4000739999974,
+      "shared": {
+        "mse": 48.43500010172526,
+        "psnr": 31.279210558829437,
+        "deltaE": 3.096530548145306
+      },
+      "pipelineMs": 41.64590899999894,
+      "own": {
+        "mse": 48.43500010172526,
+        "psnr": 31.279210558829437,
+        "deltaE": 3.0964735763165003
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 39.8692630000005,
+      "shared": {
+        "mse": 11.775884840223524,
+        "psnr": 37.420868109447994,
+        "deltaE": 2.073120637585988
+      },
+      "pipelineMs": 41.5536959999954,
+      "own": {
+        "mse": 11.775884840223524,
+        "psnr": 37.420868109447994,
+        "deltaE": 2.0738540140927872
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 38.58737100000144,
+      "shared": {
+        "mse": 6.759285820855035,
+        "psnr": 39.8317954960778,
+        "deltaE": 1.6797407664857988
+      },
+      "pipelineMs": 41.706953000000794,
+      "own": {
+        "mse": 6.759285820855035,
+        "psnr": 39.8317954960778,
+        "deltaE": 1.6781300946638726
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 38.81796399999439,
+      "shared": {
+        "mse": 3.958551194932726,
+        "psnr": 42.1554409493612,
+        "deltaE": 1.4065483795513967
+      },
+      "pipelineMs": 43.82317599999806,
+      "own": {
+        "mse": 3.958551194932726,
+        "psnr": 42.1554409493612,
+        "deltaE": 1.407245510466364
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.645613000000594,
+      "shared": {
+        "mse": 47.065470377604164,
+        "psnr": 31.4037795743428,
+        "deltaE": 3.1498237340454858
+      },
+      "pipelineMs": 8.813387000001967,
+      "own": {
+        "mse": 47.065470377604164,
+        "psnr": 31.4037795743428,
+        "deltaE": 3.15050229006057
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.657353999995394,
+      "shared": {
+        "mse": 11.765208774142796,
+        "psnr": 37.42480722712971,
+        "deltaE": 2.033483414024854
+      },
+      "pipelineMs": 9.52520899999945,
+      "own": {
+        "mse": 11.765208774142796,
+        "psnr": 37.42480722712971,
+        "deltaE": 2.033764986092251
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 7.188027000003785,
+      "shared": {
+        "mse": 6.8258251614040795,
+        "psnr": 39.78925200923223,
+        "deltaE": 1.6970393010732332
+      },
+      "pipelineMs": 10.0321449999974,
+      "own": {
+        "mse": 6.8258251614040795,
+        "psnr": 39.78925200923223,
+        "deltaE": 1.6982283472946005
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 6.594090999999025,
+      "shared": {
+        "mse": 4.408516777886285,
+        "psnr": 41.68787862903149,
+        "deltaE": 1.518096567392379
+      },
+      "pipelineMs": 11.123803999995289,
+      "own": {
+        "mse": 4.408516777886285,
+        "psnr": 41.68787862903149,
+        "deltaE": 1.5205351167741037
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 39.026467999996385,
+      "shared": {
+        "mse": 48.43500010172526,
+        "psnr": 31.279210558829437,
+        "deltaE": 3.096530548145306
+      },
+      "pipelineMs": 64.32988899999327,
+      "own": {
+        "mse": 138.86070844862195,
+        "psnr": 26.70500984229802,
+        "deltaE": 4.036284265631898
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 41.00612099999853,
+      "shared": {
+        "mse": 11.775884840223524,
+        "psnr": 37.420868109447994,
+        "deltaE": 2.073120637585988
+      },
+      "pipelineMs": 67.90210200000001,
+      "own": {
+        "mse": 51.85179307725694,
+        "psnr": 30.983165816260964,
+        "deltaE": 2.848342488391333
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 39.49060000000463,
+      "shared": {
+        "mse": 6.759285820855035,
+        "psnr": 39.8317954960778,
+        "deltaE": 1.6797407664857988
+      },
+      "pipelineMs": 73.06751899999654,
+      "own": {
+        "mse": 22.08281707763672,
+        "psnr": 34.69025885867227,
+        "deltaE": 2.1680123127229796
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 40.091607999995176,
+      "shared": {
+        "mse": 3.958551194932726,
+        "psnr": 42.1554409493612,
+        "deltaE": 1.4065483795513967
+      },
+      "pipelineMs": 76.35990299999685,
+      "own": {
+        "mse": 11.070197211371529,
+        "psnr": 37.689250031285255,
+        "deltaE": 1.789493628837393
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 36.0301380000019,
+      "shared": {
+        "mse": 49.14935387505425,
+        "psnr": 31.2156254796411,
+        "deltaE": 3.617961917446829
+      },
+      "pipelineMs": 38.414707000003546,
+      "own": {
+        "mse": 49.14935387505425,
+        "psnr": 31.2156254796411,
+        "deltaE": 3.6180756231685223
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 35.88950499999919,
+      "shared": {
+        "mse": 13.103066338433159,
+        "psnr": 36.95707421087749,
+        "deltaE": 2.242743753912453
+      },
+      "pipelineMs": 42.61490399999457,
+      "own": {
+        "mse": 13.103066338433159,
+        "psnr": 36.95707421087749,
+        "deltaE": 2.242455114886243
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 35.99296300000424,
+      "shared": {
+        "mse": 7.329315185546875,
+        "psnr": 39.480169626295094,
+        "deltaE": 1.832499148876973
+      },
+      "pipelineMs": 39.99894399999903,
+      "own": {
+        "mse": 7.329315185546875,
+        "psnr": 39.480169626295094,
+        "deltaE": 1.832330122889278
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 35.74611500000174,
+      "shared": {
+        "mse": 4.222981770833333,
+        "psnr": 41.87461154139564,
+        "deltaE": 1.544952191714836
+      },
+      "pipelineMs": 41.11553499999718,
+      "own": {
+        "mse": 4.222981770833333,
+        "psnr": 41.87461154139564,
+        "deltaE": 1.5457980115310912
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 5.679629999998724,
+      "shared": {
+        "mse": 49.63857777913412,
+        "psnr": 31.172610310614136,
+        "deltaE": 3.55580902024692
+      },
+      "pipelineMs": 8.490850000001956,
+      "own": {
+        "mse": 49.63857777913412,
+        "psnr": 31.172610310614136,
+        "deltaE": 3.556205471196123
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 5.852533000004769,
+      "shared": {
+        "mse": 13.347707960340712,
+        "psnr": 36.87673664877964,
+        "deltaE": 2.2728113314355163
+      },
+      "pipelineMs": 9.156990000003134,
+      "own": {
+        "mse": 13.347707960340712,
+        "psnr": 36.87673664877964,
+        "deltaE": 2.272140554341064
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.274872000001778,
+      "shared": {
+        "mse": 7.388604905870226,
+        "psnr": 39.44517916908683,
+        "deltaE": 1.847562154279159
+      },
+      "pipelineMs": 9.478586999997788,
+      "own": {
+        "mse": 7.388604905870226,
+        "psnr": 39.44517916908683,
+        "deltaE": 1.8482037634446333
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.828928000002634,
+      "shared": {
+        "mse": 4.678479512532552,
+        "psnr": 41.429756288641144,
+        "deltaE": 1.6369528783291403
+      },
+      "pipelineMs": 10.71871999999712,
+      "own": {
+        "mse": 4.678479512532552,
+        "psnr": 41.429756288641144,
+        "deltaE": 1.642947261215963
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 35.48360700000194,
+      "shared": {
+        "mse": 49.14935387505425,
+        "psnr": 31.2156254796411,
+        "deltaE": 3.617961917446829
+      },
+      "pipelineMs": 58.15450000000419,
+      "own": {
+        "mse": 128.2768987019857,
+        "psnr": 27.04931909244308,
+        "deltaE": 4.386236773694278
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 36.16166599999997,
+      "shared": {
+        "mse": 13.103066338433159,
+        "psnr": 36.95707421087749,
+        "deltaE": 2.242743753912453
+      },
+      "pipelineMs": 68.61118600000191,
+      "own": {
+        "mse": 42.736305236816406,
+        "psnr": 31.82283388304811,
+        "deltaE": 2.9980964472037557
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 36.58077900000353,
+      "shared": {
+        "mse": 7.329315185546875,
+        "psnr": 39.480169626295094,
+        "deltaE": 1.832499148876973
+      },
+      "pipelineMs": 74.92563800000062,
+      "own": {
+        "mse": 24.252064175075954,
+        "psnr": 34.28331652086588,
+        "deltaE": 2.451701910119423
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 37.12522799999715,
+      "shared": {
+        "mse": 4.222981770833333,
+        "psnr": 41.87461154139564,
+        "deltaE": 1.544952191714836
+      },
+      "pipelineMs": 78.46362000000227,
+      "own": {
+        "mse": 12.166443718804253,
+        "psnr": 37.27916709425362,
+        "deltaE": 1.9922837992142044
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 56.98310800000036,
+      "shared": {
+        "mse": 63.768577575683594,
+        "psnr": 30.084736311618418,
+        "deltaE": 4.265246688892037
+      },
+      "pipelineMs": 59.96721500000422,
+      "own": {
+        "mse": 63.768577575683594,
+        "psnr": 30.084736311618418,
+        "deltaE": 4.2652345056874905
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 55.60801999999967,
+      "shared": {
+        "mse": 17.619478861490887,
+        "psnr": 35.67087301906857,
+        "deltaE": 2.4634636245281962
+      },
+      "pipelineMs": 59.86223999999493,
+      "own": {
+        "mse": 17.619478861490887,
+        "psnr": 35.67087301906857,
+        "deltaE": 2.4605180127397377
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 57.38590999999724,
+      "shared": {
+        "mse": 9.821525573730469,
+        "psnr": 38.20901409049033,
+        "deltaE": 1.9923499838921075
+      },
+      "pipelineMs": 60.93095099999482,
+      "own": {
+        "mse": 9.821525573730469,
+        "psnr": 38.20901409049033,
+        "deltaE": 1.9918064445747106
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 68.66651000000275,
+      "shared": {
+        "mse": 5.787571377224392,
+        "psnr": 40.50584000722068,
+        "deltaE": 1.6824098518605421
+      },
+      "pipelineMs": 61.76726100000087,
+      "own": {
+        "mse": 5.787571377224392,
+        "psnr": 40.50584000722068,
+        "deltaE": 1.6805361696663226
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.6080089999959455,
+      "shared": {
+        "mse": 63.530613369411896,
+        "psnr": 30.100973125267455,
+        "deltaE": 4.23791809068736
+      },
+      "pipelineMs": 9.959900999994716,
+      "own": {
+        "mse": 63.530613369411896,
+        "psnr": 30.100973125267455,
+        "deltaE": 4.237754559181465
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.103659000000334,
+      "shared": {
+        "mse": 17.379134284125435,
+        "psnr": 35.73052221953847,
+        "deltaE": 2.4518608654278404
+      },
+      "pipelineMs": 10.395473999997193,
+      "own": {
+        "mse": 17.379134284125435,
+        "psnr": 35.73052221953847,
+        "deltaE": 2.4557306710211573
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.410414000005403,
+      "shared": {
+        "mse": 9.870027330186632,
+        "psnr": 38.18762005631626,
+        "deltaE": 2.0012757845395677
+      },
+      "pipelineMs": 10.795819999999367,
+      "own": {
+        "mse": 9.870027330186632,
+        "psnr": 38.18762005631626,
+        "deltaE": 2.0016089239534227
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 6.210429999999178,
+      "shared": {
+        "mse": 5.997851053873698,
+        "psnr": 40.35084684253327,
+        "deltaE": 1.7148160490943676
+      },
+      "pipelineMs": 12.057498000001942,
+      "own": {
+        "mse": 5.997851053873698,
+        "psnr": 40.35084684253327,
+        "deltaE": 1.720029943591164
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 55.54134600000543,
+      "shared": {
+        "mse": 63.768577575683594,
+        "psnr": 30.084736311618418,
+        "deltaE": 4.265246688892037
+      },
+      "pipelineMs": 79.02964099999372,
+      "own": {
+        "mse": 145.78874715169272,
+        "psnr": 26.493563570404575,
+        "deltaE": 5.0354486472385895
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 56.02697199999966,
+      "shared": {
+        "mse": 17.619478861490887,
+        "psnr": 35.67087301906857,
+        "deltaE": 2.4634636245281962
+      },
+      "pipelineMs": 83.01216900000145,
+      "own": {
+        "mse": 45.60267215304904,
+        "psnr": 31.54090069358679,
+        "deltaE": 3.2787193288280556
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 56.707453000002715,
+      "shared": {
+        "mse": 9.821525573730469,
+        "psnr": 38.20901409049033,
+        "deltaE": 1.9923499838921075
+      },
+      "pipelineMs": 89.77678200000082,
+      "own": {
+        "mse": 27.798714531792534,
+        "psnr": 33.69055647131732,
+        "deltaE": 2.727390647730605
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 56.575990999997885,
+      "shared": {
+        "mse": 5.787571377224392,
+        "psnr": 40.50584000722068,
+        "deltaE": 1.6824098518605421
+      },
+      "pipelineMs": 92.63200599999982,
+      "own": {
+        "mse": 16.78792232937283,
+        "psnr": 35.880834096209774,
+        "deltaE": 2.2138385073460487
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 42.35193699999945,
+      "shared": {
+        "mse": 60.79604170057509,
+        "psnr": 30.29205056653714,
+        "deltaE": 3.332948993175212
+      },
+      "pipelineMs": 42.37846799999534,
+      "own": {
+        "mse": 60.79604170057509,
+        "psnr": 30.29205056653714,
+        "deltaE": 3.3330578652502076
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 39.463081000001694,
+      "shared": {
+        "mse": 13.30881076388889,
+        "psnr": 36.88941110934599,
+        "deltaE": 1.8665268939192687
+      },
+      "pipelineMs": 41.86031099999673,
+      "own": {
+        "mse": 13.30881076388889,
+        "psnr": 36.88941110934599,
+        "deltaE": 1.8667311634752404
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 39.12641699999949,
+      "shared": {
+        "mse": 7.706616719563802,
+        "psnr": 39.26216600521796,
+        "deltaE": 1.4847846136231848
+      },
+      "pipelineMs": 42.419591999998374,
+      "own": {
+        "mse": 7.706616719563802,
+        "psnr": 39.26216600521796,
+        "deltaE": 1.4839053176552433
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 40.932482999996864,
+      "shared": {
+        "mse": 4.446770562065972,
+        "psnr": 41.65035638929494,
+        "deltaE": 1.1887993667802534
+      },
+      "pipelineMs": 44.151717000000644,
+      "own": {
+        "mse": 4.446770562065972,
+        "psnr": 41.65035638929494,
+        "deltaE": 1.1890561014089818
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.243752999995195,
+      "shared": {
+        "mse": 59.88249799940321,
+        "psnr": 30.35780452217459,
+        "deltaE": 3.259527739750769
+      },
+      "pipelineMs": 8.206162000002223,
+      "own": {
+        "mse": 59.88249799940321,
+        "psnr": 30.35780452217459,
+        "deltaE": 3.2593017053566684
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.245561000003363,
+      "shared": {
+        "mse": 13.550369262695312,
+        "psnr": 36.81129230486577,
+        "deltaE": 1.8808843348914446
+      },
+      "pipelineMs": 8.52307500000461,
+      "own": {
+        "mse": 13.550369262695312,
+        "psnr": 36.81129230486577,
+        "deltaE": 1.8834154649339292
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.129010999997263,
+      "shared": {
+        "mse": 7.819469875759548,
+        "psnr": 39.19903049986636,
+        "deltaE": 1.5173676223505248
+      },
+      "pipelineMs": 9.006735999995726,
+      "own": {
+        "mse": 7.819469875759548,
+        "psnr": 39.19903049986636,
+        "deltaE": 1.515638440135014
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.956025000006775,
+      "shared": {
+        "mse": 4.817490471733941,
+        "psnr": 41.30259496508238,
+        "deltaE": 1.2683182173243908
+      },
+      "pipelineMs": 9.634426999997231,
+      "own": {
+        "mse": 4.817490471733941,
+        "psnr": 41.30259496508238,
+        "deltaE": 1.266422815703552
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 38.89175400000386,
+      "shared": {
+        "mse": 60.79604170057509,
+        "psnr": 30.29205056653714,
+        "deltaE": 3.332948993175212
+      },
+      "pipelineMs": 59.25726399999985,
+      "own": {
+        "mse": 125.8494144015842,
+        "psnr": 27.13229161823833,
+        "deltaE": 4.055188496653577
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 39.43332199999713,
+      "shared": {
+        "mse": 13.30881076388889,
+        "psnr": 36.88941110934599,
+        "deltaE": 1.8665268939192687
+      },
+      "pipelineMs": 70.2204700000002,
+      "own": {
+        "mse": 53.29920535617404,
+        "psnr": 30.86359626738173,
+        "deltaE": 2.5512837642064126
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 40.32636099999945,
+      "shared": {
+        "mse": 7.706616719563802,
+        "psnr": 39.26216600521796,
+        "deltaE": 1.4847846136231848
+      },
+      "pipelineMs": 71.01638100000127,
+      "own": {
+        "mse": 25.31842295328776,
+        "psnr": 34.09643710234092,
+        "deltaE": 2.0521884534315116
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 39.70359699999972,
+      "shared": {
+        "mse": 4.446770562065972,
+        "psnr": 41.65035638929494,
+        "deltaE": 1.1887993667802534
+      },
+      "pipelineMs": 74.94747199999983,
+      "own": {
+        "mse": 13.87221950954861,
+        "psnr": 36.70934408544928,
+        "deltaE": 1.6245091049257152
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 63.2691960000011,
+      "shared": {
+        "mse": 64.89720153808594,
+        "psnr": 30.00854391074794,
+        "deltaE": 4.679104886178111
+      },
+      "pipelineMs": 68.61746499999572,
+      "own": {
+        "mse": 64.89720153808594,
+        "psnr": 30.00854391074794,
+        "deltaE": 4.678718582744602
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 63.8830850000013,
+      "shared": {
+        "mse": 21.362694634331596,
+        "psnr": 34.8342432828804,
+        "deltaE": 3.0821631409413346
+      },
+      "pipelineMs": 69.64268200000515,
+      "own": {
+        "mse": 21.362694634331596,
+        "psnr": 34.8342432828804,
+        "deltaE": 3.0827944150723123
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 62.710579000005964,
+      "shared": {
+        "mse": 12.804178025987413,
+        "psnr": 37.05728657035422,
+        "deltaE": 2.550360755154603
+      },
+      "pipelineMs": 70.2063879999987,
+      "own": {
+        "mse": 12.804178025987413,
+        "psnr": 37.05728657035422,
+        "deltaE": 2.551813782813509
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 63.51254500000505,
+      "shared": {
+        "mse": 7.874590555826823,
+        "psnr": 39.16852379227591,
+        "deltaE": 2.0703140588556823
+      },
+      "pipelineMs": 72.2152419999984,
+      "own": {
+        "mse": 7.874590555826823,
+        "psnr": 39.16852379227591,
+        "deltaE": 2.069221506128044
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.45236300000397,
+      "shared": {
+        "mse": 64.17705366346571,
+        "psnr": 30.05700585893882,
+        "deltaE": 4.946495247866354
+      },
+      "pipelineMs": 10.703559000001405,
+      "own": {
+        "mse": 64.17705366346571,
+        "psnr": 30.05700585893882,
+        "deltaE": 4.945701980246938
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 6.553025000001071,
+      "shared": {
+        "mse": 21.56401909722222,
+        "psnr": 34.79350653097392,
+        "deltaE": 3.100078192491377
+      },
+      "pipelineMs": 11.896189999999478,
+      "own": {
+        "mse": 21.56401909722222,
+        "psnr": 34.79350653097392,
+        "deltaE": 3.099805530467505
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 6.309464999998454,
+      "shared": {
+        "mse": 12.855497572157118,
+        "psnr": 37.03991470191622,
+        "deltaE": 2.543298297307228
+      },
+      "pipelineMs": 13.312582000005932,
+      "own": {
+        "mse": 12.855497572157118,
+        "psnr": 37.03991470191622,
+        "deltaE": 2.542656367395909
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 6.524701000002096,
+      "shared": {
+        "mse": 8.065431382921007,
+        "psnr": 39.06452760102394,
+        "deltaE": 2.068267906684413
+      },
+      "pipelineMs": 13.827359000002616,
+      "own": {
+        "mse": 8.065431382921007,
+        "psnr": 39.06452760102394,
+        "deltaE": 2.0661797311998904
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 62.6758090000003,
+      "shared": {
+        "mse": 64.89720153808594,
+        "psnr": 30.00854391074794,
+        "deltaE": 4.679104886178111
+      },
+      "pipelineMs": 88.3973810000025,
+      "own": {
+        "mse": 143.86100260416666,
+        "psnr": 26.551372781831386,
+        "deltaE": 5.3687150778100055
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 63.67928099999699,
+      "shared": {
+        "mse": 21.362694634331596,
+        "psnr": 34.8342432828804,
+        "deltaE": 3.0821631409413346
+      },
+      "pipelineMs": 95.46243900000263,
+      "own": {
+        "mse": 51.756561279296875,
+        "psnr": 30.99114946898082,
+        "deltaE": 3.8312681288706787
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 62.66807599999447,
+      "shared": {
+        "mse": 12.804178025987413,
+        "psnr": 37.05728657035422,
+        "deltaE": 2.550360755154603
+      },
+      "pipelineMs": 99.5091339999999,
+      "own": {
+        "mse": 33.047336154513886,
+        "psnr": 32.93943902795747,
+        "deltaE": 3.216345482327276
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 64.88049899999896,
+      "shared": {
+        "mse": 7.874590555826823,
+        "psnr": 39.16852379227591,
+        "deltaE": 2.0703140588556823
+      },
+      "pipelineMs": 102.87334800000099,
+      "own": {
+        "mse": 17.86142900254991,
+        "psnr": 35.611641592215676,
+        "deltaE": 2.5217005337676146
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 81.27887199999532,
+      "shared": {
+        "mse": 106.55154079861111,
+        "psnr": 27.855206266159414,
+        "deltaE": 4.949749342303819
+      },
+      "pipelineMs": 82.86717599999974,
+      "own": {
+        "mse": 106.55154079861111,
+        "psnr": 27.855206266159414,
+        "deltaE": 4.9496424160936785
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 79.1743159999969,
+      "shared": {
+        "mse": 29.76848687065972,
+        "psnr": 33.393236008071405,
+        "deltaE": 3.241361603620131
+      },
+      "pipelineMs": 83.95291399999405,
+      "own": {
+        "mse": 29.76848687065972,
+        "psnr": 33.393236008071405,
+        "deltaE": 3.2419977236316684
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 79.34418099999311,
+      "shared": {
+        "mse": 17.57608625623915,
+        "psnr": 35.68158185610624,
+        "deltaE": 2.6211020252417954
+      },
+      "pipelineMs": 86.27090800000587,
+      "own": {
+        "mse": 17.57608625623915,
+        "psnr": 35.68158185610624,
+        "deltaE": 2.619271616135738
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 80.82930099999794,
+      "shared": {
+        "mse": 10.156793382432726,
+        "psnr": 38.06323743089742,
+        "deltaE": 2.0596619778577936
+      },
+      "pipelineMs": 86.03749100000277,
+      "own": {
+        "mse": 10.156793382432726,
+        "psnr": 38.06323743089742,
+        "deltaE": 2.058899214472813
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 11.18623399999342,
+      "shared": {
+        "mse": 107.01129065619574,
+        "psnr": 27.83650758780891,
+        "deltaE": 4.889833868779157
+      },
+      "pipelineMs": 15.04040299999906,
+      "own": {
+        "mse": 107.01129065619574,
+        "psnr": 27.83650758780891,
+        "deltaE": 4.889912193804668
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 11.021786000004795,
+      "shared": {
+        "mse": 30.02675289577908,
+        "psnr": 33.35571990896445,
+        "deltaE": 3.2576260629764264
+      },
+      "pipelineMs": 16.053569999996398,
+      "own": {
+        "mse": 30.02675289577908,
+        "psnr": 33.35571990896445,
+        "deltaE": 3.2576651180663307
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 11.292840000001888,
+      "shared": {
+        "mse": 17.2653562757704,
+        "psnr": 35.759048162939536,
+        "deltaE": 2.5644419367342937
+      },
+      "pipelineMs": 16.40292999999656,
+      "own": {
+        "mse": 17.2653562757704,
+        "psnr": 35.759048162939536,
+        "deltaE": 2.5667232431327753
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 11.415268999997352,
+      "shared": {
+        "mse": 10.339729309082031,
+        "psnr": 37.98571191656485,
+        "deltaE": 2.0888872911191276
+      },
+      "pipelineMs": 17.609020999996574,
+      "own": {
+        "mse": 10.339729309082031,
+        "psnr": 37.98571191656485,
+        "deltaE": 2.088605685135558
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 80.94863700000133,
+      "shared": {
+        "mse": 106.55154079861111,
+        "psnr": 27.855206266159414,
+        "deltaE": 4.949749342303819
+      },
+      "pipelineMs": 103.90688699999737,
+      "own": {
+        "mse": 238.22767723931207,
+        "psnr": 24.360881445522352,
+        "deltaE": 5.956775361071529
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 79.61933400000271,
+      "shared": {
+        "mse": 29.76848687065972,
+        "psnr": 33.393236008071405,
+        "deltaE": 3.241361603620131
+      },
+      "pipelineMs": 109.27966300000844,
+      "own": {
+        "mse": 101.64744567871094,
+        "psnr": 28.059838912394408,
+        "deltaE": 4.201106305127244
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 82.02221899999131,
+      "shared": {
+        "mse": 17.57608625623915,
+        "psnr": 35.68158185610624,
+        "deltaE": 2.6211020252417954
+      },
+      "pipelineMs": 110.50560699999915,
+      "own": {
+        "mse": 52.300987243652344,
+        "psnr": 30.945704740957822,
+        "deltaE": 3.337206801835359
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 83.33682100000442,
+      "shared": {
+        "mse": 10.156793382432726,
+        "psnr": 38.06323743089742,
+        "deltaE": 2.0596619778577936
+      },
+      "pipelineMs": 115.54602899999009,
+      "own": {
+        "mse": 26.48369598388672,
+        "psnr": 33.901017670565395,
+        "deltaE": 2.5255884112440294
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 72.65120999999635,
+      "shared": {
+        "mse": 82.07276577419705,
+        "psnr": 28.988812918868135,
+        "deltaE": 4.358824061306151
+      },
+      "pipelineMs": 70.62708400000702,
+      "own": {
+        "mse": 82.07276577419705,
+        "psnr": 28.988812918868135,
+        "deltaE": 4.358544424317051
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 66.61557099998754,
+      "shared": {
+        "mse": 24.277174207899307,
+        "psnr": 34.27882226130931,
+        "deltaE": 2.5697256424724757
+      },
+      "pipelineMs": 72.02511000000231,
+      "own": {
+        "mse": 24.277174207899307,
+        "psnr": 34.27882226130931,
+        "deltaE": 2.5696243723766856
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 67.83781700000691,
+      "shared": {
+        "mse": 13.504556443956163,
+        "psnr": 36.826000364766685,
+        "deltaE": 1.9473124912374205
+      },
+      "pipelineMs": 72.45806299999822,
+      "own": {
+        "mse": 13.504556443956163,
+        "psnr": 36.826000364766685,
+        "deltaE": 1.9464220195653932
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 66.8883310000092,
+      "shared": {
+        "mse": 7.9619335598415795,
+        "psnr": 39.12061811673407,
+        "deltaE": 1.5651518585340973
+      },
+      "pipelineMs": 72.7559970000002,
+      "own": {
+        "mse": 7.9619335598415795,
+        "psnr": 39.12061811673407,
+        "deltaE": 1.5646409709434366
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 9.705209000007017,
+      "shared": {
+        "mse": 84.43307410346137,
+        "psnr": 28.86567759183631,
+        "deltaE": 4.499986673097371
+      },
+      "pipelineMs": 12.419544000003953,
+      "own": {
+        "mse": 84.43307410346137,
+        "psnr": 28.86567759183631,
+        "deltaE": 4.498792370620694
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 10.346218000006047,
+      "shared": {
+        "mse": 24.415273030598957,
+        "psnr": 34.25418775601464,
+        "deltaE": 2.539153240022538
+      },
+      "pipelineMs": 13.15846700000111,
+      "own": {
+        "mse": 24.415273030598957,
+        "psnr": 34.25418775601464,
+        "deltaE": 2.539153892638227
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 9.231256999992183,
+      "shared": {
+        "mse": 13.707761976453993,
+        "psnr": 36.76113806196314,
+        "deltaE": 1.9780899118513098
+      },
+      "pipelineMs": 14.044719000012265,
+      "own": {
+        "mse": 13.707761976453993,
+        "psnr": 36.76113806196314,
+        "deltaE": 1.9772263997244794
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 9.267821000001277,
+      "shared": {
+        "mse": 8.108044942220053,
+        "psnr": 39.04164213582006,
+        "deltaE": 1.630183545879382
+      },
+      "pipelineMs": 15.37485100000049,
+      "own": {
+        "mse": 8.108044942220053,
+        "psnr": 39.04164213582006,
+        "deltaE": 1.629037392636578
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 66.81647399999201,
+      "shared": {
+        "mse": 82.07276577419705,
+        "psnr": 28.988812918868135,
+        "deltaE": 4.358824061306151
+      },
+      "pipelineMs": 90.47308699999121,
+      "own": {
+        "mse": 206.44534640842014,
+        "psnr": 24.9827526320392,
+        "deltaE": 5.414746015410025
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 68.11451600000146,
+      "shared": {
+        "mse": 24.277174207899307,
+        "psnr": 34.27882226130931,
+        "deltaE": 2.5697256424724757
+      },
+      "pipelineMs": 91.83354599999439,
+      "own": {
+        "mse": 62.83921220567491,
+        "psnr": 30.148496290714718,
+        "deltaE": 3.2838888965122455
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 67.12066799998865,
+      "shared": {
+        "mse": 13.504556443956163,
+        "psnr": 36.826000364766685,
+        "deltaE": 1.9473124912374205
+      },
+      "pipelineMs": 93.74777199998789,
+      "own": {
+        "mse": 32.07638634575738,
+        "psnr": 33.06894925149044,
+        "deltaE": 2.48427241917534
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 71.32000300000072,
+      "shared": {
+        "mse": 7.9619335598415795,
+        "psnr": 39.12061811673407,
+        "deltaE": 1.5651518585340973
+      },
+      "pipelineMs": 97.62676400000055,
+      "own": {
+        "mse": 16.87646484375,
+        "psnr": 35.857988818272254,
+        "deltaE": 1.9793005579069247
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 22.74738800000341,
+      "shared": {
+        "mse": 38.170975579155815,
+        "psnr": 32.313471010175896,
+        "deltaE": 3.0121782718832883
+      },
+      "pipelineMs": 25.02864000000409,
+      "own": {
+        "mse": 38.170975579155815,
+        "psnr": 32.313471010175896,
+        "deltaE": 3.0123675986250817
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 22.685536999997566,
+      "shared": {
+        "mse": 7.884492662217882,
+        "psnr": 39.16306607538806,
+        "deltaE": 1.8553936257993733
+      },
+      "pipelineMs": 25.07802700001048,
+      "own": {
+        "mse": 7.884492662217882,
+        "psnr": 39.16306607538806,
+        "deltaE": 1.8558243599573767
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 23.064949999999953,
+      "shared": {
+        "mse": 4.474048190646702,
+        "psnr": 41.62379703230852,
+        "deltaE": 1.6021166540307705
+      },
+      "pipelineMs": 25.142702999990433,
+      "own": {
+        "mse": 4.474048190646702,
+        "psnr": 41.62379703230852,
+        "deltaE": 1.6028781221218855
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 22.42943999999261,
+      "shared": {
+        "mse": 2.6259307861328125,
+        "psnr": 43.93797086028667,
+        "deltaE": 1.3244140245373848
+      },
+      "pipelineMs": 26.07385400000203,
+      "own": {
+        "mse": 2.6259307861328125,
+        "psnr": 43.93797086028667,
+        "deltaE": 1.3245515270074824
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 3.2660560000076657,
+      "shared": {
+        "mse": 38.26788245307075,
+        "psnr": 32.30245929591676,
+        "deltaE": 3.0151950294827734
+      },
+      "pipelineMs": 5.153561999992235,
+      "own": {
+        "mse": 38.26788245307075,
+        "psnr": 32.30245929591676,
+        "deltaE": 3.0131443684397823
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 3.489621000000625,
+      "shared": {
+        "mse": 8.047140333387587,
+        "psnr": 39.0743878585083,
+        "deltaE": 1.8826150514769988
+      },
+      "pipelineMs": 5.675993000011658,
+      "own": {
+        "mse": 8.047140333387587,
+        "psnr": 39.0743878585083,
+        "deltaE": 1.8820806777635457
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 3.5081439999921713,
+      "shared": {
+        "mse": 4.760082668728298,
+        "psnr": 41.3546586565566,
+        "deltaE": 1.64205517847543
+      },
+      "pipelineMs": 5.7220110000052955,
+      "own": {
+        "mse": 4.760082668728298,
+        "psnr": 41.3546586565566,
+        "deltaE": 1.6450606388337432
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 3.4752599999919767,
+      "shared": {
+        "mse": 3.123160468207465,
+        "psnr": 43.184860619830076,
+        "deltaE": 1.4651664955622559
+      },
+      "pipelineMs": 6.446037000001525,
+      "own": {
+        "mse": 3.123160468207465,
+        "psnr": 43.184860619830076,
+        "deltaE": 1.4606910714055978
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 22.906967999995686,
+      "shared": {
+        "mse": 38.170975579155815,
+        "psnr": 32.313471010175896,
+        "deltaE": 3.0121782718832883
+      },
+      "pipelineMs": 45.306804000007105,
+      "own": {
+        "mse": 126.85494316948785,
+        "psnr": 27.097729657831287,
+        "deltaE": 3.982424219742326
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 22.34063000000606,
+      "shared": {
+        "mse": 7.884492662217882,
+        "psnr": 39.16306607538806,
+        "deltaE": 1.8553936257993733
+      },
+      "pipelineMs": 55.259513999990304,
+      "own": {
+        "mse": 28.40795389811198,
+        "psnr": 33.596404063691914,
+        "deltaE": 2.522402704354994
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 22.504819000008865,
+      "shared": {
+        "mse": 4.474048190646702,
+        "psnr": 41.62379703230852,
+        "deltaE": 1.6021166540307705
+      },
+      "pipelineMs": 64.51809399999911,
+      "own": {
+        "mse": 20.92058563232422,
+        "psnr": 34.92506523247867,
+        "deltaE": 2.2372037636774813
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 23.776897000003373,
+      "shared": {
+        "mse": 2.6259307861328125,
+        "psnr": 43.93797086028667,
+        "deltaE": 1.3244140245373848
+      },
+      "pipelineMs": 69.30735599999025,
+      "own": {
+        "mse": 11.324289109971788,
+        "psnr": 37.590694124617904,
+        "deltaE": 1.8061191510474062
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 29.71797399999923,
+      "shared": {
+        "mse": 42.00350019666884,
+        "psnr": 31.897948787376137,
+        "deltaE": 3.3787341921605574
+      },
+      "pipelineMs": 32.02699399999983,
+      "own": {
+        "mse": 42.00350019666884,
+        "psnr": 31.897948787376137,
+        "deltaE": 3.3787384913283294
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 29.921986000001198,
+      "shared": {
+        "mse": 10.743506537543404,
+        "psnr": 37.819343084283574,
+        "deltaE": 2.188408591005308
+      },
+      "pipelineMs": 32.912278000003425,
+      "own": {
+        "mse": 10.743506537543404,
+        "psnr": 37.819343084283574,
+        "deltaE": 2.1883894179840144
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 31.098405000011553,
+      "shared": {
+        "mse": 6.050616794162327,
+        "psnr": 40.31280712389411,
+        "deltaE": 1.8565674413592639
+      },
+      "pipelineMs": 33.64019200000621,
+      "own": {
+        "mse": 6.050616794162327,
+        "psnr": 40.31280712389411,
+        "deltaE": 1.8557827864154024
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 30.842086999997264,
+      "shared": {
+        "mse": 3.4110921223958335,
+        "psnr": 42.80186912434445,
+        "deltaE": 1.5234644318895885
+      },
+      "pipelineMs": 34.088801999998395,
+      "own": {
+        "mse": 3.4110921223958335,
+        "psnr": 42.80186912434445,
+        "deltaE": 1.5206731417965136
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 4.731568999995943,
+      "shared": {
+        "mse": 42.46153259277344,
+        "psnr": 31.850846954709866,
+        "deltaE": 3.365411199115441
+      },
+      "pipelineMs": 7.113666000004741,
+      "own": {
+        "mse": 42.46153259277344,
+        "psnr": 31.850846954709866,
+        "deltaE": 3.365399375546908
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 4.8112770000007,
+      "shared": {
+        "mse": 10.64425998263889,
+        "psnr": 37.85964887355473,
+        "deltaE": 2.1939956195913664
+      },
+      "pipelineMs": 7.0950489999959245,
+      "own": {
+        "mse": 10.64425998263889,
+        "psnr": 37.85964887355473,
+        "deltaE": 2.1939236339947126
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 4.60382999999274,
+      "shared": {
+        "mse": 6.1604419284396705,
+        "psnr": 40.23468492827106,
+        "deltaE": 1.8575583042749573
+      },
+      "pipelineMs": 7.52413499999966,
+      "own": {
+        "mse": 6.1604419284396705,
+        "psnr": 40.23468492827106,
+        "deltaE": 1.8564628613816596
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 4.653076999995392,
+      "shared": {
+        "mse": 3.84368896484375,
+        "psnr": 42.28332123993496,
+        "deltaE": 1.6474680312411316
+      },
+      "pipelineMs": 8.707964000001084,
+      "own": {
+        "mse": 3.84368896484375,
+        "psnr": 42.28332123993496,
+        "deltaE": 1.65221522675931
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 29.785782000006293,
+      "shared": {
+        "mse": 42.00350019666884,
+        "psnr": 31.897948787376137,
+        "deltaE": 3.3787341921605574
+      },
+      "pipelineMs": 51.10672599999816,
+      "own": {
+        "mse": 93.30557335747613,
+        "psnr": 28.43172774933782,
+        "deltaE": 3.8945482352841267
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 30.3613910000131,
+      "shared": {
+        "mse": 10.743506537543404,
+        "psnr": 37.819343084283574,
+        "deltaE": 2.188408591005308
+      },
+      "pipelineMs": 58.67800200000056,
+      "own": {
+        "mse": 24.852005852593315,
+        "psnr": 34.17718913651415,
+        "deltaE": 2.539777084124156
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 29.790634999997565,
+      "shared": {
+        "mse": 6.050616794162327,
+        "psnr": 40.31280712389411,
+        "deltaE": 1.8565674413592639
+      },
+      "pipelineMs": 66.96480200000224,
+      "own": {
+        "mse": 15.282396104600695,
+        "psnr": 36.28888908891091,
+        "deltaE": 2.179418332782835
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 29.891665999995894,
+      "shared": {
+        "mse": 3.4110921223958335,
+        "psnr": 42.80186912434445,
+        "deltaE": 1.5234644318895885
+      },
+      "pipelineMs": 76.8664240000071,
+      "own": {
+        "mse": 9.213278028700087,
+        "psnr": 38.486661838212804,
+        "deltaE": 1.8996205850901726
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 83.3247529999935,
+      "shared": {
+        "mse": 89.08444129096137,
+        "psnr": 28.632785002823407,
+        "deltaE": 6.011749143216217
+      },
+      "pipelineMs": 88.8121669999964,
+      "own": {
+        "mse": 89.08444129096137,
+        "psnr": 28.632785002823407,
+        "deltaE": 6.0119116754652495
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 85.97825800000282,
+      "shared": {
+        "mse": 29.171870761447483,
+        "psnr": 33.48116080003911,
+        "deltaE": 3.7354792372563814
+      },
+      "pipelineMs": 88.74220200000855,
+      "own": {
+        "mse": 29.171870761447483,
+        "psnr": 33.48116080003911,
+        "deltaE": 3.736002505803387
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 84.95566799999506,
+      "shared": {
+        "mse": 17.316468980577255,
+        "psnr": 35.74621021603973,
+        "deltaE": 2.8639477617058713
+      },
+      "pipelineMs": 93.20974700000079,
+      "own": {
+        "mse": 17.316468980577255,
+        "psnr": 35.74621021603973,
+        "deltaE": 2.863128570237885
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 83.31199099999503,
+      "shared": {
+        "mse": 10.689349704318577,
+        "psnr": 37.84129075529712,
+        "deltaE": 2.3510903809608235
+      },
+      "pipelineMs": 92.25963699999556,
+      "own": {
+        "mse": 10.689349704318577,
+        "psnr": 37.84129075529712,
+        "deltaE": 2.3493113455136485
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 9.355595000000903,
+      "shared": {
+        "mse": 88.10359022352431,
+        "psnr": 28.680867545841714,
+        "deltaE": 5.756047070945592
+      },
+      "pipelineMs": 14.223516999991261,
+      "own": {
+        "mse": 88.10359022352431,
+        "psnr": 28.680867545841714,
+        "deltaE": 5.755806641957555
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 9.326766999991378,
+      "shared": {
+        "mse": 28.356358846028645,
+        "psnr": 33.60429897213026,
+        "deltaE": 3.525533586028612
+      },
+      "pipelineMs": 15.529437999997754,
+      "own": {
+        "mse": 28.356358846028645,
+        "psnr": 33.60429897213026,
+        "deltaE": 3.524727541991343
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 9.377315999998245,
+      "shared": {
+        "mse": 17.46976810031467,
+        "psnr": 35.70793220820419,
+        "deltaE": 2.8666625296908492
+      },
+      "pipelineMs": 16.21542199999385,
+      "own": {
+        "mse": 17.46976810031467,
+        "psnr": 35.70793220820419,
+        "deltaE": 2.865591077793565
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 9.183120000001509,
+      "shared": {
+        "mse": 10.749017503526476,
+        "psnr": 37.81711590783442,
+        "deltaE": 2.3753779171786724
+      },
+      "pipelineMs": 18.598299999997835,
+      "own": {
+        "mse": 10.749017503526476,
+        "psnr": 37.81711590783442,
+        "deltaE": 2.3729185968646953
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 83.65724799998861,
+      "shared": {
+        "mse": 89.08444129096137,
+        "psnr": 28.632785002823407,
+        "deltaE": 6.011749143216217
+      },
+      "pipelineMs": 108.38273700000718,
+      "own": {
+        "mse": 197.31404537624783,
+        "psnr": 25.179223601960846,
+        "deltaE": 6.575991035606639
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 83.2331450000056,
+      "shared": {
+        "mse": 29.171870761447483,
+        "psnr": 33.48116080003911,
+        "deltaE": 3.7354792372563814
+      },
+      "pipelineMs": 109.71292899998662,
+      "own": {
+        "mse": 60.34791988796658,
+        "psnr": 30.324180557261222,
+        "deltaE": 4.365108129715025
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 84.74773799999093,
+      "shared": {
+        "mse": 17.316468980577255,
+        "psnr": 35.74621021603973,
+        "deltaE": 2.8639477617058713
+      },
+      "pipelineMs": 117.23798600000737,
+      "own": {
+        "mse": 38.90430704752604,
+        "psnr": 32.230826766777255,
+        "deltaE": 3.5838768365129465
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 83.61893199999759,
+      "shared": {
+        "mse": 10.689349704318577,
+        "psnr": 37.84129075529712,
+        "deltaE": 2.3510903809608235
+      },
+      "pipelineMs": 121.37332600000082,
+      "own": {
+        "mse": 22.881817287868923,
+        "psnr": 34.53589847444835,
+        "deltaE": 2.869802419915896
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 39.5829539999977,
+      "shared": {
+        "mse": 53.4678955078125,
+        "psnr": 30.849872702280315,
+        "deltaE": 3.774126089135777
+      },
+      "pipelineMs": 43.3401179999928,
+      "own": {
+        "mse": 53.4678955078125,
+        "psnr": 30.849872702280315,
+        "deltaE": 3.7744252422250564
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 40.033158999998705,
+      "shared": {
+        "mse": 14.169743855794271,
+        "psnr": 36.6171836122176,
+        "deltaE": 2.3329746743693125
+      },
+      "pipelineMs": 44.208044999992126,
+      "own": {
+        "mse": 14.169743855794271,
+        "psnr": 36.6171836122176,
+        "deltaE": 2.332267872450123
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 39.29451700000209,
+      "shared": {
+        "mse": 8.391148885091146,
+        "psnr": 38.89258933972897,
+        "deltaE": 1.9397909228706036
+      },
+      "pipelineMs": 44.56272800000443,
+      "own": {
+        "mse": 8.391148885091146,
+        "psnr": 38.89258933972897,
+        "deltaE": 1.9408195642429977
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 39.762596000000485,
+      "shared": {
+        "mse": 4.91617668999566,
+        "psnr": 41.21452877599151,
+        "deltaE": 1.6197251374399706
+      },
+      "pipelineMs": 45.361032000000705,
+      "own": {
+        "mse": 4.91617668999566,
+        "psnr": 41.21452877599151,
+        "deltaE": 1.6194607609820129
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 5.312608000007458,
+      "shared": {
+        "mse": 53.33613077799479,
+        "psnr": 30.860588538769242,
+        "deltaE": 3.7658152345203173
+      },
+      "pipelineMs": 8.402625000002445,
+      "own": {
+        "mse": 53.33613077799479,
+        "psnr": 30.860588538769242,
+        "deltaE": 3.765539229481955
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 5.549175000007381,
+      "shared": {
+        "mse": 14.371456570095486,
+        "psnr": 36.55579574063025,
+        "deltaE": 2.3442014270671234
+      },
+      "pipelineMs": 9.73106399999233,
+      "own": {
+        "mse": 14.371456570095486,
+        "psnr": 36.55579574063025,
+        "deltaE": 2.342873307837532
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 5.718397999997251,
+      "shared": {
+        "mse": 8.449122958713108,
+        "psnr": 38.8626873049331,
+        "deltaE": 1.9574740659686507
+      },
+      "pipelineMs": 10.347792999993544,
+      "own": {
+        "mse": 8.449122958713108,
+        "psnr": 38.8626873049331,
+        "deltaE": 1.9576324512540058
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.444182999999612,
+      "shared": {
+        "mse": 5.183241950141059,
+        "psnr": 40.9847887898986,
+        "deltaE": 1.6857396420721125
+      },
+      "pipelineMs": 11.910233000002336,
+      "own": {
+        "mse": 5.183241950141059,
+        "psnr": 40.9847887898986,
+        "deltaE": 1.6857444875434178
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 39.77637599999434,
+      "shared": {
+        "mse": 53.4678955078125,
+        "psnr": 30.849872702280315,
+        "deltaE": 3.774126089135777
+      },
+      "pipelineMs": 62.125427999999374,
+      "own": {
+        "mse": 129.48145378960504,
+        "psnr": 27.008727939460027,
+        "deltaE": 4.503328465878165
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 40.67213600000832,
+      "shared": {
+        "mse": 14.169743855794271,
+        "psnr": 36.6171836122176,
+        "deltaE": 2.3329746743693125
+      },
+      "pipelineMs": 70.3145749999967,
+      "own": {
+        "mse": 48.13216993543837,
+        "psnr": 31.306449195158415,
+        "deltaE": 3.033351396261475
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 40.5510110000032,
+      "shared": {
+        "mse": 8.391148885091146,
+        "psnr": 38.89258933972897,
+        "deltaE": 1.9397909228706036
+      },
+      "pipelineMs": 74.3809229999897,
+      "own": {
+        "mse": 26.91253407796224,
+        "psnr": 33.8312576811118,
+        "deltaE": 2.533182787389929
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 39.953850999998394,
+      "shared": {
+        "mse": 4.91617668999566,
+        "psnr": 41.21452877599151,
+        "deltaE": 1.6197251374399706
+      },
+      "pipelineMs": 79.74053199999616,
+      "own": {
+        "mse": 13.71665530734592,
+        "psnr": 36.758321356960785,
+        "deltaE": 2.0412262634573457
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 39.03409400000237,
+      "shared": {
+        "mse": 47.90469106038412,
+        "psnr": 31.32702317142604,
+        "deltaE": 2.949219286827173
+      },
+      "pipelineMs": 40.68263599999773,
+      "own": {
+        "mse": 47.90469106038412,
+        "psnr": 31.32702317142604,
+        "deltaE": 2.945899301480534
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 38.43163000000641,
+      "shared": {
+        "mse": 10.915945265028212,
+        "psnr": 37.750190115134934,
+        "deltaE": 1.7570008146233842
+      },
+      "pipelineMs": 41.45230900000024,
+      "own": {
+        "mse": 10.915945265028212,
+        "psnr": 37.750190115134934,
+        "deltaE": 1.7562905923547378
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 38.983533999999054,
+      "shared": {
+        "mse": 6.134440104166667,
+        "psnr": 40.25305430441761,
+        "deltaE": 1.3391467641471142
+      },
+      "pipelineMs": 43.42025700000522,
+      "own": {
+        "mse": 6.134440104166667,
+        "psnr": 40.25305430441761,
+        "deltaE": 1.3391599677758208
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 40.23183200000494,
+      "shared": {
+        "mse": 3.47021484375,
+        "psnr": 42.72723997729276,
+        "deltaE": 1.085638001107241
+      },
+      "pipelineMs": 42.81799199999659,
+      "own": {
+        "mse": 3.47021484375,
+        "psnr": 42.72723997729276,
+        "deltaE": 1.0855574410637054
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 6.07803899999999,
+      "shared": {
+        "mse": 45.65681457519531,
+        "psnr": 31.535747528962087,
+        "deltaE": 2.912055955349878
+      },
+      "pipelineMs": 7.906390999996802,
+      "own": {
+        "mse": 45.65681457519531,
+        "psnr": 31.535747528962087,
+        "deltaE": 2.9081649629698565
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 5.878035000001546,
+      "shared": {
+        "mse": 11.156353420681423,
+        "psnr": 37.655580970970846,
+        "deltaE": 1.7964391893151552
+      },
+      "pipelineMs": 8.472645000001648,
+      "own": {
+        "mse": 11.156353420681423,
+        "psnr": 37.655580970970846,
+        "deltaE": 1.79675453257535
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 5.5760580000060145,
+      "shared": {
+        "mse": 6.501828511555989,
+        "psnr": 40.0004485025519,
+        "deltaE": 1.522243240811225
+      },
+      "pipelineMs": 8.843163999990793,
+      "own": {
+        "mse": 6.501828511555989,
+        "psnr": 40.0004485025519,
+        "deltaE": 1.5226779314046617
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 5.839107000007061,
+      "shared": {
+        "mse": 4.152953253851996,
+        "psnr": 41.94723318202142,
+        "deltaE": 1.3218148534946248
+      },
+      "pipelineMs": 9.5894879999978,
+      "own": {
+        "mse": 4.152953253851996,
+        "psnr": 41.94723318202142,
+        "deltaE": 1.3213912572008837
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 40.236109000004944,
+      "shared": {
+        "mse": 47.90469106038412,
+        "psnr": 31.32702317142604,
+        "deltaE": 2.949219286827173
+      },
+      "pipelineMs": 55.76083600000129,
+      "own": {
+        "mse": 111.16326565212674,
+        "psnr": 27.671190642715167,
+        "deltaE": 3.4393905496410127
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 38.63117599999532,
+      "shared": {
+        "mse": 10.915945265028212,
+        "psnr": 37.750190115134934,
+        "deltaE": 1.7570008146233842
+      },
+      "pipelineMs": 58.904811000000336,
+      "own": {
+        "mse": 28.284149169921875,
+        "psnr": 33.61537241831278,
+        "deltaE": 2.054258926396038
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 38.658800999997766,
+      "shared": {
+        "mse": 6.134440104166667,
+        "psnr": 40.25305430441761,
+        "deltaE": 1.3391467641471142
+      },
+      "pipelineMs": 63.77566400000069,
+      "own": {
+        "mse": 15.282291836208767,
+        "psnr": 36.28891871995922,
+        "deltaE": 1.616512710188499
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 39.07518299999356,
+      "shared": {
+        "mse": 3.47021484375,
+        "psnr": 42.72723997729276,
+        "deltaE": 1.085638001107241
+      },
+      "pipelineMs": 63.340013000008184,
+      "own": {
+        "mse": 7.819613138834636,
+        "psnr": 39.19895093207723,
+        "deltaE": 1.3284897024646145
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 45.125001000007614,
+      "shared": {
+        "mse": 58.76736619737413,
+        "psnr": 30.439441336821584,
+        "deltaE": 3.7410579862640905
+      },
+      "pipelineMs": 48.41254800000752,
+      "own": {
+        "mse": 58.76736619737413,
+        "psnr": 30.439441336821584,
+        "deltaE": 3.7409857105749444
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 48.99977199999557,
+      "shared": {
+        "mse": 15.399708218044704,
+        "psnr": 36.25567868634927,
+        "deltaE": 2.3804135547861596
+      },
+      "pipelineMs": 49.15271599999687,
+      "own": {
+        "mse": 15.399708218044704,
+        "psnr": 36.25567868634927,
+        "deltaE": 2.3809862812188882
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 45.52822400000878,
+      "shared": {
+        "mse": 8.608740912543404,
+        "psnr": 38.78140723319063,
+        "deltaE": 1.9726582299553292
+      },
+      "pipelineMs": 49.30611499999941,
+      "own": {
+        "mse": 8.608740912543404,
+        "psnr": 38.78140723319063,
+        "deltaE": 1.97484086017427
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 45.62584599999536,
+      "shared": {
+        "mse": 5.015229119194879,
+        "psnr": 41.127895824488476,
+        "deltaE": 1.636907363387636
+      },
+      "pipelineMs": 52.23023699999612,
+      "own": {
+        "mse": 5.015229119194879,
+        "psnr": 41.127895824488476,
+        "deltaE": 1.63587171693557
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 4.891413000004832,
+      "shared": {
+        "mse": 56.97624206542969,
+        "psnr": 30.57386559419488,
+        "deltaE": 3.7214503441964872
+      },
+      "pipelineMs": 7.99317100000917,
+      "own": {
+        "mse": 56.97624206542969,
+        "psnr": 30.57386559419488,
+        "deltaE": 3.7214542680015725
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 5.2643519999983255,
+      "shared": {
+        "mse": 15.34028540717231,
+        "psnr": 36.272469210980404,
+        "deltaE": 2.40424847923407
+      },
+      "pipelineMs": 8.79475800000364,
+      "own": {
+        "mse": 15.34028540717231,
+        "psnr": 36.272469210980404,
+        "deltaE": 2.405460048234752
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 5.0218280000117375,
+      "shared": {
+        "mse": 8.769632127549913,
+        "psnr": 38.70098985098907,
+        "deltaE": 1.9979562984052406
+      },
+      "pipelineMs": 8.94967099999485,
+      "own": {
+        "mse": 8.769632127549913,
+        "psnr": 38.70098985098907,
+        "deltaE": 1.9955016381467587
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 4.739606000002823,
+      "shared": {
+        "mse": 5.317234463161892,
+        "psnr": 40.873945499401565,
+        "deltaE": 1.7151251616914598
+      },
+      "pipelineMs": 10.131002999987686,
+      "own": {
+        "mse": 5.317234463161892,
+        "psnr": 40.873945499401565,
+        "deltaE": 1.714330127748121
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 45.38898400000471,
+      "shared": {
+        "mse": 58.76736619737413,
+        "psnr": 30.439441336821584,
+        "deltaE": 3.7410579862640905
+      },
+      "pipelineMs": 69.24013500000001,
+      "own": {
+        "mse": 163.29669443766275,
+        "psnr": 26.001029673254408,
+        "deltaE": 4.946942926161135
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 45.83954899999662,
+      "shared": {
+        "mse": 15.399708218044704,
+        "psnr": 36.25567868634927,
+        "deltaE": 2.3804135547861596
+      },
+      "pipelineMs": 75.39523399999598,
+      "own": {
+        "mse": 39.23467932807075,
+        "psnr": 32.19410253473279,
+        "deltaE": 3.087693505597326
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 45.61063700000523,
+      "shared": {
+        "mse": 8.608740912543404,
+        "psnr": 38.78140723319063,
+        "deltaE": 1.9726582299553292
+      },
+      "pipelineMs": 84.54783099998895,
+      "own": {
+        "mse": 22.8762452867296,
+        "psnr": 34.53695616318068,
+        "deltaE": 2.5650057652545812
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 45.93520500000159,
+      "shared": {
+        "mse": 5.015229119194879,
+        "psnr": 41.127895824488476,
+        "deltaE": 1.636907363387636
+      },
+      "pipelineMs": 86.97484100000293,
+      "own": {
+        "mse": 14.548594156901041,
+        "psnr": 36.50259331765801,
+        "deltaE": 2.139214989400817
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 81.19183499999053,
+      "shared": {
+        "mse": 94.69805399576823,
+        "psnr": 28.367393063375317,
+        "deltaE": 5.753703096834293
+      },
+      "pipelineMs": 85.44459100000677,
+      "own": {
+        "mse": 94.69805399576823,
+        "psnr": 28.367393063375317,
+        "deltaE": 5.7530510252524785
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 81.69013899999845,
+      "shared": {
+        "mse": 27.28774854871962,
+        "psnr": 33.771126563890725,
+        "deltaE": 3.47798344561915
+      },
+      "pipelineMs": 88.5068159999937,
+      "own": {
+        "mse": 27.28774854871962,
+        "psnr": 33.771126563890725,
+        "deltaE": 3.4777350417403254
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 82.29879400000209,
+      "shared": {
+        "mse": 16.332672119140625,
+        "psnr": 36.00023117241993,
+        "deltaE": 2.7584393699567538
+      },
+      "pipelineMs": 87.66892700000608,
+      "own": {
+        "mse": 16.332672119140625,
+        "psnr": 36.00023117241993,
+        "deltaE": 2.7578427314102925
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 80.62365399999544,
+      "shared": {
+        "mse": 10.020111931694878,
+        "psnr": 38.12207787934894,
+        "deltaE": 2.2134554672145494
+      },
+      "pipelineMs": 88.46352199999092,
+      "own": {
+        "mse": 10.020111931694878,
+        "psnr": 38.12207787934894,
+        "deltaE": 2.2141427656908768
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 8.038214999993215,
+      "shared": {
+        "mse": 88.88247595893012,
+        "psnr": 28.642642168216472,
+        "deltaE": 5.599756895915558
+      },
+      "pipelineMs": 12.291986999989604,
+      "own": {
+        "mse": 88.88247595893012,
+        "psnr": 28.642642168216472,
+        "deltaE": 5.600285766120579
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 7.9073889999999665,
+      "shared": {
+        "mse": 27.068594190809463,
+        "psnr": 33.80614659623738,
+        "deltaE": 3.423917892910625
+      },
+      "pipelineMs": 13.46703400000115,
+      "own": {
+        "mse": 27.068594190809463,
+        "psnr": 33.80614659623738,
+        "deltaE": 3.422891965664041
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 8.052687000003061,
+      "shared": {
+        "mse": 16.54092237684462,
+        "psnr": 35.94520637271411,
+        "deltaE": 2.780602713084793
+      },
+      "pipelineMs": 14.873334999996587,
+      "own": {
+        "mse": 16.54092237684462,
+        "psnr": 35.94520637271411,
+        "deltaE": 2.781217754254793
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 7.903237999998964,
+      "shared": {
+        "mse": 10.18117947048611,
+        "psnr": 38.052822677540405,
+        "deltaE": 2.231045078168136
+      },
+      "pipelineMs": 15.77867499999411,
+      "own": {
+        "mse": 10.18117947048611,
+        "psnr": 38.052822677540405,
+        "deltaE": 2.231523843805121
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 81.00332000000344,
+      "shared": {
+        "mse": 94.69805399576823,
+        "psnr": 28.367393063375317,
+        "deltaE": 5.753703096834293
+      },
+      "pipelineMs": 104.02926199999638,
+      "own": {
+        "mse": 232.08682166205512,
+        "psnr": 24.47429879791297,
+        "deltaE": 6.635642182535881
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 81.43124900000112,
+      "shared": {
+        "mse": 27.28774854871962,
+        "psnr": 33.771126563890725,
+        "deltaE": 3.47798344561915
+      },
+      "pipelineMs": 109.04725599999074,
+      "own": {
+        "mse": 76.85742696126302,
+        "psnr": 29.27394519839634,
+        "deltaE": 4.467808419802398
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 81.61391499999445,
+      "shared": {
+        "mse": 16.332672119140625,
+        "psnr": 36.00023117241993,
+        "deltaE": 2.7584393699567538
+      },
+      "pipelineMs": 114.57326699999976,
+      "own": {
+        "mse": 40.12780507405599,
+        "psnr": 32.09634955689159,
+        "deltaE": 3.479149511069877
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 81.19855699999607,
+      "shared": {
+        "mse": 10.020111931694878,
+        "psnr": 38.12207787934894,
+        "deltaE": 2.2134554672145494
+      },
+      "pipelineMs": 122.52145900001051,
+      "own": {
+        "mse": 22.788402981228298,
+        "psnr": 34.55366470121169,
+        "deltaE": 2.7392878743931703
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 111.39736899999843,
+      "shared": {
+        "mse": 152.78335316975912,
+        "psnr": 26.290043235154123,
+        "deltaE": 5.944163419264625
+      },
+      "pipelineMs": 117.42099600000074,
+      "own": {
+        "mse": 152.78335316975912,
+        "psnr": 26.290043235154123,
+        "deltaE": 5.9441933568711365
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 109.9262410000083,
+      "shared": {
+        "mse": 43.28296915690104,
+        "psnr": 31.767633156957288,
+        "deltaE": 3.3997646337680743
+      },
+      "pipelineMs": 117.63597599999048,
+      "own": {
+        "mse": 43.28296915690104,
+        "psnr": 31.767633156957288,
+        "deltaE": 3.3998543102391316
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 110.77513700000418,
+      "shared": {
+        "mse": 25.093758477105034,
+        "psnr": 34.135146471969335,
+        "deltaE": 2.6996405562198187
+      },
+      "pipelineMs": 116.95891499999561,
+      "own": {
+        "mse": 25.093758477105034,
+        "psnr": 34.135146471969335,
+        "deltaE": 2.6989929597688715
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 111.17970200000855,
+      "shared": {
+        "mse": 14.487701416015625,
+        "psnr": 36.52080874052869,
+        "deltaE": 2.1408837678840094
+      },
+      "pipelineMs": 116.60141299999668,
+      "own": {
+        "mse": 14.487701416015625,
+        "psnr": 36.52080874052869,
+        "deltaE": 2.14186050612757
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 12.389880999995512,
+      "shared": {
+        "mse": 144.3204574584961,
+        "psnr": 26.53752464066762,
+        "deltaE": 5.562727185165282
+      },
+      "pipelineMs": 16.03793899998709,
+      "own": {
+        "mse": 144.3204574584961,
+        "psnr": 26.53752464066762,
+        "deltaE": 5.563231747570722
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 12.178109999993467,
+      "shared": {
+        "mse": 43.488915337456596,
+        "psnr": 31.74701784861156,
+        "deltaE": 3.419225750042147
+      },
+      "pipelineMs": 16.90166400000453,
+      "own": {
+        "mse": 43.488915337456596,
+        "psnr": 31.74701784861156,
+        "deltaE": 3.4189833455789223
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 12.00555699999677,
+      "shared": {
+        "mse": 25.312328762478298,
+        "psnr": 34.09748258294839,
+        "deltaE": 2.6806249975027985
+      },
+      "pipelineMs": 18.414608999999473,
+      "own": {
+        "mse": 25.312328762478298,
+        "psnr": 34.09748258294839,
+        "deltaE": 2.6804439110591862
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 12.347181999997701,
+      "shared": {
+        "mse": 14.631421407063803,
+        "psnr": 36.47793842038681,
+        "deltaE": 2.142911275951299
+      },
+      "pipelineMs": 19.815489000000525,
+      "own": {
+        "mse": 14.631421407063803,
+        "psnr": 36.47793842038681,
+        "deltaE": 2.143764329630644
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 110.7219449999975,
+      "shared": {
+        "mse": 152.78335316975912,
+        "psnr": 26.290043235154123,
+        "deltaE": 5.944163419264625
+      },
+      "pipelineMs": 131.81807099998696,
+      "own": {
+        "mse": 421.017579820421,
+        "psnr": 21.887801304488654,
+        "deltaE": 8.168985311122787
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 110.16135699998995,
+      "shared": {
+        "mse": 43.28296915690104,
+        "psnr": 31.767633156957288,
+        "deltaE": 3.3997646337680743
+      },
+      "pipelineMs": 135.9861050000036,
+      "own": {
+        "mse": 129.1680391099718,
+        "psnr": 27.019252942312754,
+        "deltaE": 4.967440867015144
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 110.91815599999973,
+      "shared": {
+        "mse": 25.093758477105034,
+        "psnr": 34.135146471969335,
+        "deltaE": 2.6996405562198187
+      },
+      "pipelineMs": 139.15095999999903,
+      "own": {
+        "mse": 76.4931174384223,
+        "psnr": 29.29458000132366,
+        "deltaE": 3.866846420725315
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 113.56298399998923,
+      "shared": {
+        "mse": 14.487701416015625,
+        "psnr": 36.52080874052869,
+        "deltaE": 2.1408837678840094
+      },
+      "pipelineMs": 145.31869699999515,
+      "own": {
+        "mse": 44.85827382405599,
+        "psnr": 31.61237803237345,
+        "deltaE": 2.9977281137550427
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "agglomerative",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 65.16377199999988,
+      "shared": {
+        "mse": 65.49540032280817,
+        "psnr": 29.968695598771433,
+        "deltaE": 5.582893211456697
+      },
+      "pipelineMs": 68.19722400000319,
+      "own": {
+        "mse": 65.49540032280817,
+        "psnr": 29.968695598771433,
+        "deltaE": 5.582829277572947
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "agglomerative",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 65.55913000000874,
+      "shared": {
+        "mse": 21.272695753309463,
+        "psnr": 34.852578321028005,
+        "deltaE": 3.173145701300683
+      },
+      "pipelineMs": 69.27973900000507,
+      "own": {
+        "mse": 21.272695753309463,
+        "psnr": 34.852578321028005,
+        "deltaE": 3.1722224018682113
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "agglomerative",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 63.823277000003145,
+      "shared": {
+        "mse": 12.291202969021267,
+        "psnr": 37.23485970476115,
+        "deltaE": 2.660858750815986
+      },
+      "pipelineMs": 70.79254899999069,
+      "own": {
+        "mse": 12.291202969021267,
+        "psnr": 37.23485970476115,
+        "deltaE": 2.660732915069549
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "agglomerative",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 65.38268099998822,
+      "shared": {
+        "mse": 7.412478129069011,
+        "psnr": 39.43116935903842,
+        "deltaE": 2.153787111214681
+      },
+      "pipelineMs": 71.52660499999183,
+      "own": {
+        "mse": 7.412478129069011,
+        "psnr": 39.43116935903842,
+        "deltaE": 2.1526454628056366
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "precision5",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 7.287811999995029,
+      "shared": {
+        "mse": 65.6585693359375,
+        "psnr": 29.957889454090537,
+        "deltaE": 5.67028735352116
+      },
+      "pipelineMs": 11.346039000010933,
+      "own": {
+        "mse": 65.6585693359375,
+        "psnr": 29.957889454090537,
+        "deltaE": 5.6701291473308935
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "precision5",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 7.205851000006078,
+      "shared": {
+        "mse": 21.225821601019966,
+        "psnr": 34.862158511211334,
+        "deltaE": 3.2038006826116643
+      },
+      "pipelineMs": 13.41864400000486,
+      "own": {
+        "mse": 21.225821601019966,
+        "psnr": 34.862158511211334,
+        "deltaE": 3.205315511219656
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "precision5",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 7.481407999992371,
+      "shared": {
+        "mse": 12.402801513671875,
+        "psnr": 37.195605672776274,
+        "deltaE": 2.619489086687683
+      },
+      "pipelineMs": 12.72725700000592,
+      "own": {
+        "mse": 12.402801513671875,
+        "psnr": 37.195605672776274,
+        "deltaE": 2.6197371197394426
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "precision5",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 7.3270639999973355,
+      "shared": {
+        "mse": 7.681216769748264,
+        "psnr": 39.276503394651996,
+        "deltaE": 2.152355751803146
+      },
+      "pipelineMs": 14.146953000003123,
+      "own": {
+        "mse": 7.681216769748264,
+        "psnr": 39.276503394651996,
+        "deltaE": 2.153660841216042
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "dither",
+      "k": 16,
+      "paletteSize": 16,
+      "paletteMs": 63.98604199998954,
+      "shared": {
+        "mse": 65.49540032280817,
+        "psnr": 29.968695598771433,
+        "deltaE": 5.582893211456697
+      },
+      "pipelineMs": 88.66417099999671,
+      "own": {
+        "mse": 156.43300543891058,
+        "psnr": 26.18751971685462,
+        "deltaE": 6.165693992747484
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "dither",
+      "k": 64,
+      "paletteSize": 64,
+      "paletteMs": 67.26061699999264,
+      "shared": {
+        "mse": 21.272695753309463,
+        "psnr": 34.852578321028005,
+        "deltaE": 3.173145701300683
+      },
+      "pipelineMs": 94.11818000000494,
+      "own": {
+        "mse": 58.690850999620224,
+        "psnr": 30.445099541698127,
+        "deltaE": 4.1056658600577025
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "dither",
+      "k": 128,
+      "paletteSize": 128,
+      "paletteMs": 63.84331500000553,
+      "shared": {
+        "mse": 12.291202969021267,
+        "psnr": 37.23485970476115,
+        "deltaE": 2.660858750815986
+      },
+      "pipelineMs": 97.98260800000571,
+      "own": {
+        "mse": 37.035614013671875,
+        "psnr": 32.444608116497314,
+        "deltaE": 3.4835080678217882
+      }
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "dither",
+      "k": 256,
+      "paletteSize": 256,
+      "paletteMs": 64.60880500001076,
+      "shared": {
+        "mse": 7.412478129069011,
+        "psnr": 39.43116935903842,
+        "deltaE": 2.153787111214681
+      },
+      "pipelineMs": 102.43971799999417,
+      "own": {
+        "mse": 21.458201090494793,
+        "psnr": 34.814870500049054,
+        "deltaE": 2.725171255053448
+      }
+    }
+  ],
+  "sweeps": [
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 33.13397299999997,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 4.36556900000005,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim01",
+      "width": 768,
+      "height": 512,
+      "unique": 19182,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 32.387564000000566,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 21.942203000000518,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 3.703682000000299,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim02",
+      "width": 768,
+      "height": 512,
+      "unique": 13452,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 21.12406799999917,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 50.927018999998836,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 8.384684000000561,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim03",
+      "width": 768,
+      "height": 512,
+      "unique": 34871,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 51.08355499999925,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 53.778464999999414,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.279162999999244,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim04",
+      "width": 512,
+      "height": 768,
+      "unique": 31716,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 53.816453999999794,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 100.19861500000115,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 13.593338000002404,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim05",
+      "width": 768,
+      "height": 512,
+      "unique": 63558,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 99.41793200000029,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 40.917560999998386,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 5.028179000000819,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim06",
+      "width": 768,
+      "height": 512,
+      "unique": 25964,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 41.42072000000189,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 60.79521300000124,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.926761999999144,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim07",
+      "width": 768,
+      "height": 512,
+      "unique": 37552,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 59.968683999999485,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 68.26629500000126,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.714750999999524,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim08",
+      "width": 768,
+      "height": 512,
+      "unique": 45558,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 66.7429209999973,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 40.430474000000686,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.678033000003779,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim09",
+      "width": 512,
+      "height": 768,
+      "unique": 24106,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 39.08029499999975,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 36.048195000003034,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.11894900000334,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim10",
+      "width": 512,
+      "height": 768,
+      "unique": 21537,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 36.61570799999754,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 59.33952300000237,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.302975999999035,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim11",
+      "width": 768,
+      "height": 512,
+      "unique": 34473,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 56.44292400000268,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 38.99679499999911,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.149916999995185,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim12",
+      "width": 768,
+      "height": 512,
+      "unique": 25567,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 39.15342500000406,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 63.75696800000151,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 7.001341000002867,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim13",
+      "width": 768,
+      "height": 512,
+      "unique": 39784,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 64.06379500000185,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 79.34074200000032,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 11.62440599999536,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim14",
+      "width": 768,
+      "height": 512,
+      "unique": 55117,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 79.82258500000171,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 68.23088200000348,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 9.317888000005041,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim15",
+      "width": 768,
+      "height": 512,
+      "unique": 44576,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 67.8416600000055,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 22.6929850000015,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 3.4902900000015507,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim16",
+      "width": 768,
+      "height": 512,
+      "unique": 14096,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 23.140041999999085,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 30.22874700000102,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 4.893788999994285,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim17",
+      "width": 512,
+      "height": 768,
+      "unique": 19815,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 29.868419000005815,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 86.02268399999593,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 9.712530000004335,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim18",
+      "width": 512,
+      "height": 768,
+      "unique": 57415,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 83.31922600000689,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 40.34846199999447,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 6.114535999993677,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim19",
+      "width": 512,
+      "height": 768,
+      "unique": 24807,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 40.311671000003116,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 38.25859399999899,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 5.7961320000031264,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim20",
+      "width": 768,
+      "height": 512,
+      "unique": 24470,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 38.53948500000115,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 45.426860000006855,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 5.049484000002849,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim21",
+      "width": 768,
+      "height": 512,
+      "unique": 29317,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 44.84147200000007,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 81.01091199999792,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 8.04522800000268,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim22",
+      "width": 768,
+      "height": 512,
+      "unique": 53351,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 81.68111099999805,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 111.76224300000467,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 12.393609000006109,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim23",
+      "width": 768,
+      "height": 512,
+      "unique": 72079,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 114.24401700000453,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "agglomerative",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 64.46637200000987,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "precision5",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 7.292484000005061,
+      "measured": true
+    },
+    {
+      "set": "kodak",
+      "image": "kodim24",
+      "width": 768,
+      "height": 512,
+      "unique": 42351,
+      "lib": "dither",
+      "ks": [
+        16,
+        64,
+        128,
+        256
+      ],
+      "sweepMs": 65.13849199999822,
+      "measured": true
+    }
+  ]
+}
