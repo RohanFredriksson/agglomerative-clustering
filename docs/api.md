@@ -443,7 +443,7 @@ A palette with how much of the image each colour covers, for swatches with perce
 - `weights` are pixels per colour. Fully transparent pixels count 0 and partly transparent ones in proportion to their opacity, as in clustering; with `alpha: 'ignore'` every pixel counts 1.
 - `shares` are the weights divided by their total, so they sum to 1.
 
-All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `buildClustering` once and `clustering.getSwatches(k)`.
+All three are empty for an image with no visible pixels, and `k` is a maximum, so lay swatches out from the arrays' length, not from `k`. It clusters the image each time: to try several sizes, use `buildClustering` once and `clustering.getSwatches(k)`. For hex strings and the largest share first, the guides' [Heaviest first](guides.md#heaviest-first) has a function to copy.
 
 Options: `colorSpace`, `precision`, `alpha`, `transparent`, `signal`, `onProgress`.
 

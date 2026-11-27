@@ -1,0 +1,30 @@
+agglomerative-clustering 4.3.1, Node 24.18.0
+
+1. The first "Heaviest first" block in 4.3.1's docs/guides.md (7 lines of code)
+  copied alone, with an image defined:        ReferenceError: buildSwatches is not defined
+  with the import added:                      ReferenceError: toHex is not defined
+  with the import and toHex (from the section above) added: runs
+  that complete version in strict TypeScript: 7 errors
+    TS7006: Parameter 'r' implicitly has an 'any' type.
+    TS7006: Parameter 'g' implicitly has an 'any' type.
+    TS7006: Parameter 'b' implicitly has an 'any' type.
+    TS7031: Binding element 'palette' implicitly has an 'any' type.
+    TS7031: Binding element 'shares' implicitly has an 'any' type.
+    TS18046: 'b.share' is of type 'unknown'.
+    TS18046: 'a.share' is of type 'unknown'.
+
+2. The repaired block: self-contained, no wrapper
+  JavaScript: 8 lines of code with the import; runs
+  TypeScript, the parameter annotated and nothing else:
+    runs (Node's type stripping): yes
+    strict: 0 errors 
+    strict + noUncheckedIndexedAccess: 1 errors TS18048: 'v' is possibly 'undefined'.
+    passing `color` where a [number, number, number] is wanted: 1 errors TS2322: Type 'number[]' is not assignable to type '[number, number, number]'.
+  JSON.stringify of buildSwatches' own result begins: {"palette":{"0":0,"1":0,"2":255,"3":255,"4":0,"5":0},"weight…
+  checked on 24 Kodak photos, k = 1, 2, 3, 5, 8, 16, 32, 64, 128, 256: 240 rankings, 12360 swatches; wrong order, or a hex or colour parted from its share: 0
+  speed (kodim23, median of 21; load 0.81/1.68/1.04)
+    k = 5: rankSwatches 0.003 ms; getSwatches 0.120 ms; buildSwatches 109.7 ms
+    k = 256: rankSwatches 0.170 ms; getSwatches 0.159 ms; buildSwatches 109.4 ms
+    k = 4096: rankSwatches 2.001 ms; getSwatches 0.665 ms; buildSwatches 109.8 ms
+
+3. A hand-written toHex without padStart: 568 of 12360 swatches (4.6%) would be malformed, in 113 of 240 rankings; the largest swatch itself in 7. 178 of them are 3 or 4 digits long, which CSS reads as another colour. At k up to 8: 9 of 456 (2.0%).

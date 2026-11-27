@@ -436,6 +436,8 @@ export function buildPalette(image: ImageLike, k: number, options?: ClusteringOp
 /**
  * A palette with how much of the image each of its colours covers, for swatches with percentages. The three arrays come
  * from one cut of one clustering, so they line up by construction: entry `i` of each describes the same colour.
+ * For hex strings and the largest share first, copy the function in the guides:
+ * https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#heaviest-first
  */
 export interface Swatches {
     /** The colours in split order, exactly what `clustering.getPalette(k)` gives for the same `k`. */

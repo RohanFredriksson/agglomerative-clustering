@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.3.2 (unreleased)
+
+### Fixed
+- **Docs: the guides' "Heaviest first" block now runs when copied.** It called `toHex`, which was defined in the section above, and it imported nothing, so copied alone it threw `ReferenceError`; with those added it still gave 7 errors in strict TypeScript. It now stands alone, with a TypeScript version beside it (`color` typed as `[number, number, number]`, clean under `strict` and `noUncheckedIndexedAccess`), and the tests run the JavaScript blocks as written and type-check the TypeScript one. The README's swatches example shows hex strings, and the API reference, the types and the guides link to the block. <!-- bench/spikes/swatch-hex/measure.mjs, results.txt: the old block --> No code changes.
+
 ## 4.3.1
 
 ### Fixed

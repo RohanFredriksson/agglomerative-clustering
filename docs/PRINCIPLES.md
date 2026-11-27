@@ -105,7 +105,7 @@ These were argued through and decided. Reopen one only with new evidence, and on
   - smoothing palettes across frames;
   - a linear-light dither option (a recipe in the API reference covers it);
   - keeping ordered-dithering recipes between calls (a recipe in the guides, mapping frames in batches, covers it);
-  - built-in swatch helpers: a ranking function, an ordering option on swatches, a one-call dominant colour (the guides' `rankSwatches` recipe covers them).
+  - built-in swatch helpers: a ranking function, an ordering option on swatches, a one-call dominant colour (the guides' `rankSwatches` recipe covers them; asked again and kept a recipe, repaired, on 2026-11-28; the next request for hex strings or heaviest-first order goes to the maintainer as a candidate for a pure `rankSwatches` function only).
   - a built-in palette-size suggestion or elbow heuristic (the guides' `sizeForError` and `sizeForScore` recipes cover it).
 - **Done in 4.0 part 1** (ROADMAP "4.0"): premultiplied alpha (`premultiplied: true`), with `RawImage` as a union split by `format` and unknown image keys rejected; narrowed result types. Straight output from a premultiplied source is a recipe, not an option (decided 2026-11-25).
 - **Done in 4.0 part 2** (ROADMAP "4.0"): Node 20 dropped; `transparent: true` or a cutoff throwing on formats without alpha; the `get…` names of the functions that cluster an image and the `…FromClustering` functions removed; the bare-image warnings (`rgb-as-rgba`, `gray-as-rgba`) became `invalid-argument` errors.

@@ -1,5 +1,9 @@
 // Runs the recipes in docs/guides.md ("Converting the output" and others) against the real encoders, so the documentation can't drift from the API.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+import * as library from '../dist/index.mjs';
 import * as gifenc from 'gifenc';
 import { GifReader } from 'omggif';
 import { encode as encodePng, decode as decodePng } from 'fast-png';
@@ -31,16 +35,28 @@ const toColors = (palette) => Array.from({ length: palette.length / 3 }, (_, i) 
 
 describe('recipes in the guides', () => {
 
-    // The guides' "Converting the output" and "Heaviest first" recipes. Their functions are checked against the guides' text
+    // The guides' "Heaviest first" blocks are taken from the page and run as they are written, so a block that doesn't
+    // run when copied (a missing import, a helper defined elsewhere) fails here.
+    const guidesText = readFileSync(new URL('../docs/guides.md', import.meta.url), 'utf8');
+    const heaviest = guidesText.slice(guidesText.indexOf('### Heaviest first'), guidesText.indexOf('## Moving from'));
+    const blocks = (language) => [...heaviest.matchAll(new RegExp('```' + language + '\\n([\\s\\S]*?)```', 'g'))].map((m) => m[1]);
+    const rankSwatchesBlock = blocks('js').find((code) => code.includes('function rankSwatches('));
+    const rankPaletteBlock = blocks('js').find((code) => code.includes('const rankPalette ='));
+    const typescriptBlock = blocks('ts').find((code) => code.includes('function rankSwatches('));
+    // Only what a block imports is in scope, as in a file of the user's own.
+    const importLine = /^import \{([^}]*)\} from 'agglomerative-clustering';$/gm;
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const runBlock = (code, picture, names) => new AsyncFunction('library', 'image', `${code.replace(importLine, 'const {$1} = library;')}\nreturn { ${names} };`)(library, picture);
+    let rankSwatches, rankPalette;
+    beforeAll(async () => {
+        ({ rankSwatches } = await runBlock(rankSwatchesBlock, image, 'rankSwatches'));
+        // The ranked palette builds on the function above, as the guides say.
+        ({ rankPalette } = await runBlock(`${rankSwatchesBlock}\n${rankPaletteBlock}`, image, 'rankPalette'));
+    });
+
+    // The guides' "Converting the output" helper, and the indexed ranking. Their text is checked against the guides'
     // below, so the two can't drift apart.
     const toHex = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
-    function rankSwatches({ palette, shares }) {
-      return Array.from(shares, (share, i) => {
-        const [r, g, b] = palette.subarray(3 * i, 3 * i + 3);
-        return { color: [r, g, b], hex: toHex(r, g, b), share };
-      }).sort((a, b) => b.share - a.share);   // equal shares keep split order
-    }
-    const rankPalette = (swatches) => new Palette(rankSwatches(swatches).flatMap((s) => s.color), swatches.palette.colorSpace);
     // The transparent entry, if there is one, stays last, so `transparentIndex` and `colors` keep their meaning.
     function rankIndices(result) {
       const { palette, colors, indices } = result;
@@ -61,7 +77,44 @@ describe('recipes in the guides', () => {
         indices: rankedIndices };
     }
 
-    it('the swatch-ranking recipes are the ones in the guides', async () => {
+    it('the swatch-ranking block runs as written and ranks the image it is given', async () => {
+        const { ranked } = await runBlock(rankSwatchesBlock, split, 'ranked');
+        expect(ranked[0]).toEqual({ color: [255, 0, 0], hex: '#ff0000', share: 0.4 });
+        expect(ranked.map((s) => s.share)).toEqual([0.4, 0.3, 0.3]);
+    });
+
+    it('the TypeScript block is the JavaScript one with two type annotations', () => {
+        const plain = (code) => code.split('\n').map((line) => line.replace(/\s*\/\/.*$/, '')).filter((line) => line.trim()).join('\n');
+        const untyped = typescriptBlock.replace(', type Swatches', '').replace(': Swatches', '').replace(' as [number, number, number]', '');
+        expect(plain(untyped)).toBe(plain(rankSwatchesBlock));
+    });
+
+    it('the TypeScript block compiles under strict and noUncheckedIndexedAccess, with a tuple colour', () => {
+        const root = fileURLToPath(new URL('../', import.meta.url));
+        mkdirSync(`${root}build`, { recursive: true });
+        // Inside the package, so that 'agglomerative-clustering' resolves to it, as it does for a user.
+        const dir = mkdtempSync(`${root}build/recipes-types-`);
+        try {
+            const file = `${dir}/heaviest.mts`;
+            const palette = rankPaletteBlock.replace('(swatches) =>', '(swatches: Swatches) =>');
+            writeFileSync(file, `declare const image: import('agglomerative-clustering').ImageLike;
+${typescriptBlock}
+${palette}
+export const colour: [number, number, number] | undefined = ranked[0]?.color;
+export const hex: string | undefined = ranked[0]?.hex;
+export { rankPalette };
+`);
+            const program = ts.createProgram([file], {
+                strict: true, noUncheckedIndexedAccess: true, noEmit: true, types: [], lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'],
+                target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
+            });
+            expect(ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, timeLimit(60_000));
+
+    it('the other swatch recipes are the ones in the guides', async () => {
         const { readFile } = await import('fs/promises');
         const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
         // A declaration's lines, trimmed: one line for a `const`, to the closing brace at its indentation for a function.
@@ -76,7 +129,7 @@ describe('recipes in the guides', () => {
             return lines.slice(first, end + 1).map((line) => line.trim()).join('\n');
         };
         const [guides, test] = await Promise.all([read('../docs/guides.md'), read('./recipes.test.js')]);
-        for (const start of ['const toHex =', 'function rankSwatches(', 'const rankPalette =', 'function rankIndices(']) {
+        for (const start of ['const toHex =', 'function rankIndices(']) {
             expect(source(test, start)).toBe(source(guides, start));
         }
     });
