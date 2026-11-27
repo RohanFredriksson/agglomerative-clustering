@@ -181,14 +181,15 @@ public:
     }
 
     // How far along it is, 0 to 1000 (approximate, and not linear in time). Scanning is the first tenth, building
-    // the next twentieth, merging most of the rest, writing the last twentieth; building and writing report where
-    // they start (they are short next to merging, and JS keeps the reports monotonic).
+    // the next twentieth, merging most of the rest, writing the last twentieth. Building and writing advance through
+    // their parts too, so a progress bar keeps moving when they span several slices (JS keeps the reports monotonic).
+    // Reading the cursors only, it never changes what is computed.
     int progress() const {
         switch (this->stage) {
             case Stage::scan: return this->limit > 0 ? int(100.0 * double(this->position) / double(this->limit)) : 0;
-            case Stage::build: return 100;
+            case Stage::build: return std::min(149, 100 + int(50.0 * this->build_fraction()));
             case Stage::chain: return n > 1 ? 150 + int(800.0 * double(this->merges.size()) / double(this->n - 1)) : 150;
-            case Stage::write: return 950;
+            case Stage::write: return std::min(999, 950 + int(50.0 * this->write_fraction()));
             default: return 1000;
         }
     }
@@ -264,6 +265,38 @@ private:
     std::vector<uint32_t> index;
     uint32_t crc = 0xFFFFFFFFu;
     size_t crc_cursor = 0;
+
+    static double part(size_t done, size_t total) {return total > 0 ? double(done) / double(total) : 1.0;}
+
+    // How far building has got, 0 to 1, by its phases' cursors (only for progress()). The spans are rough shares of
+    // its time: choosing the grid's first size is the largest part on millions of colours.
+    double build_fraction() const {
+        switch (this->phase) {
+            case Phase::convert: return 0.2 * part(this->cursor, this->histogram.colors().size());
+            case Phase::group: return 0.2 + 0.1 * part(this->cursor, this->unique_colors.size());
+            case Phase::grouped_error: return 0.3 + 0.1 * part(this->cursor, this->unique_colors.size());
+            case Phase::grid: return 0.4 + 0.2 * part(this->cursor, this->n);
+            default: return 0.6 + 0.4 * (this->grid ? this->grid->review_fraction() : 0.0);
+        }
+    }
+
+    // How far writing has got, 0 to 1, by its parts' cursors (only for progress()). The sort counts its passes, each
+    // a pass over every merge.
+    double write_fraction() const {
+        const size_t total = this->merges.size();
+        switch (this->writing) {
+            case Writing::colors: return 0.2 * part(this->cursor, this->grid ? size_t(this->grid->capacity()) : 0);
+            case Writing::sort: {
+                if (this->sorted.size() < total) {return 0.2 + 0.05 * part(this->sorted.size(), total);}
+                // Widths are powers of two: the passes are ceil(log2(total)), and log2(width) of them are done.
+                const double passes = double(64 - __builtin_clzll(uint64_t(std::max<size_t>(total, 2)) - 1));
+                const double done = double(__builtin_ctzll(uint64_t(this->sort_width))) + part(this->sort_active ? this->sort_k : this->sort_left, total);
+                return 0.25 + 0.35 * std::min(1.0, done / passes);
+            }
+            case Writing::records: return 0.6 + 0.3 * part(this->cursor, total);
+            default: return 0.9 + 0.1 * part(this->crc_cursor, this->clustering.size());
+        }
+    }
 
     // Pass 1: build the histogram and collect unique colours. Alpha weights are in units of 1/255 of a pixel.
     bool scan(bool timed, double deadline) {
