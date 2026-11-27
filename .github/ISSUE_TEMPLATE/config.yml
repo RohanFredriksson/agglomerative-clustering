@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question
+    url: https://github.com/RohanFredriksson/agglomerative-clustering/discussions/new?category=q-a
+    about: Have a usage question? Ask it in Discussions.

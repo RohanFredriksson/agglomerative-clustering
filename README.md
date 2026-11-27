@@ -270,6 +270,10 @@ npm run demo                   # then open http://localhost:8080/demo/
 
 The demo clusters an image once, then re-cuts and re-maps it live as you drag the palette-size and dithering sliders.
 
+## Questions
+
+Have a question about using it? Ask in [Discussions](https://github.com/RohanFredriksson/agglomerative-clustering/discussions/categories/q-a).
+
 ## License
 
 MIT © Rohan Fredriksson
