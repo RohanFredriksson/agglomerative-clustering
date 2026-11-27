@@ -1,0 +1,12 @@
+block cs=0
+slices 164 longest slice 12.6 ms (at progress 950) | nearest: max 0.1 ms (alive 235099) total 1231 ms n 887964 over5ms 0 | reindex max 3.0 ms
+block cs=1
+slices 96 longest slice 16.5 ms (at progress 100) | nearest: max 0.1 ms (alive 196251) total 602 ms n 807338 over5ms 0 | reindex max 4.2 ms
+dark cs=0
+slices 188 longest slice 11.6 ms (at progress 950) | nearest: max 0.1 ms (alive 183928) total 1424 ms n 885394 over5ms 0 | reindex max 4.9 ms
+dark cs=1
+slices 81 longest slice 16.1 ms (at progress 950) | nearest: max 0.1 ms (alive 303726) total 481 ms n 821544 over5ms 0 | reindex max 5.1 ms
+noise cs=0
+slices 9 longest slice 12.3 ms (at progress 950) | nearest: max 0.0 ms (alive 62307) total 40 ms n 147865 over5ms 0 | reindex max 1.4 ms
+noise cs=1
+slices 9 longest slice 14.3 ms (at progress 950) | nearest: max 0.0 ms (alive 51900) total 37 ms n 151911 over5ms 0 | reindex max 1.5 ms

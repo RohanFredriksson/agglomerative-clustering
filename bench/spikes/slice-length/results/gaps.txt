@@ -1,0 +1,8 @@
+load before 0.46/1.23/1.35
+block + 25% scatter	rgb8	longest slice (event-loop gap) 17.3 ms	longest onProgress gap 55.1 ms
+block + 25% scatter	oklab	longest slice (event-loop gap) 13.6 ms	longest onProgress gap 108.1 ms
+dark block + 25% scatter	rgb8	longest slice (event-loop gap) 13.2 ms	longest onProgress gap 47.8 ms
+dark block + 25% scatter	oklab	longest slice (event-loop gap) 15.1 ms	longest onProgress gap 107.8 ms
+noise 1024^2	rgb8	longest slice (event-loop gap) 10.7 ms	longest onProgress gap 10.3 ms
+noise 1024^2	oklab	longest slice (event-loop gap) 15.9 ms	longest onProgress gap 15.9 ms
+load after 0.62/1.22/1.34
