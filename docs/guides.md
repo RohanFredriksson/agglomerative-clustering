@@ -11,7 +11,7 @@ Recipes by task. For what each function and option does, see the [API reference]
 - [Storing clusterings](#storing-clusterings)
 - [Fixed palettes: e-ink, thread, bricks](#fixed-palettes-e-ink-thread-bricks)
 - [Batches of images](#batches-of-images)
-- [Converting the output](#converting-the-output)
+- [Converting the output](#converting-the-output), with [hex swatches, heaviest first](#heaviest-first)
 - [Moving from color-thief, node-vibrant, image-q or get-image-colors](#moving-from-color-thief-node-vibrant-image-q-or-get-image-colors)
 
 ## Decoding image files
@@ -151,7 +151,7 @@ const clustering = await buildClustering(image);
 const eight = await clustering.getSwatches(8);
 ```
 
-How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (an accent colour, a theme), ask for 12 to 16: a small vivid area, such as a red sign in a street scene, only gets a colour of its own once the bigger areas have been split. Each colour is the average of its cluster, so it is a little less saturated than the image's most vivid pixels, and a white background comes back as a near-white such as `[254, 254, 254]` rather than exactly `#ffffff`. On a smooth single-hue photo no colour has a large share (the shares fall as `k` grows), so judge the heaviest swatch against the others, not by a fixed share. See [Picking colours from swatches](#picking-colours-from-swatches).
+How many to ask for: 5 to 8 for a set of swatches to show. To *pick* from them (an accent colour, a theme), ask for 12 to 16: a small vivid area, such as a red sign in a street scene, only gets a colour of its own once the bigger areas have been split. Each colour is the average of its cluster, so it is a little less saturated than the image's most vivid pixels, and a white background comes back as a near-white such as `[254, 254, 254]` rather than exactly `#ffffff`. On a smooth single-hue photo no colour has a large share (the shares fall as `k` grows), so judge the heaviest swatch against the others, not by a fixed share. See [Picking colours from swatches](#picking-colours-from-swatches). For hex strings and the largest share first, see [Heaviest first](#heaviest-first).
 
 ### Choosing a palette size
 
@@ -556,20 +556,40 @@ const hexNumber = (i) => (palette[3 * i] << 16) | (palette[3 * i + 1] << 8) | pa
 
 Palettes come in split order, which is what makes them nest, so the biggest colour isn't necessarily first. Sort to rank them. A sorted palette of one size is no longer the start of a larger one.
 
-**Swatches as objects, heaviest first:**
+**Swatches as objects, heaviest first.** The block stands alone: copy it as it is.
 
 ```js
-// `swatches` is what buildSwatches(image, k) or clustering.getSwatches(k) returns.
+import { buildSwatches } from 'agglomerative-clustering';
+
+// Swatches as objects, the largest share first: [{ color: [r, g, b], hex: '#rrggbb', share }, …]
 function rankSwatches({ palette, shares }) {
   return Array.from(shares, (share, i) => {
-    const [r, g, b] = palette.subarray(3 * i, 3 * i + 3);
-    return { color: [r, g, b], hex: toHex(r, g, b), share };
+    const color = [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]];
+    const hex = '#' + color.map((v) => v.toString(16).padStart(2, '0')).join('');   // padStart: 10 is '0a', not 'a'
+    return { color, hex, share };
   }).sort((a, b) => b.share - a.share);   // equal shares keep split order
 }
 
-const ranked = rankSwatches(await buildSwatches(image, 8));
-// [{ color: [r, g, b], hex: '#rrggbb', share }, …], the largest share first
+const ranked = rankSwatches(await buildSwatches(image, 8));   // clustering.getSwatches(k) works the same way
 ```
+
+In TypeScript:
+
+```ts
+import { buildSwatches, type Swatches } from 'agglomerative-clustering';
+
+function rankSwatches({ palette, shares }: Swatches) {
+  return Array.from(shares, (share, i) => {
+    const color = [palette[3 * i], palette[3 * i + 1], palette[3 * i + 2]] as [number, number, number];
+    const hex = '#' + color.map((v) => v.toString(16).padStart(2, '0')).join('');
+    return { color, hex, share };
+  }).sort((a, b) => b.share - a.share);
+}
+
+const ranked = rankSwatches(await buildSwatches(image, 8));
+```
+
+The ranked objects are plain arrays, strings and numbers, so `JSON.stringify(ranked)` writes them as you'd expect. `buildSwatches`' own result holds typed arrays, which `JSON.stringify` writes as objects keyed `"0"`, `"1"`, …
 
 **A dominant colour** is the first of those: `rankSwatches(await buildSwatches(image, 5))[0]`. It depends on `k` as much as on the image. The heaviest swatch is whichever region the cut hasn't split yet, so asking for 8 colours instead of 5 changed it by more than ΔE 10 on 11 of 24 Kodak photos. <!-- bench/spikes/swatch-helpers/measure.mjs, results.txt --> Pick one `k` and keep it. And for vivid accent colours, rather than the area-weighted averages these are, see [Picking colours from swatches](#picking-colours-from-swatches).
 
@@ -578,6 +598,7 @@ const ranked = rankSwatches(await buildSwatches(image, 8));
 ```js
 import { Palette } from 'agglomerative-clustering';
 
+// rankSwatches is the function above. In TypeScript, write (swatches: Swatches).
 const rankPalette = (swatches) => new Palette(rankSwatches(swatches).flatMap((s) => s.color), swatches.palette.colorSpace);
 ```
 
@@ -620,11 +641,11 @@ The renumbering takes about 40 ms for a 12-megapixel image with 8-bit indices. <
 The library answers which colours an image has and how much of each; choosing among them (a vivid accent, text that contrasts with a background) is colour arithmetic that a colour library already does well. With [culori](https://culorijs.org/):
 
 ```js
-import { buildSwatches } from 'agglomerative-clustering';
+// Paste below rankSwatches from "Heaviest first", which imports buildSwatches.
 import { converter, wcagContrast } from 'culori';
 
 const oklch = converter('oklch');
-// rankSwatches from "Heaviest first", with each colour's OKLCh added: l (0-1), c (chroma), h (hue)
+// The ranked swatches with each colour's OKLCh added: l (0-1), c (chroma), h (hue)
 const swatches = rankSwatches(await buildSwatches(image, 12)).map((s) => ({ ...s, ...oklch(s.hex) }));
 
 const background = swatches[0];

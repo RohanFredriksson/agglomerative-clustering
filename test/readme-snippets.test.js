@@ -41,6 +41,10 @@ const checks = {
         expect(reduced.data).toHaveLength(data.length);
         for (let i = 3; i < data.length; i += 4) expect(reduced.data[i]).toBe(data[i]);
     },
+    legend: ({ legend }) => {
+        expect(legend).toHaveLength(6);
+        for (const line of legend) expect(line).toMatch(/^#[0-9a-f]{6} \d+\.\d%$/);
+    },
     swatches: ({ shares }) => {
         expect(shares).toHaveLength(8);
         expect(Math.abs(Array.from(shares).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(1e-9);
@@ -55,7 +59,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 describe('README snippets', () => {
     it('has marked snippets', () => {
-        expect(snippets.length).toBeGreaterThanOrEqual(6);
+        expect(snippets.length).toBeGreaterThanOrEqual(7);
     });
     for (const [id, code] of snippets) {
         it(`runs snippet ${id}: ${code.split('\n').find((l) => l.trim() && !l.startsWith('import')).slice(0, 50)}`, async () => {

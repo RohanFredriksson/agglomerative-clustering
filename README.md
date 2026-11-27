@@ -67,16 +67,16 @@ ctx.putImageData(await quantize(imageData, 16, { dither: true }), 0, 0);   // Im
 
 **Swatches, with each colour's share of the image:**
 
+<!-- snippet legend -->
 ```js
 import { buildSwatches } from 'agglomerative-clustering';
 
 const { palette, shares } = await buildSwatches(imageData, 6);   // six colours; the shares sum to 1
-shares.forEach((share, i) => {
-  console.log(`rgb(${palette[3 * i]} ${palette[3 * i + 1]} ${palette[3 * i + 2]})`, `${(share * 100).toFixed(1)}%`);
-});
+const hex = (i) => '#' + [...palette.subarray(3 * i, 3 * i + 3)].map((v) => v.toString(16).padStart(2, '0')).join('');
+const legend = Array.from(shares, (share, i) => `${hex(i)} ${(share * 100).toFixed(1)}%`);   // ['#1a2b3c 31.4%', …]
 ```
 
-Entries keep their place as `k` grows (split order), so palettes nest. For hex strings, the largest share first or a dominant colour, see [Heaviest first](docs/guides.md#heaviest-first).
+Entries keep their place as `k` grows (split order), so palettes nest. For swatches as objects, the largest share first, or a dominant colour, see [Heaviest first](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#heaviest-first).
 
 **A colour-count slider:** cluster once, then cut and map as often as you like.
 
@@ -175,7 +175,7 @@ import { buildSwatches } from 'agglomerative-clustering';
 const { palette, shares } = await buildSwatches(image, 8);   // the shares sum to 1
 ```
 
-Guide: [Swatches and choosing a palette size](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#swatches-and-choosing-a-palette-size).
+Guides: [Swatches and choosing a palette size](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#swatches-and-choosing-a-palette-size); [hex strings, heaviest first](https://github.com/RohanFredriksson/agglomerative-clustering/blob/master/docs/guides.md#heaviest-first).
 
 ### Animation: ordered dithering keeps still areas still
 
